@@ -320,6 +320,52 @@ to prepare derivative works based upon the copyrighted work;
 - Activity heatmap showing which sections change frequently vs rarely
 - "Last modified" timestamp for each section
 
+**Legislative Blame View** ("Git Blame" for Laws)
+- Line-by-line attribution showing which law last modified each provision
+- Display format for each line/paragraph:
+  - **Public Law**: PL number and popular name (e.g., "PL 94-553: Copyright Act of 1976")
+  - **Congress**: Which Congress passed it (e.g., "94th Congress")
+  - **President**: Who signed it (e.g., "President Gerald Ford")
+  - **Date**: When it became effective (e.g., "Oct 19, 1976")
+  - **Visual indicator**: Color-coding or sidebar marker showing law attribution
+- Toggle between normal view and blame view
+- Hover/click on any line to see:
+  - Full metadata about the modifying law
+  - Link to view the complete PR (law) that made the change
+  - Preview of the diff showing what changed
+  - Sponsors and vote counts
+- Multi-law sections: Some text may show multiple attributions if different subsections were modified by different laws
+- Original enactment indicator: Special styling for text that dates to the section's original creation
+- User stories:
+  - "I want to know when this copyright provision was added"
+  - "Which Congress and President are responsible for this tax rule?"
+  - "Has this criminal statute been modified since its original enactment?"
+
+**Example Blame View:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ § 106 · Exclusive rights in copyrighted works               │
+│                                                              │
+│ PL 94-553   Subject to sections 107 through 118, the owner  │
+│ 94th Cong   of copyright under this title has the exclusive │
+│ Ford        rights to do and to authorize any of the        │
+│ 1976        following:                                       │
+│                                                              │
+│ PL 94-553   (1) to reproduce the copyrighted work in copies │
+│ 94th Cong       or phonorecords;                            │
+│ Ford                                                         │
+│ 1976        (2) to prepare derivative works based upon the  │
+│                 copyrighted work;                            │
+│                                                              │
+│ PL 101-650  (3) to distribute copies or phonorecords of the │
+│ 101st Cong      copyrighted work to the public by sale or   │
+│ Bush                                                         │
+│ 1990        ...                                              │
+└─────────────────────────────────────────────────────────────┘
+         ↑
+    Click any line to see full law details
+```
+
 ### 4.2 Law Viewer ("Pull Request View")
 
 **Individual Law Display**
@@ -457,21 +503,29 @@ to prepare derivative works based upon the copyrighted work;
 2. Understand who authored the laws that affect my daily life
 3. Discover whether my representative is an active legislator
 4. See which areas of law are most actively debated and changed
+5. **Use blame view to see which President and Congress are responsible for specific tax provisions I care about**
+6. **Click on any line of law to understand when and why it was added**
 
 ### As an educator, I want to...
 1. Show students real examples of legislative change over time
 2. Compare how different Congresses approached specific issues
 3. Demonstrate the collaborative nature of lawmaking through co-sponsorship data
+4. **Use blame view to teach students about legislative authorship and accountability**
+5. **Show students how a single section evolved through multiple Congresses**
 
 ### As a journalist, I want to...
 1. Quickly identify when a specific section was last modified and why
 2. Analyze voting patterns on consequential legislation
 3. Track which legislators are most influential in specific policy areas
+4. **Use blame view to attribute specific provisions to specific administrations for fact-checking**
+5. **Trace contentious legal language back to the exact law and legislators responsible**
 
 ### As a researcher, I want to...
 1. Export data about legislative activity for statistical analysis
 2. Identify trends in legislative focus over decades
 3. Study the evolution of specific legal concepts through amendments
+4. **Analyze patterns in which Congresses and Presidents modified which sections**
+5. **Study legislative persistence by identifying which provisions remain unchanged for decades**
 
 ---
 
@@ -573,6 +627,24 @@ to prepare derivative works based upon the copyrighted work;
 - `reference_text`: Text (the actual text that makes the reference)
 - `discovered_date`: Date (when this reference was identified)
 
+**LineAttribution** (For "git blame" style attribution - tracks which law created each line)
+- `section_id`: Foreign key to USCodeSection
+- `law_id`: Foreign key to PublicLaw (which law last modified this text)
+- `line_number_start`: Integer (starting line number)
+- `line_number_end`: Integer (ending line number, for multi-line provisions)
+- `text_content`: Text (the actual text content for this range)
+- `subsection_identifier`: String (e.g., "(a)", "(1)", "(A)(i)" - helps map to legal structure)
+- `attribution_type`: Enum (Original enactment, Amendment, Addition, Renumbering)
+- `effective_date`: Date (when this version of the text took effect)
+- `created_at`: Timestamp (when this attribution record was created)
+- Note: When a law modifies text, old LineAttribution records are preserved for historical blame views
+
+**Alternative/Optimization**: Instead of storing line-by-line attribution, could compute blame dynamically by:
+1. Starting with section's original enactment law
+2. Applying LawChange records chronologically
+3. Tracking which law last touched each portion of text
+This approach saves storage but increases computation time for blame views.
+
 ---
 
 ## 7. Technical Architecture
@@ -638,6 +710,7 @@ to prepare derivative works based upon the copyrighted work;
 │ USC > Title 17 > Chapter 1 > § 106                          │
 │                                                              │
 │ Time Travel: [◄] Jan 1, 2024 [Date Picker] [►]             │
+│ View: [Normal] [🔍 Blame]                                    │
 │                                                              │
 │ ┌─────────────────────────────────────────────────────────┐ │
 │ │ § 106 · Exclusive rights in copyrighted works           │ │
@@ -652,7 +725,41 @@ to prepare derivative works based upon the copyrighted work;
 │ └─────────────────────────────────────────────────────────┘ │
 │                                                              │
 │ Last modified: Oct 28, 1998 by PL 105-304                   │
-│ [View change history] [View full law]                       │
+│ [View change history] [View full law] [Legislative blame]   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**With Blame View Enabled:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [Logo] The Code We Live By       [Search] [Analytics] [?]   │
+├─────────────────────────────────────────────────────────────┤
+│ USC > Title 17 > Chapter 1 > § 106                          │
+│                                                              │
+│ Time Travel: [◄] Jan 1, 2024 [Date Picker] [►]             │
+│ View: [Normal] [🔍 Blame] ← Active                           │
+│                                                              │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ § 106 · Exclusive rights in copyrighted works           │ │
+│ │                                                          │ │
+│ │ PL 94-553 │ Subject to sections 107 through 122, the    │ │
+│ │ 94th Cong │ owner of copyright under this title has the │ │
+│ │ Ford 1976 │ exclusive rights to do and to authorize any │ │
+│ │           │ of the following:                            │ │
+│ │              ↑ Hover for details                         │ │
+│ │ PL 94-553 │ (1) to reproduce the copyrighted work in    │ │
+│ │ 94th Cong │     copies or phonorecords;                  │ │
+│ │ Ford 1976 │                                              │ │
+│ │           │ (2) to prepare derivative works based upon  │ │
+│ │           │     the copyrighted work;                    │ │
+│ │                                                          │ │
+│ │ PL 101-650│ (3) to distribute copies or phonorecords of │ │
+│ │ 101st Cong│     the copyrighted work to the public...   │ │
+│ │ Bush 1990 │                                              │ │
+│ │ ...                                                      │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│                                                              │
+│ 💡 Tip: Click any line to see the full law that created it  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
