@@ -34,6 +34,233 @@
 | Congressional debates/hearings | PR conversation/comments |
 | Cross-references between sections | Code dependencies |
 
+### Understanding the US Code Structure
+
+The United States Code is the codification of federal statutory law, organized in a hierarchical structure:
+
+**Structural Levels:**
+
+1. **Titles** (54 total) - Broad subject areas
+   - Example: Title 17 (Copyright), Title 26 (Internal Revenue Code)
+   - Each title covers a major legal domain
+
+2. **Chapters** - Major subdivisions within a title
+   - Example: Title 17, Chapter 1 (Subject Matter and Scope of Copyright)
+   - Typically 10-50+ chapters per title
+
+3. **Sections** - The fundamental unit of law, indicated by the § symbol
+   - Example: 17 USC § 106 (Exclusive rights in copyrighted works)
+   - Full citation format: `[Title] USC § [Section]`
+   - Most legislative changes happen at the section level
+   - Typically hundreds to thousands of sections per title
+
+4. **Subsections** - Numbered or lettered subdivisions within a section
+   - Example: § 106(1), § 106(2), or § 106(a), § 106(b)
+   - Contains the detailed provisions of the law
+
+5. **Paragraphs, Subparagraphs, Clauses, Subclauses** - Deeper nesting
+   - Example: § 101(a)(1)(A)(i)
+   - Can nest several levels deep for complex provisions
+
+**Example Hierarchy:**
+```
+Title 17 - Copyright
+├── Chapter 1 - Subject Matter and Scope of Copyright
+│   ├── § 101 - Definitions
+│   ├── § 102 - Subject matter of copyright: In general
+│   │   ├── (a) Copyright protection subsists...
+│   │   └── (b) In no case does copyright protection...
+│   ├── § 106 - Exclusive rights in copyrighted works
+│   │   ├── (1) to reproduce the copyrighted work...
+│   │   ├── (2) to prepare derivative works...
+│   │   └── (6) in the case of sound recordings...
+│   └── § 107 - Limitations on exclusive rights: Fair use
+├── Chapter 2 - Copyright Ownership and Transfer
+│   └── ...
+└── Chapter 13 - Protection of Original Designs
+    └── ...
+```
+
+### Repository Structure Mapping Options
+
+#### Option 1: Section-as-File (Recommended ⭐)
+
+**Structure:**
+```
+USC/
+├── Title-17-Copyright/
+│   ├── Chapter-01-Subject-Matter-and-Scope/
+│   │   ├── Section-101-Definitions.md
+│   │   ├── Section-102-Subject-Matter-In-General.md
+│   │   ├── Section-106-Exclusive-Rights.md
+│   │   └── Section-107-Fair-Use.md
+│   ├── Chapter-02-Copyright-Ownership/
+│   │   └── ...
+│   └── README.md (Title overview)
+├── Title-26-Internal-Revenue-Code/
+│   └── ...
+└── README.md (US Code overview)
+```
+
+**Mapping:**
+- **Titles** → Top-level directories/modules
+- **Chapters** → Subdirectories
+- **Sections** → Individual files (e.g., `Section-106-Exclusive-Rights.md`)
+- **Subsections** → Content within files (with anchor links for deep linking)
+- **Paragraphs/clauses** → Nested content within files
+
+**Rationale:**
+- **Natural legislative granularity**: ~80% of laws modify at the section level
+- **Meaningful diffs**: Most PRs (laws) change 1-50 sections, making diffs readable
+- **Familiar citation pattern**: Aligns with how lawyers cite law ("17 USC § 106")
+- **Balanced file count**: ~60,000 sections total = manageable but comprehensive
+- **Clean PR visualization**: "Files changed: 23 sections" is intuitive
+- **Historical tracking**: Each section has its own change history
+
+**Example PR (Law) changing 3 sections:**
+```
+PL 105-304: Digital Millennium Copyright Act
+Files changed: 3
+
+Modified:
+  ✏️ Title-17-Copyright/Chapter-01/Section-106-Exclusive-Rights.md
+  ✏️ Title-17-Copyright/Chapter-05/Section-512-Limitations-on-Liability.md
+Added:
+  ➕ Title-17-Copyright/Chapter-12/Section-1201-Circumvention-of-Tech-Measures.md
+```
+
+#### Option 2: Chapter-as-File
+
+**Structure:**
+```
+USC/
+├── Title-17-Copyright/
+│   ├── Chapter-01-Subject-Matter-and-Scope.md
+│   ├── Chapter-02-Copyright-Ownership.md
+│   └── Chapter-13-Original-Designs.md
+├── Title-26-Internal-Revenue-Code/
+│   └── ...
+└── README.md
+```
+
+**Mapping:**
+- **Titles** → Directories
+- **Chapters** → Files
+- **Sections** → Major headings within files
+- **Subsections** → Content under headings
+
+**Pros:**
+- Fewer total files (~500-1000 vs ~60,000)
+- Easier to browse at high level
+- Simpler file tree navigation
+
+**Cons:**
+- ❌ Very large files (some chapters have 100+ sections)
+- ❌ Diffs are harder to read (entire chapter shows as changed even for 1-section amendments)
+- ❌ Doesn't match legislative granularity (laws rarely touch whole chapters)
+- ❌ Harder to link to specific provisions
+- ❌ Section-level history is obscured
+
+#### Option 3: Subsection-as-File
+
+**Structure:**
+```
+USC/
+├── Title-17-Copyright/
+│   ├── Chapter-01/
+│   │   ├── Section-106-Exclusive-Rights/
+│   │   │   ├── Subsection-1-Reproduction.md
+│   │   │   ├── Subsection-2-Derivative-Works.md
+│   │   │   ├── Subsection-3-Distribution.md
+│   │   │   └── ...
+│   │   └── Section-107-Fair-Use/
+│   │       └── ...
+```
+
+**Mapping:**
+- **Titles** → Top-level directories
+- **Chapters** → Directories
+- **Sections** → Directories
+- **Subsections** → Files
+- **Paragraphs** → Content within files
+
+**Pros:**
+- Maximum granularity for tracking changes
+- Very precise change attribution
+
+**Cons:**
+- ❌ Hundreds of thousands of files (overwhelming)
+- ❌ Too granular for most use cases
+- ❌ Many laws modify entire sections, not subsections
+- ❌ Navigation becomes cumbersome
+- ❌ Doesn't match typical legislative or legal citation patterns
+
+#### Option 4: Hybrid Section-as-File with Subsection Anchors
+
+**Structure:**
+Same as Option 1 (Section-as-File), but with enhanced deep linking:
+
+```
+USC/
+├── Title-17-Copyright/
+│   └── Chapter-01/
+│       └── Section-106-Exclusive-Rights.md
+```
+
+**File content with anchors:**
+```markdown
+# § 106 · Exclusive rights in copyrighted works
+
+Subject to sections 107 through 122, the owner of copyright under this
+title has the exclusive rights to do and to authorize any of the following:
+
+## (1) Reproduction {#subsection-1}
+to reproduce the copyrighted work in copies or phonorecords;
+
+## (2) Derivative Works {#subsection-2}
+to prepare derivative works based upon the copyrighted work;
+
+...
+```
+
+**Enhanced features:**
+- URLs can deep-link to subsections: `/Title-17/Chapter-01/Section-106#subsection-2`
+- Diffs can highlight subsection-level changes within the file
+- UI can show subsection-level change indicators
+- Search can index and return subsections as results
+
+**Pros:**
+- ✅ Same benefits as Section-as-File
+- ✅ Plus: subsection-level precision when needed
+- ✅ Progressive disclosure: show section, expand to subsections
+- ✅ Flexible for both coarse and fine-grained analysis
+
+**Cons:**
+- Slightly more complex implementation
+- Requires anchor/bookmark parsing
+
+### Recommended Approach: Option 1 (Section-as-File)
+
+**Primary reasons:**
+
+1. **Matches legislative practice**: The section is the fundamental unit that Congress modifies. When a law says "Section 106 is amended...", it's operating at this level.
+
+2. **Optimal diff readability**: A typical law might modify 5-30 sections. This produces a clean "Files changed" list similar to a normal software PR.
+
+3. **Legal citation alignment**: Lawyers, judges, and citizens reference laws as "17 USC § 106" – having this be a direct file path is intuitive.
+
+4. **Scalability**: 60,000 files is large but manageable for modern systems. GitHub repositories regularly handle this scale.
+
+5. **Historical clarity**: Each section's evolution is tracked independently, making time-travel intuitive.
+
+6. **Balanced granularity**: Not too coarse (chapters) or too fine (subsections), but just right for the audience and use case.
+
+**Implementation notes:**
+- File naming: Use descriptive names like `Section-106-Exclusive-Rights.md` rather than just `106.md` for better discoverability
+- Internal structure: Use markdown headers for subsections to enable deep linking
+- Metadata: Include frontmatter with section number, heading, enactment date, last modified
+- Cross-references: Automatically hyperlink citations to other sections (e.g., "section 107" → link to Section-107 file)
+
 ---
 
 ## 2. Target Audience
