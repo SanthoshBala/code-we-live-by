@@ -235,6 +235,7 @@ Added:
 
 **Legislative Blame View** ("Git Blame" for Laws)
 - Line-by-line attribution showing which law last modified each provision
+- Powered by **USCodeLine** entity with `last_modified_by_law_id` tracking
 - Display format for each line/paragraph:
   - **Public Law**: PL number and popular name (e.g., "PL 94-553: Copyright Act of 1976")
   - **Congress**: Which Congress passed it (e.g., "94th Congress")
@@ -247,8 +248,12 @@ Added:
   - Link to view the complete PR (law) that made the change
   - Preview of the diff showing what changed
   - Sponsors and vote counts
+  - Hierarchical context (parent lines via tree structure)
+- **Deep linking**: Each line has a unique URL for precise citation
+  - Format: `https://cwlb.gov/17/106#line-3` or `https://cwlb.gov/17/106#(1)`
+  - Share links to specific sentences or list items
 - Multi-law sections: Some text may show multiple attributions if different subsections were modified by different laws
-- Original enactment indicator: Special styling for text that dates to the section's original creation
+- Original enactment indicator: Special styling for text that dates to the section's original creation (via `created_by_law_id`)
 - User stories:
   - "I want to know when this copyright provision was added"
   - "Which Congress and President are responsible for this tax rule?"
@@ -540,23 +545,132 @@ Added:
 - `reference_text`: Text (the actual text that makes the reference)
 - `discovered_date`: Date (when this reference was identified)
 
-**LineAttribution** (For "git blame" style attribution - tracks which law created each line)
-- `section_id`: Foreign key to USCodeSection
-- `law_id`: Foreign key to PublicLaw (which law last modified this text)
-- `line_number_start`: Integer (starting line number)
-- `line_number_end`: Integer (ending line number, for multi-line provisions)
-- `text_content`: Text (the actual text content for this range)
-- `subsection_identifier`: String (e.g., "(a)", "(1)", "(A)(i)" - helps map to legal structure)
-- `attribution_type`: Enum (Original enactment, Amendment, Addition, Renumbering)
-- `effective_date`: Date (when this version of the text took effect)
-- `created_at`: Timestamp (when this attribution record was created)
-- Note: When a law modifies text, old LineAttribution records are preserved for historical blame views
+**USCodeLine** (Fine-grained line structure with parent/child tree relationships)
+- `line_id`: Primary key
+- `section_id`: Foreign key to USCodeSection (which section this belongs to)
+- `parent_line_id`: Foreign key to USCodeLine (NULL for root/section heading)
+- `line_number`: Integer (sequential within section for ordering: 1, 2, 3...)
+- `line_type`: Enum (Heading, Prose, ListItem)
+- `text_content`: Text (the actual text of this line)
+- `subsection_path`: String (e.g., "(c)(1)(A)(ii)" - for quick lookup and display)
+- `depth_level`: Integer (computed from tree depth: 0=root, 1=child of root, etc.)
+- `created_by_law_id`: Foreign key to PublicLaw (which law created this line)
+- `last_modified_by_law_id`: Foreign key to PublicLaw (which law last modified this line)
+- `effective_date`: Date (when this version took effect)
+- `hash`: String (SHA-256 of text_content, for detecting identical text across versions)
 
-**Alternative/Optimization**: Instead of storing line-by-line attribution, could compute blame dynamically by:
-1. Starting with section's original enactment law
-2. Applying LawChange records chronologically
-3. Tracking which law last touched each portion of text
-This approach saves storage but increases computation time for blame views.
+**Why parent/child tree structure?**
+- Handles arbitrary nesting depth (US Code can nest 5+ levels deep)
+- Natural representation of legal document structure
+- Enables precise blame attribution at line level
+- Supports deep linking to any sentence or list item
+- Simplifies queries for subtree navigation and context display
+
+**Line Types:**
+- **Heading**: Any level of heading (section title, subsection header, paragraph label)
+- **Prose**: Regular paragraph text
+- **ListItem**: Any enumerated item at any nesting level
+
+The tree structure emerges from `parent_line_id`, eliminating the need for fixed "SubsectionHeading" types.
+
+**Example: [17 USC § 106](https://www.law.cornell.edu/uscode/text/17/106)**
+
+| line_id | parent_id | line_# | type | path | depth | text_content |
+|---------|-----------|--------|------|------|-------|--------------|
+| 100 | NULL | 1 | Heading | NULL | 0 | § 106. Exclusive rights in copyrighted works |
+| 101 | 100 | 2 | Prose | NULL | 1 | Subject to sections 107 through 122, the owner of copyright under this title has the exclusive rights to do and to authorize any of the following: |
+| 102 | 101 | 3 | ListItem | "(1)" | 2 | to reproduce the copyrighted work in copies or phonorecords; |
+| 103 | 101 | 4 | ListItem | "(2)" | 2 | to prepare derivative works based upon the copyrighted work; |
+| 104 | 101 | 5 | ListItem | "(3)" | 2 | to distribute copies or phonorecords of the copyrighted work to the public... |
+
+Tree visualization:
+```
+§ 106 [Heading]
+└── Subject to sections 107 through 122... [Prose]
+    ├── (1) to reproduce... [ListItem]
+    ├── (2) to prepare derivative works... [ListItem]
+    ├── (3) to distribute copies... [ListItem]
+    ├── (4) to perform publicly... [ListItem]
+    ├── (5) to display publicly... [ListItem]
+    └── (6) in the case of sound recordings... [ListItem]
+```
+
+**Example: [17 USC § 512(c)(1)](https://www.law.cornell.edu/uscode/text/17/512) - Deeply Nested**
+
+| line_id | parent_id | line_# | type | path | depth | text_content |
+|---------|-----------|--------|------|------|-------|--------------|
+| 200 | NULL | 1 | Heading | NULL | 0 | § 512. Limitations on liability... |
+| 201 | 200 | 2 | Heading | "(c)" | 1 | Information residing on systems... |
+| 202 | 201 | 3 | Heading | "(c)(1)" | 2 | In general |
+| 203 | 202 | 4 | Prose | "(c)(1)" | 3 | A service provider shall not be liable... if the service provider— |
+| 204 | 203 | 5 | ListItem | "(c)(1)(A)" | 4 | (A) |
+| 205 | 204 | 6 | ListItem | "(c)(1)(A)(i)" | 5 | (i) does not have actual knowledge... |
+| 206 | 204 | 7 | ListItem | "(c)(1)(A)(ii)" | 5 | (ii) in the absence of such actual knowledge... |
+| 207 | 204 | 8 | ListItem | "(c)(1)(A)(iii)" | 5 | (iii) upon obtaining such knowledge... |
+| 208 | 203 | 9 | ListItem | "(c)(1)(B)" | 4 | (B) does not receive a financial benefit... |
+
+Tree visualization:
+```
+§ 512 [Heading]
+└── (c) Information residing... [Heading]
+    └── (1) In general [Heading]
+        └── A service provider shall not be liable... [Prose]
+            ├── (A) [ListItem]
+            │   ├── (i) does not have actual knowledge... [ListItem]
+            │   ├── (ii) in the absence of... [ListItem]
+            │   └── (iii) upon obtaining... [ListItem]
+            └── (B) does not receive... [ListItem]
+```
+
+**LineHistory** (Historical versions of lines)
+- `line_history_id`: Primary key
+- `line_id`: Foreign key to USCodeLine
+- `version_number`: Integer (1, 2, 3... for each time this line changed)
+- `text_content`: Text (historical text at this version)
+- `modified_by_law_id`: Foreign key to PublicLaw
+- `effective_date`: Date
+- `parent_line_id`: Foreign key (parent at this version, may differ from current)
+
+**Key Query Patterns:**
+
+```sql
+-- Get all lines in a section (ordered for display)
+SELECT * FROM USCodeLine
+WHERE section_id = ?
+ORDER BY line_number;
+
+-- Get direct children of a line
+SELECT * FROM USCodeLine
+WHERE parent_line_id = ?
+ORDER BY line_number;
+
+-- Get entire subtree (recursive CTE)
+WITH RECURSIVE subtree AS (
+  SELECT * FROM USCodeLine WHERE line_id = ?
+  UNION ALL
+  SELECT l.* FROM USCodeLine l
+  JOIN subtree s ON l.parent_line_id = s.line_id
+)
+SELECT * FROM subtree ORDER BY line_number;
+
+-- Get path to root (breadcrumb trail)
+WITH RECURSIVE path AS (
+  SELECT * FROM USCodeLine WHERE line_id = ?
+  UNION ALL
+  SELECT l.* FROM USCodeLine l
+  JOIN path p ON l.line_id = p.parent_line_id
+)
+SELECT * FROM path ORDER BY depth_level;
+
+-- Blame view: lines with law attribution
+SELECT l.line_number, l.text_content, l.subsection_path,
+       pl.law_number, pl.popular_name, pl.enacted_date, pl.president,
+       c.congress
+FROM USCodeLine l
+JOIN PublicLaw pl ON l.last_modified_by_law_id = pl.law_id
+WHERE l.section_id = ?
+ORDER BY l.line_number;
+```
 
 ---
 
@@ -586,13 +700,23 @@ This approach saves storage but increases computation time for blame views.
 - **ETL Process**:
   - Ingest Public Laws in structured format (XML/JSON)
   - Parse legal language to extract section changes
+  - **Parse sections into USCodeLine tree structure**:
+    - Identify headings, prose, and list items
+    - Build parent/child relationships based on legal nesting
+    - Extract subsection paths (e.g., "(c)(1)(A)(ii)")
+    - Compute depth levels for rendering
+    - Calculate line hashes for change detection
   - Build historical versions by applying changes chronologically
+  - Track line-level attribution (created_by, last_modified_by)
   - Link legislators to sponsorship and votes
 
 - **Challenges**:
   - Older laws may be in PDF/scanned format requiring OCR
   - Legal language parsing is complex (e.g., "Section 106 is amended by striking 'and' and inserting 'or'")
+  - **Line parsing complexity**: Determining boundaries between lines (sentence vs. clause vs. list item)
+  - **Tree structure inference**: Legal documents don't explicitly mark parent/child relationships
   - Effective dates may differ from enactment dates
+  - Scale: Millions of USCodeLine records across ~60,000 sections
 
 ### Infrastructure
 - **Hosting**: Cloud platform (AWS, GCP, or Azure)
@@ -926,6 +1050,44 @@ Legal statutes often describe changes indirectly:
 - Manual review for complex cases
 - Display both original bill language AND resulting code change
 
+### Challenge: Line-Level Parsing and Tree Structure
+Breaking sections into individual lines with parent/child relationships requires sophisticated parsing that doesn't exist in source documents.
+
+**Specific Challenges**:
+- **Line boundaries**: What constitutes a "line"? Is "Subject to sections 107 through 122..." one line or multiple?
+- **Nested list detection**: Recognizing that "(A)(i)" is a child of "(A)" which is a child of "(1)"
+- **Prose vs. list items**: When a paragraph introduces a list with a colon, establishing the parent relationship
+- **Multi-paragraph items**: Some list items span multiple paragraphs with complex internal structure
+- **Inconsistent formatting**: Not all sections follow the same structural conventions
+- **Subsection path extraction**: Parsing "(c)(1)(A)(ii)" from various formats
+
+**Mitigation**:
+- **Leverage XML structure**: Office of Law Revision Counsel provides XML with some hierarchical hints
+- **Pattern recognition**: Build parser that recognizes common patterns:
+  - Lines ending with ":" typically parent the following list
+  - Numbered/lettered items are children of preceding prose
+  - Indentation in source often indicates nesting depth
+- **Heuristic rules**:
+  - Complete sentences = Prose lines
+  - Numbered items at same level = siblings
+  - Items with deeper nesting = children
+- **Manual correction interface**: Flag ambiguous cases for human review during ETL
+- **Iterative refinement**: Parse simple sections first (like § 106), use as training data
+- **Version control parsing rules**: Track parser logic changes to enable re-parsing if rules improve
+- **Hash-based change detection**: Use line hashes to detect when text hasn't changed across versions
+
+**Example parsing decision tree**:
+```
+Input: "(1) In general. A service provider shall not be liable..."
+
+Decision:
+- Starts with "(1)" → ListItem type
+- Contains period after "general" → Has heading component
+- Text after period is prose → Could split or keep together
+- Decision: Keep as single ListItem with path "(1)"
+- Create child Prose line for the text after "In general."
+```
+
 ### Challenge: Historical Data Availability
 Pre-1990s laws may lack structured digital format.
 
@@ -944,13 +1106,32 @@ Some laws take effect immediately; others have delayed effective dates or phase-
 - Show annotation if dates differ significantly
 
 ### Challenge: Scale
-Full US Code is ~60,000 sections; 100+ years of history = millions of changes.
+Full US Code is ~60,000 sections; with line-level granularity = **millions of USCodeLine records**. With 100+ years of history, LineHistory table could contain tens of millions of records.
+
+**Specific Scale Concerns**:
+- Average section has 20-50 lines → 1.2M - 3M current USCodeLine records
+- Each line may have 5-10 historical versions → 10M - 30M LineHistory records
+- Blame queries joining lines to laws across large datasets
+- Deep tree traversals (recursive CTEs) for nested sections
+- Full-text search across millions of line records
 
 **Mitigation**:
-- Efficient database schema with indexing
-- Lazy loading and pagination
-- Pre-compute common queries (e.g., "current version")
-- CDN for static content
+- **Database optimization**:
+  - Efficient indexing on section_id, parent_line_id, line_number
+  - Materialized views for common queries (e.g., current section with all lines)
+  - Partition LineHistory table by date ranges
+  - Use PostgreSQL's recursive CTE optimization
+- **Query strategies**:
+  - Lazy loading: Load section headings first, expand on demand
+  - Pagination for blame view (show first 100 lines)
+  - Cache entire sections with line trees in Redis
+  - Pre-compute depth_level and subsection_path during ETL
+- **Storage optimization**:
+  - Compress historical text (many lines unchanged across versions)
+  - Use line hashes to detect duplicates
+  - Archive very old versions to cold storage
+- **CDN**: Serve pre-rendered section HTML for common sections
+- **Horizontal scaling**: Partition database by Title for read replicas
 
 ### Challenge: Legal Accuracy
 Displaying legal text requires precision; errors could mislead users.
