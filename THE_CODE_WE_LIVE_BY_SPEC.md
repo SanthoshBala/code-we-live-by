@@ -10,6 +10,41 @@
 
 ---
 
+## Table of Contents
+
+1. [Core Concept & Metaphor Mapping](#1-core-concept--metaphor-mapping)
+   - [Repository Metaphor](#repository-metaphor)
+   - [Understanding the US Code Structure](#understanding-the-us-code-structure)
+   - [Repository Structure Mapping](#repository-structure-mapping)
+2. [Target Audience](#2-target-audience)
+3. [Phase 1 Scope](#3-phase-1-scope)
+4. [Core Features](#4-core-features)
+   - [Code Browsing ("Repository View")](#41-code-browsing-repository-view)
+   - [Law Viewer ("Pull Request View")](#42-law-viewer-pull-request-view)
+   - [Search & Discovery](#43-search--discovery)
+   - [Analytics & Visualizations](#44-analytics--visualizations)
+   - [Integration with Related Resources](#45-integration-with-related-resources)
+5. [User Stories](#5-user-stories)
+6. [Data Model](#6-data-model)
+7. [Technical Architecture](#7-technical-architecture)
+8. [User Interface & Experience](#8-user-interface--experience)
+9. [Analytics: Key Metrics & Questions](#9-analytics-key-metrics--questions)
+10. [Success Metrics](#10-success-metrics)
+11. [Privacy & User Data](#11-privacy--user-data)
+12. [Future Enhancements (Post-Phase 1)](#12-future-enhancements-post-phase-1)
+13. [Technical Challenges & Mitigations](#13-technical-challenges--mitigations)
+14. [Open Questions for Further Discussion](#14-open-questions-for-further-discussion)
+15. [Development Roadmap](#15-development-roadmap)
+16. [Conclusion](#16-conclusion)
+
+**Appendices:**
+- [Appendix A: Data Sources](#appendix-a-data-sources)
+- [Appendix B: Technical Stack Recommendations](#appendix-b-technical-stack-recommendations)
+- [Appendix C: Legal & Disclaimers](#appendix-c-legal--disclaimers)
+- [Appendix D: Alternative Repository Structure Mappings](#appendix-d-alternative-repository-structure-mappings)
+
+---
+
 ## 1. Core Concept & Metaphor Mapping
 
 ### Repository Metaphor
@@ -81,9 +116,9 @@ Title 17 - Copyright
     └── ...
 ```
 
-### Repository Structure Mapping Options
+### Repository Structure Mapping
 
-#### Option 1: Section-as-File (Recommended ⭐)
+After evaluating multiple structural approaches (see [Appendix D](#appendix-d-alternative-repository-structure-mappings) for alternatives), we recommend **Section-as-File** mapping:
 
 **Structure:**
 ```
@@ -109,14 +144,6 @@ USC/
 - **Subsections** → Content within files (with anchor links for deep linking)
 - **Paragraphs/clauses** → Nested content within files
 
-**Rationale:**
-- **Natural legislative granularity**: ~80% of laws modify at the section level
-- **Meaningful diffs**: Most PRs (laws) change 1-50 sections, making diffs readable
-- **Familiar citation pattern**: Aligns with how lawyers cite law ("17 USC § 106")
-- **Balanced file count**: ~60,000 sections total = manageable but comprehensive
-- **Clean PR visualization**: "Files changed: 23 sections" is intuitive
-- **Historical tracking**: Each section has its own change history
-
 **Example PR (Law) changing 3 sections:**
 ```
 PL 105-304: Digital Millennium Copyright Act
@@ -129,131 +156,14 @@ Added:
   ➕ Title-17-Copyright/Chapter-12/Section-1201-Circumvention-of-Tech-Measures.md
 ```
 
-#### Option 2: Chapter-as-File
+### Why Section-as-File?
 
-**Structure:**
-```
-USC/
-├── Title-17-Copyright/
-│   ├── Chapter-01-Subject-Matter-and-Scope.md
-│   ├── Chapter-02-Copyright-Ownership.md
-│   └── Chapter-13-Original-Designs.md
-├── Title-26-Internal-Revenue-Code/
-│   └── ...
-└── README.md
-```
-
-**Mapping:**
-- **Titles** → Directories
-- **Chapters** → Files
-- **Sections** → Major headings within files
-- **Subsections** → Content under headings
-
-**Pros:**
-- Fewer total files (~500-1000 vs ~60,000)
-- Easier to browse at high level
-- Simpler file tree navigation
-
-**Cons:**
-- ❌ Very large files (some chapters have 100+ sections)
-- ❌ Diffs are harder to read (entire chapter shows as changed even for 1-section amendments)
-- ❌ Doesn't match legislative granularity (laws rarely touch whole chapters)
-- ❌ Harder to link to specific provisions
-- ❌ Section-level history is obscured
-
-#### Option 3: Subsection-as-File
-
-**Structure:**
-```
-USC/
-├── Title-17-Copyright/
-│   ├── Chapter-01/
-│   │   ├── Section-106-Exclusive-Rights/
-│   │   │   ├── Subsection-1-Reproduction.md
-│   │   │   ├── Subsection-2-Derivative-Works.md
-│   │   │   ├── Subsection-3-Distribution.md
-│   │   │   └── ...
-│   │   └── Section-107-Fair-Use/
-│   │       └── ...
-```
-
-**Mapping:**
-- **Titles** → Top-level directories
-- **Chapters** → Directories
-- **Sections** → Directories
-- **Subsections** → Files
-- **Paragraphs** → Content within files
-
-**Pros:**
-- Maximum granularity for tracking changes
-- Very precise change attribution
-
-**Cons:**
-- ❌ Hundreds of thousands of files (overwhelming)
-- ❌ Too granular for most use cases
-- ❌ Many laws modify entire sections, not subsections
-- ❌ Navigation becomes cumbersome
-- ❌ Doesn't match typical legislative or legal citation patterns
-
-#### Option 4: Hybrid Section-as-File with Subsection Anchors
-
-**Structure:**
-Same as Option 1 (Section-as-File), but with enhanced deep linking:
-
-```
-USC/
-├── Title-17-Copyright/
-│   └── Chapter-01/
-│       └── Section-106-Exclusive-Rights.md
-```
-
-**File content with anchors:**
-```markdown
-# § 106 · Exclusive rights in copyrighted works
-
-Subject to sections 107 through 122, the owner of copyright under this
-title has the exclusive rights to do and to authorize any of the following:
-
-## (1) Reproduction {#subsection-1}
-to reproduce the copyrighted work in copies or phonorecords;
-
-## (2) Derivative Works {#subsection-2}
-to prepare derivative works based upon the copyrighted work;
-
-...
-```
-
-**Enhanced features:**
-- URLs can deep-link to subsections: `/Title-17/Chapter-01/Section-106#subsection-2`
-- Diffs can highlight subsection-level changes within the file
-- UI can show subsection-level change indicators
-- Search can index and return subsections as results
-
-**Pros:**
-- ✅ Same benefits as Section-as-File
-- ✅ Plus: subsection-level precision when needed
-- ✅ Progressive disclosure: show section, expand to subsections
-- ✅ Flexible for both coarse and fine-grained analysis
-
-**Cons:**
-- Slightly more complex implementation
-- Requires anchor/bookmark parsing
-
-### Recommended Approach: Option 1 (Section-as-File)
-
-**Primary reasons:**
-
-1. **Matches legislative practice**: The section is the fundamental unit that Congress modifies. When a law says "Section 106 is amended...", it's operating at this level.
-
-2. **Optimal diff readability**: A typical law might modify 5-30 sections. This produces a clean "Files changed" list similar to a normal software PR.
-
-3. **Legal citation alignment**: Lawyers, judges, and citizens reference laws as "17 USC § 106" – having this be a direct file path is intuitive.
-
-4. **Scalability**: 60,000 files is large but manageable for modern systems. GitHub repositories regularly handle this scale.
-
-5. **Historical clarity**: Each section's evolution is tracked independently, making time-travel intuitive.
-
-6. **Balanced granularity**: Not too coarse (chapters) or too fine (subsections), but just right for the audience and use case.
+1. **Matches legislative practice**: The section is the fundamental unit that Congress modifies (~80% of laws operate at this level)
+2. **Optimal diff readability**: Typical laws modify 5-30 sections, producing clean "Files changed" lists
+3. **Legal citation alignment**: "17 USC § 106" maps directly to a file path
+4. **Scalability**: ~60,000 sections is manageable for modern systems
+5. **Historical clarity**: Each section's evolution is tracked independently
+6. **Balanced granularity**: Not too coarse (chapters) or too fine (subsections)
 
 **Implementation notes:**
 - File naming: Use descriptive names like `Section-106-Exclusive-Rights.md` rather than just `106.md` for better discoverability
@@ -1155,3 +1065,127 @@ This platform has the potential to become an essential tool for civic education,
 - Official version is at uscode.house.gov
 - Not legal advice
 - Open data license for all content
+
+## Appendix D: Alternative Repository Structure Mappings
+
+This appendix presents alternative approaches to mapping the US Code structure to repository files. The main specification recommends **Section-as-File** (see Section 1), but these alternatives were considered during design.
+
+### Option 2: Chapter-as-File
+
+**Structure:**
+```
+USC/
+├── Title-17-Copyright/
+│   ├── Chapter-01-Subject-Matter-and-Scope.md
+│   ├── Chapter-02-Copyright-Ownership.md
+│   └── Chapter-13-Original-Designs.md
+├── Title-26-Internal-Revenue-Code/
+│   └── ...
+└── README.md
+```
+
+**Mapping:**
+- **Titles** → Directories
+- **Chapters** → Files
+- **Sections** → Major headings within files
+- **Subsections** → Content under headings
+
+**Pros:**
+- Fewer total files (~500-1000 vs ~60,000)
+- Easier to browse at high level
+- Simpler file tree navigation
+
+**Cons:**
+- ❌ Very large files (some chapters have 100+ sections)
+- ❌ Diffs are harder to read (entire chapter shows as changed even for 1-section amendments)
+- ❌ Doesn't match legislative granularity (laws rarely touch whole chapters)
+- ❌ Harder to link to specific provisions
+- ❌ Section-level history is obscured
+
+**Verdict**: Too coarse-grained for the use case. Would make diffs unwieldy and obscure the section-level changes that are fundamental to legislation.
+
+---
+
+### Option 3: Subsection-as-File
+
+**Structure:**
+```
+USC/
+├── Title-17-Copyright/
+│   ├── Chapter-01/
+│   │   ├── Section-106-Exclusive-Rights/
+│   │   │   ├── Subsection-1-Reproduction.md
+│   │   │   ├── Subsection-2-Derivative-Works.md
+│   │   │   ├── Subsection-3-Distribution.md
+│   │   │   └── ...
+│   │   └── Section-107-Fair-Use/
+│   │       └── ...
+```
+
+**Mapping:**
+- **Titles** → Top-level directories
+- **Chapters** → Directories
+- **Sections** → Directories
+- **Subsections** → Files
+- **Paragraphs** → Content within files
+
+**Pros:**
+- Maximum granularity for tracking changes
+- Very precise change attribution
+
+**Cons:**
+- ❌ Hundreds of thousands of files (overwhelming)
+- ❌ Too granular for most use cases
+- ❌ Many laws modify entire sections, not subsections
+- ❌ Navigation becomes cumbersome
+- ❌ Doesn't match typical legislative or legal citation patterns
+
+**Verdict**: Too fine-grained. Creates an overwhelming number of files and doesn't match how laws are typically cited or modified.
+
+---
+
+### Option 4: Hybrid Section-as-File with Subsection Anchors
+
+**Structure:**
+Same as recommended Section-as-File approach, but with enhanced deep linking:
+
+```
+USC/
+├── Title-17-Copyright/
+│   └── Chapter-01/
+│       └── Section-106-Exclusive-Rights.md
+```
+
+**File content with anchors:**
+```markdown
+# § 106 · Exclusive rights in copyrighted works
+
+Subject to sections 107 through 122, the owner of copyright under this
+title has the exclusive rights to do and to authorize any of the following:
+
+## (1) Reproduction {#subsection-1}
+to reproduce the copyrighted work in copies or phonorecords;
+
+## (2) Derivative Works {#subsection-2}
+to prepare derivative works based upon the copyrighted work;
+
+...
+```
+
+**Enhanced features:**
+- URLs can deep-link to subsections: `/Title-17/Chapter-01/Section-106#subsection-2`
+- Diffs can highlight subsection-level changes within the file
+- UI can show subsection-level change indicators
+- Search can index and return subsections as results
+
+**Pros:**
+- ✅ Same benefits as Section-as-File
+- ✅ Plus: subsection-level precision when needed
+- ✅ Progressive disclosure: show section, expand to subsections
+- ✅ Flexible for both coarse and fine-grained analysis
+
+**Cons:**
+- Slightly more complex implementation
+- Requires anchor/bookmark parsing
+
+**Verdict**: Strong alternative that could be adopted in Phase 2 for enhanced functionality. Maintains the benefits of Section-as-File while adding subsection-level precision through anchors rather than file structure.
