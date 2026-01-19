@@ -1,8 +1,10 @@
-# US Code Explorer - Project Specification
+# The Code We Live By (CWLB) - Project Specification
 
 ## Executive Summary
 
-The US Code Explorer is a civic engagement platform that makes federal legislation accessible and understandable by treating the US Code as a software repository. By leveraging the familiar metaphors of version control (commits, pull requests, diffs, contributors), the platform enables citizens to explore how laws evolve over time, understand congressional activity patterns, and gain insights into the legislative process.
+**The Code We Live By** (CWLB) is a civic engagement platform that makes federal legislation accessible and understandable by treating the US Code as a software repository. By leveraging the familiar metaphors of version control (commits, pull requests, diffs, contributors), the platform enables citizens to explore how laws evolve over time, understand congressional activity patterns, and gain insights into the legislative process.
+
+**Brand**: The Code We Live By | **Acronym**: CWLB | **Social**: @cwlb
 
 **Mission**: Increase transparency and public understanding of how the nation's laws are created, modified, and maintained.
 
@@ -16,7 +18,9 @@ The US Code Explorer is a civic engagement platform that makes federal legislati
 |----------------|-------------------------------|
 | US Code (current state) | Repository main branch |
 | Individual sections (e.g., 17 USC § 106) | Source code files |
-| Public Law / Statute | Pull Request (PR) |
+| Public Law / Statute | Merged Pull Request (PR) |
+| Proposed bill | Open Pull Request |
+| Failed/rejected bill | Closed/Rejected PR |
 | Bill sponsor(s) | PR Author(s) |
 | Co-sponsors | Co-authors |
 | Congress members who voted | Reviewers |
@@ -27,6 +31,8 @@ The US Code Explorer is a civic engagement platform that makes federal legislati
 | Effective date | Merge timestamp |
 | Historical versions of code | Git history / time travel |
 | Titles (e.g., Title 17) | Repository directories/modules |
+| Congressional debates/hearings | PR conversation/comments |
+| Cross-references between sections | Code dependencies |
 
 ---
 
@@ -255,7 +261,7 @@ The US Code Explorer is a civic engagement platform that makes federal legislati
 - `last_modified`: Date
 - `enacted_date`: Date (when section was originally created)
 
-**PublicLaw**
+**PublicLaw** (Enacted legislation - "Merged PR")
 - `law_number`: String (e.g., "94-553")
 - `congress`: Integer (e.g., 94)
 - `law_type`: Enum (Public, Private)
@@ -268,13 +274,38 @@ The US Code Explorer is a civic engagement platform that makes federal legislati
 - `enacted_date`: Date
 - `effective_date`: Date
 - `president`: String
+- `status`: Enum (Enacted) - always "Enacted" for this table
 
-**LawChange** (The "Diff")
+**Bill** (Proposed or failed legislation - "Open or Closed PR")
+- `bill_number`: String (e.g., "H.R. 1234")
+- `congress`: Integer
+- `bill_type`: Enum (House, Senate)
+- `popular_name`: String
+- `summary`: Text
+- `introduced_date`: Date
+- `status`: Enum (Introduced, In Committee, Passed House, Passed Senate, Failed, Vetoed)
+- `current_chamber`: String
+- `current_committee`: String
+- `last_action_date`: Date
+- `last_action_description`: Text
+- `likelihood_score`: Float (optional - probability of passage)
+- `related_law_id`: Foreign key to PublicLaw (if eventually enacted)
+
+**LawChange** (The "Diff" for enacted laws)
 - `law_id`: Foreign key to PublicLaw
 - `section_id`: Foreign key to USCodeSection
 - `change_type`: Enum (Add, Delete, Modify, Repeal)
 - `old_text`: Text
 - `new_text`: Text
+- `line_number_start`: Integer
+- `line_number_end`: Integer
+
+**ProposedChange** (The "Diff" for bills not yet enacted)
+- `bill_id`: Foreign key to Bill
+- `section_id`: Foreign key to USCodeSection (proposed target)
+- `change_type`: Enum (Add, Delete, Modify, Repeal)
+- `current_text`: Text (current code text)
+- `proposed_text`: Text (what it would become)
 - `line_number_start`: Integer
 - `line_number_end`: Integer
 
@@ -307,6 +338,13 @@ The US Code Explorer is a civic engagement platform that makes federal legislati
 - `vote_type`: Enum (Yea, Nay, Present, Not Voting)
 - `chamber`: Enum (House, Senate)
 - `vote_date`: Date
+
+**SectionReference** (For dependency graphs)
+- `source_section_id`: Foreign key to USCodeSection (the section doing the referencing)
+- `target_section_id`: Foreign key to USCodeSection (the section being referenced)
+- `reference_type`: Enum (Explicit citation, Cross-reference, "Subject to", Conditional)
+- `reference_text`: Text (the actual text that makes the reference)
+- `discovered_date`: Date (when this reference was identified)
 
 ---
 
@@ -368,7 +406,7 @@ The US Code Explorer is a civic engagement platform that makes federal legislati
 ### Code Browser Page
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [Logo] US Code Explorer          [Search] [Analytics] [?]   │
+│ [Logo] The Code We Live By       [Search] [Analytics] [?]   │
 ├─────────────────────────────────────────────────────────────┤
 │ USC > Title 17 > Chapter 1 > § 106                          │
 │                                                              │
@@ -564,6 +602,44 @@ The US Code Explorer is a civic engagement platform that makes federal legislati
 
 ## 12. Future Enhancements (Post-Phase 1)
 
+### Legislative Process Features (Priority Backlog)
+
+**Proposed Bills ("Open Pull Requests")** ⭐ Priority
+- Show bills currently under consideration in Congress
+- Display as "Open PRs" awaiting merge (enactment)
+- Real-time status updates (in committee, scheduled for vote, etc.)
+- Show proposed diffs (what would change if bill passes)
+- Filter by chamber, committee, likelihood of passage
+- Track bill amendments as commits to the PR
+- User story: "I want to see what changes to copyright law are being proposed right now"
+
+**Failed Legislation ("Closed/Rejected PRs")**
+- Show bills that failed to pass (died in committee, rejected, vetoed without override)
+- Display as closed/rejected PRs
+- Include voting records showing why it failed
+- Compare similar bills across sessions (was it reintroduced?)
+- Analytics: success/failure rates by topic, sponsor, Congress
+- User story: "I want to see how many times healthcare reform was attempted before the ACA passed"
+
+**Conversation Tab**
+- Congressional floor debates excerpts
+- Committee hearing summaries and testimony
+- Bill markup session notes
+- Public comments (if applicable)
+- Media coverage and analysis links
+- Expert commentary
+- Design challenges: What format? How much detail? Chronological or topical?
+- User story: "I want to understand the debates that shaped this law"
+
+**Dependency Graph**
+- Visual network showing which sections reference each other
+- "This section is referenced by 47 other sections"
+- "This section references 12 other sections"
+- Identify critical hub sections (highly referenced)
+- Impact analysis: "If this section changes, these others might be affected"
+- Interactive graph visualization (D3.js force-directed graph)
+- User story: "I want to see what other laws depend on this privacy statute"
+
 ### Expanded Coverage
 - All 54 titles of US Code
 - State laws (multi-state comparison)
@@ -642,35 +718,28 @@ Displaying legal text requires precision; errors could mislead users.
 
 ## 14. Open Questions for Further Discussion
 
-1. **Naming**: Is "US Code Explorer" the right name, or something more evocative (e.g., "LegisGit", "CodeCongress", "The People's Repository")?
-
-2. **Monetization**: Should this be:
+1. **Monetization**: Should this be:
    - Fully free (grant-funded or nonprofit)
    - Freemium (advanced features require subscription)
    - Ad-supported (with ethical ad standards)
 
-3. **Governance**: Who maintains this? Options:
+2. **Governance**: Who maintains this? Options:
    - Nonprofit organization
    - Open-source community
    - Academic institution
    - Government partnership
 
-4. **Scope of "Conversation"**: Should laws have a "Conversation" tab showing:
-   - Congressional floor debates?
-   - Committee hearing summaries?
-   - Public comments during drafting?
-
-5. **Amendments to Bills**: Should we show:
+3. **Amendments to Bills**: Should we show:
    - Amendments proposed during bill passage as "commits to PR branch"?
    - Failed amendments as "rejected commits"?
 
-6. **Cross-References**: How deeply should we link related sections?
+4. **Cross-References**: How deeply should we link related sections?
    - Inline links to other sections mentioned?
-   - Dependency graph (sections that reference each other)?
+   - Auto-detect citations and hyperlink them?
 
-7. **International Expansion**: Could this model extend to other countries' legal codes?
+5. **International Expansion**: Could this model extend to other countries' legal codes?
 
-8. **Educational Materials**: Should we create:
+6. **Educational Materials**: Should we create:
    - Video tutorials?
    - Guided tours (e.g., "The journey of the ADA")?
    - Curriculum for high school civics classes?
@@ -716,7 +785,7 @@ Displaying legal text requires precision; errors could mislead users.
 
 ## 16. Conclusion
 
-The US Code Explorer transforms how citizens understand and engage with federal law. By applying the familiar metaphor of software development to the legislative process, we make the US Code accessible, explorable, and analytically rich.
+**The Code We Live By** (CWLB) transforms how citizens understand and engage with federal law. By applying the familiar metaphor of software development to the legislative process, we make the US Code accessible, explorable, and analytically rich.
 
 **Key Differentiators**:
 - **Transparency**: See exactly what changed, when, and by whom
