@@ -191,11 +191,14 @@ Added:
 
 ### Coverage
 - **Titles**: 5-10 most publicly relevant titles, including:
+  - Title 10: Armed Forces
   - Title 17: Copyright
-  - Title 26: Internal Revenue Code (Tax)
   - Title 18: Crimes and Criminal Procedure
-  - Title 42: Public Health and Social Welfare
   - Title 20: Education
+  - Title 22: Foreign Relations and Intercourse
+  - Title 26: Internal Revenue Code (Tax)
+  - Title 42: Public Health and Social Welfare
+  - Title 50: War and National Defense
   - Additional titles based on public interest and data availability
 
 ### Historical Depth
