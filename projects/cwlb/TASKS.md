@@ -7,10 +7,11 @@ This document translates the CWLB specification into an actionable backlog of im
 ## Phase 0: Research & Validation (2-3 months)
 
 ### Data Source Assessment
-- [ ] **Task 0.1**: Evaluate US House Office of Law Revision Counsel API/data formats
+- [x] **Task 0.1**: Evaluate US House Office of Law Revision Counsel API/data formats ✅
   - Test XML/JSON structure for US Code sections
   - Assess completeness and update frequency
   - Document data schema and available metadata
+  - **Completed**: See [research/TASK-0.1-OLRC-Data-Evaluation.md](research/TASK-0.1-OLRC-Data-Evaluation.md)
 
 - [ ] **Task 0.2**: Evaluate GovInfo.gov API for Public Laws
   - Test API endpoints for Public Law documents
