@@ -4,27 +4,70 @@ This directory contains custom skills and slash commands for Claude Code.
 
 ## Structure
 
-- `skills/` - Custom Claude skills that extend functionality
-- `commands/` - Slash commands for quick access to common operations
+- `skills/` - Custom Claude skills that extend functionality (slash commands)
+- `commands/` - Legacy location for command definitions (still supported)
 
-## Usage
+## Creating Custom Slash Commands
 
-### Skills
+Custom slash commands in Claude Code are created as **Skills**. Each skill is a directory containing a `SKILL.md` file.
 
-Place custom skill definitions in the `skills/` directory. Skills are reusable components that can perform specific tasks.
+### Directory Structure
 
-### Slash Commands
+```
+.claude/skills/
+└── hello/
+    └── SKILL.md
+```
 
-Place slash command definitions in the `commands/` directory. Slash commands provide quick shortcuts for common operations.
+### SKILL.md Format
 
-## Examples
+Create a `SKILL.md` file with YAML frontmatter and instructions:
 
-To add a new skill:
-1. Create a new file in `skills/` (e.g., `my-skill.md`)
-2. Define the skill's purpose and implementation
-3. Reference it using the Skill tool
+```yaml
+---
+name: command-name
+description: What the command does
+argument-hint: [arg1] [arg2]
+---
 
-To add a new slash command:
-1. Create a new file in `commands/` (e.g., `my-command.md`)
-2. Define the command's behavior and parameters
-3. Use it with `/my-command` in conversations
+Instructions for Claude on how to execute this command.
+Use $ARGUMENTS to access all arguments, or $1, $2, etc. for individual args.
+```
+
+### Example: Hello Command
+
+`.claude/skills/hello/SKILL.md`:
+```yaml
+---
+name: hello
+description: Greet someone with a personalized hello message
+argument-hint: [name]
+---
+
+Greet the person named $ARGUMENTS with "Hello, $ARGUMENTS!"
+If no arguments are provided, respond with "Hello, World!"
+```
+
+### Usage
+
+Once created, invoke your command:
+```
+/hello Alice
+> Hello, Alice!
+
+/hello
+> Hello, World!
+```
+
+### Key Frontmatter Options
+
+- `name` - The command name (use without `/` prefix)
+- `description` - What the command does; Claude uses this to auto-invoke
+- `argument-hint` - Shows expected arguments to users
+- `disable-model-invocation` - Set to `true` to prevent auto-invocation
+- `allowed-tools` - Restrict which tools Claude can use in this skill
+
+## Scope
+
+- `.claude/skills/` - Project-specific, shared with team via git
+- `~/.claude/skills/` - Personal, available across all your projects
