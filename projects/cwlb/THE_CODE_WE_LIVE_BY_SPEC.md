@@ -116,6 +116,52 @@ Title 17 - Copyright
     └── ...
 ```
 
+### Positive Law vs Non-Positive Law Titles
+
+A critical distinction in understanding the US Code is that **not all titles carry the same legal authority**. The US Code consists of two types of titles:
+
+**Positive Law Titles (Currently 29 of 54 titles)**
+- These titles have been **formally enacted as statutes by Congress**
+- They represent official restatements and codifications of federal law
+- **The US Code text itself is the authoritative legal text**
+- If a conflict exists between the US Code and original Statutes at Large, the US Code prevails
+- Congress has designated these titles as "legal evidence" of the law
+- Examples from Phase 1 scope:
+  - **Title 10 (Armed Forces)** - Enacted as positive law in 1956
+  - **Title 17 (Copyright)** - Enacted as positive law in 1976
+  - **Title 18 (Crimes and Criminal Procedure)** - Enacted as positive law in 1948
+
+**Non-Positive Law Titles (Currently 25 of 54 titles)**
+- These are **editorial compilations** of individually enacted federal statutes
+- They have NOT been enacted as a complete title by Congress
+- **The Statutes at Large remains the authoritative legal text**
+- The US Code text is "prima facie evidence" of the law, but not legally authoritative
+- If conflicts exist between the US Code text and Statutes at Large, **Statutes at Large takes precedence**
+- These titles are compiled by the Office of the Law Revision Counsel for convenience
+- Examples from Phase 1 scope:
+  - **Title 20 (Education)** - Not positive law (compilation only)
+  - **Title 22 (Foreign Relations)** - Not positive law (compilation only)
+  - **Title 26 (Internal Revenue Code)** - Not positive law as a complete title (though the IRC was enacted)
+  - **Title 42 (Public Health and Social Welfare)** - Not positive law (compilation only)
+  - **Title 50 (War and National Defense)** - Not positive law (compilation only)
+
+**Why This Matters for CWLB:**
+
+1. **Disclaimers**: Users must understand which titles are legally authoritative vs compilations
+2. **Attribution**: For non-positive law titles, laws shown in "blame view" modified the Statutes at Large, not necessarily the US Code text directly
+3. **UI Indicators**: Visual cues should distinguish positive law from non-positive law sections
+4. **Legal Citations**: Lawyers citing non-positive law titles may need to verify against Statutes at Large
+5. **Ongoing Codification**: Congress gradually enacts non-positive law titles into positive law (ongoing project since 1926)
+
+**Display Recommendations:**
+- Show a banner on non-positive law title pages: "This title is a compilation. For authoritative text, consult Statutes at Large."
+- Mark positive law titles with a badge: "✓ Positive Law - Authoritative Text"
+- Include metadata in section views indicating positive law status
+- Link to official Statutes at Large citations for non-positive law provisions
+
+**Current Status (as of 2026):**
+The Office of the Law Revision Counsel maintains an [official list of positive law titles](https://uscode.house.gov/codification/legislation.shtml). Positive law titles include: 1, 3, 4, 5, 9, 10, 11, 13, 14, 17, 18, 23, 28, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 44, 46, 49, 51, 52, 54, and others as they are enacted. The remaining titles are non-positive law compilations.
+
 ### Repository Structure Mapping
 
 After evaluating multiple structural approaches (see [Appendix D](#appendix-d-alternative-repository-structure-mappings) for alternatives), we recommend **Section-as-File** mapping:
@@ -191,15 +237,20 @@ Added:
 
 ### Coverage
 - **Titles**: 5-10 most publicly relevant titles, including:
-  - Title 10: Armed Forces
-  - Title 17: Copyright
-  - Title 18: Crimes and Criminal Procedure
-  - Title 20: Education
-  - Title 22: Foreign Relations and Intercourse
-  - Title 26: Internal Revenue Code (Tax)
-  - Title 42: Public Health and Social Welfare
-  - Title 50: War and National Defense
+  - Title 10: Armed Forces ✓ *Positive Law*
+  - Title 17: Copyright ✓ *Positive Law*
+  - Title 18: Crimes and Criminal Procedure ✓ *Positive Law*
+  - Title 20: Education ⚠️ *Non-Positive Law (compilation)*
+  - Title 22: Foreign Relations and Intercourse ⚠️ *Non-Positive Law (compilation)*
+  - Title 26: Internal Revenue Code (Tax) ⚠️ *Non-Positive Law (compilation)*
+  - Title 42: Public Health and Social Welfare ⚠️ *Non-Positive Law (compilation)*
+  - Title 50: War and National Defense ⚠️ *Non-Positive Law (compilation)*
   - Additional titles based on public interest and data availability
+
+**Note on Legal Authority:**
+- ✓ **Positive Law titles**: The US Code text is legally authoritative
+- ⚠️ **Non-Positive Law titles**: The US Code is a compilation; Statutes at Large is authoritative
+- See [Section 1: Positive Law vs Non-Positive Law Titles](#positive-law-vs-non-positive-law-titles) for detailed explanation
 
 ### Historical Depth
 - **Full legislative history** from original enactment to present
@@ -232,6 +283,9 @@ Added:
 - Color-coding for recently changed sections (e.g., changed in last 1yr, 5yr, 10yr)
 - Activity heatmap showing which sections change frequently vs rarely
 - "Last modified" timestamp for each section
+- **Positive law badge**: "✓ Positive Law" for authoritative titles
+- **Non-positive law warning**: "⚠️ Compilation - See Statutes at Large" for non-positive law titles
+- Banner disclaimers on title and section pages indicating legal authority status
 
 **Legislative Blame View** ("Git Blame" for Laws)
 - Line-by-line attribution showing which law last modified each provision
@@ -459,6 +513,9 @@ Added:
 - `text`: Text (current verbatim text)
 - `last_modified`: Date
 - `enacted_date`: Date (when section was originally created)
+- `is_positive_law`: Boolean (whether this section belongs to a positive law title)
+- `title_positive_law_date`: Date (when the title was enacted as positive law, NULL if non-positive law)
+- `statutes_at_large_citation`: String (authoritative citation for non-positive law sections)
 
 **PublicLaw** (Enacted legislation - "Merged PR")
 - `law_number`: String (e.g., "94-553")
@@ -558,6 +615,8 @@ Added:
 - `last_modified_by_law_id`: Foreign key to PublicLaw (which law last modified this line)
 - `effective_date`: Date (when this version took effect)
 - `hash`: String (SHA-256 of text_content, for detecting identical text across versions)
+
+**Note on Positive Law**: The `is_positive_law` status is inherited from the parent USCodeSection. For blame view display in non-positive law titles, UI should indicate that the law modified Statutes at Large, which was then compiled into the US Code.
 
 **Why parent/child tree structure?**
 - Handles arbitrary nesting depth (US Code can nest 5+ levels deep)
@@ -968,6 +1027,8 @@ ORDER BY l.line_number;
 - All source data is public domain (government data)
 - Methodology and data sources clearly documented
 - Open API for researchers
+- Clear disclaimers about positive law vs non-positive law status (see [Appendix C](#appendix-c-legal--disclaimers))
+- Users informed about which titles are legally authoritative vs compilations
 
 ---
 
@@ -1245,10 +1306,41 @@ This platform has the potential to become an essential tool for civic education,
 
 ## Appendix C: Legal & Disclaimers
 
+**General Disclaimer:**
 - This is an unofficial presentation of the US Code
-- Official version is at uscode.house.gov
-- Not legal advice
-- Open data license for all content
+- Official version is maintained by the Office of the Law Revision Counsel at uscode.house.gov
+- This platform is not legal advice and should not be relied upon for legal decisions
+- Always consult the official sources and a qualified attorney for legal matters
+
+**Positive Law vs Non-Positive Law Titles:**
+
+The US Code contains two types of titles with different legal authority:
+
+1. **Positive Law Titles** (e.g., Titles 10, 17, 18):
+   - The US Code text displayed here is the **legally authoritative source**
+   - These titles have been enacted by Congress as statutes
+   - In case of conflicts, the US Code text prevails over earlier Statutes at Large
+
+2. **Non-Positive Law Titles** (e.g., Titles 20, 22, 26, 42, 50):
+   - The US Code text displayed here is an **editorial compilation only**
+   - These titles are "prima facie evidence" of the law, but **NOT legally authoritative**
+   - The **Statutes at Large is the authoritative source** for these titles
+   - In case of conflicts between US Code and Statutes at Large, **Statutes at Large prevails**
+   - Users citing these provisions should verify against the original Statutes at Large
+
+**Disclaimer Language for Platform:**
+
+For Positive Law Title Pages:
+> "This title has been enacted as positive law. The text displayed here represents the legally authoritative US Code. However, this is an unofficial presentation. For official citations, consult uscode.house.gov."
+
+For Non-Positive Law Title Pages:
+> "⚠️ This title is a non-positive law compilation. The text displayed is an editorial compilation and is NOT legally authoritative. For authoritative text, consult the Statutes at Large. This is an unofficial presentation for informational purposes only."
+
+**Data Licensing:**
+- All US Code text is in the public domain as government work
+- Legislative data is sourced from official government APIs and databases
+- This platform's presentation, analytics, and UI are subject to the project's open-source license
+- Users may freely use, copy, and distribute the government data
 
 ## Appendix D: Alternative Repository Structure Mappings
 
