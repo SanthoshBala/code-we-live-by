@@ -25,10 +25,12 @@ This document translates the CWLB specification into an actionable backlog of im
   - Document sponsor, co-sponsor, and vote record access
   - **Completed**: See [research/TASK-0.3-Congress-API-Evaluation.md](research/TASK-0.3-Congress-API-Evaluation.md)
 
-- [ ] **Task 0.4**: Research ProPublica Congress API for legislator details
+- [x] **Task 0.4**: Research ProPublica Congress API for legislator details ✅
   - Test endpoints for legislator photos, party, state
   - Assess historical legislator data coverage
   - Document data freshness and update schedule
+  - **Completed**: See [research/TASK-0.4-ProPublica-API-Evaluation.md](research/TASK-0.4-ProPublica-API-Evaluation.md)
+  - **Note**: ProPublica API discontinued July 2024. Congress.gov API (Task 0.3) is superior alternative.
 
 ### Prototype Parser Development
 - [ ] **Task 0.5**: Build prototype parser for single Public Law (e.g., PL 94-553)
