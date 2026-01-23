@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title.number }} U.S.C. § {{ section.number }} - {{ section.heading }}{% endblock %}
+
+{% block content %}
+<div class="uscode-browser">
+    <nav class="breadcrumb">
+        <a href="/">Home</a> &raquo;
+        <a href="/uscode">US Code</a> &raquo;
+        <a href="/uscode/title/20">Title {{ title.number }}</a> &raquo;
+        <a href="/uscode/title/20/chapter/{{ chapter.number }}">Chapter {{ chapter.number }}</a> &raquo;
+        {% if subchapter %}
+        <span>Subchapter {{ subchapter.number }}</span> &raquo;
+        {% endif %}
+        <span>§ {{ section.number }}</span>
+    </nav>
+
+    <header class="section-header">
+        <div class="section-citation">
+            <span class="citation-badge">{{ title.number }} U.S.C. § {{ section.number }}</span>
+        </div>
+        <h1>{{ section.heading }}</h1>
+
+        <div class="section-context">
+            <div class="context-item">
+                <strong>Title:</strong> {{ title.name }}
+            </div>
+            <div class="context-item">
+                <strong>Chapter:</strong> {{ chapter.name }}
+            </div>
+            {% if subchapter %}
+            <div class="context-item">
+                <strong>Subchapter:</strong> {{ subchapter.name }}
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <article class="section-content">
+        <div class="legal-text">
+            {{ section.text|safe|replace('\n', '<br>')|replace('  ', '&nbsp;&nbsp;') }}
+        </div>
+    </article>
+
+    <aside class="section-info">
+        <div class="info-card">
+            <h3>About This Section</h3>
+            <dl class="info-list">
+                <dt>Title:</dt>
+                <dd>{{ title.number }} - {{ title.name }}</dd>
+
+                <dt>Chapter:</dt>
+                <dd>{{ chapter.number }} - {{ chapter.name }}</dd>
+
+                {% if subchapter %}
+                <dt>Subchapter:</dt>
+                <dd>{{ subchapter.number }} - {{ subchapter.name }}</dd>
+                {% endif %}
+
+                <dt>Section:</dt>
+                <dd>{{ section.number }}</dd>
+
+                <dt>Citation:</dt>
+                <dd><code>{{ title.number }} U.S.C. § {{ section.number }}</code></dd>
+            </dl>
+        </div>
+
+        <div class="info-card">
+            <h3>Legal Notice</h3>
+            <p class="legal-notice">
+                {% if title.is_positive_law %}
+                This is a positive law title. The US Code text is the legal evidence of law.
+                {% else %}
+                This title is not positive law. The Statutes at Large, not the US Code, is the legal evidence of law.
+                {% endif %}
+            </p>
+            <p class="legal-notice">
+                This is an MVP demonstration. For official legal reference, consult official government sources.
+            </p>
+        </div>
+    </aside>
+
+    <nav class="section-nav">
+        <a href="/uscode/title/20/chapter/{{ chapter.number }}" class="nav-button">
+            ← Back to Chapter {{ chapter.number }}
+        </a>
+        <a href="/uscode/title/20" class="nav-button secondary">
+            Back to Title 20
+        </a>
+    </nav>
+</div>
+
+<style>
+    .uscode-browser {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .breadcrumb {
+        margin-bottom: 20px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .breadcrumb a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        text-decoration: underline;
+    }
+
+    .section-header {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .section-citation {
+        margin-bottom: 15px;
+    }
+
+    .citation-badge {
+        display: inline-block;
+        background: #1a1a1a;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .section-header h1 {
+        color: #1a1a1a;
+        font-size: 28px;
+        margin: 15px 0;
+        line-height: 1.3;
+    }
+
+    .section-context {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-top: 15px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .context-item strong {
+        color: #333;
+        margin-right: 5px;
+    }
+
+    .section-content {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 30px;
+    }
+
+    .legal-text {
+        font-family: 'Georgia', serif;
+        font-size: 16px;
+        line-height: 1.8;
+        color: #1a1a1a;
+        white-space: pre-wrap;
+    }
+
+    .section-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .info-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+    }
+
+    .info-card h3 {
+        font-size: 16px;
+        color: #1a1a1a;
+        margin: 0 0 15px 0;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .info-list {
+        margin: 0;
+        font-size: 14px;
+    }
+
+    .info-list dt {
+        font-weight: 600;
+        color: #555;
+        margin-top: 10px;
+    }
+
+    .info-list dt:first-child {
+        margin-top: 0;
+    }
+
+    .info-list dd {
+        margin: 5px 0 0 0;
+        color: #333;
+    }
+
+    .info-list code {
+        background: #f0f0f0;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+    }
+
+    .legal-notice {
+        font-size: 13px;
+        color: #666;
+        line-height: 1.6;
+        margin: 10px 0;
+    }
+
+    .legal-notice:first-of-type {
+        margin-top: 0;
+    }
+
+    .section-nav {
+        display: flex;
+        gap: 15px;
+        padding-top: 20px;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .nav-button {
+        display: inline-block;
+        padding: 10px 20px;
+        background: #0066cc;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: 500;
+        transition: background 0.2s;
+    }
+
+    .nav-button:hover {
+        background: #0052a3;
+    }
+
+    .nav-button.secondary {
+        background: #6c757d;
+    }
+
+    .nav-button.secondary:hover {
+        background: #545b62;
+    }
+
+    @media (max-width: 768px) {
+        .section-info {
+            grid-template-columns: 1fr;
+        }
+
+        .section-nav {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}

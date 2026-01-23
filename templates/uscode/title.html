@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Title {{ title.number }} - {{ title.name }} | US Code Browser{% endblock %}
+
+{% block content %}
+<div class="uscode-browser">
+    <nav class="breadcrumb">
+        <a href="/">Home</a> &raquo;
+        <a href="/uscode">US Code</a> &raquo;
+        <span>Title {{ title.number }}</span>
+    </nav>
+
+    <header class="title-header">
+        <h1>Title {{ title.number }} — {{ title.name }}</h1>
+        {% if not title.is_positive_law %}
+        <div class="notice notice-warning">
+            <strong>⚠️ Non-Positive Law Title</strong>
+            <p>This title is a non-positive law codification. The United States Statutes at Large, not the US Code, is the legal evidence of law.</p>
+        </div>
+        {% else %}
+        <div class="notice notice-info">
+            <strong>✓ Positive Law Title</strong>
+            <p>This title has been enacted as positive law. The US Code text is the legal evidence of law.</p>
+        </div>
+        {% endif %}
+
+        <p class="title-description">{{ title.description }}</p>
+    </header>
+
+    <section class="chapters-list">
+        <h2>Chapters</h2>
+
+        {% if chapters|length == 0 %}
+        <p class="no-data">No chapters available.</p>
+        {% else %}
+        <div class="chapters-grid">
+            {% for chapter in chapters %}
+            <div class="chapter-card">
+                <div class="chapter-header">
+                    <a href="/uscode/title/20/chapter/{{ chapter.number }}" class="chapter-link">
+                        <span class="chapter-number">Chapter {{ chapter.number }}</span>
+                        <span class="chapter-name">{{ chapter.name }}</span>
+                    </a>
+                </div>
+
+                <div class="chapter-meta">
+                    {% if chapter.subchapters %}
+                    <span class="meta-item">{{ chapter.subchapters|length }} subchapter(s)</span>
+                    {% endif %}
+
+                    {% set section_count = 0 %}
+                    {% if chapter.sections %}
+                        {% set section_count = section_count + chapter.sections|length %}
+                    {% endif %}
+                    {% if chapter.subchapters %}
+                        {% for subchapter in chapter.subchapters %}
+                            {% if subchapter.sections %}
+                                {% set section_count = section_count + subchapter.sections|length %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+
+                    {% if section_count > 0 %}
+                    <span class="meta-item">{{ section_count }} section(s)</span>
+                    {% endif %}
+                </div>
+
+                {% if chapter.subchapters and chapter.subchapters|length > 0 %}
+                <ul class="subchapter-list">
+                    {% for subchapter in chapter.subchapters[:3] %}
+                    <li>{{ subchapter.name }}</li>
+                    {% endfor %}
+                    {% if chapter.subchapters|length > 3 %}
+                    <li><em>... and {{ chapter.subchapters|length - 3 }} more</em></li>
+                    {% endif %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<style>
+    .uscode-browser {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .breadcrumb {
+        margin-bottom: 20px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .breadcrumb a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        text-decoration: underline;
+    }
+
+    .title-header {
+        margin-bottom: 40px;
+    }
+
+    .title-header h1 {
+        color: #1a1a1a;
+        margin-bottom: 20px;
+        font-size: 32px;
+    }
+
+    .notice {
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+
+    .notice-warning {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+    }
+
+    .notice-info {
+        background-color: #d1ecf1;
+        border-left: 4px solid #0dcaf0;
+    }
+
+    .notice strong {
+        display: block;
+        margin-bottom: 5px;
+    }
+
+    .notice p {
+        margin: 0;
+        font-size: 14px;
+    }
+
+    .title-description {
+        font-size: 16px;
+        color: #555;
+        line-height: 1.6;
+    }
+
+    .chapters-list h2 {
+        font-size: 24px;
+        margin-bottom: 20px;
+        color: #1a1a1a;
+    }
+
+    .chapters-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 20px;
+    }
+
+    .chapter-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        background: white;
+        transition: box-shadow 0.2s;
+    }
+
+    .chapter-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .chapter-header {
+        margin-bottom: 12px;
+    }
+
+    .chapter-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+
+    .chapter-link:hover .chapter-name {
+        color: #0066cc;
+    }
+
+    .chapter-number {
+        display: block;
+        font-size: 14px;
+        color: #666;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+
+    .chapter-name {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+        color: #1a1a1a;
+        transition: color 0.2s;
+    }
+
+    .chapter-meta {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 12px;
+        font-size: 13px;
+        color: #666;
+    }
+
+    .meta-item {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .subchapter-list {
+        list-style: none;
+        padding: 0;
+        margin: 10px 0 0 0;
+        font-size: 13px;
+        color: #555;
+    }
+
+    .subchapter-list li {
+        padding: 3px 0;
+    }
+
+    .no-data {
+        color: #999;
+        font-style: italic;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Chapter {{ chapter.number }} - {{ chapter.name }} | Title 20 | US Code{% endblock %}
+
+{% block content %}
+<div class="uscode-browser">
+    <nav class="breadcrumb">
+        <a href="/">Home</a> &raquo;
+        <a href="/uscode">US Code</a> &raquo;
+        <a href="/uscode/title/20">Title {{ title.number }}</a> &raquo;
+        <span>Chapter {{ chapter.number }}</span>
+    </nav>
+
+    <header class="chapter-header">
+        <div class="chapter-title">
+            <span class="title-badge">Title 20</span>
+            <h1>Chapter {{ chapter.number }} — {{ chapter.name }}</h1>
+        </div>
+    </header>
+
+    <section class="chapter-content">
+        {% if chapter.subchapters and chapter.subchapters|length > 0 %}
+            <h2>Subchapters</h2>
+            {% for subchapter in chapter.subchapters %}
+            <div class="subchapter-section">
+                <h3 id="subchapter-{{ subchapter.number }}">
+                    Subchapter {{ subchapter.number }} — {{ subchapter.name }}
+                </h3>
+
+                {% if subchapter.sections and subchapter.sections|length > 0 %}
+                <div class="sections-list">
+                    {% for section in subchapter.sections %}
+                    <div class="section-item">
+                        <a href="/uscode/title/20/section/{{ section.number }}" class="section-link">
+                            <span class="section-number">§ {{ section.number }}</span>
+                            <span class="section-heading">{{ section.heading }}</span>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="no-data">No sections in this subchapter.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if chapter.sections and chapter.sections|length > 0 %}
+            <h2>{% if chapter.subchapters and chapter.subchapters|length > 0 %}Direct Chapter Sections{% else %}Sections{% endif %}</h2>
+            <div class="sections-list">
+                {% for section in chapter.sections %}
+                <div class="section-item">
+                    <a href="/uscode/title/20/section/{{ section.number }}" class="section-link">
+                        <span class="section-number">§ {{ section.number }}</span>
+                        <span class="section-heading">{{ section.heading }}</span>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if (not chapter.subchapters or chapter.subchapters|length == 0) and (not chapter.sections or chapter.sections|length == 0) %}
+        <p class="no-data">No sections available in this chapter.</p>
+        {% endif %}
+    </section>
+
+    <nav class="chapter-nav">
+        <a href="/uscode/title/20" class="nav-button">← Back to Title 20</a>
+    </nav>
+</div>
+
+<style>
+    .uscode-browser {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .breadcrumb {
+        margin-bottom: 20px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .breadcrumb a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+        text-decoration: underline;
+    }
+
+    .chapter-header {
+        margin-bottom: 40px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .chapter-title {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .title-badge {
+        background: #0066cc;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .chapter-header h1 {
+        color: #1a1a1a;
+        font-size: 28px;
+        margin: 0;
+    }
+
+    .chapter-content h2 {
+        font-size: 22px;
+        color: #1a1a1a;
+        margin: 30px 0 20px 0;
+    }
+
+    .subchapter-section {
+        margin-bottom: 40px;
+    }
+
+    .subchapter-section h3 {
+        font-size: 20px;
+        color: #333;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .sections-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .section-item {
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        background: white;
+        transition: all 0.2s;
+    }
+
+    .section-item:hover {
+        border-color: #0066cc;
+        box-shadow: 0 2px 8px rgba(0,102,204,0.1);
+    }
+
+    .section-link {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .section-number {
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+        color: #0066cc;
+        font-size: 14px;
+        min-width: 60px;
+    }
+
+    .section-heading {
+        color: #1a1a1a;
+        font-size: 15px;
+        line-height: 1.5;
+    }
+
+    .section-link:hover .section-heading {
+        color: #0066cc;
+    }
+
+    .no-data {
+        color: #999;
+        font-style: italic;
+        margin: 20px 0;
+    }
+
+    .chapter-nav {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .nav-button {
+        display: inline-block;
+        padding: 10px 20px;
+        background: #0066cc;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: 500;
+        transition: background 0.2s;
+    }
+
+    .nav-button:hover {
+        background: #0052a3;
+    }
+</style>
+{% endblock %}

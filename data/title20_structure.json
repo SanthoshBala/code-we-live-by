@@ -1,0 +1,148 @@
+{
+  "title": {
+    "number": 20,
+    "name": "EDUCATION",
+    "is_positive_law": false,
+    "description": "This title contains provisions related to education, including federal education programs, student aid, elementary and secondary education, and higher education."
+  },
+  "chapters": [
+    {
+      "number": 3,
+      "name": "Smithsonian Institution, National Museums and Art Galleries",
+      "subchapters": [
+        {
+          "number": 1,
+          "name": "Charter Provisions",
+          "sections": [
+            {
+              "number": 41,
+              "heading": "Incorporation of institution",
+              "text": "The President, the Vice President, the Chief Justice, and the heads of executive departments are constituted an establishment by the name of the Smithsonian Institution for the increase and diffusion of knowledge among men, and by that name shall be known and have perpetual succession with the powers, limitations, and restrictions hereinafter contained, and no other."
+            },
+            {
+              "number": 42,
+              "heading": "Board of Regents; members",
+              "text": "The business of the Institution shall be conducted at the city of Washington by a Board of Regents, named the Regents of the Smithsonian Institution, to be composed of the Vice President, the Chief Justice of the United States, three Members of the Senate, three Members of the House of Representatives, and nine other persons, other than Members of Congress, two of whom shall be resident in the city of Washington, and seven of whom shall be inhabitants of some State, but no two of them of the same State."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 28,
+      "name": "Higher Education Resources and Student Assistance",
+      "subchapters": [
+        {
+          "number": 1,
+          "name": "General Provisions",
+          "sections": [
+            {
+              "number": 1001,
+              "heading": "General definition of institution of higher education",
+              "text": "(a) Institution of higher education\n\nFor purposes of this chapter, other than subchapter IV, the term 'institution of higher education' means an educational institution in any State that—\n\n(1) admits as regular students only persons having a certificate of graduation from a school providing secondary education, or the recognized equivalent of such a certificate;\n\n(2) is legally authorized within such State to provide a program of education beyond secondary education;\n\n(3) provides an educational program for which the institution awards a bachelor's degree or provides not less than a 2-year program that is acceptable for full credit toward such a degree;\n\n(4) is a public or other nonprofit institution; and\n\n(5) is accredited by a nationally recognized accrediting agency or association, or if not so accredited, is an institution that has been granted preaccreditation status by such an agency or association that has been recognized by the Secretary for the granting of preaccreditation status, and the Secretary has determined that there is satisfactory assurance that the institution will meet the accreditation standards of such an agency or association within a reasonable time."
+            },
+            {
+              "number": 1002,
+              "heading": "Definition of institution of higher education for purposes of student assistance programs",
+              "text": "(a) Definition of institution of higher education for purposes of student assistance programs\n\n(1) Inclusion\n\nExcept as provided in subsection (b), for purposes of subchapter IV the term 'institution of higher education' includes, in addition to the institutions covered by the definition in section 1001 of this title—\n\n(A) a proprietary institution of higher education (as defined in subsection (b)); and\n\n(B) a postsecondary vocational institution (as defined in subsection (c))."
+            }
+          ]
+        },
+        {
+          "number": 4,
+          "name": "Student Assistance",
+          "sections": [
+            {
+              "number": 1070,
+              "heading": "Federal Pell Grants: amount and determinations; applications",
+              "text": "(a) Program authority and method of distribution\n\n(1) For each fiscal year through fiscal year 2024, the Secretary shall pay to each eligible institution such sums as may be necessary to pay to each eligible student (defined in accordance with section 1091 of this title) for each academic year during which that student is in attendance at an institution of higher education, as an undergraduate, a Federal Pell Grant in the amount for which that student is eligible, as determined pursuant to subsection (b).\n\n(2)(A) There are authorized to be appropriated, and there are appropriated, out of any money in the Treasury not otherwise appropriated, for each of fiscal years 2008 through 2024, such sums as may be necessary to provide Federal Pell Grants to all eligible students."
+            },
+            {
+              "number": "1087a",
+              "heading": "Program authority; eligibility",
+              "text": "(a) In general\n\nThere are hereby made available, in accordance with the provisions of this part, such sums as may be necessary (as determined under section 1087h of this title) for loans under this part for any fiscal year beginning on or after July 1, 1994.\n\n(b) Loans for which eligible\n\nExcept as provided in section 1087f of this title, all students at an institution of higher education shall be entitled to borrow under this part if the institution of higher education—\n\n(1) makes available to students attending the institution the opportunity to receive loans under this part; and\n\n(2) meets such other requirements as the Secretary shall specify by regulation."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 31,
+      "name": "National Diffusion Network",
+      "subchapters": [],
+      "sections": [
+        {
+          "number": 1261,
+          "heading": "Statement of purpose",
+          "text": "It is the purpose of this chapter to promote and accelerate the systematic, rapid dissemination and adoption of validated exemplary programs to serve the educational needs of the Nation's students, and for other purposes."
+        }
+      ]
+    },
+    {
+      "number": 33,
+      "name": "Education of Individuals with Disabilities",
+      "subchapters": [
+        {
+          "number": 1,
+          "name": "General Provisions",
+          "sections": [
+            {
+              "number": 1400,
+              "heading": "Short title; findings; purposes",
+              "text": "(a) Short title\n\nThis chapter may be cited as the 'Individuals with Disabilities Education Act'.\n\n(b) Omitted\n\n(c) Findings\n\nCongress finds the following:\n\n(1) Disability is a natural part of the human experience and in no way diminishes the right of individuals to participate in or contribute to society. Improving educational results for children with disabilities is an essential element of our national policy of ensuring equality of opportunity, full participation, independent living, and economic self-sufficiency for individuals with disabilities.\n\n(2) Before the date of enactment of the Education for All Handicapped Children Act of 1975 (Public Law 94–142), the educational needs of millions of children with disabilities were not being fully met."
+            },
+            {
+              "number": 1401,
+              "heading": "Definitions",
+              "text": "Except as otherwise provided, in this chapter:\n\n(1) Assistive technology device\n\nThe term 'assistive technology device' means any item, piece of equipment, or product system, whether acquired commercially off the shelf, modified, or customized, that is used to increase, maintain, or improve functional capabilities of a child with a disability.\n\n(2) Assistive technology service\n\nThe term 'assistive technology service' means any service that directly assists a child with a disability in the selection, acquisition, or use of an assistive technology device."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 48,
+      "name": "Department of Education",
+      "subchapters": [
+        {
+          "number": 1,
+          "name": "General Provisions",
+          "sections": [
+            {
+              "number": 3401,
+              "heading": "Congressional findings",
+              "text": "The Congress finds that—\n\n(1) education is fundamental to the development of individual citizens and the progress of the Nation;\n\n(2) there is a continuing need to ensure equal access for all Americans to educational opportunities of a high quality, and such educational opportunities should not be denied because of race, creed, color, national origin, or sex;\n\n(3) parents have the primary responsibility for the education of their children, and States, localities, and private institutions have the primary responsibility for supporting that parental role."
+            },
+            {
+              "number": 3402,
+              "heading": "Congressional declaration of purpose",
+              "text": "The Congress declares that the establishment of a Department of Education is in the public interest, will promote the general welfare of the United States, will help ensure that education issues receive proper treatment at the Federal level, and will enable the Federal Government to coordinate its education activities more effectively."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 70,
+      "name": "Strengthening and Improvement of Elementary and Secondary Schools",
+      "subchapters": [
+        {
+          "number": 1,
+          "name": "Improving the Academic Achievement of the Disadvantaged",
+          "sections": [
+            {
+              "number": 6301,
+              "heading": "Statement of purpose",
+              "text": "The purpose of this subchapter is to provide all children significant opportunity to receive a fair, equitable, and high-quality education, and to close educational achievement gaps."
+            },
+            {
+              "number": 6311,
+              "heading": "State plans",
+              "text": "(a) Plans required\n\n(1) In general\n\nFor any State desiring to receive a grant under this part, the State educational agency shall submit to the Secretary a plan, developed by the State educational agency, in consultation with local educational agencies, teachers, principals, other school leaders, paraprofessionals, specialized instructional support personnel, charter school leaders (in a State that has charter schools), parents, and other stakeholders, that satisfies the requirements of this section and that is coordinated with other programs under this chapter, the Individuals with Disabilities Education Act, the Rehabilitation Act of 1973, the Carl D. Perkins Career and Technical Education Act of 2006, the Workforce Innovation and Opportunity Act, the Head Start Act, the Child Care and Development Block Grant Act of 1990, the McKinney-Vento Homeless Assistance Act, the Adult Education and Family Literacy Act, and other Acts as appropriate."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
