@@ -19,10 +19,11 @@ This document translates the CWLB specification into an actionable backlog of im
   - Document required API keys and rate limits
   - **Completed**: See [research/TASK-0.2-GovInfo-API-Evaluation.md](research/TASK-0.2-GovInfo-API-Evaluation.md)
 
-- [ ] **Task 0.3**: Evaluate Congress.gov API for bill information
+- [x] **Task 0.3**: Evaluate Congress.gov API for bill information ✅
   - Test bill metadata endpoints
   - Assess legislator data availability
   - Document sponsor, co-sponsor, and vote record access
+  - **Completed**: See [research/TASK-0.3-Congress-API-Evaluation.md](research/TASK-0.3-Congress-API-Evaluation.md)
 
 - [ ] **Task 0.4**: Research ProPublica Congress API for legislator details
   - Test endpoints for legislator photos, party, state
