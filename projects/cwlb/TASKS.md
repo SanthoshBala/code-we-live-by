@@ -33,10 +33,13 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Note**: ProPublica API discontinued July 2024. Congress.gov API (Task 0.3) is superior alternative.
 
 ### Prototype Parser Development
-- [ ] **Task 0.5**: Build prototype parser for single Public Law (e.g., PL 94-553)
+- [x] **Task 0.5**: Build prototype parser for single Public Law (e.g., PL 94-553) ✅
   - Parse law metadata (number, date, sponsors)
   - Extract section changes from legal language
   - Generate diff between old and new text
+  - **Completed**: See [research/TASK-0.5-Prototype-Parser.md](research/TASK-0.5-Prototype-Parser.md)
+  - **Deliverables**: Jupyter notebook and Python script in `/prototypes` and `/notebooks`
+  - **Key Finding**: Automated parsing feasible with 80% accuracy; recommend hybrid approach with manual review
 
 - [ ] **Task 0.6**: Build prototype line-level parser for one section (e.g., 17 USC § 106)
   - Parse section into individual lines
