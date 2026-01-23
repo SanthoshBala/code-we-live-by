@@ -1,0 +1,98 @@
+{
+  "lines": [
+    {
+      "line_id": 1,
+      "section_id": "17-106",
+      "parent_line_id": null,
+      "line_number": 1,
+      "line_type": "Heading",
+      "text_content": "\u00a7 106. Exclusive rights in copyrighted works",
+      "subsection_path": null,
+      "depth_level": 0
+    },
+    {
+      "line_id": 2,
+      "section_id": "17-106",
+      "parent_line_id": 1,
+      "line_number": 2,
+      "line_type": "Prose",
+      "text_content": "Subject to sections 107 through 122, the owner of copyright under this title has the exclusive rights to do and to authorize any of the following:",
+      "subsection_path": null,
+      "depth_level": 1
+    },
+    {
+      "line_id": 3,
+      "section_id": "17-106",
+      "parent_line_id": 1,
+      "line_number": 3,
+      "line_type": "ListItem",
+      "text_content": "(1) to reproduce the copyrighted work in copies or phonorecords;",
+      "subsection_path": "(1)",
+      "depth_level": 1
+    },
+    {
+      "line_id": 4,
+      "section_id": "17-106",
+      "parent_line_id": 1,
+      "line_number": 4,
+      "line_type": "ListItem",
+      "text_content": "(2) to prepare derivative works based upon the copyrighted work;",
+      "subsection_path": "(2)",
+      "depth_level": 1
+    },
+    {
+      "line_id": 5,
+      "section_id": "17-106",
+      "parent_line_id": 1,
+      "line_number": 5,
+      "line_type": "ListItem",
+      "text_content": "(3) to distribute copies or phonorecords of the copyrighted work to the public by sale or other transfer of ownership, or by rental, lease, or lending;",
+      "subsection_path": "(3)",
+      "depth_level": 1
+    },
+    {
+      "line_id": 6,
+      "section_id": "17-106",
+      "parent_line_id": 1,
+      "line_number": 6,
+      "line_type": "ListItem",
+      "text_content": "(4) in the case of literary, musical, dramatic, and choreographic works, pantomimes, and motion pictures and other audiovisual works, to perform the work publicly;",
+      "subsection_path": "(4)",
+      "depth_level": 1
+    },
+    {
+      "line_id": 7,
+      "section_id": "17-106",
+      "parent_line_id": 1,
+      "line_number": 7,
+      "line_type": "ListItem",
+      "text_content": "(5) in the case of literary, musical, dramatic, and choreographic works, pantomimes, and pictorial, graphic, or sculptural works, including the individual images of a motion picture or other audiovisual work, to display the work publicly; and",
+      "subsection_path": "(5)",
+      "depth_level": 1
+    },
+    {
+      "line_id": 8,
+      "section_id": "17-106",
+      "parent_line_id": 1,
+      "line_number": 8,
+      "line_type": "ListItem",
+      "text_content": "(6) in the case of sound recordings, to perform the copyrighted work publicly by means of a digital audio transmission.",
+      "subsection_path": "(6)",
+      "depth_level": 1
+    }
+  ],
+  "statistics": {
+    "total_lines": 8,
+    "max_depth": 1,
+    "type_distribution": {
+      "Heading": 1,
+      "Prose": 1,
+      "ListItem": 6
+    },
+    "depth_distribution": {
+      "0": 1,
+      "1": 7
+    },
+    "has_subsections": true
+  }
+}

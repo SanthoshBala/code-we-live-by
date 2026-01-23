@@ -1,0 +1,151 @@
+{
+  "lines": [
+    {
+      "line_id": 1,
+      "section_id": "17-512c",
+      "parent_line_id": null,
+      "line_number": 1,
+      "line_type": "Heading",
+      "text_content": "\u00a7 512. Limitations on liability relating to material online",
+      "subsection_path": null,
+      "depth_level": 0
+    },
+    {
+      "line_id": 2,
+      "section_id": "17-512c",
+      "parent_line_id": 1,
+      "line_number": 2,
+      "line_type": "ListItem",
+      "text_content": "(c) Information residing on systems or networks at direction of users",
+      "subsection_path": "(c)",
+      "depth_level": 1
+    },
+    {
+      "line_id": 3,
+      "section_id": "17-512c",
+      "parent_line_id": 2,
+      "line_number": 3,
+      "line_type": "ListItem",
+      "text_content": "(c)(1) In general",
+      "subsection_path": "(c)(1)",
+      "depth_level": 2
+    },
+    {
+      "line_id": 4,
+      "section_id": "17-512c",
+      "parent_line_id": 3,
+      "line_number": 4,
+      "line_type": "Prose",
+      "text_content": "A service provider shall not be liable for monetary relief, or, except as provided in subsection (j), for injunctive or other equitable relief, for infringement of copyright by reason of the storage at the direction of a user of material that resides on a system or network controlled or operated by or for the service provider, if the service provider\u2014",
+      "subsection_path": null,
+      "depth_level": 3
+    },
+    {
+      "line_id": 5,
+      "section_id": "17-512c",
+      "parent_line_id": 3,
+      "line_number": 5,
+      "line_type": "ListItem",
+      "text_content": "(c)(1)(A) does not have actual knowledge that the material or an activity using the material on the system or network is infringing;",
+      "subsection_path": "(c)(1)(A)",
+      "depth_level": 3
+    },
+    {
+      "line_id": 6,
+      "section_id": "17-512c",
+      "parent_line_id": 5,
+      "line_number": 6,
+      "line_type": "ListItem",
+      "text_content": "(c)(1)(A)(i) in the absence of such actual knowledge, is not aware of facts or circumstances from which infringing activity is apparent; or",
+      "subsection_path": "(c)(1)(A)(i)",
+      "depth_level": 4
+    },
+    {
+      "line_id": 7,
+      "section_id": "17-512c",
+      "parent_line_id": 5,
+      "line_number": 7,
+      "line_type": "ListItem",
+      "text_content": "(c)(1)(A)(ii) upon obtaining such knowledge or awareness, acts expeditiously to remove, or disable access to, the material;",
+      "subsection_path": "(c)(1)(A)(ii)",
+      "depth_level": 4
+    },
+    {
+      "line_id": 8,
+      "section_id": "17-512c",
+      "parent_line_id": 3,
+      "line_number": 8,
+      "line_type": "ListItem",
+      "text_content": "(c)(1)(B) does not receive a financial benefit directly attributable to the infringing activity, in a case in which the service provider has the right and ability to control such activity; and",
+      "subsection_path": "(c)(1)(B)",
+      "depth_level": 3
+    },
+    {
+      "line_id": 9,
+      "section_id": "17-512c",
+      "parent_line_id": 3,
+      "line_number": 9,
+      "line_type": "ListItem",
+      "text_content": "(c)(1)(C) upon notification of claimed infringement as described in paragraph (3), responds expeditiously to remove, or disable access to, the material that is claimed to be infringing or to be the subject of infringing activity.",
+      "subsection_path": "(c)(1)(C)",
+      "depth_level": 3
+    },
+    {
+      "line_id": 10,
+      "section_id": "17-512c",
+      "parent_line_id": 2,
+      "line_number": 10,
+      "line_type": "ListItem",
+      "text_content": "(c)(2) Designated agent",
+      "subsection_path": "(c)(2)",
+      "depth_level": 2
+    },
+    {
+      "line_id": 11,
+      "section_id": "17-512c",
+      "parent_line_id": 10,
+      "line_number": 11,
+      "line_type": "Prose",
+      "text_content": "The limitations on liability established in this subsection apply to a service provider only if the service provider has designated an agent to receive notifications of claimed infringement described in paragraph (3), by making available through its service, including on its website in a location accessible to the public, and by providing to the Copyright Office, substantially the following information:",
+      "subsection_path": null,
+      "depth_level": 3
+    },
+    {
+      "line_id": 12,
+      "section_id": "17-512c",
+      "parent_line_id": 10,
+      "line_number": 12,
+      "line_type": "ListItem",
+      "text_content": "(c)(2)(A) the name, address, phone number, and electronic mail address of the agent;",
+      "subsection_path": "(c)(2)(A)",
+      "depth_level": 3
+    },
+    {
+      "line_id": 13,
+      "section_id": "17-512c",
+      "parent_line_id": 10,
+      "line_number": 13,
+      "line_type": "ListItem",
+      "text_content": "(c)(2)(B) other contact information which the Register of Copyrights may deem appropriate.",
+      "subsection_path": "(c)(2)(B)",
+      "depth_level": 3
+    }
+  ],
+  "statistics": {
+    "total_lines": 13,
+    "max_depth": 4,
+    "type_distribution": {
+      "Heading": 1,
+      "ListItem": 10,
+      "Prose": 2
+    },
+    "depth_distribution": {
+      "0": 1,
+      "1": 1,
+      "2": 2,
+      "3": 7,
+      "4": 2
+    },
+    "has_subsections": true
+  }
+}
