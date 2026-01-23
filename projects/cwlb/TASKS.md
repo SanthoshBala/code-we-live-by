@@ -13,10 +13,11 @@ This document translates the CWLB specification into an actionable backlog of im
   - Document data schema and available metadata
   - **Completed**: See [research/TASK-0.1-OLRC-Data-Evaluation.md](research/TASK-0.1-OLRC-Data-Evaluation.md)
 
-- [ ] **Task 0.2**: Evaluate GovInfo.gov API for Public Laws
+- [x] **Task 0.2**: Evaluate GovInfo.gov API for Public Laws ✅
   - Test API endpoints for Public Law documents
   - Assess historical coverage (how far back does structured data go?)
   - Document required API keys and rate limits
+  - **Completed**: See [research/TASK-0.2-GovInfo-API-Evaluation.md](research/TASK-0.2-GovInfo-API-Evaluation.md)
 
 - [ ] **Task 0.3**: Evaluate Congress.gov API for bill information
   - Test bill metadata endpoints
