@@ -152,12 +152,88 @@ A critical distinction in understanding the US Code is that **not all titles car
 3. **UI Indicators**: Visual cues should distinguish positive law from non-positive law sections
 4. **Legal Citations**: Lawyers citing non-positive law titles may need to verify against Statutes at Large
 5. **Ongoing Codification**: Congress gradually enacts non-positive law titles into positive law (ongoing project since 1926)
+6. **Authorship Complexity**: Positive law enactments create a "dual authorship" scenario:
+   - **Original authorship**: The law that first created a provision (e.g., Copyright Act of 1909)
+   - **Codification authorship**: The positive law enactment that made the US Code text authoritative (e.g., Copyright Act of 1976)
+   - The blame view must track both to provide accurate historical context
 
 **Display Recommendations:**
 - Show a banner on non-positive law title pages: "This title is a compilation. For authoritative text, consult Statutes at Large."
 - Mark positive law titles with a badge: "✓ Positive Law - Authoritative Text"
 - Include metadata in section views indicating positive law status
 - Link to official Statutes at Large citations for non-positive law provisions
+
+**Authorship and Blame Attribution for Positive Law Titles:**
+
+When a title is enacted as positive law, the blame view faces a dual attribution challenge. Consider Title 17 (Copyright), enacted as positive law in 1976:
+
+*Scenario 1: Provision unchanged by codification*
+- Original law: Copyright Act of 1909 created the text
+- Codification: Copyright Act of 1976 (PL 94-553) enacted it as positive law
+- **Attribution strategy**: Show codification law as primary (it made the text authoritative), with secondary note about original authorship
+
+*Scenario 2: Provision modified during codification*
+- Original law: Copyright Act of 1909
+- Codification: Copyright Act of 1976 modified the text while codifying
+- **Attribution strategy**: Show codification law as primary (it both modified AND codified)
+
+*Scenario 3: Provision amended after codification*
+- Original law: Copyright Act of 1909
+- Codification: Copyright Act of 1976 (unchanged)
+- Amendment: Digital Millennium Copyright Act of 1998 (PL 105-304)
+- **Attribution strategy**: Show amendment law (standard blame view behavior), with note that title is positive law
+
+**Recommended Blame View Display:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Before Positive Law Enactment (viewing as of 1970)          │
+│                                                              │
+│ PL 60-349   │ The owner of copyright under this Act shall  │
+│ 62nd Cong   │ have the exclusive right to reproduce the    │
+│ Taft 1909   │ copyrighted work...                           │
+│ ⚠️ Non-PL   │                                               │
+│             │ ↑ This title not yet positive law             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ After Positive Law Enactment (viewing as of 1980)           │
+│ Text unchanged from 1909 version                            │
+│                                                              │
+│ PL 94-553   │ Subject to sections 107 through 122, the     │
+│ 94th Cong   │ owner of copyright under this title has the  │
+│ Ford 1976   │ exclusive rights to do and to authorize any  │
+│ ✓ Codified  │ of the following:                             │
+│             │                                               │
+│             │ 📜 Originally enacted: PL 60-349 (1909)       │
+│             │ [Click to view original version]              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ After Amendment to Positive Law (viewing as of 2000)        │
+│                                                              │
+│ PL 105-304  │ Subject to sections 107 through 122, the     │
+│ 105th Cong  │ owner of copyright under this title has the  │
+│ Clinton '98 │ exclusive rights to do and to authorize any  │
+│ ✓ Positive  │ of the following:                             │
+│             │                                               │
+│             │ 📜 Title codified: PL 94-553 (1976)           │
+│             │ 📜 Originally enacted: PL 60-349 (1909)       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**For Non-Positive Law Titles:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Non-Positive Law Title (e.g., Title 42)                     │
+│                                                              │
+│ PL 111-148  │ Each applicable large employer shall...       │
+│ 111th Cong  │                                               │
+│ Obama 2010  │                                               │
+│ ⚠️ Non-PL   │ Modified Statutes at Large (compiled)        │
+│             │ [View authoritative Statutes at Large]        │
+└─────────────────────────────────────────────────────────────┘
+```
 
 **Current Status (as of 2026):**
 The Office of the Law Revision Counsel maintains an [official list of positive law titles](https://uscode.house.gov/codification/legislation.shtml). Positive law titles include: 1, 3, 4, 5, 9, 10, 11, 13, 14, 17, 18, 23, 28, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 44, 46, 49, 51, 52, 54, and others as they are enacted. The remaining titles are non-positive law compilations.
@@ -289,13 +365,15 @@ Added:
 
 **Legislative Blame View** ("Git Blame" for Laws)
 - Line-by-line attribution showing which law last modified each provision
-- Powered by **USCodeLine** entity with `last_modified_by_law_id` tracking
+- Powered by **USCodeLine** entity with `last_modified_by_law_id` and `codified_by_law_id` tracking
 - Display format for each line/paragraph:
   - **Public Law**: PL number and popular name (e.g., "PL 94-553: Copyright Act of 1976")
   - **Congress**: Which Congress passed it (e.g., "94th Congress")
   - **President**: Who signed it (e.g., "President Gerald Ford")
   - **Date**: When it became effective (e.g., "Oct 19, 1976")
   - **Visual indicator**: Color-coding or sidebar marker showing law attribution
+  - **Positive Law badge**: "✓ Positive Law" or "✓ Codified" for positive law titles
+  - **Original authorship note**: For codified provisions, secondary note showing original enactment
 - Toggle between normal view and blame view
 - Hover/click on any line to see:
   - Full metadata about the modifying law
@@ -308,10 +386,13 @@ Added:
   - Share links to specific sentences or list items
 - Multi-law sections: Some text may show multiple attributions if different subsections were modified by different laws
 - Original enactment indicator: Special styling for text that dates to the section's original creation (via `created_by_law_id`)
+- **Positive law attribution**: For positive law titles, show both the codification law and original authorship (see [Positive Law vs Non-Positive Law](#positive-law-vs-non-positive-law-titles) for detailed attribution model)
+- **Non-positive law attribution**: Show clear disclaimer that law modified Statutes at Large, compiled into US Code
 - User stories:
   - "I want to know when this copyright provision was added"
   - "Which Congress and President are responsible for this tax rule?"
   - "Has this criminal statute been modified since its original enactment?"
+  - "When was this title codified as positive law, and what was the original source?"
 
 **Example Blame View:**
 ```
@@ -611,12 +692,46 @@ Added:
 - `text_content`: Text (the actual text of this line)
 - `subsection_path`: String (e.g., "(c)(1)(A)(ii)" - for quick lookup and display)
 - `depth_level`: Integer (computed from tree depth: 0=root, 1=child of root, etc.)
-- `created_by_law_id`: Foreign key to PublicLaw (which law created this line)
+- `created_by_law_id`: Foreign key to PublicLaw (which law originally created this line)
 - `last_modified_by_law_id`: Foreign key to PublicLaw (which law last modified this line)
+- `codified_by_law_id`: Foreign key to PublicLaw (which positive law enactment codified this line, NULL if non-positive law or never codified)
+- `codification_date`: Date (when this line became part of positive law, NULL if non-positive law)
 - `effective_date`: Date (when this version took effect)
 - `hash`: String (SHA-256 of text_content, for detecting identical text across versions)
 
-**Note on Positive Law**: The `is_positive_law` status is inherited from the parent USCodeSection. For blame view display in non-positive law titles, UI should indicate that the law modified Statutes at Large, which was then compiled into the US Code.
+**Note on Positive Law Attribution**: The `is_positive_law` status is inherited from the parent USCodeSection.
+
+**Attribution Logic for Blame View:**
+- **Non-positive law titles**: Display `last_modified_by_law_id` with disclaimer "Modified Statutes at Large (compiled into US Code)"
+- **Positive law titles (unchanged during codification)**: Display `codified_by_law_id` as primary attribution with secondary note showing `created_by_law_id` as "Originally enacted by..."
+- **Positive law titles (modified during codification)**: Display `codified_by_law_id` (serves as both modifier and codifier)
+- **Positive law titles (amended after codification)**: Display `last_modified_by_law_id` with note that title is positive law and was codified by `codified_by_law_id`
+
+**Example Queries for Blame View:**
+
+```sql
+-- Get blame view with positive law context
+SELECT
+  l.line_number,
+  l.text_content,
+  l.subsection_path,
+  pl_modified.law_number as last_modified_law,
+  pl_modified.popular_name as last_modified_name,
+  pl_modified.enacted_date as last_modified_date,
+  pl_modified.president as last_modified_president,
+  pl_codified.law_number as codified_by_law,
+  pl_codified.enacted_date as codification_date,
+  pl_created.law_number as originally_created_by,
+  pl_created.enacted_date as original_creation_date,
+  s.is_positive_law
+FROM USCodeLine l
+JOIN USCodeSection s ON l.section_id = s.section_id
+JOIN PublicLaw pl_modified ON l.last_modified_by_law_id = pl_modified.law_id
+LEFT JOIN PublicLaw pl_codified ON l.codified_by_law_id = pl_codified.law_id
+LEFT JOIN PublicLaw pl_created ON l.created_by_law_id = pl_created.law_id
+WHERE l.section_id = ?
+ORDER BY l.line_number;
+```
 
 **Why parent/child tree structure?**
 - Handles arbitrary nesting depth (US Code can nest 5+ levels deep)
@@ -1202,6 +1317,47 @@ Displaying legal text requires precision; errors could mislead users.
 - Regular synchronization with official sources
 - Clear disclaimers about unofficial nature
 - Feedback mechanism for reporting errors
+
+### Challenge: Positive Law Attribution and Codification Tracking
+
+When a title is enacted as positive law, it creates complex attribution scenarios that must be accurately tracked and displayed.
+
+**Specific Challenges**:
+- **Dual authorship**: Text may have been originally enacted decades before positive law codification (e.g., 1909 Copyright Act provision codified in 1976 Copyright Act)
+- **Text changes during codification**: Some provisions are modified, reorganized, or renumbered during positive law enactment, requiring tracking of both original and codified versions
+- **Historical accuracy**: Before codification date, blame should show pre-positive law attribution; after codification, should show codification law
+- **Mixed titles**: Phase 1 includes both positive law (10, 17, 18) and non-positive law (20, 22, 26, 42, 50) titles requiring different attribution strategies
+- **Retroactive codification tracking**: Historical blame view must show correct attribution for dates before positive law enactment
+- **Data source challenges**: Determining which provisions were unchanged vs modified during codification requires comparing original Statutes at Large with positive law enactment text
+
+**Mitigation**:
+- **Extended data model**: Add `codified_by_law_id` and `codification_date` to USCodeLine entity
+- **Three-tier attribution tracking**:
+  - `created_by_law_id`: Original law that first created the provision
+  - `codified_by_law_id`: Positive law enactment (if applicable)
+  - `last_modified_by_law_id`: Most recent modification
+- **Historical versioning**: LineHistory table tracks full attribution context at each point in time
+- **UI logic**: Display appropriate attribution based on:
+  - Is title positive law? (check `is_positive_law`)
+  - Has line been modified since codification? (compare `last_modified_by_law_id` vs `codified_by_law_id`)
+  - Is user viewing historical version before codification? (check date vs `codification_date`)
+- **Source verification**: Cross-reference Office of Law Revision Counsel's positive law enactment documentation to identify unchanged vs modified provisions
+- **Clear UI indicators**: Use badges ("✓ Positive Law", "✓ Codified", "⚠️ Non-PL") and secondary notes ("Originally enacted by PL X") to communicate attribution complexity
+- **Comprehensive testing**: Create test cases for all attribution scenarios using Title 17 (codified 1976) and Title 10 (codified 1956) as examples
+
+**Example Scenarios to Handle:**
+
+1. **Scenario**: User views 17 USC § 106 as of 1970 (before positive law)
+   - **Display**: PL 60-349 (1909) with "⚠️ Non-PL" badge
+
+2. **Scenario**: User views 17 USC § 106 as of 1980 (after codification, before DMCA)
+   - **Display**: PL 94-553 (1976) with "✓ Codified" badge + note "Originally: PL 60-349 (1909)"
+
+3. **Scenario**: User views 17 USC § 106 as of 2000 (after DMCA amendment)
+   - **Display**: PL 105-304 (1998) with "✓ Positive Law" badge + secondary notes showing codification and original authorship
+
+4. **Scenario**: User views 42 USC § 18001 (Affordable Care Act, non-positive law title)
+   - **Display**: PL 111-148 (2010) with "⚠️ Non-PL" badge + "Modified Statutes at Large (compiled)"
 
 ---
 
