@@ -41,16 +41,20 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Deliverables**: Jupyter notebook and Python script in `/prototypes` and `/notebooks`
   - **Key Finding**: Automated parsing feasible with 80% accuracy; recommend hybrid approach with manual review
 
-- [ ] **Task 0.6**: Build prototype line-level parser for one section (e.g., 17 USC § 106)
+- [x] **Task 0.6**: Build prototype line-level parser for one section (e.g., 17 USC § 106) ✅
   - Parse section into individual lines
   - Build parent/child tree structure
   - Extract subsection paths (e.g., "(1)", "(c)(1)(A)")
   - Calculate depth levels
+  - **Completed**: See [research/TASK-0.6-0.7-Line-Level-Parser.md](research/TASK-0.6-0.7-Line-Level-Parser.md)
+  - **Deliverables**: Python script in `/prototypes/line_level_parser_prototype.py`
 
-- [ ] **Task 0.7**: Test parser on complex nested section (e.g., 17 USC § 512(c))
+- [x] **Task 0.7**: Test parser on complex nested section (e.g., 17 USC § 512(c)) ✅
   - Validate tree structure for deeply nested subsections
   - Test edge cases (multi-paragraph list items, ambiguous nesting)
   - Document parsing challenges and heuristics
+  - **Completed**: See [research/TASK-0.6-0.7-Line-Level-Parser.md](research/TASK-0.6-0.7-Line-Level-Parser.md)
+  - **Key Finding**: Parser correctly handles 4+ depth levels of nesting
 
 ### Title Selection
 - [ ] **Task 0.8**: Finalize 5-10 titles for Phase 1 based on:
@@ -72,10 +76,13 @@ This document translates the CWLB specification into an actionable backlog of im
   - Define success criteria from user perspective
 
 ### Technical Architecture Design
-- [ ] **Task 0.11**: Design database schema (see Section 6 of spec)
+- [x] **Task 0.11**: Design database schema (see Section 6 of spec) ✅
   - Define tables: USCodeSection, PublicLaw, LawChange, USCodeLine, etc.
   - Document relationships and foreign keys
   - Plan indexing strategy for performance
+  - **Completed**: See [research/TASK-0.11-Database-Schema-Design.md](research/TASK-0.11-Database-Schema-Design.md)
+  - **Deliverables**: SQL schema in `/prototypes/database_schema.sql` (22 tables, 85+ indexes, 3 materialized views)
+  - **Key Decisions**: PostgreSQL 15+, Alembic migrations, version tables for temporal data
 
 - [ ] **Task 0.12**: Design API architecture
   - RESTful or GraphQL decision
