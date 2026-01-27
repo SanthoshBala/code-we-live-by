@@ -84,10 +84,13 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Deliverables**: SQL schema in `/prototypes/database_schema.sql` (22 tables, 85+ indexes, 3 materialized views)
   - **Key Decisions**: PostgreSQL 15+, Alembic migrations, version tables for temporal data
 
-- [ ] **Task 0.12**: Design API architecture
+- [x] **Task 0.12**: Design API architecture ✅
   - RESTful or GraphQL decision
   - Define key endpoints (browse code, view law, search, analytics)
   - Document request/response formats
+  - **Completed**: See [research/TASK-0.12-API-Architecture-Design.md](research/TASK-0.12-API-Architecture-Design.md)
+  - **Key Decisions**: RESTful API (better caching, simpler), 27 endpoints across 6 API areas, JSON responses
+  - **Deliverables**: Full endpoint specifications with request/response examples, OpenAPI schema outline
 
 - [ ] **Task 0.13**: Select technology stack
   - Frontend: React/Next.js vs alternatives
