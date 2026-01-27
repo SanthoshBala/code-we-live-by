@@ -98,7 +98,8 @@ This document translates the CWLB specification into an actionable backlog of im
   - Database: PostgreSQL + Elasticsearch setup
   - Hosting platform: AWS/GCP/Azure decision
   - **Completed**: See [research/TASK-0.13-Technology-Stack-Selection.md](research/TASK-0.13-Technology-Stack-Selection.md)
-  - **Key Decisions**: Next.js 14 (frontend), Python/FastAPI (backend), PostgreSQL + Elasticsearch + Redis (data), AWS (hosting)
+  - **Key Decisions**: Monolith architecture, React + Python/FastAPI, PostgreSQL (Cloud SQL), GCP Cloud Run (scales to zero)
+  - **Cost**: ~$10/month idle, ~$30-40/month with moderate traffic
 
 - [ ] **Task 0.14**: Design data pipeline architecture
   - ETL process flow diagram

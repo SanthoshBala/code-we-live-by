@@ -40,31 +40,29 @@ This document defines the complete technology stack for The Code We Live By (CWL
 
 | Layer | Technology | Version |
 |-------|------------|---------|
-| **Frontend** | Next.js (React) | 14.x |
+| **Frontend** | React (served by backend) | 18.x |
 | **Frontend Styling** | Tailwind CSS | 3.x |
-| **Frontend State** | TanStack Query | 5.x |
 | **Backend** | Python (FastAPI) | 3.11+ |
 | **ORM** | SQLAlchemy | 2.x |
-| **Database** | PostgreSQL | 15+ |
-| **Search** | Elasticsearch | 8.x |
-| **Cache** | Redis | 7.x |
-| **Hosting** | AWS | - |
-| **Containerization** | Docker | - |
-| **Orchestration** | AWS ECS Fargate | - |
-| **CI/CD** | GitHub Actions | - |
-| **Monitoring** | Datadog | - |
-| **Error Tracking** | Sentry | - |
+| **Database** | PostgreSQL (Cloud SQL) | 15+ |
+| **Search** | PostgreSQL Full-Text (MVP) | - |
+| **Cache** | In-memory / Memorystore (if needed) | - |
+| **Hosting** | Google Cloud Platform | - |
+| **Compute** | Cloud Run (scales to zero) | - |
+| **CI/CD** | GitHub Actions + Cloud Build | - |
+| **Monitoring** | Cloud Monitoring (free tier) | - |
 
 ### Key Decisions Summary
 
 | Decision Area | Choice | Primary Rationale |
 |---------------|--------|-------------------|
-| Frontend Framework | **Next.js** | SSR/SSG for SEO, React ecosystem, App Router |
+| Architecture | **Monolith** | Simpler deployment, one service to manage |
+| Frontend Framework | **React** | Served by FastAPI, no separate hosting needed |
 | Backend Language | **Python** | Existing prototypes, data processing strength, FastAPI performance |
 | Database | **PostgreSQL** | Already decided in Task 0.11; best relational + full-text |
-| Search | **Elasticsearch** | Superior full-text search, faceted navigation |
-| Cache | **Redis** | Industry standard, versatile, excellent performance |
-| Hosting | **AWS** | Mature ecosystem, government-friendly, cost-effective |
+| Search | **PostgreSQL FTS** | Built-in, no extra service for MVP (Elasticsearch later if needed) |
+| Cache | **In-memory** | Start simple, add Redis/Memorystore only if needed |
+| Hosting | **GCP Cloud Run** | Scales to zero = $0 when idle, familiar ecosystem |
 
 ---
 
@@ -768,116 +766,93 @@ requirepass ${REDIS_PASSWORD}
 
 ## 8. Hosting Platform Selection
 
-### 8.1 Candidates Evaluated
+### 8.1 Decision: Google Cloud Platform (Monolith)
 
-| Provider | Key Strengths | Key Weaknesses |
-|----------|---------------|----------------|
-| **AWS** | Mature, government-friendly, comprehensive | Complex, can be expensive |
-| **GCP** | BigQuery, ML services, clean UI | Smaller ecosystem |
-| **Azure** | Microsoft integration, enterprise | Complex pricing |
-| **Vercel + Railway** | Simple, fast deployment | Limited control, vendor lock-in |
-| **DigitalOcean** | Simple, affordable | Limited managed services |
-
-### 8.2 Evaluation Matrix
-
-| Criterion | AWS | GCP | Azure | Vercel+Railway |
-|-----------|-----|-----|-------|----------------|
-| Managed PostgreSQL | 10/10 | 9/10 | 8/10 | 7/10 |
-| Managed Elasticsearch | 9/10 | 7/10 | 7/10 | 3/10 |
-| Managed Redis | 10/10 | 8/10 | 8/10 | 6/10 |
-| CDN | 10/10 | 9/10 | 8/10 | 10/10 |
-| Container Orchestration | 10/10 | 10/10 | 9/10 | 5/10 |
-| Government Compliance | 10/10 | 8/10 | 9/10 | 4/10 |
-| Cost Efficiency | 7/10 | 8/10 | 6/10 | 8/10 |
-| **Weighted Total** | **9.1** | **8.4** | **7.9** | **6.1** |
-
-### 8.3 Decision: AWS
-
-**Selected**: Amazon Web Services (AWS)
+**Selected**: Google Cloud Platform with Cloud Run
 
 **Primary Reasons**:
 
-1. **Government Readiness**:
-   - FedRAMP authorized
-   - GovCloud available if needed
-   - Used by Congress.gov, many government sites
-   - CWLB may eventually integrate with government systems
+1. **Scales to Zero**:
+   - Cloud Run charges only when handling requests
+   - $0/month during periods of no traffic
+   - Perfect for a project with sporadic usage patterns
 
-2. **Managed Services**:
-   - **RDS PostgreSQL**: Automated backups, failover, read replicas
-   - **OpenSearch**: Elasticsearch-compatible, managed
-   - **ElastiCache**: Managed Redis
-   - **CloudFront**: Global CDN with edge locations
+2. **Simplicity**:
+   - One service to deploy (monolith)
+   - No load balancer configuration needed
+   - Automatic HTTPS
+   - Built-in request routing
 
-3. **Mature Ecosystem**:
-   - Extensive documentation
-   - Large community
-   - Proven at scale
-   - Rich tooling (AWS CLI, SDKs, CDK)
+3. **Familiar Ecosystem**:
+   - Similar to App Engine experience
+   - Good documentation
+   - gcloud CLI is straightforward
 
-4. **Cost Controls**:
-   - Reserved instances for predictable workloads
-   - Spot instances for batch processing (data pipeline)
-   - Detailed cost explorer
-   - AWS Nonprofit credits available
+4. **Generous Free Tier**:
+   - Cloud Run: 2 million requests/month free
+   - Cloud SQL: No always-free tier, but minimal instance is ~$7/month
+   - Cloud Storage: 5GB free
+   - Cloud Build: 120 build-minutes/day free
 
-5. **Scalability Path**:
-   - Easy to scale up as usage grows
-   - Auto-scaling groups
-   - Multi-AZ for high availability
-
-### 8.4 AWS Architecture
+### 8.2 GCP Architecture (Monolith)
 
 ```
-                                    ┌─────────────────────┐
-                                    │     CloudFront      │
-                                    │        (CDN)        │
-                                    └──────────┬──────────┘
-                                               │
-                                    ┌──────────▼──────────┐
-                                    │   Application       │
-                                    │   Load Balancer     │
-                                    └──────────┬──────────┘
-                                               │
-                    ┌──────────────────────────┼──────────────────────────┐
-                    │                          │                          │
-           ┌────────▼────────┐       ┌────────▼────────┐       ┌────────▼────────┐
-           │   ECS Fargate   │       │   ECS Fargate   │       │   ECS Fargate   │
-           │   (Frontend)    │       │    (Backend)    │       │   (Backend)     │
-           │   Next.js       │       │    FastAPI      │       │   FastAPI       │
-           └────────┬────────┘       └────────┬────────┘       └────────┬────────┘
-                    │                         │                          │
-                    │                         │                          │
-                    │              ┌──────────▼──────────────────────────┘
-                    │              │
-                    │    ┌─────────▼─────────┐    ┌─────────────────────┐
-                    │    │   ElastiCache     │    │    OpenSearch       │
-                    │    │     (Redis)       │    │   (Elasticsearch)   │
-                    │    └───────────────────┘    └─────────────────────┘
-                    │              │                         │
-                    │              │                         │
-                    │    ┌─────────▼─────────────────────────▼─────────┐
-                    │    │              RDS PostgreSQL                  │
-                    │    │          (Multi-AZ, Read Replica)           │
-                    └────┤                                             │
-                         └─────────────────────────────────────────────┘
+                    ┌─────────────────────────────────┐
+                    │         Cloud Run               │
+                    │   ┌─────────────────────────┐   │
+                    │   │   FastAPI (Python)      │   │
+     HTTPS          │   │                         │   │
+    Request ──────► │   │   - API endpoints       │   │
+                    │   │   - Serves React build  │   │
+                    │   │   - Static files        │   │
+                    │   └───────────┬─────────────┘   │
+                    └───────────────┼─────────────────┘
+                                    │
+                                    ▼
+                    ┌─────────────────────────────────┐
+                    │      Cloud SQL (PostgreSQL)     │
+                    │         db-f1-micro             │
+                    │     (scales up if needed)       │
+                    └─────────────────────────────────┘
 ```
 
-### 8.5 AWS Services Selection
+**That's it.** Two services. No Redis, no Elasticsearch, no load balancer, no CDN configuration.
 
-| Service | AWS Service | Specification |
-|---------|-------------|---------------|
-| Compute (Frontend) | ECS Fargate | 0.5 vCPU, 1GB RAM per task |
-| Compute (Backend) | ECS Fargate | 1 vCPU, 2GB RAM per task |
-| Database | RDS PostgreSQL | db.r6g.large (2 vCPU, 16GB RAM) |
-| Search | OpenSearch | t3.medium.search (2 nodes) |
-| Cache | ElastiCache Redis | cache.r6g.large (2 nodes) |
-| CDN | CloudFront | Standard distribution |
-| Object Storage | S3 | Standard tier |
-| DNS | Route 53 | Hosted zone |
-| Secrets | Secrets Manager | API keys, DB credentials |
-| Monitoring | CloudWatch | Logs, metrics, alarms |
-| CI/CD | CodePipeline + CodeBuild | Or GitHub Actions |
+### 8.3 GCP Services Selection
+
+| Service | GCP Service | Specification | Monthly Cost |
+|---------|-------------|---------------|--------------|
+| **Compute** | Cloud Run | 1 vCPU, 512MB RAM, scales to zero | ~$0 (idle) |
+| **Database** | Cloud SQL PostgreSQL | db-f1-micro (shared vCPU, 614MB) | ~$7-10 |
+| **Storage** | Cloud Storage | Static assets if needed | ~$0 (free tier) |
+| **Secrets** | Secret Manager | API keys, DB credentials | ~$0 (free tier) |
+| **DNS** | Cloud DNS | Optional (can use external) | ~$0.20/zone |
+| **Monitoring** | Cloud Monitoring | Logs, metrics | ~$0 (free tier) |
+| **CI/CD** | Cloud Build | Triggered by GitHub | ~$0 (free tier) |
+
+### 8.4 Why Not Separate Services?
+
+For MVP with low/sporadic traffic:
+
+| Separate Service | Why Skip It |
+|------------------|-------------|
+| **Redis cache** | PostgreSQL is fast enough; add later if needed |
+| **Elasticsearch** | PostgreSQL full-text search works for MVP |
+| **CDN** | Cloud Run is already globally distributed |
+| **Load balancer** | Cloud Run handles this automatically |
+| **Separate frontend host** | FastAPI serves static files fine |
+
+### 8.5 Scaling Path (If CWLB Takes Off)
+
+| Traffic Level | Action |
+|---------------|--------|
+| **0-1K users/month** | Keep monolith, db-f1-micro |
+| **1K-10K users/month** | Upgrade Cloud SQL to db-g1-small (~$25/month) |
+| **10K-50K users/month** | Add Memorystore (Redis) for caching |
+| **50K+ users/month** | Consider splitting frontend, add Elasticsearch |
+| **100K+ users/month** | Evaluate migration to GKE or multi-region |
+
+The architecture grows with demand. No need to pay for scale you don't have.
 
 ---
 
@@ -885,417 +860,249 @@ requirepass ${REDIS_PASSWORD}
 
 ### 9.1 Containerization: Docker
 
-All services containerized for consistency across environments.
-
-**Frontend Dockerfile**:
+Single Dockerfile for the monolith application:
 
 ```dockerfile
-# Dockerfile.frontend
-FROM node:20-alpine AS builder
+# Dockerfile
+FROM python:3.11-slim
+
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
+# Install Node.js for building React frontend
+RUN apt-get update && apt-get install -y nodejs npm && rm -rf /var/lib/apt/lists/*
 
-**Backend Dockerfile**:
-
-```dockerfile
-# Dockerfile.backend
-FROM python:3.11-slim AS base
-WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-FROM base AS builder
-RUN pip install --upgrade pip
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-FROM base AS runner
-COPY --from=builder /app/wheels /wheels
-RUN pip install --no-cache /wheels/*
-COPY ./app ./app
-EXPOSE 8000
-CMD ["gunicorn", "app.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000"]
+# Build React frontend
+COPY frontend/package*.json frontend/
+RUN cd frontend && npm ci
+
+COPY frontend/ frontend/
+RUN cd frontend && npm run build
+
+# Copy backend code
+COPY app/ app/
+
+# Copy built frontend to static directory
+RUN cp -r frontend/build app/static
+
+# Expose port (Cloud Run uses 8080 by default)
+ENV PORT=8080
+EXPOSE 8080
+
+# Run with gunicorn
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app.main:app -k uvicorn.workers.UvicornWorker
 ```
 
-### 9.2 Infrastructure as Code: Terraform
+### 9.2 Project Structure (Monolith)
 
-```hcl
-# main.tf (simplified)
-
-provider "aws" {
-  region = var.aws_region
-}
-
-# VPC
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "5.0.0"
-
-  name = "cwlb-vpc"
-  cidr = "10.0.0.0/16"
-
-  azs             = ["us-east-1a", "us-east-1b"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24"]
-
-  enable_nat_gateway = true
-}
-
-# RDS PostgreSQL
-module "rds" {
-  source  = "terraform-aws-modules/rds/aws"
-  version = "6.0.0"
-
-  identifier = "cwlb-postgres"
-
-  engine               = "postgres"
-  engine_version       = "15.4"
-  family               = "postgres15"
-  major_engine_version = "15"
-  instance_class       = "db.r6g.large"
-
-  allocated_storage     = 100
-  max_allocated_storage = 500
-
-  db_name  = "cwlb"
-  username = var.db_username
-  port     = 5432
-
-  multi_az               = true
-  db_subnet_group_name   = module.vpc.database_subnet_group_name
-  vpc_security_group_ids = [module.security_group.security_group_id]
-
-  backup_retention_period = 7
-  skip_final_snapshot     = false
-  deletion_protection     = true
-}
-
-# ElastiCache Redis
-resource "aws_elasticache_cluster" "redis" {
-  cluster_id           = "cwlb-redis"
-  engine               = "redis"
-  node_type            = "cache.r6g.large"
-  num_cache_nodes      = 1
-  parameter_group_name = "default.redis7"
-  engine_version       = "7.0"
-  port                 = 6379
-}
-
-# OpenSearch
-resource "aws_opensearch_domain" "search" {
-  domain_name    = "cwlb-search"
-  engine_version = "OpenSearch_2.11"
-
-  cluster_config {
-    instance_type  = "t3.medium.search"
-    instance_count = 2
-  }
-
-  ebs_options {
-    ebs_enabled = true
-    volume_size = 100
-  }
-}
-
-# ECS Cluster
-resource "aws_ecs_cluster" "main" {
-  name = "cwlb-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-}
+```
+cwlb/
+├── app/                      # FastAPI backend
+│   ├── __init__.py
+│   ├── main.py              # FastAPI app + static file serving
+│   ├── api/                 # API routes
+│   ├── models/              # SQLAlchemy models
+│   ├── schemas/             # Pydantic schemas
+│   ├── crud/                # Database operations
+│   └── static/              # Built React app (generated)
+│
+├── frontend/                 # React frontend source
+│   ├── package.json
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── components/
+│   │   └── pages/
+│   └── build/               # Build output (generated)
+│
+├── pipeline/                 # Data ingestion scripts
+│   ├── ingest_sections.py
+│   └── ingest_laws.py
+│
+├── alembic/                  # Database migrations
+│   └── versions/
+│
+├── Dockerfile
+├── requirements.txt
+├── cloudbuild.yaml          # GCP Cloud Build config
+└── .gcloudignore
 ```
 
-### 9.3 CI/CD: GitHub Actions
+### 9.3 GCP Deployment Commands
+
+**One-time setup**:
+
+```bash
+# Create GCP project
+gcloud projects create cwlb-app --name="The Code We Live By"
+gcloud config set project cwlb-app
+
+# Enable required APIs
+gcloud services enable \
+  cloudbuild.googleapis.com \
+  run.googleapis.com \
+  sqladmin.googleapis.com \
+  secretmanager.googleapis.com
+
+# Create Cloud SQL instance
+gcloud sql instances create cwlb-db \
+  --database-version=POSTGRES_15 \
+  --tier=db-f1-micro \
+  --region=us-central1
+
+# Create database
+gcloud sql databases create cwlb --instance=cwlb-db
+
+# Store database password in Secret Manager
+echo -n "your-secure-password" | \
+  gcloud secrets create db-password --data-file=-
+```
+
+**Deploy**:
+
+```bash
+# Build and deploy to Cloud Run
+gcloud run deploy cwlb \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --add-cloudsql-instances cwlb-app:us-central1:cwlb-db \
+  --set-env-vars "DATABASE_URL=postgresql://postgres:PASSWORD@/cwlb?host=/cloudsql/cwlb-app:us-central1:cwlb-db"
+```
+
+### 9.4 CI/CD: GitHub Actions + Cloud Build
 
 ```yaml
 # .github/workflows/deploy.yml
-
-name: Deploy CWLB
+name: Deploy to Cloud Run
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-
-env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY_BACKEND: cwlb-backend
-  ECR_REPOSITORY_FRONTEND: cwlb-frontend
-  ECS_CLUSTER: cwlb-cluster
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          cd backend
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Run tests
-        run: |
-          cd backend
-          pytest --cov=app tests/
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm ci
-
-      - name: Run frontend tests
-        run: |
-          cd frontend
-          npm run test
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm run build
-
   deploy:
-    needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push backend image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Deploy to Cloud Run
         run: |
-          cd backend
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
-
-      - name: Build and push frontend image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          cd frontend
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
-
-      - name: Deploy to ECS
-        run: |
-          aws ecs update-service --cluster $ECS_CLUSTER --service cwlb-backend --force-new-deployment
-          aws ecs update-service --cluster $ECS_CLUSTER --service cwlb-frontend --force-new-deployment
+          gcloud run deploy cwlb \
+            --source . \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --quiet
 ```
+
+**That's the entire CI/CD pipeline.** Push to main → deploys automatically.
 
 ---
 
 ## 10. Monitoring and Observability
 
-### 10.1 Monitoring Stack
+### 10.1 Monitoring Stack (Simple)
 
-| Component | Tool | Purpose |
-|-----------|------|---------|
-| **Metrics** | Datadog | Infrastructure and application metrics |
-| **Logs** | Datadog / CloudWatch | Centralized logging |
-| **Traces** | Datadog APM | Distributed tracing |
-| **Errors** | Sentry | Error tracking and alerting |
-| **Uptime** | Datadog Synthetics | Uptime monitoring |
+For MVP, use GCP's built-in free monitoring:
+
+| Component | Tool | Cost |
+|-----------|------|------|
+| **Metrics** | Cloud Monitoring | Free tier |
+| **Logs** | Cloud Logging | Free tier (50GB/month) |
+| **Errors** | Cloud Error Reporting | Free |
+| **Uptime** | Cloud Monitoring Uptime Checks | Free (up to 10) |
+
+No need for Datadog/Sentry unless traffic grows significantly.
 
 ### 10.2 Key Metrics to Track
 
-**Application Metrics**:
+| Metric | Where to Find | Alert If |
+|--------|---------------|----------|
+| Request latency | Cloud Run metrics | p99 > 2s |
+| Error rate | Cloud Run metrics | > 1% |
+| Instance count | Cloud Run metrics | Unexpectedly high |
+| DB connections | Cloud SQL metrics | Near limit |
+| DB CPU | Cloud SQL metrics | > 80% sustained |
 
-| Metric | Target | Alert Threshold |
-|--------|--------|-----------------|
-| API response time (p50) | < 100ms | > 200ms |
-| API response time (p99) | < 500ms | > 1000ms |
-| Error rate | < 0.1% | > 1% |
-| Request throughput | Monitor | Spike > 3x baseline |
+### 10.3 Simple Alerting
 
-**Infrastructure Metrics**:
-
-| Metric | Target | Alert Threshold |
-|--------|--------|-----------------|
-| CPU utilization | < 70% | > 85% |
-| Memory utilization | < 80% | > 90% |
-| Database connections | < 80% max | > 90% max |
-| Cache hit rate | > 90% | < 70% |
-
-**Database Metrics**:
-
-| Metric | Target | Alert Threshold |
-|--------|--------|-----------------|
-| Query time (p99) | < 100ms | > 500ms |
-| Connection count | < 150 | > 180 |
-| Replication lag | < 10s | > 60s |
-| Disk usage | < 70% | > 85% |
-
-### 10.3 Alerting Strategy
-
-```yaml
-# Datadog monitors (simplified)
-
-monitors:
-  - name: "High API Error Rate"
-    type: metric
-    query: "avg(last_5m):sum:cwlb.api.errors{*} / sum:cwlb.api.requests{*} > 0.01"
-    message: "Error rate exceeded 1%"
-    priority: P1
-
-  - name: "Slow API Response"
-    type: metric
-    query: "avg(last_5m):p99:cwlb.api.response_time{*} > 1000"
-    message: "P99 response time > 1 second"
-    priority: P2
-
-  - name: "Database Connection Pool Exhausted"
-    type: metric
-    query: "avg(last_5m):cwlb.db.connections{*} > 180"
-    message: "Database connections near limit"
-    priority: P1
-
-  - name: "Low Cache Hit Rate"
-    type: metric
-    query: "avg(last_15m):cwlb.cache.hit_rate{*} < 0.7"
-    message: "Cache hit rate below 70%"
-    priority: P3
+```bash
+# Create uptime check + alert via gcloud
+gcloud monitoring uptime create cwlb-health \
+  --display-name="CWLB Health Check" \
+  --resource-type="cloud-run-revision" \
+  --resource-labels="service_name=cwlb,location=us-central1"
 ```
 
-### 10.4 Logging Configuration
+### 10.4 Logging
 
-**Backend Logging (Python)**:
+Cloud Run automatically captures stdout/stderr. Use structured logging:
 
 ```python
 # app/core/logging.py
 import logging
 import json
-from datetime import datetime
 
 class JSONFormatter(logging.Formatter):
     def format(self, record):
-        log_data = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
+        return json.dumps({
+            "severity": record.levelname,
             "message": record.getMessage(),
             "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-        }
+        })
 
-        if hasattr(record, "request_id"):
-            log_data["request_id"] = record.request_id
-
-        if record.exc_info:
-            log_data["exception"] = self.formatException(record.exc_info)
-
-        return json.dumps(log_data)
-
-# Configure logging
-def setup_logging():
-    handler = logging.StreamHandler()
-    handler.setFormatter(JSONFormatter())
-
-    logging.basicConfig(
-        level=logging.INFO,
-        handlers=[handler]
-    )
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().handlers[0].setFormatter(JSONFormatter())
 ```
+
+Logs are automatically available in Cloud Logging console.
 
 ---
 
 ## 11. Complete Technology Stack Summary
 
-### 11.1 Full Stack Overview
+### 11.1 Full Stack Overview (Monolith)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              PRESENTATION LAYER                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  Next.js 14        │  React 18          │  Tailwind CSS     │  TypeScript  │
-│  (App Router)      │  (Components)      │  (Styling)        │  (Types)     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  TanStack Query    │  Radix UI          │  Recharts         │  react-diff  │
-│  (Data fetching)   │  (Accessibility)   │  (Charts)         │  (Diffs)     │
+│  React 18          │  Tailwind CSS      │  TypeScript       │  Recharts    │
+│  (Components)      │  (Styling)         │  (Types)          │  (Charts)    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
-                                    ▼
+                                    ▼ (built & served by backend)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                               API LAYER                                     │
+│                            APPLICATION LAYER                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  FastAPI           │  Pydantic          │  SQLAlchemy 2.0   │  Python 3.11 │
-│  (Framework)       │  (Validation)      │  (ORM)            │  (Runtime)   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  httpx             │  pytest            │  Alembic          │  Gunicorn    │
-│  (HTTP client)     │  (Testing)         │  (Migrations)     │  (Server)    │
+│  (API + Static)    │  (Validation)      │  (ORM)            │  (Runtime)   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              DATA LAYER                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  PostgreSQL 15     │  Elasticsearch 8   │  Redis 7          │              │
-│  (Primary DB)      │  (Search)          │  (Cache)          │              │
+│  PostgreSQL 15 (Cloud SQL)               │  Full-text search (built-in)    │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           INFRASTRUCTURE LAYER                              │
+│                           INFRASTRUCTURE (GCP)                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  AWS ECS Fargate   │  AWS RDS           │  AWS OpenSearch   │  ElastiCache │
-│  (Compute)         │  (PostgreSQL)      │  (Search)         │  (Redis)     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  CloudFront        │  Route 53          │  S3               │  ECR         │
-│  (CDN)             │  (DNS)             │  (Storage)        │  (Registry)  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              DEVOPS LAYER                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Docker            │  Terraform         │  GitHub Actions   │  Datadog     │
-│  (Containers)      │  (IaC)             │  (CI/CD)          │  (Monitoring)│
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Sentry            │  Git               │  GitHub           │              │
-│  (Errors)          │  (Version Control) │  (Code hosting)   │              │
+│  Cloud Run         │  Cloud SQL         │  Cloud Build      │  Secret Mgr  │
+│  (Compute)         │  (PostgreSQL)      │  (CI/CD)          │  (Secrets)   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1303,107 +1110,120 @@ def setup_logging():
 
 | Category | Technology | Version | Notes |
 |----------|------------|---------|-------|
-| **Frontend** | Next.js | 14.x | App Router |
-| | React | 18.x | |
+| **Frontend** | React | 18.x | Served by FastAPI |
 | | TypeScript | 5.x | |
 | | Tailwind CSS | 3.x | |
-| | TanStack Query | 5.x | Data fetching |
+| | Recharts | 2.x | Charts/visualizations |
 | **Backend** | Python | 3.11+ | |
 | | FastAPI | 0.109+ | |
-| | SQLAlchemy | 2.0+ | Async support |
+| | SQLAlchemy | 2.0+ | |
 | | Pydantic | 2.x | |
-| | Alembic | 1.13+ | |
-| **Database** | PostgreSQL | 15+ | |
-| **Search** | Elasticsearch | 8.x | Or OpenSearch 2.x |
-| **Cache** | Redis | 7.x | |
-| **Infrastructure** | Docker | Latest | |
-| | Terraform | 1.6+ | |
-| **Monitoring** | Datadog | SaaS | |
-| | Sentry | SaaS | |
+| | Alembic | 1.13+ | Migrations |
+| **Database** | PostgreSQL | 15+ | Cloud SQL |
+| **Search** | PostgreSQL FTS | - | Built-in, add ES later if needed |
+| **Infrastructure** | Cloud Run | - | Scales to zero |
+| | Cloud SQL | - | Managed PostgreSQL |
+| | Cloud Build | - | CI/CD |
+| **Monitoring** | Cloud Monitoring | - | Free tier |
 
 ---
 
 ## 12. Cost Projections
 
-### 12.1 Phase 1 (MVP) Monthly Costs
+### 12.1 Idle Month (No Traffic)
 
 | Service | Specification | Monthly Cost |
 |---------|---------------|--------------|
-| **ECS Fargate (Frontend)** | 2 tasks × 0.5 vCPU × 1GB | ~$30 |
-| **ECS Fargate (Backend)** | 2 tasks × 1 vCPU × 2GB | ~$60 |
-| **RDS PostgreSQL** | db.r6g.large, Multi-AZ | ~$350 |
-| **OpenSearch** | t3.medium.search × 2 | ~$150 |
-| **ElastiCache Redis** | cache.r6g.large | ~$130 |
-| **CloudFront** | 100GB transfer | ~$20 |
-| **S3** | 10GB storage | ~$1 |
-| **Route 53** | Hosted zone + queries | ~$5 |
-| **Secrets Manager** | 10 secrets | ~$5 |
-| **CloudWatch** | Logs + metrics | ~$30 |
-| **Data transfer** | 200GB outbound | ~$20 |
-| **Datadog** | Pro plan (3 hosts) | ~$75 |
-| **Sentry** | Team plan | ~$26 |
-| **Domain** | Annual / 12 | ~$2 |
-| **TOTAL (Phase 1)** | | **~$900/month** |
+| **Cloud Run** | Scales to zero | **$0** |
+| **Cloud SQL** | db-f1-micro (always on) | ~$7-10 |
+| **Cloud Storage** | < 5GB (free tier) | $0 |
+| **Cloud Build** | < 120 min/day (free tier) | $0 |
+| **Secret Manager** | < 6 secrets (free tier) | $0 |
+| **Cloud Monitoring** | Free tier | $0 |
+| **Domain** | Annual / 12 | ~$1 |
+| **TOTAL (Idle)** | | **~$8-11/month** |
 
-### 12.2 Phase 2 (Scale) Monthly Costs
+### 12.2 Light Usage (~1,000 requests/day)
 
 | Service | Specification | Monthly Cost |
 |---------|---------------|--------------|
-| **ECS Fargate (Frontend)** | 4 tasks × 1 vCPU × 2GB | ~$120 |
-| **ECS Fargate (Backend)** | 6 tasks × 1 vCPU × 2GB | ~$180 |
-| **RDS PostgreSQL** | db.r6g.xlarge, Multi-AZ + Read Replica | ~$700 |
-| **OpenSearch** | m6g.large.search × 3 | ~$400 |
-| **ElastiCache Redis** | cache.r6g.large × 2 (cluster) | ~$260 |
-| **CloudFront** | 500GB transfer | ~$50 |
-| **Other services** | | ~$150 |
-| **Monitoring (Datadog)** | Pro plan (10 hosts) | ~$250 |
-| **TOTAL (Phase 2)** | | **~$2,100/month** |
+| **Cloud Run** | ~30K requests/month, minimal CPU | ~$0-2 |
+| **Cloud SQL** | db-f1-micro | ~$7-10 |
+| **Egress** | ~1GB/month | ~$0.12 |
+| **TOTAL (Light)** | | **~$10-15/month** |
 
-### 12.3 Cost Optimization Strategies
+### 12.3 Moderate Usage (~10,000 requests/day)
 
-1. **Reserved Instances**: 30-40% savings on RDS, ElastiCache with 1-year commitment
-2. **Spot Instances**: Use for data pipeline batch jobs (70% savings)
-3. **Right-sizing**: Start small, scale based on actual usage
-4. **Caching**: Aggressive caching reduces database load
-5. **AWS Nonprofit Credits**: Apply for credits (if applicable)
-6. **CloudFront Caching**: Reduces origin requests
+| Service | Specification | Monthly Cost |
+|---------|---------------|--------------|
+| **Cloud Run** | ~300K requests/month | ~$5-10 |
+| **Cloud SQL** | db-g1-small (upgrade) | ~$25 |
+| **Egress** | ~10GB/month | ~$1.20 |
+| **TOTAL (Moderate)** | | **~$30-40/month** |
+
+### 12.4 Scaling Costs
+
+| Traffic Level | Cloud SQL Tier | Est. Monthly Cost |
+|---------------|----------------|-------------------|
+| 0-1K req/day | db-f1-micro | ~$10 |
+| 1K-10K req/day | db-g1-small | ~$35 |
+| 10K-50K req/day | db-custom-2-4096 | ~$80 |
+| 50K+ req/day | db-custom-4-8192 + Memorystore | ~$200+ |
+
+### 12.5 Cost Comparison
+
+| Scenario | GCP (This Plan) | AWS (Original) |
+|----------|-----------------|----------------|
+| Idle month | ~$10 | ~$500+ |
+| Light usage | ~$15 | ~$600+ |
+| Moderate usage | ~$40 | ~$800+ |
+
+**Key advantage**: GCP Cloud Run's scale-to-zero means you only pay for actual usage. No minimum costs for compute.
 
 ---
 
 ## 13. Implementation Roadmap
 
-### 13.1 Infrastructure Setup (Week 1-2)
+### 13.1 Infrastructure Setup (Day 1)
+
+```bash
+# Everything you need to set up (1-2 hours)
+
+# 1. Create GCP project
+gcloud projects create cwlb-app
+gcloud config set project cwlb-app
+
+# 2. Enable APIs
+gcloud services enable cloudbuild.googleapis.com run.googleapis.com sqladmin.googleapis.com
+
+# 3. Create Cloud SQL instance
+gcloud sql instances create cwlb-db --database-version=POSTGRES_15 --tier=db-f1-micro --region=us-central1
+
+# 4. Create database and user
+gcloud sql databases create cwlb --instance=cwlb-db
+
+# 5. Done! Deploy when ready
+```
+
+### 13.2 Application Setup (Week 1)
 
 ```
-Week 1:
-├── Day 1-2: Set up AWS account, IAM roles, VPC
-├── Day 3-4: Provision RDS PostgreSQL, run schema
-├── Day 5: Set up ElastiCache Redis
-└── Weekend: Set up OpenSearch (can run parallel)
+Day 1-2:
+├── Initialize FastAPI project structure
+├── Set up SQLAlchemy models (from Task 0.11 schema)
+├── Configure Alembic migrations
+└── Create Dockerfile
 
-Week 2:
-├── Day 1-2: Set up ECS cluster, ECR repositories
-├── Day 3: Configure ALB, SSL certificates
-├── Day 4: Set up CloudFront distribution
-├── Day 5: Configure DNS in Route 53
-└── Weekend: Terraform modules for reproducibility
-```
+Day 3-4:
+├── Initialize React frontend (create-react-app or Vite)
+├── Configure Tailwind CSS
+├── Set up basic routing
+└── Integrate with FastAPI static serving
 
-### 13.2 Application Setup (Week 3-4)
-
-```
-Week 3:
-├── Day 1-2: Initialize Next.js project, configure Tailwind
-├── Day 3-4: Initialize FastAPI project, configure SQLAlchemy
-├── Day 5: Set up Alembic migrations, run initial migration
-└── Weekend: Docker containers for both services
-
-Week 4:
-├── Day 1-2: GitHub Actions CI pipeline
-├── Day 3: GitHub Actions CD pipeline
-├── Day 4: Datadog agent setup
-├── Day 5: Sentry integration
-└── Weekend: Documentation, runbooks
+Day 5:
+├── Set up GitHub Actions deploy workflow
+├── First deploy to Cloud Run
+└── Verify everything works
 ```
 
 ### 13.3 Integration with Phase 1 Tasks
@@ -1411,13 +1231,13 @@ Week 4:
 | Task ID | Task Name | Technology Used |
 |---------|-----------|-----------------|
 | 1.1 | Development environment | Docker, GitHub |
-| 1.2 | PostgreSQL setup | RDS PostgreSQL, Alembic |
-| 1.3 | Elasticsearch setup | OpenSearch |
-| 1.4 | Redis setup | ElastiCache |
-| 1.5 | Hosting infrastructure | ECS, CloudFront, ALB |
+| 1.2 | PostgreSQL setup | Cloud SQL, Alembic |
+| 1.3 | Elasticsearch setup | PostgreSQL FTS (MVP), ES later |
+| 1.4 | Redis setup | Skip for MVP, add Memorystore if needed |
+| 1.5 | Hosting infrastructure | Cloud Run (1 command deploy) |
 | 1.20-1.24 | Backend API | FastAPI, SQLAlchemy |
-| 1.25-1.37 | Frontend UI | Next.js, Tailwind, React |
-| 1.46 | Production deployment | Terraform, GitHub Actions |
+| 1.25-1.37 | Frontend UI | React, Tailwind (served by FastAPI) |
+| 1.46 | Production deployment | GitHub Actions → Cloud Run |
 
 ---
 
@@ -1427,65 +1247,60 @@ Week 4:
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| Next.js complexity | Medium | Medium | Team training, start with Pages Router fallback |
-| FastAPI async issues | Low | Medium | Comprehensive testing, sync fallbacks |
-| PostgreSQL performance | Low | High | Monitoring, query optimization, read replicas |
-| Elasticsearch sync issues | Medium | Medium | Transaction outbox pattern, monitoring |
-| AWS cost overruns | Medium | Medium | Budget alerts, reserved instances, right-sizing |
+| Cold start latency | Medium | Low | Keep min instances=1 if needed (~$25/mo) |
+| PostgreSQL FTS limitations | Medium | Medium | Upgrade to Elasticsearch later if search quality suffers |
+| Cloud SQL connection limits | Low | Medium | Connection pooling, upgrade tier if needed |
+| React bundle size | Low | Low | Code splitting, lazy loading |
 
 ### 14.2 Operational Risks
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| Service outage | Low | High | Multi-AZ, health checks, auto-recovery |
-| Data loss | Very Low | Critical | Automated backups, point-in-time recovery |
-| Security breach | Low | Critical | WAF, security groups, secrets management |
-| Scaling issues | Medium | Medium | Load testing, auto-scaling policies |
+| Cloud SQL downtime | Very Low | High | Automated backups, point-in-time recovery |
+| Data loss | Very Low | Critical | Daily backups enabled by default |
+| Cost spike | Low | Low | Budget alerts, scale-to-zero protects against runaway costs |
 
 ### 14.3 Organizational Risks
 
 | Risk | Probability | Impact | Mitigation |
 |------|-------------|--------|------------|
-| Key person dependency | Medium | High | Documentation, pair programming, cross-training |
-| Scope creep | High | Medium | Clear MVP scope, backlog discipline |
-| Budget constraints | Medium | Medium | Phased rollout, cost monitoring |
+| Scope creep | High | Medium | Strict MVP scope, resist adding complexity |
+| Over-engineering | Medium | Medium | Keep monolith simple, resist premature optimization |
+
+**Note**: The simplified architecture significantly reduces operational risk compared to a multi-service setup.
 
 ---
 
-## Appendix A: Alternative Considered - Go Backend
+## Appendix A: Alternative Considered - AWS (Full Stack)
 
-**Why Go was seriously considered**:
-- Superior performance for high-throughput scenarios
-- Excellent concurrency model
-- Single binary deployment
-- Strong typing
+**Why AWS was considered**:
+- Government-ready (FedRAMP)
+- Comprehensive managed services
+- Proven at scale
 
-**Why Go was not selected**:
-- Would require rewriting all Python prototypes
-- Smaller ecosystem for legal/data processing
-- Team more experienced with Python
-- Performance difference not critical for CWLB's I/O-bound workload
+**Why AWS was not selected for MVP**:
+- Minimum monthly cost ~$500+ even with no traffic
+- More complex to set up and maintain
+- Overkill for a project with sporadic usage
 
-**Recommendation**: Consider Go for specific high-performance microservices in Phase 3 if needed.
+**Recommendation**: Migrate to AWS if CWLB reaches 50K+ monthly users and needs enterprise-grade reliability.
 
 ---
 
-## Appendix B: Alternative Considered - Vercel + Railway
+## Appendix B: Alternative Considered - Vercel + Supabase
 
-**Why Vercel + Railway was considered**:
-- Simpler deployment
-- Excellent developer experience
-- Lower operational overhead
-- Cost-effective for small scale
+**Why it was considered**:
+- Even simpler than GCP
+- Excellent free tiers
+- Great developer experience
 
-**Why it was not selected**:
-- Less control over infrastructure
-- Vendor lock-in concerns
-- Government compliance uncertainty
-- Limited managed database options
-- May not scale as cost-effectively
+**Why GCP was selected instead**:
+- More familiar (similar to App Engine)
+- Better PostgreSQL control via Cloud SQL
+- Clearer scaling path
+- Single vendor simplicity
 
-**Recommendation**: Acceptable for a prototype or proof-of-concept, but AWS better for production civic tech platform.
+**Either would work** - GCP chosen for familiarity.
 
 ---
 
@@ -1499,9 +1314,7 @@ Week 4:
 - Node.js 20.x (via nvm)
 - Python 3.11+ (via pyenv)
 - PostgreSQL 15 client (psql)
-- Redis CLI
-- AWS CLI v2
-- Terraform 1.6+
+- Google Cloud SDK (gcloud)
 
 # Recommended IDE
 - VS Code with extensions:
@@ -1510,8 +1323,6 @@ Week 4:
   - ESLint
   - Prettier
   - Tailwind CSS IntelliSense
-  - Docker
-  - Remote - Containers
 ```
 
 ### Docker Compose for Local Development
@@ -1532,76 +1343,52 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    image: redis:7
+  app:
+    build: .
     ports:
-      - "6379:6379"
-
-  elasticsearch:
-    image: elasticsearch:8.12.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    ports:
-      - "9200:9200"
+      - "8080:8080"
     volumes:
-      - es_data:/usr/share/elasticsearch/data
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+      - ./app:/app/app
+      - ./frontend:/app/frontend
     environment:
       - DATABASE_URL=postgresql://cwlb:localdev@postgres:5432/cwlb
-      - REDIS_URL=redis://redis:6379
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
     depends_on:
       - postgres
-      - redis
-      - elasticsearch
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
 
 volumes:
   postgres_data:
-  es_data:
 ```
 
 ---
 
 ## Summary
 
-Task 0.13 establishes the complete technology stack for CWLB:
+Task 0.13 establishes a **simple, cost-effective technology stack** for CWLB:
 
 | Layer | Selection | Key Rationale |
 |-------|-----------|---------------|
-| **Frontend** | Next.js 14 + React | SEO, ecosystem, performance |
-| **Backend** | Python + FastAPI | Existing code, data processing |
-| **Database** | PostgreSQL 15 | Already designed, best relational |
-| **Search** | Elasticsearch 8 | Full-text, facets, analytics |
-| **Cache** | Redis 7 | Industry standard, versatile |
-| **Hosting** | AWS | Government-ready, mature |
-| **DevOps** | Docker + Terraform + GitHub Actions | Reproducibility, automation |
+| **Architecture** | Monolith | One service to deploy and manage |
+| **Frontend** | React + Tailwind | Served by backend, no separate hosting |
+| **Backend** | Python + FastAPI | Existing prototypes, data processing strength |
+| **Database** | PostgreSQL (Cloud SQL) | Already designed schema, built-in FTS |
+| **Search** | PostgreSQL FTS | Good enough for MVP, add Elasticsearch later |
+| **Cache** | None (MVP) | Add Memorystore only if needed |
+| **Hosting** | GCP Cloud Run | Scales to zero = ~$0 when idle |
+| **CI/CD** | GitHub Actions | Simple, free for public repos |
 
-The stack optimizes for:
-- **Developer productivity** with familiar, well-documented tools
-- **Performance** with async Python, SSR, and aggressive caching
-- **Scalability** with containerized services and managed databases
-- **Cost efficiency** with right-sized resources and optimization paths
-- **Maintainability** with long-term supported technologies
+### Cost Summary
+
+| Traffic | Monthly Cost |
+|---------|--------------|
+| Idle (no traffic) | ~$8-11 |
+| Light (1K req/day) | ~$10-15 |
+| Moderate (10K req/day) | ~$30-40 |
+
+### Key Principles
+
+1. **Start simple** - Monolith over microservices
+2. **Pay for what you use** - Cloud Run scales to zero
+3. **Add complexity only when needed** - Skip Redis/Elasticsearch for MVP
+4. **Familiar tools** - GCP is similar to App Engine experience
 
 The technology stack is ready for implementation in Phase 1 Tasks 1.1-1.5 (Infrastructure Setup).
