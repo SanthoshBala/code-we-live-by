@@ -92,11 +92,13 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Key Decisions**: RESTful API (better caching, simpler), 27 endpoints across 6 API areas, JSON responses
   - **Deliverables**: Full endpoint specifications with request/response examples, OpenAPI schema outline
 
-- [ ] **Task 0.13**: Select technology stack
+- [x] **Task 0.13**: Select technology stack ✅
   - Frontend: React/Next.js vs alternatives
   - Backend: Node.js/Python decision
   - Database: PostgreSQL + Elasticsearch setup
   - Hosting platform: AWS/GCP/Azure decision
+  - **Completed**: See [research/TASK-0.13-Technology-Stack-Selection.md](research/TASK-0.13-Technology-Stack-Selection.md)
+  - **Key Decisions**: Next.js 14 (frontend), Python/FastAPI (backend), PostgreSQL + Elasticsearch + Redis (data), AWS (hosting)
 
 - [ ] **Task 0.14**: Design data pipeline architecture
   - ETL process flow diagram
