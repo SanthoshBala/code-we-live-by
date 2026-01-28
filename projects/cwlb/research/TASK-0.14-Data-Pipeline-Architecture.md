@@ -2,7 +2,7 @@
 
 **Task**: Design data pipeline architecture
 **Status**: Complete
-**Date**: 2026-01-28
+**Date**: 2026.01.28
 
 ---
 
