@@ -9,17 +9,50 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# OLRC download URLs
+# =============================================================================
+# OLRC (Office of Law Revision Counsel) Configuration
+# =============================================================================
+# Primary source: https://uscode.house.gov/download/download.shtml
+#
+# The OLRC publishes the US Code as "release points" that are updated
+# continuously as Congress enacts new legislation (typically 2-4 times per
+# month during active legislative periods, more frequently in Dec/Jan).
+#
+# To check for updates:
+#   1. Visit https://uscode.house.gov/download/download.shtml
+#   2. Note the current release point shown at the top of the page
+#   3. Update DEFAULT_RELEASE_POINT below if changed
+#
+# Prior release points: https://uscode.house.gov/download/priorreleasepoints.htm
+# =============================================================================
+
 OLRC_BASE_URL = "https://uscode.house.gov"
 OLRC_DOWNLOAD_BASE = f"{OLRC_BASE_URL}/download"
 
-# Current release point (as of Jan 2026)
-# Format: "{congress}-{public_law}" e.g., "119-72not60" means
-# "through Public Law 119-72, except 119-60"
+# HARDCODED ASSUMPTION: Default release point for US Code downloads
+# Source: https://uscode.house.gov/download/download.shtml
+# Last verified: January 2026
+# Update cadence: Check monthly, or when ingesting new data. The OLRC updates
+#   release points 2-4 times per month as new public laws are codified.
+# Format: "{congress}-{public_law}[not{excluded}]"
+#   - "119-72not60" = through P.L. 119-72, except P.L. 119-60
+#   - Exclusions occur when large/complex laws take longer to codify
+#
+# About the P.L. 119-60 exclusion:
+#   P.L. 119-60 is the National Defense Authorization Act (NDAA) for FY2026,
+#   signed December 18, 2025. The NDAA is one of the most complex pieces of
+#   legislation passed each year—typically thousands of pages affecting multiple
+#   titles (defense, energy, intelligence, personnel, etc.). It also includes
+#   incorporated acts like the Intelligence Authorization Act. The OLRC needs
+#   extra time to properly codify all provisions across affected titles.
+#   See: https://www.congress.gov/bill/119th-congress/senate-bill/1071
 DEFAULT_RELEASE_POINT = "119-72not60"
 
-# XML download URL pattern for individual titles using release points
-# e.g., https://uscode.house.gov/download/releasepoints/us/pl/119/72not60/xml_usc17@119-72not60.zip
+# HARDCODED ASSUMPTION: URL pattern for downloading individual title XML files
+# Source: https://uscode.house.gov/download/download.shtml (inspect download links)
+# Last verified: January 2026
+# Update cadence: Unlikely to change; this is the OLRC's established URL structure.
+#   If downloads fail, verify the pattern at the source URL above.
 TITLE_XML_URL_PATTERN = (
     f"{OLRC_DOWNLOAD_BASE}/releasepoints/us/pl/{{congress}}/{{public_law}}/"
     "xml_usc{title_number:02d}@{congress}-{public_law}.zip"

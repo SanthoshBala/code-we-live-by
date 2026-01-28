@@ -78,7 +78,29 @@ class USLMParseResult:
 class USLMParser:
     """Parser for USLM (United States Legislative Markup) XML files."""
 
-    # Positive law titles (enacted into positive law)
+    # =========================================================================
+    # HARDCODED ASSUMPTION: Positive law titles (fallback only)
+    # Source: https://uscode.house.gov/codification/legislation.shtml
+    # See also: Titles marked with asterisk at https://uscode.house.gov/browse.xhtml
+    # Last verified: January 2026
+    # Update cadence: Rarely changes. New titles are enacted into positive law
+    #   infrequently (typically 0-2 per Congress). Check the source URL when a
+    #   new title is enacted.
+    #
+    # NOTE: The parser first checks the XML metadata for positive law status
+    # via <property role="is-positive-law">yes/no</property>. This set is only
+    # used as a fallback if the XML doesn't contain the metadata.
+    #
+    # Current positive law titles (27 total):
+    #   1 (General Provisions), 3 (The President), 4 (Flag and Seal),
+    #   5 (Govt Organization), 9 (Arbitration), 10 (Armed Forces),
+    #   11 (Bankruptcy), 13 (Census), 14 (Coast Guard), 17 (Copyrights),
+    #   18 (Crimes), 23 (Highways), 28 (Judiciary), 31 (Money and Finance),
+    #   32 (National Guard), 35 (Patents), 36 (Patriotic Societies),
+    #   37 (Pay and Allowances), 38 (Veterans' Benefits), 39 (Postal Service),
+    #   40 (Public Buildings), 41 (Public Contracts), 44 (Public Printing),
+    #   46 (Shipping), 49 (Transportation), 51 (Space Programs), 54 (NPS)
+    # =========================================================================
     POSITIVE_LAW_TITLES = {
         1,
         3,
@@ -234,7 +256,9 @@ class USLMParser:
         # Extract title name from heading
         heading = None
         if title_elem is not None:
-            heading = title_elem.find("{*}heading") or title_elem.find("heading")
+            heading = title_elem.find("{*}heading")
+            if heading is None:
+                heading = title_elem.find("heading")
         if heading is None:
             heading = root.find(".//{*}heading")
         if heading is None:
