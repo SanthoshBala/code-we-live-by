@@ -120,19 +120,22 @@ This document translates the CWLB specification into an actionable backlog of im
   - Set up CI/CD pipeline (GitHub Actions or equivalent)
   - **Completed**: Backend (Python/FastAPI with ruff, black, pytest) + Frontend (Next.js with ESLint, Prettier, Vitest)
 
-- [ ] **Task 1.2**: Set up PostgreSQL database
+- [x] **Task 1.2**: Set up PostgreSQL database ✅
   - Provision database instance
   - Create initial schema (core tables)
   - Set up migration tooling (e.g., Prisma, Alembic)
+  - **Completed**: SQLAlchemy models (23 tables) + Alembic configuration
 
-- [ ] **Task 1.3**: Set up Elasticsearch for full-text search
+- [ ] **Task 1.3**: Set up Elasticsearch for full-text search *(Deferred to Phase 2)*
   - Provision Elasticsearch instance
   - Configure indices for sections and laws
   - Set up synchronization from PostgreSQL
+  - **Note**: Using PostgreSQL native full-text search (tsvector/pg_trgm) for MVP
 
-- [ ] **Task 1.4**: Set up Redis for caching
+- [ ] **Task 1.4**: Set up Redis for caching *(Deferred to Phase 2)*
   - Provision Redis instance
   - Configure caching strategy for frequently accessed sections
+  - **Note**: Not needed for MVP scale; revisit when traffic justifies
 
 - [ ] **Task 1.5**: Set up hosting infrastructure
   - Provision cloud resources (compute, storage)
