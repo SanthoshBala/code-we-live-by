@@ -114,10 +114,11 @@ This document translates the CWLB specification into an actionable backlog of im
 ## Phase 1: MVP (6-9 months)
 
 ### Infrastructure Setup
-- [ ] **Task 1.1**: Set up development environment
+- [x] **Task 1.1**: Set up development environment ✅
   - Initialize Git repository
   - Configure linting, formatting, testing tools
   - Set up CI/CD pipeline (GitHub Actions or equivalent)
+  - **Completed**: Backend (Python/FastAPI with ruff, black, pytest) + Frontend (Next.js with ESLint, Prettier, Vitest)
 
 - [ ] **Task 1.2**: Set up PostgreSQL database
   - Provision database instance

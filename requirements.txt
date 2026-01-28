@@ -1,7 +1,0 @@
-beautifulsoup4
-jupyter
-lxml==6.0.2
-matplotlib==3.10.8
-numpy==2.4.1
-pandas==3.0.0
-seaborn==0.13.2

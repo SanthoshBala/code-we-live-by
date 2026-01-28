@@ -15,23 +15,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+### Backend (Python/FastAPI)
 
-# Run Jupyter notebooks
-jupyter notebook
+```bash
+cd backend
+
+# Install dependencies
+pip install -e ".[dev]"
+
+# Run development server
+uvicorn app.main:app --reload --port 8000
+
+# Linting and formatting
+ruff check .              # Lint
+black .                   # Format
+mypy app                  # Type check
+
+# Testing
+pytest                    # Run tests
+pytest --cov=app          # With coverage
+```
+
+### Frontend (Next.js)
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev               # http://localhost:3000
+
+# Linting and formatting
+npm run lint              # Lint
+npm run format            # Format
+npm run type-check        # Type check
+
+# Testing
+npm run test              # Run tests
+npm run build             # Production build
 ```
 
 ## Repository Structure
 
 ```
 /
-├── TASKS.md                      # Implementation task backlog (Phase 0-3)
-├── THE_CODE_WE_LIVE_BY_SPEC.md   # Full product specification
-├── research/                     # Completed research tasks (TASK-0.x-*.md)
-├── explore_us_code_structure.ipynb  # Jupyter notebook for exploration
-└── .claude/skills/               # Custom Claude Code slash commands
+├── backend/                      # Python/FastAPI backend
+│   ├── app/
+│   │   ├── api/v1/              # API route handlers
+│   │   ├── core/                # Business logic
+│   │   ├── models/              # SQLAlchemy models
+│   │   ├── schemas/             # Pydantic schemas
+│   │   └── crud/                # Database operations
+│   ├── tests/                   # Pytest tests
+│   ├── alembic/                 # Database migrations
+│   ├── pipeline/                # Data ingestion scripts
+│   └── pyproject.toml           # Python dependencies & tool config
+│
+├── frontend/                     # Next.js frontend
+│   ├── src/app/                 # App Router pages
+│   ├── src/components/          # React components
+│   └── package.json             # Node dependencies
+│
+├── research/                     # Completed research (TASK-0.x-*.md)
+├── TASKS.md                      # Implementation backlog
+├── THE_CODE_WE_LIVE_BY_SPEC.md   # Product specification
+└── .github/workflows/ci.yml      # CI/CD pipeline
 ```
 
 ## Architecture
@@ -42,25 +92,21 @@ CWLB treats federal legislation as version control:
 - **Law sponsors** → PR authors
 - **Congressional votes** → Code reviewers
 
-### Key Data Model Entities (from spec Section 6):
-- `USCodeSection` - Individual law sections (the fundamental unit)
-- `USCodeLine` - Line-level content with parent/child tree structure for "blame view"
+### Tech Stack (from Task 0.13):
+- **Frontend**: Next.js 14, React 18, Tailwind CSS, TypeScript
+- **Backend**: Python 3.11+, FastAPI, SQLAlchemy 2.x
+- **Database**: PostgreSQL 15+ (with full-text search for MVP)
+- **Hosting**: GCP Cloud Run (scales to zero)
+
+### Key Data Model Entities:
+- `USCodeSection` - Individual law sections
+- `USCodeLine` - Line-level content for "blame view"
 - `PublicLaw` - Enacted legislation with metadata
 - `LawChange` - Diffs showing what each law modified
-- `SectionHistory` / `LineHistory` - Time-travel snapshots
 
-### Primary Data Source:
-- **OLRC (Office of Law Revision Counsel)**: https://uscode.house.gov
-- XML format (USLM schema) for all 54 US Code titles
-- See `research/TASK-0.1-OLRC-Data-Evaluation.md` for complete evaluation
-
-### Phase 1 Scope:
-- Titles: 10, 17, 18, 20, 22, 26, 42, 50
-- Features: Code browsing, law viewer with diffs, blame view, basic search
-- 20 years of legislative history
+### Phase 1 Titles (from Task 0.8):
+10, 17, 18, 20, 22, 26, 42, 50
 
 ## Working with Tasks
 
-Tasks are tracked in `TASKS.md`. Format: `Task X.Y` where X is phase number (0-3 or M for maintenance).
-
-Example: "Complete CWLB Task 0.14" means design the data pipeline architecture.
+Tasks are tracked in `TASKS.md`. Format: `Task X.Y` where X is phase (0-3 or M).
