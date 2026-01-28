@@ -226,3 +226,6 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Downloaded data
+backend/data/
