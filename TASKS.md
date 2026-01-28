@@ -101,10 +101,11 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Key Decisions**: Monolith architecture, React + Python/FastAPI, PostgreSQL (Cloud SQL), GCP Cloud Run (scales to zero)
   - **Cost**: ~$10/month idle, ~$30-40/month with moderate traffic
 
-- [ ] **Task 0.14**: Design data pipeline architecture
+- [x] **Task 0.14**: Design data pipeline architecture ✅
   - ETL process flow diagram
   - Ingestion frequency and update strategy
   - Error handling and data validation approach
+  - **Completed**: See [research/TASK-0.14-Data-Pipeline-Architecture.md](research/TASK-0.14-Data-Pipeline-Architecture.md)
 
 ---
 
