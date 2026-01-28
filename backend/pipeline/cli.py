@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
@@ -71,6 +72,137 @@ def parse_title(xml_path: Path) -> None:
             print(f"    § {sec.section_number}: {sec.heading}")
 
 
+# =============================================================================
+# GovInfo Public Law functions
+# =============================================================================
+
+
+async def list_public_laws(
+    congress: int | None = None,
+    days: int = 30,
+    limit: int = 20,
+) -> None:
+    """List public laws from GovInfo API.
+
+    Args:
+        congress: Filter by Congress number (optional).
+        days: Number of days to look back (default: 30).
+        limit: Maximum number of results to display.
+    """
+    from datetime import timedelta
+
+    from pipeline.govinfo.client import GovInfoClient
+
+    client = GovInfoClient()
+
+    start_date = datetime.utcnow() - timedelta(days=days)
+    laws = await client.get_public_laws(start_date=start_date, congress=congress)
+
+    print(f"\nPublic Laws (last {days} days)")
+    if congress:
+        print(f"Filtered to Congress {congress}")
+    print(f"Found {len(laws)} laws\n")
+
+    for i, law in enumerate(laws[:limit]):
+        print(f"  PL {law.congress}-{law.law_number}: {law.title[:70]}...")
+        if i >= limit - 1 and len(laws) > limit:
+            print(f"\n  ... and {len(laws) - limit} more")
+            break
+
+
+async def ingest_public_law(
+    congress: int,
+    law_number: int,
+    force: bool = False,
+) -> int:
+    """Ingest a single Public Law from GovInfo.
+
+    Args:
+        congress: Congress number.
+        law_number: Law number within that Congress.
+        force: If True, update existing record.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+    async with async_session_maker() as session:
+        service = PublicLawIngestionService(session)
+        log = await service.ingest_law(congress, law_number, force=force)
+
+        if log.status == "completed":
+            logger.info(f"Ingested PL {congress}-{law_number}: {log.details}")
+            return 0
+        else:
+            logger.error(f"Failed to ingest PL {congress}-{law_number}: {log.error_message}")
+            return 1
+
+
+async def ingest_congress_laws(
+    congress: int,
+    force: bool = False,
+) -> int:
+    """Ingest all Public Laws for a Congress.
+
+    Args:
+        congress: Congress number.
+        force: If True, update existing records.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+    async with async_session_maker() as session:
+        service = PublicLawIngestionService(session)
+        log = await service.ingest_congress(congress, force=force)
+
+        if log.status == "completed":
+            logger.info(
+                f"Ingested Congress {congress}: {log.records_created} created, "
+                f"{log.records_updated} updated, "
+                f"{log.records_processed - log.records_created - log.records_updated} skipped"
+            )
+            return 0
+        else:
+            logger.error(f"Failed to ingest Congress {congress}: {log.error_message}")
+            return 1
+
+
+async def ingest_recent_laws(
+    days: int = 30,
+    force: bool = False,
+) -> int:
+    """Ingest Public Laws modified in the last N days.
+
+    Args:
+        days: Number of days to look back.
+        force: If True, update existing records.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+    async with async_session_maker() as session:
+        service = PublicLawIngestionService(session)
+        log = await service.ingest_recent_laws(days, force=force)
+
+        if log.status == "completed":
+            logger.info(
+                f"Ingested recent laws (last {days} days): "
+                f"{log.records_created} created, {log.records_updated} updated"
+            )
+            return 0
+        else:
+            logger.error(f"Failed to ingest recent laws: {log.error_message}")
+            return 1
+
+
 def main() -> int:
     """Main entry point for CLI."""
     parser = argparse.ArgumentParser(description="US Code data ingestion pipeline CLI")
@@ -119,6 +251,83 @@ def main() -> int:
         help="Download directory (default: data/olrc)",
     )
 
+    # =========================================================================
+    # GovInfo Public Law commands
+    # =========================================================================
+
+    # govinfo-list command
+    govinfo_list_parser = subparsers.add_parser(
+        "govinfo-list", help="List public laws from GovInfo API"
+    )
+    govinfo_list_parser.add_argument(
+        "--congress",
+        type=int,
+        help="Filter by Congress number",
+    )
+    govinfo_list_parser.add_argument(
+        "--days",
+        type=int,
+        default=30,
+        help="Number of days to look back (default: 30)",
+    )
+    govinfo_list_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum results to display (default: 20)",
+    )
+
+    # govinfo-ingest-law command
+    govinfo_law_parser = subparsers.add_parser(
+        "govinfo-ingest-law", help="Ingest a single Public Law from GovInfo"
+    )
+    govinfo_law_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 119)",
+    )
+    govinfo_law_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 60 for PL 119-60)",
+    )
+    govinfo_law_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing record if present",
+    )
+
+    # govinfo-ingest-congress command
+    govinfo_congress_parser = subparsers.add_parser(
+        "govinfo-ingest-congress", help="Ingest all Public Laws for a Congress"
+    )
+    govinfo_congress_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number to ingest (e.g., 119)",
+    )
+    govinfo_congress_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing records if present",
+    )
+
+    # govinfo-ingest-recent command
+    govinfo_recent_parser = subparsers.add_parser(
+        "govinfo-ingest-recent", help="Ingest recently modified Public Laws"
+    )
+    govinfo_recent_parser.add_argument(
+        "--days",
+        type=int,
+        default=30,
+        help="Number of days to look back (default: 30)",
+    )
+    govinfo_recent_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing records if present",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -151,6 +360,45 @@ def main() -> int:
         else:
             print("No titles downloaded yet.")
         return 0
+
+    # =========================================================================
+    # GovInfo command handlers
+    # =========================================================================
+
+    elif args.command == "govinfo-list":
+        asyncio.run(
+            list_public_laws(
+                congress=args.congress,
+                days=args.days,
+                limit=args.limit,
+            )
+        )
+        return 0
+
+    elif args.command == "govinfo-ingest-law":
+        return asyncio.run(
+            ingest_public_law(
+                congress=args.congress,
+                law_number=args.law_number,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "govinfo-ingest-congress":
+        return asyncio.run(
+            ingest_congress_laws(
+                congress=args.congress,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "govinfo-ingest-recent":
+        return asyncio.run(
+            ingest_recent_laws(
+                days=args.days,
+                force=args.force,
+            )
+        )
 
     else:
         parser.print_help()

@@ -84,6 +84,36 @@ async with AsyncSession(engine) as session:
 - Creates `DataIngestionLog` records for audit trail
 - Supports `force` flag for re-ingestion
 
+### 3. CLI Commands
+
+The pipeline CLI provides commands for GovInfo operations:
+
+```bash
+# List recent public laws from GovInfo API (preview before ingestion)
+uv run python -m pipeline.cli govinfo-list
+uv run python -m pipeline.cli govinfo-list --congress 119 --days 60 --limit 50
+
+# Ingest a single public law
+uv run python -m pipeline.cli govinfo-ingest-law 119 60
+uv run python -m pipeline.cli govinfo-ingest-law 119 60 --force  # Update if exists
+
+# Ingest all public laws for a Congress
+uv run python -m pipeline.cli govinfo-ingest-congress 119
+uv run python -m pipeline.cli govinfo-ingest-congress 119 --force
+
+# Ingest recently modified laws
+uv run python -m pipeline.cli govinfo-ingest-recent
+uv run python -m pipeline.cli govinfo-ingest-recent --days 60 --force
+```
+
+**Commands:**
+| Command | Description |
+|---------|-------------|
+| `govinfo-list` | Preview public laws from API without ingesting |
+| `govinfo-ingest-law` | Ingest a single law by congress and number |
+| `govinfo-ingest-congress` | Ingest all laws for a specific Congress |
+| `govinfo-ingest-recent` | Ingest laws modified in the last N days |
+
 ## API Key Setup
 
 The GovInfo API requires a free API key from [api.data.gov](https://api.data.gov/signup/).
