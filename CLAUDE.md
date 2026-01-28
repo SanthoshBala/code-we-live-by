@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Date format**: Use `YYYY.MM.DD` or `MM.DD` if the year is obvious from context
 - **Atomic commits**: Make commits as atomic as possible (separate commits for separate features/tasks, separate commits for independently testable units)
 - **Commit messages**: Use the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) standard for semantic commit messages (e.g., `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`)
+- **Branching**: Always start new tasks in a fresh branch and create a pull request back into main when done
 
 ## Project Overview
 
