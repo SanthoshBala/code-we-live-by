@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import titles, sections
+from app.api.v1 import sections, titles
 
 api_router = APIRouter()
 
