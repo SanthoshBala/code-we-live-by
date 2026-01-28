@@ -199,33 +199,46 @@ class USLMParser:
         # Try to find title number and name from various locations
         title_number = 0
         title_name = ""
+        is_positive_law = False
+
+        # Check for docNumber in meta (OLRC format)
+        doc_number = root.find(".//{*}docNumber")
+        if doc_number is not None and doc_number.text:
+            with contextlib.suppress(ValueError):
+                title_number = int(doc_number.text.strip())
 
         # Check root attributes
-        if "number" in root.attrib:
+        if not title_number and "number" in root.attrib:
             with contextlib.suppress(ValueError):
                 title_number = int(root.attrib["number"])
 
-        # Check for title element or heading
-        title_elem = root.find(".//title", NAMESPACES) or root.find(".//title")
-        if title_elem is not None and "number" in title_elem.attrib:
-            with contextlib.suppress(ValueError):
-                title_number = int(title_elem.attrib["number"])
+        # Check for title element with num child that has value attribute
+        title_elem = root.find(".//{*}title")
+        if title_elem is not None:
+            num_elem = title_elem.find("{*}num") or title_elem.find("num")
+            if num_elem is not None and "value" in num_elem.attrib:
+                with contextlib.suppress(ValueError):
+                    title_number = int(num_elem.attrib["value"])
 
-        # Try to extract from identifier or meta
-        identifier = root.find(".//identifier") or root.find(".//{*}identifier")
-        if identifier is not None and identifier.text:
-            # Parse "usc/17" or similar patterns
-            match = re.search(r"(\d+)", identifier.text)
-            if match:
-                title_number = int(match.group(1))
+        # Try to extract from identifier attribute on root or title
+        if not title_number:
+            identifier = root.get("identifier", "")
+            if not identifier and title_elem is not None:
+                identifier = title_elem.get("identifier", "")
+            if identifier:
+                # Parse "/us/usc/t17" pattern
+                match = re.search(r"/t(\d+)", identifier)
+                if match:
+                    title_number = int(match.group(1))
 
         # Extract title name from heading
-        # Try various paths to find the heading element
-        heading = root.find(".//{*}heading")
+        heading = None
+        if title_elem is not None:
+            heading = title_elem.find("{*}heading") or title_elem.find("heading")
+        if heading is None:
+            heading = root.find(".//{*}heading")
         if heading is None:
             heading = root.find(".//heading")
-        if heading is None:
-            heading = root.find(".//title/heading")
         if heading is not None:
             title_name = self._get_text_content(heading)
 
@@ -234,8 +247,15 @@ class USLMParser:
         if not title_name:
             title_name = f"Title {title_number}"
 
-        # Check if positive law
-        is_positive_law = title_number in self.POSITIVE_LAW_TITLES
+        # Check for positive law property in meta (OLRC format)
+        for prop in root.findall(".//{*}property"):
+            if prop.get("role") == "is-positive-law":
+                is_positive_law = prop.text and prop.text.strip().lower() == "yes"
+                break
+
+        # Fall back to hardcoded list if not found in XML
+        if not is_positive_law:
+            is_positive_law = title_number in self.POSITIVE_LAW_TITLES
 
         return ParsedTitle(
             title_number=title_number,
@@ -427,17 +447,26 @@ class USLMParser:
 
     def _get_number(self, elem: etree._Element) -> str:
         """Extract the number/identifier from an element."""
-        # Check number attribute
+        # Check number attribute on element
         if "number" in elem.attrib:
             return elem.attrib["number"]
 
-        # Look for <num> child element
-        num_elem = elem.find("num") or elem.find("{*}num")
-        if num_elem is not None and num_elem.text:
-            # Clean up the number (remove "§", "Chapter", etc.)
-            num_text = num_elem.text.strip()
-            num_text = re.sub(r"^(§|Section|Chapter|Subchapter)\s*", "", num_text)
-            return num_text.strip()
+        # Look for <num> child element with value attribute (OLRC format)
+        num_elem = elem.find("{*}num")
+        if num_elem is None:
+            num_elem = elem.find("num")
+        if num_elem is not None:
+            # Prefer value attribute (contains clean number)
+            if "value" in num_elem.attrib:
+                return num_elem.attrib["value"]
+            # Fall back to text content
+            if num_elem.text:
+                # Clean up the number (remove "§", "Chapter", etc.)
+                num_text = num_elem.text.strip()
+                num_text = re.sub(r"^(§|Section|Chapter|Subchapter)\s*", "", num_text)
+                # Remove trailing punctuation
+                num_text = num_text.rstrip("—.-:")
+                return num_text.strip()
 
         # Try identifier attribute
         identifier = elem.get("identifier", "")
@@ -492,12 +521,14 @@ class USLMParser:
 
     def _extract_notes(self, section_elem: etree._Element) -> str | None:
         """Extract notes/annotations from a section."""
-        notes_elem = (
-            section_elem.find(".//notes")
-            or section_elem.find(".//{*}notes")
-            or section_elem.find(".//sourceCredit")
-            or section_elem.find(".//{*}sourceCredit")
-        )
+        # Try various paths for notes elements
+        notes_elem = section_elem.find(".//{*}notes")
+        if notes_elem is None:
+            notes_elem = section_elem.find(".//notes")
+        if notes_elem is None:
+            notes_elem = section_elem.find(".//{*}sourceCredit")
+        if notes_elem is None:
+            notes_elem = section_elem.find(".//sourceCredit")
         if notes_elem is not None:
             return self._get_text_content(notes_elem)
         return None

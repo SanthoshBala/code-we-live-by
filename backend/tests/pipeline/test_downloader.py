@@ -25,16 +25,17 @@ class TestOLRCDownloader:
         """Test URL generation for titles."""
         url = downloader.get_title_url(17)
 
-        assert "title17" in url
-        assert "2024" in url
-        assert url.startswith("https://uscode.house.gov/download/xml/")
+        assert "usc17" in url
+        assert "119" in url  # Congress number
+        assert url.startswith("https://uscode.house.gov/download/releasepoints/")
 
-    def test_get_title_url_different_year(self, tmp_path) -> None:
-        """Test URL generation with different year."""
-        downloader = OLRCDownloader(download_dir=tmp_path, year=2023)
+    def test_get_title_url_different_release_point(self, tmp_path) -> None:
+        """Test URL generation with different release point."""
+        downloader = OLRCDownloader(download_dir=tmp_path, release_point="118-100")
         url = downloader.get_title_url(17)
 
-        assert "2023" in url
+        assert "118" in url
+        assert "100" in url
 
     def test_get_downloaded_titles_empty(self, downloader: OLRCDownloader) -> None:
         """Test get_downloaded_titles with no downloads."""

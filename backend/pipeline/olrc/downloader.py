@@ -13,10 +13,16 @@ logger = logging.getLogger(__name__)
 OLRC_BASE_URL = "https://uscode.house.gov"
 OLRC_DOWNLOAD_BASE = f"{OLRC_BASE_URL}/download"
 
-# XML download URL pattern for individual titles
-# e.g., https://uscode.house.gov/download/xml/USCODE-2024-title17.zip
+# Current release point (as of Jan 2026)
+# Format: "{congress}-{public_law}" e.g., "119-72not60" means
+# "through Public Law 119-72, except 119-60"
+DEFAULT_RELEASE_POINT = "119-72not60"
+
+# XML download URL pattern for individual titles using release points
+# e.g., https://uscode.house.gov/download/releasepoints/us/pl/119/72not60/xml_usc17@119-72not60.zip
 TITLE_XML_URL_PATTERN = (
-    f"{OLRC_DOWNLOAD_BASE}/xml/USCODE-{{year}}-title{{title_number}}.zip"
+    f"{OLRC_DOWNLOAD_BASE}/releasepoints/us/pl/{{congress}}/{{public_law}}/"
+    "xml_usc{title_number:02d}@{congress}-{public_law}.zip"
 )
 
 # Phase 1 target titles (from Task 0.8)
@@ -29,20 +35,26 @@ class OLRCDownloader:
     def __init__(
         self,
         download_dir: Path | str = "data/olrc",
-        year: int = 2024,
+        release_point: str = DEFAULT_RELEASE_POINT,
         timeout: float = 120.0,
     ):
         """Initialize the downloader.
 
         Args:
             download_dir: Directory to store downloaded files.
-            year: Release year for US Code XML files.
+            release_point: OLRC release point (e.g., "119-72not60").
             timeout: HTTP request timeout in seconds.
         """
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
-        self.year = year
+        self.release_point = release_point
         self.timeout = timeout
+
+        # Parse release point into congress and public_law components
+        # e.g., "119-72not60" -> congress="119", public_law="72not60"
+        parts = release_point.split("-", 1)
+        self.congress = parts[0]
+        self.public_law = parts[1] if len(parts) > 1 else ""
 
     def get_title_url(self, title_number: int) -> str:
         """Get the download URL for a specific title.
@@ -53,7 +65,11 @@ class OLRCDownloader:
         Returns:
             The download URL for the title's XML file.
         """
-        return TITLE_XML_URL_PATTERN.format(year=self.year, title_number=title_number)
+        return TITLE_XML_URL_PATTERN.format(
+            congress=self.congress,
+            public_law=self.public_law,
+            title_number=title_number,
+        )
 
     async def download_title(
         self, title_number: int, force: bool = False
