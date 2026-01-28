@@ -1,27 +1,30 @@
-# Hello World Python Web Application
+# The Code We Live By (CWLB)
 
-A simple Flask web application that displays "Hello World!".
+A civic engagement platform that makes federal legislation accessible and understandable by treating the US Code as a software repository.
 
-## Setup Instructions
+## Vision
 
-1. Install Python 3.7 or higher
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+Using familiar version control metaphors (commits, pull requests, diffs, blame view), CWLB enables citizens to:
+- Explore how laws evolve over time
+- See exactly what changed, when, and by whom
+- Understand congressional activity patterns
+- Gain insights into the legislative process
 
-## Running the Application
+## Documentation
 
-Run the application with:
+- [Full Specification](THE_CODE_WE_LIVE_BY_SPEC.md) - Complete product specification
+- [Tasks](TASKS.md) - Implementation backlog (Phase 0-3)
+- [Research](research/) - Completed research and design documents
+
+## Setup
+
 ```bash
-python app.py
+pip install -r requirements.txt
+jupyter notebook
 ```
 
-The application will start on http://localhost:5000
+## Status
 
-Visit http://localhost:5000 in your browser to see "Hello World!"
+Currently in **Phase 0: Research & Validation**
 
-## Project Structure
-
-- `app.py` - Main Flask application
-- `requirements.txt` - Python dependencies
+See [TASKS.md](TASKS.md) for current progress.

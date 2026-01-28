@@ -11,19 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains:
-1. A Flask web application (`app.py`) with Jinja2 templates
-2. The **CWLB (Code We Live By)** project - a civic engagement platform that treats the US Code as a software repository
+**The Code We Live By (CWLB)** is a civic engagement platform that makes federal legislation accessible by treating the US Code as a software repository. Using version control metaphors (commits, pull requests, diffs, blame view), the platform enables citizens to explore how laws evolve over time.
 
 ## Commands
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
-
-# Run Flask app
-python app.py
-# Runs on http://localhost:5000
 
 # Run Jupyter notebooks
 jupyter notebook
@@ -33,18 +27,14 @@ jupyter notebook
 
 ```
 /
-├── app.py                    # Flask application (routes: /, /projects, /clock)
-├── templates/                # Jinja2 HTML templates
-├── requirements.txt          # Python dependencies (Flask, pandas, lxml, jupyter, etc.)
-├── projects/cwlb/            # CWLB project files
-│   ├── TASKS.md              # Implementation task backlog (Phase 0-3)
-│   ├── THE_CODE_WE_LIVE_BY_SPEC.md  # Full product specification
-│   ├── research/             # Completed research tasks
-│   └── *.ipynb               # Jupyter notebooks for exploration
-└── .claude/skills/           # Custom Claude Code slash commands
+├── TASKS.md                      # Implementation task backlog (Phase 0-3)
+├── THE_CODE_WE_LIVE_BY_SPEC.md   # Full product specification
+├── research/                     # Completed research tasks (TASK-0.x-*.md)
+├── explore_us_code_structure.ipynb  # Jupyter notebook for exploration
+└── .claude/skills/               # Custom Claude Code slash commands
 ```
 
-## CWLB Project Architecture
+## Architecture
 
 CWLB treats federal legislation as version control:
 - **US Code sections** → Source code files
@@ -69,8 +59,8 @@ CWLB treats federal legislation as version control:
 - Features: Code browsing, law viewer with diffs, blame view, basic search
 - 20 years of legislative history
 
-## Working with CWLB Tasks
+## Working with Tasks
 
-Tasks are tracked in `projects/cwlb/TASKS.md`. Format: `Task X.Y` where X is phase number (0-3 or M for maintenance).
+Tasks are tracked in `TASKS.md`. Format: `Task X.Y` where X is phase number (0-3 or M for maintenance).
 
 Example: "Complete CWLB Task 0.14" means design the data pipeline architecture.

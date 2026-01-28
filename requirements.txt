@@ -1,5 +1,4 @@
 beautifulsoup4
-Flask==3.0.0
 jupyter
 lxml==6.0.2
 matplotlib==3.10.8
