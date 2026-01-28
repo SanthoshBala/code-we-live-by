@@ -1,7 +1,7 @@
 """Tests for GovInfo API client."""
 
-import os
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
 
@@ -119,15 +119,11 @@ class TestGovInfoClient:
 
     def test_init_requires_api_key(self) -> None:
         """Test that client requires an API key."""
-        # Clear any environment variable
-        old_key = os.environ.pop("GOVINFO_API_KEY", None)
-
-        try:
+        # Mock settings to return None for govinfo_api_key
+        with patch("app.config.settings") as mock_settings:
+            mock_settings.govinfo_api_key = None
             with pytest.raises(ValueError, match="API key required"):
                 GovInfoClient()
-        finally:
-            if old_key:
-                os.environ["GOVINFO_API_KEY"] = old_key
 
     def test_init_with_api_key(self) -> None:
         """Test client initialization with API key."""

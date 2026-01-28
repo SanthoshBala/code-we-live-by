@@ -2,7 +2,6 @@
 
 import contextlib
 import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -199,14 +198,19 @@ class GovInfoClient:
         """Initialize the GovInfo client.
 
         Args:
-            api_key: GovInfo API key. If not provided, reads from
-                GOVINFO_API_KEY environment variable.
+            api_key: GovInfo API key. If not provided, reads from app settings
+                (which loads from GOVINFO_API_KEY environment variable or .env).
             timeout: HTTP request timeout in seconds.
 
         Raises:
-            ValueError: If no API key is provided or found in environment.
+            ValueError: If no API key is provided or found in settings.
         """
-        self.api_key = api_key or os.environ.get("GOVINFO_API_KEY")
+        if api_key:
+            self.api_key = api_key
+        else:
+            # Import here to avoid circular imports
+            from app.config import settings
+            self.api_key = settings.govinfo_api_key
         if not self.api_key:
             raise ValueError(
                 "GovInfo API key required. Set GOVINFO_API_KEY environment "

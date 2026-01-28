@@ -88,12 +88,28 @@ async with AsyncSession(engine) as session:
 
 The GovInfo API requires a free API key from [api.data.gov](https://api.data.gov/signup/).
 
-Set the key via environment variable:
+### Option 1: Using .env file (recommended for local dev)
+
+1. Copy the example env file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and add your API key:
+   ```
+   GOVINFO_API_KEY=your-api-key-here
+   ```
+
+The key is automatically loaded by the app settings.
+
+### Option 2: Environment variable
+
 ```bash
 export GOVINFO_API_KEY=your-api-key-here
 ```
 
-Or pass directly to the client:
+### Option 3: Pass directly to client
+
 ```python
 client = GovInfoClient(api_key="your-api-key")
 ```
