@@ -57,11 +57,13 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Key Finding**: Parser correctly handles 4+ depth levels of nesting
 
 ### Title Selection
-- [ ] **Task 0.8**: Finalize 5-10 titles for Phase 1 based on:
+- [x] **Task 0.8**: Finalize 5-10 titles for Phase 1 based on: ✅
   - Public interest and relevance
   - Data availability and quality
   - Legislative activity volume (balance stable vs frequently updated)
-  - Confirmed selection: Titles 10, 17, 18, 20, 22, 26, 42, 50
+  - **Completed**: See [research/TASK-0.8-Title-Selection.md](research/TASK-0.8-Title-Selection.md)
+  - **Final Selection (8 titles)**: 10 (Armed Forces), 17 (Copyright), 18 (Crimes), 20 (Education), 22 (Foreign Relations), 26 (Tax), 42 (Health/Welfare), 50 (War/Defense)
+  - **Key Decision**: 3 positive law + 5 non-positive law titles; balances data quality with public interest
 
 ### User Research
 - [ ] **Task 0.9**: Conduct user interviews with target audience segments
