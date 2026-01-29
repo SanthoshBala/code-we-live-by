@@ -211,6 +211,7 @@ class GovInfoClient:
         else:
             # Import here to avoid circular imports
             from app.config import settings
+
             self.api_key = settings.govinfo_api_key
         if not self.api_key:
             raise ValueError(
@@ -320,7 +321,9 @@ class GovInfoClient:
                     params["congress"] = congress
 
                 logger.info(f"Fetching PLAW collection from {url}")
-                response = await self._request_with_retry(client, "GET", url, params=params)
+                response = await self._request_with_retry(
+                    client, "GET", url, params=params
+                )
                 data = response.json()
 
                 # Parse packages
@@ -413,7 +416,9 @@ class GovInfoClient:
             response = await self._request_with_retry(client, "GET", detail.xml_url)
             return response.text
 
-    def build_package_id(self, congress: int, law_number: int, law_type: str = "public") -> str:
+    def build_package_id(
+        self, congress: int, law_number: int, law_type: str = "public"
+    ) -> str:
         """Build a GovInfo package ID for a Public Law.
 
         Args:

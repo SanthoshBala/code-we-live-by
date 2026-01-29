@@ -65,7 +65,9 @@ class PublicLawIngestionService:
             for law_info in laws:
                 try:
                     # Get detailed info for each law
-                    detail = await self.client.get_public_law_detail(law_info.package_id)
+                    detail = await self.client.get_public_law_detail(
+                        law_info.package_id
+                    )
 
                     # Upsert the law
                     was_created = await self._upsert_public_law(detail, force)
@@ -191,7 +193,9 @@ class PublicLawIngestionService:
 
             for law_info in laws:
                 try:
-                    detail = await self.client.get_public_law_detail(law_info.package_id)
+                    detail = await self.client.get_public_law_detail(
+                        law_info.package_id
+                    )
                     was_created = await self._upsert_public_law(detail, force)
                     if was_created is True:
                         created += 1

@@ -136,7 +136,9 @@ async def ingest_public_law(
             logger.info(f"Ingested PL {congress}-{law_number}: {log.details}")
             return 0
         else:
-            logger.error(f"Failed to ingest PL {congress}-{law_number}: {log.error_message}")
+            logger.error(
+                f"Failed to ingest PL {congress}-{law_number}: {log.error_message}"
+            )
             return 1
 
 
