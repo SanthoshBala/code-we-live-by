@@ -106,3 +106,54 @@ class PoliticalParty(str, enum.Enum):
     LIBERTARIAN = "Libertarian"
     GREEN = "Green"
     OTHER = "Other"
+
+
+# =============================================================================
+# Validation and Parsing Enums (Task 1.11)
+# =============================================================================
+
+
+class ParsingMode(str, enum.Enum):
+    """Mode of parsing for legal text.
+
+    Defines the level of automation and human oversight for parsing operations.
+    """
+
+    HUMAN_PLUS_LLM = "Human_Plus_LLM"  # Human + Claude review together
+    LLM = "LLM"  # Claude autonomous with parser tools
+    REGEX = "RegEx"  # Pure programmatic parsing
+
+
+class ParsingSessionStatus(str, enum.Enum):
+    """Status of a parsing session."""
+
+    IN_PROGRESS = "In_Progress"
+    COMPLETED = "Completed"
+    FAILED = "Failed"
+    ESCALATED = "Escalated"
+
+
+class SpanType(str, enum.Enum):
+    """Type of text span in coverage tracking."""
+
+    CLAIMED = "Claimed"  # Matched by a pattern
+    UNCLAIMED_FLAGGED = "Unclaimed_Flagged"  # Contains amendment keywords
+    UNCLAIMED_IGNORED = "Unclaimed_Ignored"  # Boilerplate, no keywords
+
+
+class AmendmentReviewStatus(str, enum.Enum):
+    """Review status for parsed amendments."""
+
+    PENDING = "Pending"
+    APPROVED = "Approved"
+    REJECTED = "Rejected"
+    CORRECTED = "Corrected"
+
+
+class PatternDiscoveryStatus(str, enum.Enum):
+    """Status of a discovered pattern in the learning loop."""
+
+    NEW = "New"
+    UNDER_REVIEW = "Under_Review"
+    PROMOTED = "Promoted"
+    REJECTED = "Rejected"
