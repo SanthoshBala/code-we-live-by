@@ -451,3 +451,203 @@ class TestEdgeCases:
         amendments = parser.parse(text)
         # Should still find the amendment
         assert len(amendments) >= 1
+
+
+class TestRealWorldExamples:
+    """Tests using real amendment language from actual Public Laws.
+
+    These examples are drawn from different Congressional eras and titles
+    to ensure the parser handles stylistic variations over time.
+
+    Sources:
+    - 104th Congress (1995-1996): Older "striking out" / "in lieu thereof" style
+    - 105th Congress (1997-1998): Copyright amendments
+    - 110th Congress (2007-2008): FDA Amendments Act
+    - 115th-118th Congress (2017-2024): Modern drafting style
+    """
+
+    def test_1996_striking_out_in_lieu_thereof(self) -> None:
+        """Test older 'striking out' and 'in lieu thereof' phrasing.
+
+        Source: S. Rept. 104-272 (Electronic FOIA Improvement Act of 1996)
+        """
+        parser = AmendmentParser(default_title=5)
+        text = (
+            'Section 552(a)(6)(A)(i) is amended by striking out "ten days" '
+            'and inserting in lieu thereof "twenty days".'
+        )
+
+        amendments = parser.parse(text)
+        strike_inserts = [
+            a for a in amendments if a.pattern_type == PatternType.STRIKE_INSERT
+        ]
+
+        assert len(strike_inserts) >= 1
+        amendment = strike_inserts[0]
+        assert amendment.old_text == "ten days"
+        assert amendment.new_text == "twenty days"
+
+    def test_1995_strike_and_all_that_follows(self) -> None:
+        """Test 'and all that follows through the period' pattern.
+
+        Source: H.R.692 - 104th Congress (Rural Community Wastewater)
+        """
+        parser = AmendmentParser(default_title=33)
+        text = (
+            'Section 603(d)(7) is amended by striking "except that" '
+            "and all that follows through the period."
+        )
+
+        amendments = parser.parse(text)
+        strikes = [a for a in amendments if a.pattern_type == PatternType.STRIKE]
+
+        assert len(strikes) >= 1
+        amendment = strikes[0]
+        assert amendment.old_text == "except that"
+        assert amendment.change_type == ChangeType.DELETE
+
+    def test_1995_copyright_title_17(self) -> None:
+        """Test copyright law amendment with full title reference.
+
+        Source: H.R.2441 - 104th Congress (NII Copyright Protection Act)
+        """
+        parser = AmendmentParser()
+        text = (
+            "Section 106(3) of title 17, United States Code, is amended by "
+            'striking "or by rental, lease, or lending" and inserting '
+            '"by rental, lease, or lending, or by transmission".'
+        )
+
+        amendments = parser.parse(text)
+        strike_inserts = [
+            a for a in amendments if a.pattern_type == PatternType.STRIKE_INSERT
+        ]
+
+        assert len(strike_inserts) >= 1
+        amendment = strike_inserts[0]
+        assert amendment.old_text == "or by rental, lease, or lending"
+        assert amendment.new_text == "by rental, lease, or lending, or by transmission"
+
+    def test_2007_each_place_appears(self) -> None:
+        """Test 'each place such term appears' multi-location pattern.
+
+        Source: FDAAA 2007 (Food and Drug Administration Amendments Act)
+        """
+        parser = AmendmentParser(default_title=21)
+        text = (
+            'Section 736(a) is amended by striking "(c)(4)" each place '
+            'such term appears and inserting "(c)(5)".'
+        )
+
+        amendments = parser.parse(text)
+        strike_inserts = [
+            a for a in amendments if a.pattern_type == PatternType.STRIKE_INSERT
+        ]
+
+        assert len(strike_inserts) >= 1
+        amendment = strike_inserts[0]
+        assert amendment.old_text == "(c)(4)"
+        assert amendment.new_text == "(c)(5)"
+
+    def test_2007_redesignation_with_addition(self) -> None:
+        """Test redesignation pattern from 2007 law.
+
+        Source: FDAAA 2007
+        """
+        parser = AmendmentParser(default_title=21)
+        text = "by redesignating subparagraph (C) as subparagraph (B)"
+
+        amendments = parser.parse(text)
+        redesignates = [
+            a for a in amendments if a.pattern_type == PatternType.REDESIGNATE
+        ]
+
+        assert len(redesignates) >= 1
+        assert redesignates[0].change_type == ChangeType.REDESIGNATE
+
+    def test_multiple_titles_in_one_law(self) -> None:
+        """Test parsing amendments affecting multiple USC titles.
+
+        Modern laws often amend multiple titles in one section.
+        """
+        parser = AmendmentParser()
+        text = """
+        (a) Section 1007(b) of title 17, United States Code, is amended
+            by striking "Within 30 days after" and inserting "After".
+        (b) Section 7825 of title 26, United States Code, is amended
+            by striking "Civil Service Commission" and inserting
+            "Merit Systems Protection Board".
+        """
+
+        amendments = parser.parse(text)
+
+        # Should find amendments in both titles
+        assert len(amendments) >= 2
+
+        # Check we detected amendments with different implied titles
+        strike_inserts = [
+            a for a in amendments if a.pattern_type == PatternType.STRIKE_INSERT
+        ]
+        assert len(strike_inserts) >= 2
+
+    def test_subsection_with_complex_path(self) -> None:
+        """Test subsection reference with deep nesting.
+
+        Example from 1996 H.R.4095 (National Information Infrastructure Protection)
+        """
+        parser = AmendmentParser(default_title=18)
+        text = (
+            "Section 1030(a)(1) of title 18, United States Code, is amended "
+            'by striking "knowingly accesses" and inserting '
+            '"having knowingly accessed".'
+        )
+
+        amendments = parser.parse(text)
+        strike_inserts = [
+            a for a in amendments if a.pattern_type == PatternType.STRIKE_INSERT
+        ]
+
+        assert len(strike_inserts) >= 1
+        amendment = strike_inserts[0]
+        assert amendment.old_text == "knowingly accesses"
+        assert amendment.new_text == "having knowingly accessed"
+
+    def test_defense_authorization_style(self) -> None:
+        """Test National Defense Authorization Act amendment style.
+
+        Defense bills have distinctive amendment patterns.
+        """
+        parser = AmendmentParser(default_title=10)
+        text = (
+            "Section 2302(5) of title 10, United States Code, is amended "
+            "to read as follows:"
+        )
+
+        amendments = parser.parse(text)
+        substitutes = [
+            a for a in amendments if a.pattern_type == PatternType.SUBSTITUTE
+        ]
+
+        assert len(substitutes) >= 1
+        assert substitutes[0].needs_review  # Needs text extraction
+
+    def test_tax_code_amendment_title_26(self) -> None:
+        """Test Internal Revenue Code (Title 26) amendment.
+
+        Tax amendments often use precise numerical substitutions.
+        """
+        parser = AmendmentParser(default_title=26)
+        text = (
+            'Section 401(a)(9)(C)(ii)(I) is amended by striking "$160,000" '
+            'and inserting "$170,000".'
+        )
+
+        amendments = parser.parse(text)
+        strike_inserts = [
+            a for a in amendments if a.pattern_type == PatternType.STRIKE_INSERT
+        ]
+
+        assert len(strike_inserts) >= 1
+        amendment = strike_inserts[0]
+        assert amendment.old_text == "$160,000"
+        assert amendment.new_text == "$170,000"

@@ -73,11 +73,25 @@ AMENDMENT_PATTERNS: list[AmendmentPattern] = [
         name="strike_insert_quoted",
         pattern_type=PatternType.STRIKE_INSERT,
         regex=(
-            r"(?:by\s+)?striking\s+" + QUOTED_TEXT + r"\s+"
-            r"and\s+inserting\s+" + QUOTED_TEXT
+            r"(?:by\s+)?striking(?:\s+out)?\s+" + QUOTED_TEXT + r"\s+"
+            r"and\s+inserting(?:\s+in\s+lieu\s+thereof)?\s+" + QUOTED_TEXT
         ),
         confidence=0.95,
-        description='Striking "X" and inserting "Y"',
+        description='Striking "X" and inserting "Y" (including older "striking out" / "in lieu thereof")',
+    ),
+    AmendmentPattern(
+        name="strike_insert_each_place",
+        pattern_type=PatternType.STRIKE_INSERT,
+        regex=(
+            r"(?:by\s+)?striking\s+"
+            + QUOTED_TEXT
+            + r"\s+each\s+place\s+(?:such\s+term\s+|it\s+)?appears?"
+            + r"(?:\s+and\s+inserting\s+"
+            + QUOTED_TEXT
+            + r")?"
+        ),
+        confidence=0.95,
+        description='Striking "X" each place it appears and inserting "Y"',
     ),
     AmendmentPattern(
         name="strike_insert_phrase",
@@ -117,9 +131,25 @@ AMENDMENT_PATTERNS: list[AmendmentPattern] = [
     AmendmentPattern(
         name="strike_quoted",
         pattern_type=PatternType.STRIKE,
-        regex=r"(?:by\s+)?striking\s+" + QUOTED_TEXT + r"(?!\s+and\s+inserting)",
+        regex=(
+            r"(?:by\s+)?striking(?:\s+out)?\s+"
+            + QUOTED_TEXT
+            + r"(?!\s+(?:and\s+inserting|each\s+place))"
+        ),
         confidence=0.90,
         description='Striking "X" (without insertion)',
+    ),
+    AmendmentPattern(
+        name="strike_through_period",
+        pattern_type=PatternType.STRIKE,
+        regex=(
+            r"(?:by\s+)?striking\s+"
+            + QUOTED_TEXT
+            + r"\s+and\s+all\s+that\s+follows\s+through\s+"
+            r"(?:the\s+period|the\s+semicolon|" + QUOTED_TEXT + r")"
+        ),
+        confidence=0.93,
+        description='Striking "X" and all that follows through the period',
     ),
     AmendmentPattern(
         name="strike_paragraph",
@@ -270,7 +300,7 @@ AMENDMENT_PATTERNS: list[AmendmentPattern] = [
         name="substitute_section",
         pattern_type=PatternType.SUBSTITUTE,
         regex=(
-            SECTION_REF + r"\s+(?:is|are)\s+(?:hereby\s+)?(?:amended\s+)?"
+            SECTION_REF_WITH_TITLE + r",?\s+(?:is|are)\s+(?:hereby\s+)?(?:amended\s+)?"
             r"(?:to\s+read|and\s+reenacted\s+to\s+read)\s+as\s+follows"
         ),
         confidence=0.95,
