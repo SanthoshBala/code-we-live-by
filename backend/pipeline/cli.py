@@ -338,6 +338,312 @@ async def ingest_current_members(
 
 
 # =============================================================================
+# Legal Parser functions (Task 1.11)
+# =============================================================================
+
+
+async def parse_law_command(
+    congress: int,
+    law_number: int,
+    mode: str = "regex",
+    default_title: int | None = None,
+    min_confidence: float = 0.0,
+    dry_run: bool = False,
+) -> int:
+    """Parse a Public Law for amendments.
+
+    Args:
+        congress: Congress number.
+        law_number: Law number.
+        mode: Parsing mode (regex, llm, human-plus-llm).
+        default_title: Default US Code title.
+        min_confidence: Minimum confidence threshold.
+        dry_run: If True, parse without saving.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from app.models.enums import ParsingMode
+    from pipeline.govinfo.client import GovInfoClient
+    from pipeline.legal_parser.parsing_modes import RegExParsingSession
+
+    # Map mode string to enum
+    mode_map = {
+        "regex": ParsingMode.REGEX,
+        "llm": ParsingMode.LLM,
+        "human-plus-llm": ParsingMode.HUMAN_PLUS_LLM,
+    }
+    parsing_mode = mode_map.get(mode, ParsingMode.REGEX)
+
+    if parsing_mode != ParsingMode.REGEX:
+        logger.error(f"Parsing mode '{mode}' is not yet implemented")
+        return 1
+
+    # Fetch law text from GovInfo
+    client = GovInfoClient()
+    law_info = await client.get_public_law(congress, law_number)
+    if not law_info:
+        logger.error(f"Law PL {congress}-{law_number} not found")
+        return 1
+
+    # Get full text
+    law_text = await client.get_law_text(congress, law_number)
+    if not law_text:
+        logger.error(f"Could not retrieve text for PL {congress}-{law_number}")
+        return 1
+
+    print(f"\nParsing PL {congress}-{law_number}")
+    print(f"  Title: {law_info.title[:70]}..." if len(law_info.title) > 70 else f"  Title: {law_info.title}")
+    print(f"  Text length: {len(law_text):,} characters")
+    print(f"  Mode: {parsing_mode.value}")
+    print()
+
+    async with async_session_maker() as session:
+        # Get or create law_id
+        from sqlalchemy import select
+        from app.models.public_law import PublicLaw
+
+        result = await session.execute(
+            select(PublicLaw).where(
+                PublicLaw.congress == congress,
+                PublicLaw.law_number == str(law_number),
+            )
+        )
+        law = result.scalar_one_or_none()
+
+        if not law:
+            logger.error(
+                f"Law PL {congress}-{law_number} not in database. "
+                "Run 'govinfo-ingest-law' first."
+            )
+            return 1
+
+        # Parse the law
+        parser_session = RegExParsingSession(
+            session,
+            default_title=default_title,
+            min_confidence=min_confidence,
+        )
+        result = await parser_session.parse_law(
+            law_id=law.law_id,
+            law_text=law_text,
+            save_to_db=not dry_run,
+        )
+
+        # Display results
+        print(f"Parsing {'completed' if result.status.value == 'Completed' else result.status.value}")
+        print(f"  Session ID: {result.session_id}")
+        print(f"  Amendments found: {len(result.amendments)}")
+        print(f"  Coverage: {result.coverage_report.coverage_percentage:.1f}%")
+        print(f"    Claimed: {result.coverage_report.claimed_length:,} / {result.coverage_report.total_length:,} chars")
+        print(f"    Flagged unclaimed: {len(result.coverage_report.flagged_unclaimed)}")
+        print(f"    Ignored unclaimed: {len(result.coverage_report.ignored_unclaimed)}")
+
+        if result.amendments:
+            # Show amendment stats
+            stats = parser_session.parser.get_statistics(result.amendments)
+            print(f"\n  Amendment statistics:")
+            print(f"    High confidence (>=90%): {stats['high_confidence']}")
+            print(f"    Needs review: {stats['needs_review']}")
+            print(f"    Average confidence: {stats['avg_confidence']:.2%}")
+
+            if stats.get("by_change_type"):
+                print(f"    By type: {stats['by_change_type']}")
+
+        if result.escalation_recommended:
+            print(f"\n  ESCALATION RECOMMENDED: {result.escalation_reason}")
+
+        if result.ingestion_report_id:
+            print(f"\n  Ingestion report ID: {result.ingestion_report_id}")
+
+        if dry_run:
+            print("\n  [DRY RUN - results not saved to database]")
+
+    return 0
+
+
+async def show_ingestion_report_command(
+    report_id: int,
+    verbose: bool = False,
+) -> int:
+    """Display an ingestion report.
+
+    Args:
+        report_id: Report ID to display.
+        verbose: Show detailed amendment list.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.models.base import async_session_maker
+    from app.models.validation import IngestionReport, ParsedAmendmentRecord
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(IngestionReport)
+            .options(selectinload(IngestionReport.session))
+            .where(IngestionReport.report_id == report_id)
+        )
+        report = result.scalar_one_or_none()
+
+        if not report:
+            logger.error(f"Report {report_id} not found")
+            return 1
+
+        print(f"\nIngestion Report #{report.report_id}")
+        print(f"  Law ID: {report.law_id}")
+        print(f"  Session ID: {report.session_id}")
+        print(f"  Mode: {report.session.mode.value if report.session else 'Unknown'}")
+        print(f"  Status: {report.session.status.value if report.session else 'Unknown'}")
+        print()
+        print(f"Coverage:")
+        print(f"  Total text length: {report.total_text_length:,}")
+        print(f"  Claimed text length: {report.claimed_text_length:,}")
+        print(f"  Coverage: {report.coverage_percentage:.1f}%")
+        print(f"  Flagged unclaimed: {report.unclaimed_flagged_count}")
+        print(f"  Ignored unclaimed: {report.unclaimed_ignored_count}")
+        print()
+        print(f"Amendments:")
+        print(f"  Total: {report.total_amendments}")
+        print(f"  High confidence: {report.high_confidence_count}")
+        print(f"  Needs review: {report.needs_review_count}")
+        print(f"  Average confidence: {report.avg_confidence:.2%}")
+
+        if report.amendments_by_type:
+            print(f"  By type: {report.amendments_by_type}")
+
+        if report.amendments_by_pattern:
+            print(f"  By pattern: {report.amendments_by_pattern}")
+
+        print()
+        print(f"Decision:")
+        print(f"  Auto-approve eligible: {'Yes' if report.auto_approve_eligible else 'No'}")
+        print(f"  Escalation recommended: {'Yes' if report.escalation_recommended else 'No'}")
+        if report.escalation_reason:
+            print(f"  Escalation reason: {report.escalation_reason}")
+
+        if verbose:
+            # Fetch amendments
+            amend_result = await session.execute(
+                select(ParsedAmendmentRecord)
+                .where(ParsedAmendmentRecord.session_id == report.session_id)
+                .order_by(ParsedAmendmentRecord.start_pos)
+            )
+            amendments = amend_result.scalars().all()
+
+            if amendments:
+                print(f"\nAmendments ({len(amendments)}):")
+                for amend in amendments:
+                    target = f"{amend.target_title} USC {amend.target_section}" if amend.target_title else "unknown"
+                    review = " [NEEDS REVIEW]" if amend.needs_review else ""
+                    print(
+                        f"  - {amend.pattern_name}: {target} "
+                        f"(conf: {amend.confidence:.0%}){review}"
+                    )
+
+    return 0
+
+
+async def validate_corpus_command(verbose: bool = False) -> int:
+    """Run regression tests against golden corpus.
+
+    Args:
+        verbose: Show detailed results.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.legal_parser.golden_corpus import GoldenCorpusManager
+
+    async with async_session_maker() as session:
+        manager = GoldenCorpusManager(session)
+        result = await manager.run_regression_tests(verbose=verbose)
+
+        print(f"\nGolden Corpus Validation")
+        print(f"  Total laws: {result.total_laws}")
+        print(f"  Passed: {result.passed}")
+        print(f"  Failed: {result.failed}")
+        print(f"  All passed: {'Yes' if result.all_passed else 'No'}")
+
+        if verbose and result.results:
+            print(f"\nDetailed Results:")
+            for r in result.results:
+                status = "PASS" if r.passed else "FAIL"
+                print(f"  [{status}] PL {r.congress}-{r.law_number}")
+                if not r.passed:
+                    for d in r.discrepancies:
+                        print(f"    - {d}")
+
+    return 0 if result.all_passed else 1
+
+
+async def list_pending_patterns_command(limit: int = 20) -> int:
+    """List pattern discoveries awaiting review.
+
+    Args:
+        limit: Maximum results.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.legal_parser.pattern_learning import PatternLearningService
+
+    async with async_session_maker() as session:
+        service = PatternLearningService(session)
+        patterns = await service.get_pending_patterns(limit=limit)
+
+        if not patterns:
+            print("\nNo pending pattern discoveries")
+            return 0
+
+        print(f"\nPending Pattern Discoveries ({len(patterns)})")
+        for p in patterns:
+            keywords = p.detected_keywords if p.detected_keywords else "none"
+            print(f"\n  #{p.discovery_id}")
+            print(f"    Keywords: {keywords}")
+            print(f"    Text: {p.unmatched_text[:100]}...")
+            print(f"    Status: {p.status.value}")
+
+    return 0
+
+
+async def promote_pattern_command(
+    discovery_id: int,
+    pattern_name: str | None = None,
+) -> int:
+    """Promote a discovered pattern.
+
+    Args:
+        discovery_id: Discovery ID to promote.
+        pattern_name: Name for the new pattern.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.legal_parser.pattern_learning import PatternLearningService
+
+    async with async_session_maker() as session:
+        service = PatternLearningService(session)
+        try:
+            await service.promote_pattern(
+                discovery_id=discovery_id,
+                pattern_name=pattern_name,
+            )
+            print(f"\nPattern discovery #{discovery_id} promoted successfully")
+            return 0
+        except Exception as e:
+            logger.error(f"Failed to promote pattern: {e}")
+            return 1
+
+
+# =============================================================================
 # House Vote functions
 # =============================================================================
 
@@ -716,6 +1022,101 @@ def main() -> int:
         help="Update existing records if present",
     )
 
+    # =========================================================================
+    # Legal Parser commands (Task 1.11)
+    # =========================================================================
+
+    # parse-law command
+    parse_law_parser = subparsers.add_parser(
+        "parse-law", help="Parse a Public Law for amendments"
+    )
+    parse_law_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 118)",
+    )
+    parse_law_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 60 for PL 118-60)",
+    )
+    parse_law_parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["regex", "llm", "human-plus-llm"],
+        default="regex",
+        help="Parsing mode (default: regex)",
+    )
+    parse_law_parser.add_argument(
+        "--default-title",
+        type=int,
+        help="Default US Code title when not specified in text",
+    )
+    parse_law_parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.0,
+        help="Minimum confidence threshold (0.0-1.0, default: 0.0)",
+    )
+    parse_law_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse without saving to database",
+    )
+
+    # show-ingestion-report command
+    show_report_parser = subparsers.add_parser(
+        "show-ingestion-report", help="Display an ingestion report"
+    )
+    show_report_parser.add_argument(
+        "report_id",
+        type=int,
+        help="Report ID to display",
+    )
+    show_report_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed amendment list",
+    )
+
+    # validate-corpus command
+    validate_corpus_parser = subparsers.add_parser(
+        "validate-corpus", help="Run regression tests against golden corpus"
+    )
+    validate_corpus_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed results for each law",
+    )
+
+    # list-pending-patterns command
+    list_patterns_parser = subparsers.add_parser(
+        "list-pending-patterns", help="List pattern discoveries awaiting review"
+    )
+    list_patterns_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum results to display (default: 20)",
+    )
+
+    # promote-pattern command
+    promote_pattern_parser = subparsers.add_parser(
+        "promote-pattern", help="Promote a discovered pattern"
+    )
+    promote_pattern_parser.add_argument(
+        "discovery_id",
+        type=int,
+        help="Discovery ID to promote",
+    )
+    promote_pattern_parser.add_argument(
+        "--pattern-name",
+        type=str,
+        help="Name for the new pattern",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -856,6 +1257,52 @@ def main() -> int:
                 session=args.session,
                 limit=args.limit,
                 force=args.force,
+            )
+        )
+
+    # =========================================================================
+    # Legal Parser command handlers (Task 1.11)
+    # =========================================================================
+
+    elif args.command == "parse-law":
+        return asyncio.run(
+            parse_law_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                mode=args.mode,
+                default_title=args.default_title,
+                min_confidence=args.min_confidence,
+                dry_run=args.dry_run,
+            )
+        )
+
+    elif args.command == "show-ingestion-report":
+        return asyncio.run(
+            show_ingestion_report_command(
+                report_id=args.report_id,
+                verbose=args.verbose,
+            )
+        )
+
+    elif args.command == "validate-corpus":
+        return asyncio.run(
+            validate_corpus_command(
+                verbose=args.verbose,
+            )
+        )
+
+    elif args.command == "list-pending-patterns":
+        return asyncio.run(
+            list_pending_patterns_command(
+                limit=args.limit,
+            )
+        )
+
+    elif args.command == "promote-pattern":
+        return asyncio.run(
+            promote_pattern_command(
+                discovery_id=args.discovery_id,
+                pattern_name=args.pattern_name,
             )
         )
 
