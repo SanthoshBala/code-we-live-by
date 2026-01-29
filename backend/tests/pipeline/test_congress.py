@@ -1,6 +1,6 @@
 """Tests for Congress.gov API client."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -163,7 +163,7 @@ class TestMemberDetail:
         assert detail.depiction_url == "https://www.congress.gov/img/member/b000944.jpg"
         assert detail.depiction_attribution == "Image courtesy of the Member"
         assert len(detail.terms) == 1
-        assert detail.update_date == datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        assert detail.update_date == datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
 
     def test_from_api_response_historical(self) -> None:
         """Test parsing a historical member (deceased)."""
