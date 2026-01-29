@@ -1,14 +1,66 @@
 # Congress.gov Pipeline
 
-This module provides data ingestion capabilities from the Congress.gov API for legislator data.
+This module provides data ingestion capabilities from the Congress.gov API for legislator and vote data.
+
+## Congressional Concepts
+
+### Congress Numbers
+
+A **Congress** is a two-year period that begins on January 3rd of odd-numbered years. Each Congress is numbered sequentially:
+
+| Congress | Years | Notable Events |
+|----------|-------|----------------|
+| 118th | 2023-2025 | Current Congress |
+| 117th | 2021-2023 | Biden administration begins |
+| 116th | 2019-2021 | Trump impeachment |
+| 1st | 1789-1791 | First Congress under Constitution |
+
+The formula: `Congress = ((Year - 1789) / 2) + 1` (rounded down)
+
+### Sessions
+
+Each Congress has two **sessions**, one per calendar year:
+- **Session 1**: January of odd year to adjournment (typically late December)
+- **Session 2**: January of even year to adjournment
+
+### Chambers
+
+Congress consists of two chambers:
+- **House of Representatives**: 435 voting members, 2-year terms, represent districts
+- **Senate**: 100 members (2 per state), 6-year staggered terms
+
+### Roll Call Votes
+
+A **roll call vote** (or **recorded vote**) is when each member's vote is individually recorded. Types include:
+
+| Vote Type | Description |
+|-----------|-------------|
+| **Yea/Aye** | Vote in favor |
+| **Nay/No** | Vote against |
+| **Present** | Counted for quorum but not voting |
+| **Not Voting** | Absent or abstaining |
+
+Roll calls are numbered sequentially within each session (e.g., "Roll Call 296" in Session 1).
+
+### Vote Outcomes
+
+- **Passed**: Motion received required majority
+- **Failed**: Motion did not receive required majority
+- **Agreed to**: Resolution or amendment adopted
+- **Rejected**: Resolution or amendment not adopted
+
+Required majorities vary:
+- Simple majority (>50%) for most legislation
+- 2/3 majority for veto overrides, constitutional amendments
+- 3/5 majority (60 votes) to end Senate filibusters
 
 ## Overview
 
-The Congress.gov API (v3) provides comprehensive programmatic access to legislator information, bill metadata, and sponsor/cosponsor data. This pipeline fetches and stores:
+The Congress.gov API (v3) provides comprehensive programmatic access to:
 
 - **Legislators**: Members of Congress with biographical data
 - **Terms**: Service periods for each legislator (House/Senate)
-- **Future**: Sponsorship links to Public Laws
+- **Votes**: Roll call votes with individual member positions (House only, 118th Congress+)
 
 ## Prerequisites
 
@@ -38,58 +90,39 @@ alembic upgrade head
 
 ## CLI Commands
 
-### List Members
-
-List members of Congress:
+### Legislator Commands
 
 ```bash
-# List all members (first 20)
-python -m pipeline.cli congress-list-members
+# List members of Congress
+python -m pipeline.cli congress-list-members --congress 118 --limit 20
 
-# List current members only
-python -m pipeline.cli congress-list-members --current
-
-# List members from a specific Congress
-python -m pipeline.cli congress-list-members --congress 118
-
-# Show more results
-python -m pipeline.cli congress-list-members --limit 50
-```
-
-### Ingest Single Member
-
-Ingest a specific member by their Bioguide ID:
-
-```bash
-# Ingest Sherrod Brown
+# Ingest a single member by Bioguide ID
 python -m pipeline.cli congress-ingest-member B000944
 
-# Force update existing record
-python -m pipeline.cli congress-ingest-member B000944 --force
-```
-
-### Ingest Congress Members
-
-Ingest all members who served in a specific Congress:
-
-```bash
-# Ingest 118th Congress members
+# Ingest all members from a Congress
 python -m pipeline.cli congress-ingest-congress 118
 
-# Force update existing records
-python -m pipeline.cli congress-ingest-congress 118 --force
+# Ingest all current members
+python -m pipeline.cli congress-ingest-current
 ```
 
-### Ingest Current Members
-
-Ingest all currently serving members:
+### Vote Commands (House only, 118th Congress+)
 
 ```bash
-# Ingest current members
-python -m pipeline.cli congress-ingest-current
+# List House roll call votes
+python -m pipeline.cli house-list-votes 118 --session 1 --limit 20
 
-# Force update
-python -m pipeline.cli congress-ingest-current --force
+# Ingest a single House vote
+python -m pipeline.cli house-ingest-vote 118 1 296
+
+# Ingest all House votes for a Congress/session
+python -m pipeline.cli house-ingest-votes 118 --session 1 --limit 50
+```
+
+**Important**: For individual votes to be linked to legislators, ingest legislators first:
+```bash
+python -m pipeline.cli congress-ingest-congress 118
+python -m pipeline.cli house-ingest-votes 118 --session 1
 ```
 
 ## Programmatic Usage
@@ -101,33 +134,31 @@ from pipeline.congress import CongressClient
 
 client = CongressClient()  # Uses CONGRESS_API_KEY from settings
 
-# List members by Congress
+# Legislators
 members = await client.get_members_by_congress(118)
-
-# Get member details
 detail = await client.get_member_detail("B000944")
 
-# Get bill sponsors
-sponsor, cosponsors = await client.get_bill_sponsors(117, "hr", 3076)
+# Votes (House only)
+votes = await client.get_house_votes(118, session=1, limit=10)
+vote_detail = await client.get_house_vote_detail(118, 1, 296)
+member_votes = await client.get_house_vote_members(118, 1, 296)
 ```
 
-### Ingestion Service
+### Ingestion Services
 
 ```python
 from app.models.base import async_session_maker
-from pipeline.congress import LegislatorIngestionService
+from pipeline.congress import LegislatorIngestionService, VoteIngestionService
 
 async with async_session_maker() as session:
-    service = LegislatorIngestionService(session)
+    # Legislators
+    leg_service = LegislatorIngestionService(session)
+    await leg_service.ingest_congress(118)
 
-    # Ingest single member
-    log = await service.ingest_member("B000944")
-
-    # Ingest Congress
-    log = await service.ingest_congress(118)
-
-    # Ingest current members
-    log = await service.ingest_current_members()
+    # Votes
+    vote_service = VoteIngestionService(session)
+    await vote_service.ingest_house_vote(118, 1, 296)
+    await vote_service.ingest_house_votes_for_congress(118, session_num=1)
 ```
 
 ## Data Mapping
@@ -138,66 +169,54 @@ async with async_session_maker() as session:
 |------------------|----------------|-------|
 | `bioguideId` | `bioguide_id` | Unique identifier |
 | `firstName` | `first_name` | |
-| `middleName` | `middle_name` | |
 | `lastName` | `last_name` | |
-| `suffixName` | `suffix` | Jr., Sr., III, etc. |
 | `directOrderName` | `full_name` | "Sherrod Brown" format |
 | `partyName` | `party` | Mapped to PoliticalParty enum |
-| `state` | `state` | Two-letter code |
-| `district` | `district` | House only |
+| `state` (from terms) | `state` | Two-letter code |
 | `currentMember` | `is_current_member` | Boolean |
-| `birthYear` | `birth_date` | Converted to date |
-| `deathYear` | `death_date` | Converted to date |
 | `depiction.imageUrl` | `photo_url` | Member photo |
-| `officialWebsiteUrl` | `official_website` | |
 
-### Party Mapping
+### Vote Fields
 
-| API Value | Enum Value |
-|-----------|------------|
-| "Democratic" | `PoliticalParty.DEMOCRAT` |
-| "Republican" | `PoliticalParty.REPUBLICAN` |
-| "Independent" | `PoliticalParty.INDEPENDENT` |
-| "Libertarian" | `PoliticalParty.LIBERTARIAN` |
-| "Green" | `PoliticalParty.GREEN` |
-| Other | `PoliticalParty.OTHER` |
+| Congress.gov API | Database Field | Notes |
+|------------------|----------------|-------|
+| `congress` | `congress` | Congress number |
+| `sessionNumber` | `session` | 1 or 2 |
+| `rollCallNumber` | `vote_number` | Roll call number |
+| `startDate` | `vote_date` | When vote occurred |
+| `result` | `result` | "Passed", "Failed", etc. |
+| `votePartyTotal[].yeaTotal` | `yeas` | Sum across parties |
+| `votePartyTotal[].nayTotal` | `nays` | Sum across parties |
 
-### Chamber Mapping
+### Member Vote Fields
 
-| API Value | Enum Value |
-|-----------|------------|
-| "Senate" | `Chamber.SENATE` |
-| "House of Representatives" | `Chamber.HOUSE` |
+| Congress.gov API | Database Field | Notes |
+|------------------|----------------|-------|
+| `bioguideID` | `legislator_id` | Linked via Legislator table |
+| `voteCast` | `vote_cast` | "Aye", "No", "Present", etc. |
 
 ## API Coverage
 
-Per the Congress.gov API documentation:
-
 | Data Type | Coverage |
 |-----------|----------|
-| Member Profiles | 71st Congress (1929) to present* |
-| Terms of Service | Complete for all included members |
-| Party Affiliation | Current/last party only |
-| Member Photos | Primarily recent Congresses |
+| Member Profiles | 71st Congress (1929) to present |
+| House Votes | **118th Congress (2023) forward only** |
+| Senate Votes | Not available via API (XML from Senate.gov required) |
 
-*Members serving in 93rd Congress (1973) or later
+## Limitations
+
+1. **House votes only**: Senate votes are not yet available via Congress.gov API
+2. **Recent data only**: House vote API covers 118th Congress (2023) forward
+3. **Individual votes require legislators**: Must ingest legislators before votes to link member positions
 
 ## Rate Limits
 
 - **5,000 requests/hour** (rolling window)
-- Response includes `X-RateLimit-Remaining` header
-- 429 errors trigger exponential backoff retry
-
-## Error Handling
-
-The client implements:
-- Automatic retry for 5xx server errors
-- Exponential backoff (2s, 4s, 8s)
+- Automatic retry with exponential backoff for server errors
 - Maximum 3 retry attempts
-- Detailed logging of failures
 
 ## Related Documentation
 
 - [Congress.gov API Documentation](https://api.congress.gov)
 - [API GitHub Repository](https://github.com/LibraryOfCongress/api.congress.gov)
-- [Task 0.3 Research](../../research/TASK-0.3-Congress-API-Evaluation.md)
+- [House Roll Call Votes Blog Post](https://blogs.loc.gov/law/2025/05/introducing-house-roll-call-votes-in-the-congress-gov-api/)
