@@ -169,160 +169,177 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Completed**: House vote API client, ingestion service, CLI commands
 
 ### Data Pipeline - Law Change Parsing
-- [ ] **Task 1.10**: Build legal language parser for common amendment patterns
+- [x] **Task 1.10**: Build legal language parser for common amendment patterns ✅
   - "Section X is amended by striking Y and inserting Z"
   - "Section X is amended by adding at the end the following"
   - "Section X is repealed"
   - Document supported patterns and limitations
+  - **Completed**: 23 amendment patterns, confidence scoring, section reference parsing
 
-- [ ] **Task 1.11**: Implement diff generation for law changes
+- [ ] **Task 1.11**: Build ingestion validation and graduated trust system
+  - **Text accounting**: Track which spans of bill text are "claimed" by parsed amendments
+    - Calculate coverage percentage
+    - Flag unclaimed text containing amendment keywords ("amended", "striking", etc.)
+  - **Metadata validation**: Compare parsed amendment count vs GovInfo metadata (if available)
+  - **IngestionReport schema**: Standardized report for every ingestion
+    - Coverage stats, confidence scores, flags, auto-approve verdict
+  - **Three parsing modes**:
+    - Interactive: Human + Claude review bill together
+    - LLM: Claude reviews autonomously with parser tools
+    - RegEx: Pure programmatic parsing
+  - **Graduation criteria**: Interactive → LLM → RegEx based on pattern stability
+  - **Pattern learning loop**: New patterns discovered feed back into regex library
+  - **Golden test corpus**: First ~10 Interactive laws become regression test suite
+  - **Fallback escalation**: Suspicious RegEx reports auto-escalate to LLM review
+
+- [ ] **Task 1.12**: Implement diff generation for law changes
   - Compare old text vs new text for modified sections
   - Calculate line-by-line diffs
   - Store in LawChange table
 
-- [ ] **Task 1.12**: Build manual review interface for complex amendments
+- [ ] **Task 1.13**: Build manual review interface for complex amendments
   - Flag ambiguous legal language for human review
   - UI for reviewing and correcting parsed changes
   - Approval workflow before committing to database
 
 ### Data Pipeline - Line-Level Parsing
-- [ ] **Task 1.13**: Implement line-level parser for sections
+- [ ] **Task 1.14**: Implement line-level parser for sections
   - Parse section text into individual lines
   - Identify line types (Heading, Prose, ListItem)
   - Extract subsection paths (e.g., "(1)", "(c)(1)(A)")
   - Store in USCodeLine table
 
-- [ ] **Task 1.14**: Build parent/child tree structure for lines
+- [ ] **Task 1.15**: Build parent/child tree structure for lines
   - Detect nesting relationships using heuristics (indentation, numbering)
   - Set parent_line_id for each line
   - Calculate depth_level from tree structure
   - Validate tree integrity (no orphans, no cycles)
 
-- [ ] **Task 1.15**: Implement line-level attribution (blame functionality)
+- [ ] **Task 1.16**: Implement line-level attribution (blame functionality)
   - For each line, determine which law created it (created_by_law_id)
   - For each line, determine which law last modified it (last_modified_by_law_id)
   - Handle edge cases (original enactment, multiple modifications)
 
-- [ ] **Task 1.16**: Implement line hash calculation for change detection
+- [ ] **Task 1.17**: Implement line hash calculation for change detection
   - Calculate SHA-256 hash of text_content for each line
   - Use hashes to detect unchanged lines across versions
   - Optimize storage by avoiding duplicate text
 
 ### Data Pipeline - Historical Depth
-- [ ] **Task 1.17**: Ingest historical Public Laws (last 20 years as MVP scope)
+- [ ] **Task 1.18**: Ingest historical Public Laws (last 20 years as MVP scope)
   - Fetch laws from ~2004 to present for selected titles
   - Parse and store in chronological order
   - Build historical versions incrementally
 
-- [ ] **Task 1.18**: Build SectionHistory records
+- [ ] **Task 1.19**: Build SectionHistory records
   - For each law that modifies a section, create snapshot
   - Store full text at that point in time
   - Link to law_id and effective_date
 
-- [ ] **Task 1.19**: Build LineHistory records
+- [ ] **Task 1.20**: Build LineHistory records
   - For each law that modifies specific lines, create version records
   - Store historical text_content, parent relationships
   - Enable time-travel at line granularity
 
 ### Backend API Development
-- [ ] **Task 1.20**: Implement Code Browsing API endpoints
+- [ ] **Task 1.21**: Implement Code Browsing API endpoints
   - `GET /api/titles` - List all titles
   - `GET /api/titles/:title/chapters` - List chapters in a title
   - `GET /api/titles/:title/chapters/:chapter/sections` - List sections
   - `GET /api/sections/:title/:section` - Get full section content
   - `GET /api/sections/:title/:section/lines` - Get line-level structure
 
-- [ ] **Task 1.21**: Implement Law Viewer API endpoints
+- [ ] **Task 1.22**: Implement Law Viewer API endpoints
   - `GET /api/laws/:lawId` - Get law metadata and summary
   - `GET /api/laws/:lawId/changes` - Get all section changes for a law
   - `GET /api/laws/:lawId/diff/:sectionId` - Get diff for specific section
   - `GET /api/laws/:lawId/sponsors` - Get sponsors and co-sponsors
   - `GET /api/laws/:lawId/votes` - Get vote records
 
-- [ ] **Task 1.22**: Implement Search API endpoints
+- [ ] **Task 1.23**: Implement Search API endpoints
   - `GET /api/search/sections?q=query` - Full-text search within code
   - `GET /api/search/laws?q=query` - Search laws by name/number/keyword
   - Support filters (date range, title, sponsor)
 
-- [ ] **Task 1.23**: Implement Time Travel API
+- [ ] **Task 1.24**: Implement Time Travel API
   - `GET /api/sections/:title/:section/history` - Get all versions of section
   - `GET /api/sections/:title/:section/at/:date` - Get section as of specific date
   - `GET /api/sections/:title/:section/compare?from=date1&to=date2` - Compare versions
 
-- [ ] **Task 1.24**: Implement Blame View API
+- [ ] **Task 1.25**: Implement Blame View API
   - `GET /api/sections/:title/:section/blame` - Get line-by-line attribution
   - Include law metadata (PL number, Congress, President, date) for each line
   - Support deep linking to specific lines
 
 ### Frontend Development - Core UI
-- [ ] **Task 1.25**: Set up Next.js project structure
+- [ ] **Task 1.26**: Set up Next.js project structure
   - Initialize Next.js with TypeScript
   - Configure Tailwind CSS for styling
   - Set up component library structure
 
-- [ ] **Task 1.26**: Build main navigation and layout
+- [ ] **Task 1.27**: Build main navigation and layout
   - Header with logo and main nav (Explore Code, View Laws, Analytics, About)
   - Footer with disclaimers and links
   - Responsive design for mobile/tablet/desktop
 
-- [ ] **Task 1.27**: Build Title/Chapter/Section navigation tree
+- [ ] **Task 1.28**: Build Title/Chapter/Section navigation tree
   - Hierarchical navigation component (collapsible tree)
   - Breadcrumb trail showing current location
   - File path-style display (USC/Title-17/Chapter-1/Section-106)
 
 ### Frontend Development - Code Browser
-- [ ] **Task 1.28**: Build Section Viewer component
+- [ ] **Task 1.29**: Build Section Viewer component
   - Display section heading and full text
   - Clean, readable formatting with proper legal citations
   - "Last modified" timestamp and link to modifying law
 
-- [ ] **Task 1.29**: Build Blame View component
+- [ ] **Task 1.30**: Build Blame View component
   - Toggle between Normal and Blame views
   - Display law attribution for each line in sidebar
   - Format: PL number, Congress, President, date
   - Hover/click for full law details
   - Color-coding or visual indicators for different laws
 
-- [ ] **Task 1.30**: Implement deep linking to specific lines
+- [ ] **Task 1.31**: Implement deep linking to specific lines
   - URL format: `/17/106#line-3` or `/17/106#(1)`
   - Scroll to line on page load
   - Highlight target line
   - Share button for copying line URLs
 
-- [ ] **Task 1.31**: Build Time Travel UI
+- [ ] **Task 1.32**: Build Time Travel UI
   - Date picker for selecting historical snapshot
   - Timeline scrubber for browsing over time
   - "What changed" summary when viewing historical version
   - Permalink to specific version (e.g., "Section 106 as of July 4, 1976")
 
 ### Frontend Development - Law Viewer
-- [ ] **Task 1.32**: Build Law Details page
+- [ ] **Task 1.33**: Build Law Details page
   - Display PL number, popular name, summary
   - Show metadata panel (sponsors, reviewers, timeline, impact)
   - Tabs for Conversation, Files Changed, Related Resources
 
-- [ ] **Task 1.33**: Build Diff Viewer component
+- [ ] **Task 1.34**: Build Diff Viewer component
   - Line-by-line diff with color-coding (red=deleted, green=added, yellow=modified)
   - Side-by-side or unified diff toggle
   - Collapsible sections for multi-section changes
 
-- [ ] **Task 1.34**: Build Sponsors & Reviewers panel
+- [ ] **Task 1.35**: Build Sponsors & Reviewers panel
   - Display sponsor photos, names, party, state
   - Show co-sponsors (collapsible list)
   - Display vote counts and breakdown (House, Senate, President)
 
-- [ ] **Task 1.35**: Build Legislative Journey Timeline
+- [ ] **Task 1.36**: Build Legislative Journey Timeline
   - Visual timeline showing bill progress
   - Milestones: Introduced → Committee → House → Senate → President → Effective
   - Display key dates at each stage
 
 ### Frontend Development - Search
-- [ ] **Task 1.36**: Build Search interface
+- [ ] **Task 1.37**: Build Search interface
   - Search bar with autocomplete suggestions
   - Tabs for searching Sections vs Laws
   - Results page with snippet previews and highlighting
 
-- [ ] **Task 1.37**: Build Advanced Filters component
+- [ ] **Task 1.38**: Build Advanced Filters component
   - Date range picker
   - Title/Chapter selector
   - Sponsor selector (autocomplete)
@@ -330,66 +347,66 @@ This document translates the CWLB specification into an actionable backlog of im
   - Sort options (relevance, date, impact)
 
 ### Analytics - Basic Implementation
-- [ ] **Task 1.38**: Implement basic analytics queries
+- [ ] **Task 1.39**: Implement basic analytics queries
   - Laws enacted per Congressional session
   - Sections modified per session
   - Lines added/removed per session
 
-- [ ] **Task 1.39**: Build Legislative Activity Over Time chart
+- [ ] **Task 1.40**: Build Legislative Activity Over Time chart
   - Line/bar chart showing laws enacted by Congress
   - X-axis: Congressional sessions
   - Y-axis: Count of laws, sections modified, or lines changed
   - Interactive tooltips with details
 
-- [ ] **Task 1.40**: Build simple analytics dashboard page
+- [ ] **Task 1.41**: Build simple analytics dashboard page
   - Display 2-3 key visualizations
   - Filters for date range and Congress selection
   - Export data as CSV option
 
 ### Testing & Quality Assurance
-- [ ] **Task 1.41**: Write unit tests for parser logic
+- [ ] **Task 1.42**: Write unit tests for parser logic
   - Test legal language parsing patterns
   - Test line-level parsing and tree building
   - Test diff generation
 
-- [ ] **Task 1.42**: Write integration tests for API endpoints
+- [ ] **Task 1.43**: Write integration tests for API endpoints
   - Test all GET endpoints
   - Test search functionality
   - Test time travel queries
 
-- [ ] **Task 1.43**: Write E2E tests for critical user flows
+- [ ] **Task 1.44**: Write E2E tests for critical user flows
   - Browse code navigation
   - View law and diff
   - Search and results
   - Time travel functionality
 
-- [ ] **Task 1.44**: Conduct manual QA testing
+- [ ] **Task 1.45**: Conduct manual QA testing
   - Test across browsers (Chrome, Firefox, Safari)
   - Test on mobile devices
   - Test accessibility (screen readers, keyboard navigation)
 
-- [ ] **Task 1.45**: Legal accuracy review
+- [ ] **Task 1.46**: Legal accuracy review
   - Compare displayed text to official US Code sources
   - Verify diff accuracy against Public Law documents
   - Document disclaimers about unofficial status
 
 ### Deployment & Launch
-- [ ] **Task 1.46**: Set up production environment
+- [ ] **Task 1.47**: Set up production environment
   - Provision production database, cache, search instances
   - Configure production hosting and CDN
   - Set up SSL certificates
 
-- [ ] **Task 1.47**: Perform load testing and optimization
+- [ ] **Task 1.48**: Perform load testing and optimization
   - Test with realistic traffic patterns
   - Identify and fix performance bottlenecks
   - Optimize database queries and caching
 
-- [ ] **Task 1.48**: Create user documentation
+- [ ] **Task 1.49**: Create user documentation
   - Write "About" page explaining the project
   - Create glossary of legislative terms
   - Write FAQ
 
-- [ ] **Task 1.49**: Public beta launch
+- [ ] **Task 1.50**: Public beta launch
   - Deploy to production
   - Announce to target user communities
   - Set up feedback collection mechanism (e.g., feedback form, GitHub issues)
