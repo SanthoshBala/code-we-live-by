@@ -143,15 +143,17 @@ This document translates the CWLB specification into an actionable backlog of im
   - Set up monitoring and logging (e.g., Datadog, Sentry)
 
 ### Data Pipeline - Core Implementation
-- [ ] **Task 1.6**: Implement US Code section ingestion
+- [x] **Task 1.6**: Implement US Code section ingestion ✅
   - Fetch current US Code data for selected titles
   - Parse XML/JSON into database format
   - Store in USCodeSection table
+  - **Completed**: OLRC pipeline (downloader, parser, ingestion service, CLI)
 
-- [ ] **Task 1.7**: Implement Public Law ingestion
+- [x] **Task 1.7**: Implement Public Law ingestion ✅
   - Fetch Public Law documents from GovInfo
   - Parse law metadata (number, date, sponsors, president)
   - Store in PublicLaw table
+  - **Completed**: GovInfo API client, ingestion service, CLI commands
 
 - [ ] **Task 1.8**: Implement legislator data ingestion
   - Fetch legislator data from ProPublica/Congress.gov
