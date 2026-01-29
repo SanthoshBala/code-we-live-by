@@ -1,5 +1,6 @@
 """GovInfo API client for fetching Public Laws and related documents."""
 
+import asyncio
 import contextlib
 import logging
 from dataclasses import dataclass
@@ -219,6 +220,65 @@ class GovInfoClient:
             )
         self.timeout = timeout
         self.base_url = GOVINFO_BASE_URL
+        self.max_retries = 3
+        self.retry_delay = 2.0  # seconds
+
+    async def _request_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        url: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Make HTTP request with retry logic for 5xx errors.
+
+        Args:
+            client: httpx AsyncClient instance.
+            method: HTTP method (GET, POST, etc.).
+            url: Request URL.
+            **kwargs: Additional arguments passed to client.request().
+
+        Returns:
+            httpx.Response on success.
+
+        Raises:
+            httpx.HTTPStatusError: After all retries exhausted.
+        """
+        last_error: Exception | None = None
+
+        for attempt in range(self.max_retries):
+            try:
+                response = await client.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500:
+                    last_error = e
+                    if attempt < self.max_retries - 1:
+                        delay = self.retry_delay * (2**attempt)  # Exponential backoff
+                        logger.warning(
+                            f"Server error {e.response.status_code}, "
+                            f"retrying in {delay}s (attempt {attempt + 1}/{self.max_retries})"
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                raise
+            except httpx.RequestError as e:
+                last_error = e
+                if attempt < self.max_retries - 1:
+                    delay = self.retry_delay * (2**attempt)
+                    logger.warning(
+                        f"Request error: {e}, "
+                        f"retrying in {delay}s (attempt {attempt + 1}/{self.max_retries})"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                raise
+
+        # Should not reach here, but just in case
+        if last_error:
+            raise last_error
+        raise RuntimeError("Unexpected error in retry logic")
 
     async def get_public_laws(
         self,
@@ -260,8 +320,7 @@ class GovInfoClient:
                     params["congress"] = congress
 
                 logger.info(f"Fetching PLAW collection from {url}")
-                response = await client.get(url, params=params)
-                response.raise_for_status()
+                response = await self._request_with_retry(client, "GET", url, params=params)
                 data = response.json()
 
                 # Parse packages
@@ -301,8 +360,7 @@ class GovInfoClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             params = {"api_key": self.api_key}
             logger.info(f"Fetching package detail for {package_id}")
-            response = await client.get(url, params=params)
-            response.raise_for_status()
+            response = await self._request_with_retry(client, "GET", url, params=params)
             data = response.json()
 
         return PLAWPackageDetail.from_api_response(data)
@@ -352,8 +410,7 @@ class GovInfoClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             # XML downloads don't need API key
             logger.info(f"Downloading XML for {detail.package_id}")
-            response = await client.get(detail.xml_url)
-            response.raise_for_status()
+            response = await self._request_with_retry(client, "GET", detail.xml_url)
             return response.text
 
     def build_package_id(self, congress: int, law_number: int, law_type: str = "public") -> str:
