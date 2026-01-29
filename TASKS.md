@@ -169,11 +169,12 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Completed**: House vote API client, ingestion service, CLI commands
 
 ### Data Pipeline - Law Change Parsing
-- [ ] **Task 1.10**: Build legal language parser for common amendment patterns
+- [x] **Task 1.10**: Build legal language parser for common amendment patterns ✅
   - "Section X is amended by striking Y and inserting Z"
   - "Section X is amended by adding at the end the following"
   - "Section X is repealed"
   - Document supported patterns and limitations
+  - **Completed**: 23 amendment patterns, confidence scoring, section reference parsing
 
 - [ ] **Task 1.11**: Implement diff generation for law changes
   - Compare old text vs new text for modified sections
