@@ -57,9 +57,12 @@ class Settings(BaseSettings):
         description="GovInfo API key from api.data.gov",
     )
 
-    # Future API keys can be added here:
-    # congress_api_key: str | None = Field(default=None)
-    # propublica_api_key: str | None = Field(default=None)
+    # Congress.gov API (https://api.congress.gov/sign-up/)
+    # Required for: Legislator data, bill metadata, sponsor/cosponsor info
+    congress_api_key: str | None = Field(
+        default=None,
+        description="Congress.gov API key from api.congress.gov",
+    )
 
 
 settings = Settings()
