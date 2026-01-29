@@ -201,6 +201,132 @@ class SponsorInfo:
         )
 
 
+@dataclass
+class HouseVoteInfo:
+    """Basic info about a House vote from the list endpoint."""
+
+    congress: int
+    session: int
+    roll_number: int
+    vote_date: str | None
+    question: str | None
+    result: str | None
+    bill_type: str | None = None
+    bill_number: int | None = None
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> "HouseVoteInfo":
+        """Create from Congress.gov API response item.
+
+        Note: List endpoint uses different field names than detail endpoint:
+        - sessionNumber vs session
+        - rollCallNumber vs rollNumber
+        - startDate vs date
+        - legislationType/legislationNumber vs relatedBill
+        """
+        # Parse bill info from list endpoint format
+        bill_type = data.get("legislationType")
+        bill_number = _safe_int(data.get("legislationNumber"))
+
+        return cls(
+            congress=_safe_int(data.get("congress")) or 0,
+            session=_safe_int(data.get("sessionNumber")) or 0,
+            roll_number=_safe_int(data.get("rollCallNumber")) or 0,
+            vote_date=data.get("startDate"),
+            question=data.get("voteType"),  # List endpoint doesn't have question
+            result=data.get("result"),
+            bill_type=bill_type,
+            bill_number=bill_number,
+        )
+
+
+@dataclass
+class HouseVoteDetail:
+    """Detailed info about a House vote."""
+
+    congress: int
+    session: int
+    roll_number: int
+    vote_date: str | None
+    question: str | None
+    description: str | None
+    result: str | None
+    yea_total: int
+    nay_total: int
+    present_total: int
+    not_voting_total: int
+    bill_type: str | None = None
+    bill_number: int | None = None
+    amendment_number: str | None = None
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> "HouseVoteDetail":
+        """Create from Congress.gov API house-vote detail response."""
+        vote_data = data.get("houseRollCallVote", data)
+
+        # Parse totals from votePartyTotal array
+        party_totals = vote_data.get("votePartyTotal", [])
+        yea_total = sum(p.get("yeaTotal", 0) for p in party_totals)
+        nay_total = sum(p.get("nayTotal", 0) for p in party_totals)
+        present_total = sum(p.get("presentTotal", 0) for p in party_totals)
+        not_voting_total = sum(p.get("notVotingTotal", 0) for p in party_totals)
+
+        # Parse bill info (uses legislationType/legislationNumber, not relatedBill)
+        bill_type = vote_data.get("legislationType")
+        bill_number = _safe_int(vote_data.get("legislationNumber"))
+
+        # Parse amendment
+        amendment_number = vote_data.get("amendmentNumber")
+
+        return cls(
+            congress=_safe_int(vote_data.get("congress")) or 0,
+            session=_safe_int(vote_data.get("sessionNumber")) or 0,
+            roll_number=_safe_int(vote_data.get("rollCallNumber")) or 0,
+            vote_date=vote_data.get("startDate"),
+            question=vote_data.get("voteType"),
+            description=vote_data.get("voteQuestion"),
+            result=vote_data.get("result"),
+            yea_total=yea_total,
+            nay_total=nay_total,
+            present_total=present_total,
+            not_voting_total=not_voting_total,
+            bill_type=bill_type,
+            bill_number=bill_number,
+            amendment_number=amendment_number,
+        )
+
+
+@dataclass
+class MemberVoteInfo:
+    """A member's vote on a specific roll call."""
+
+    bioguide_id: str
+    name: str
+    party: str | None
+    state: str | None
+    vote_cast: str  # "Yea", "Nay", "Present", "Not Voting"
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> "MemberVoteInfo":
+        """Create from Congress.gov API member vote response.
+
+        Note: API uses bioguideID (not bioguideId), voteCast (not votePosition),
+        and voteState/voteParty (not state/party).
+        """
+        # Build name from firstName and lastName
+        first_name = data.get("firstName", "")
+        last_name = data.get("lastName", "")
+        name = f"{last_name}, {first_name}".strip(", ") if last_name else first_name
+
+        return cls(
+            bioguide_id=data.get("bioguideID", ""),
+            name=name,
+            party=data.get("voteParty"),
+            state=data.get("voteState"),
+            vote_cast=data.get("voteCast", ""),
+        )
+
+
 class CongressClient:
     """Client for the Congress.gov API.
 
@@ -528,3 +654,161 @@ class CongressClient:
                     logger.warning(f"Law PL {congress}-{law_number} not found")
                     return None
                 raise
+
+    async def get_house_votes(
+        self,
+        congress: int,
+        session: int | None = None,
+        page_size: int = DEFAULT_PAGE_SIZE,
+        limit: int | None = None,
+    ) -> list[HouseVoteInfo]:
+        """Fetch list of House roll call votes.
+
+        Args:
+            congress: Congress number (118+).
+            session: Session number (1 or 2, optional).
+            page_size: Number of results per page (max 250).
+            limit: Maximum total results to return (optional).
+
+        Returns:
+            List of HouseVoteInfo objects.
+
+        Note:
+            House vote data is only available from 118th Congress (2023) forward.
+        """
+        if congress < 118:
+            logger.warning(
+                f"House vote API only supports 118th Congress forward, got {congress}"
+            )
+            return []
+
+        results: list[HouseVoteInfo] = []
+        offset = 0
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            while True:
+                params: dict[str, Any] = {
+                    "api_key": self.api_key,
+                    "format": "json",
+                    "limit": page_size,
+                    "offset": offset,
+                }
+
+                # Build URL based on whether session is specified
+                if session:
+                    url = f"{self.base_url}/house-vote/{congress}/{session}"
+                else:
+                    url = f"{self.base_url}/house-vote/{congress}"
+
+                logger.info(f"Fetching House votes from {url} (offset={offset})")
+                response = await self._request_with_retry(
+                    client, "GET", url, params=params
+                )
+                data = response.json()
+
+                # Parse votes (API returns "houseRollCallVotes")
+                votes = data.get("houseRollCallVotes", [])
+                for vote_data in votes:
+                    info = HouseVoteInfo.from_api_response(vote_data)
+                    results.append(info)
+
+                # Check if we've hit the limit
+                if limit and len(results) >= limit:
+                    results = results[:limit]
+                    break
+
+                # Check for more pages
+                pagination = data.get("pagination", {})
+                count = pagination.get("count", 0)
+                if offset + page_size >= count or not votes:
+                    break
+
+                offset += page_size
+
+        logger.info(f"Fetched {len(results)} House votes for Congress {congress}")
+        return results
+
+    async def get_house_vote_detail(
+        self,
+        congress: int,
+        session: int,
+        roll_number: int,
+    ) -> HouseVoteDetail:
+        """Fetch detailed information about a specific House vote.
+
+        Args:
+            congress: Congress number (118+).
+            session: Session number (1 or 2).
+            roll_number: Roll call vote number.
+
+        Returns:
+            HouseVoteDetail with full vote information.
+        """
+        url = f"{self.base_url}/house-vote/{congress}/{session}/{roll_number}"
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            params = {"api_key": self.api_key, "format": "json"}
+            logger.info(
+                f"Fetching House vote detail for {congress}/{session}/{roll_number}"
+            )
+            response = await self._request_with_retry(client, "GET", url, params=params)
+            data = response.json()
+
+        return HouseVoteDetail.from_api_response(data)
+
+    async def get_house_vote_members(
+        self,
+        congress: int,
+        session: int,
+        roll_number: int,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> list[MemberVoteInfo]:
+        """Fetch how each member voted on a specific House vote.
+
+        Args:
+            congress: Congress number (118+).
+            session: Session number (1 or 2).
+            roll_number: Roll call vote number.
+            page_size: Number of results per page (max 250).
+
+        Returns:
+            List of MemberVoteInfo objects.
+        """
+        url = f"{self.base_url}/house-vote/{congress}/{session}/{roll_number}/members"
+        results: list[MemberVoteInfo] = []
+        offset = 0
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            while True:
+                params: dict[str, Any] = {
+                    "api_key": self.api_key,
+                    "format": "json",
+                    "limit": page_size,
+                    "offset": offset,
+                }
+
+                logger.info(
+                    f"Fetching member votes for {congress}/{session}/{roll_number} (offset={offset})"
+                )
+                response = await self._request_with_retry(
+                    client, "GET", url, params=params
+                )
+                data = response.json()
+
+                # Parse member votes (nested in houseRollCallVoteMemberVotes.results)
+                vote_data = data.get("houseRollCallVoteMemberVotes", {})
+                members = vote_data.get("results", [])
+                for member_data in members:
+                    info = MemberVoteInfo.from_api_response(member_data)
+                    results.append(info)
+
+                # Check for more pages
+                pagination = data.get("pagination", {})
+                count = pagination.get("count", 0)
+                if offset + page_size >= count or not members:
+                    break
+
+                offset += page_size
+
+        logger.info(f"Fetched {len(results)} member votes")
+        return results

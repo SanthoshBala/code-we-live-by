@@ -337,6 +337,120 @@ async def ingest_current_members(
             return 1
 
 
+# =============================================================================
+# House Vote functions
+# =============================================================================
+
+
+async def list_house_votes(
+    congress: int,
+    session: int | None = None,
+    limit: int = 20,
+) -> None:
+    """List House roll call votes.
+
+    Args:
+        congress: Congress number (118+).
+        session: Session number (1 or 2, optional).
+        limit: Maximum results to display.
+    """
+    from pipeline.congress.client import CongressClient
+
+    client = CongressClient()
+
+    votes = await client.get_house_votes(congress, session=session, limit=limit)
+
+    session_str = f"/{session}" if session else ""
+    print(f"\nHouse Votes for Congress {congress}{session_str}")
+    print(f"Found {len(votes)} votes\n")
+
+    for i, vote in enumerate(votes[:limit]):
+        bill_info = ""
+        if vote.bill_type and vote.bill_number:
+            bill_info = f" ({vote.bill_type} {vote.bill_number})"
+        question = (vote.question or "")[:50]
+        print(f"  Roll {vote.roll_number}: {question}...{bill_info} - {vote.result}")
+        if i >= limit - 1 and len(votes) > limit:
+            print(f"\n  ... and {len(votes) - limit} more")
+            break
+
+
+async def ingest_house_vote(
+    congress: int,
+    session: int,
+    roll_number: int,
+    force: bool = False,
+) -> int:
+    """Ingest a single House roll call vote.
+
+    Args:
+        congress: Congress number (118+).
+        session: Session number (1 or 2).
+        roll_number: Roll call vote number.
+        force: If True, update existing record.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.congress.vote_ingestion import VoteIngestionService
+
+    async with async_session_maker() as session_db:
+        service = VoteIngestionService(session_db)
+        log = await service.ingest_house_vote(
+            congress, session, roll_number, force=force
+        )
+
+        if log.status == "completed":
+            logger.info(
+                f"Ingested House vote {congress}/{session}/{roll_number}: {log.details}"
+            )
+            return 0
+        else:
+            logger.error(
+                f"Failed to ingest House vote {congress}/{session}/{roll_number}: "
+                f"{log.error_message}"
+            )
+            return 1
+
+
+async def ingest_house_votes(
+    congress: int,
+    session: int | None = None,
+    limit: int | None = None,
+    force: bool = False,
+) -> int:
+    """Ingest House votes for a Congress/session.
+
+    Args:
+        congress: Congress number (118+).
+        session: Session number (1 or 2, optional).
+        limit: Maximum votes to ingest.
+        force: If True, update existing records.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.congress.vote_ingestion import VoteIngestionService
+
+    async with async_session_maker() as session_db:
+        service = VoteIngestionService(session_db)
+        log = await service.ingest_house_votes_for_congress(
+            congress, session_num=session, force=force, limit=limit
+        )
+
+        if log.status == "completed":
+            logger.info(
+                f"Ingested House votes for Congress {congress}: "
+                f"{log.records_created} created, {log.records_updated} updated"
+            )
+            return 0
+        else:
+            logger.error(f"Failed to ingest House votes: {log.error_message}")
+            return 1
+
+
 def main() -> int:
     """Main entry point for CLI."""
     parser = argparse.ArgumentParser(description="US Code data ingestion pipeline CLI")
@@ -527,6 +641,81 @@ def main() -> int:
         help="Update existing records if present",
     )
 
+    # =========================================================================
+    # House Vote commands
+    # =========================================================================
+
+    # house-list-votes command
+    house_list_parser = subparsers.add_parser(
+        "house-list-votes", help="List House roll call votes (118th Congress+)"
+    )
+    house_list_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (118+)",
+    )
+    house_list_parser.add_argument(
+        "--session",
+        type=int,
+        help="Session number (1 or 2)",
+    )
+    house_list_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum results to display (default: 20)",
+    )
+
+    # house-ingest-vote command
+    house_vote_parser = subparsers.add_parser(
+        "house-ingest-vote", help="Ingest a single House roll call vote"
+    )
+    house_vote_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (118+)",
+    )
+    house_vote_parser.add_argument(
+        "session",
+        type=int,
+        help="Session number (1 or 2)",
+    )
+    house_vote_parser.add_argument(
+        "roll_number",
+        type=int,
+        help="Roll call vote number",
+    )
+    house_vote_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing record if present",
+    )
+
+    # house-ingest-votes command
+    house_votes_parser = subparsers.add_parser(
+        "house-ingest-votes", help="Ingest House votes for a Congress/session"
+    )
+    house_votes_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (118+)",
+    )
+    house_votes_parser.add_argument(
+        "--session",
+        type=int,
+        help="Session number (1 or 2)",
+    )
+    house_votes_parser.add_argument(
+        "--limit",
+        type=int,
+        help="Maximum votes to ingest",
+    )
+    house_votes_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing records if present",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -632,6 +821,40 @@ def main() -> int:
     elif args.command == "congress-ingest-current":
         return asyncio.run(
             ingest_current_members(
+                force=args.force,
+            )
+        )
+
+    # =========================================================================
+    # House Vote command handlers
+    # =========================================================================
+
+    elif args.command == "house-list-votes":
+        asyncio.run(
+            list_house_votes(
+                congress=args.congress,
+                session=args.session,
+                limit=args.limit,
+            )
+        )
+        return 0
+
+    elif args.command == "house-ingest-vote":
+        return asyncio.run(
+            ingest_house_vote(
+                congress=args.congress,
+                session=args.session,
+                roll_number=args.roll_number,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "house-ingest-votes":
+        return asyncio.run(
+            ingest_house_votes(
+                congress=args.congress,
+                session=args.session,
+                limit=args.limit,
                 force=args.force,
             )
         )
