@@ -349,6 +349,7 @@ async def parse_law_command(
     default_title: int | None = None,
     min_confidence: float = 0.0,
     dry_run: bool = False,
+    validate: bool = True,
 ) -> int:
     """Parse a Public Law for amendments.
 
@@ -359,6 +360,7 @@ async def parse_law_command(
         default_title: Default US Code title.
         min_confidence: Minimum confidence threshold.
         dry_run: If True, parse without saving.
+        validate: If True, validate against GovInfo metadata.
 
     Returns:
         0 on success, 1 on failure.
@@ -366,7 +368,10 @@ async def parse_law_command(
     from app.models.base import async_session_maker
     from app.models.enums import ParsingMode
     from pipeline.govinfo.client import GovInfoClient
-    from pipeline.legal_parser.parsing_modes import RegExParsingSession
+    from pipeline.legal_parser.parsing_modes import (
+        RegExParsingSession,
+        validate_against_govinfo,
+    )
 
     # Map mode string to enum
     mode_map = {
@@ -402,6 +407,7 @@ async def parse_law_command(
     async with async_session_maker() as session:
         # Get or create law_id
         from sqlalchemy import select
+
         from app.models.public_law import PublicLaw
 
         result = await session.execute(
@@ -431,6 +437,26 @@ async def parse_law_command(
             save_to_db=not dry_run,
         )
 
+        # Validate against GovInfo metadata
+        govinfo_mismatch = None
+        if validate and not dry_run and result.ingestion_report_id:
+            from sqlalchemy import select
+
+            from app.models.validation import IngestionReport
+
+            report_result = await session.execute(
+                select(IngestionReport).where(
+                    IngestionReport.report_id == result.ingestion_report_id
+                )
+            )
+            report = report_result.scalar_one_or_none()
+            if report:
+                has_mismatch, mismatch_desc = await validate_against_govinfo(
+                    report, congress, law_number, session
+                )
+                if has_mismatch:
+                    govinfo_mismatch = mismatch_desc
+
         # Display results
         print(f"Parsing {'completed' if result.status.value == 'Completed' else result.status.value}")
         print(f"  Session ID: {result.session_id}")
@@ -443,7 +469,7 @@ async def parse_law_command(
         if result.amendments:
             # Show amendment stats
             stats = parser_session.parser.get_statistics(result.amendments)
-            print(f"\n  Amendment statistics:")
+            print("\n  Amendment statistics:")
             print(f"    High confidence (>=90%): {stats['high_confidence']}")
             print(f"    Needs review: {stats['needs_review']}")
             print(f"    Average confidence: {stats['avg_confidence']:.2%}")
@@ -451,8 +477,17 @@ async def parse_law_command(
             if stats.get("by_change_type"):
                 print(f"    By type: {stats['by_change_type']}")
 
-        if result.escalation_recommended:
-            print(f"\n  ESCALATION RECOMMENDED: {result.escalation_reason}")
+        # Show GovInfo validation results
+        if validate and not dry_run:
+            print("\n  GovInfo validation:")
+            if govinfo_mismatch:
+                print(f"    WARNING: {govinfo_mismatch}")
+            else:
+                print("    Amendment count appears reasonable")
+
+        if result.escalation_recommended or govinfo_mismatch:
+            reason = result.escalation_reason or govinfo_mismatch
+            print(f"\n  ESCALATION RECOMMENDED: {reason}")
 
         if result.ingestion_report_id:
             print(f"\n  Ingestion report ID: {result.ingestion_report_id}")
@@ -500,14 +535,14 @@ async def show_ingestion_report_command(
         print(f"  Mode: {report.session.mode.value if report.session else 'Unknown'}")
         print(f"  Status: {report.session.status.value if report.session else 'Unknown'}")
         print()
-        print(f"Coverage:")
+        print("Coverage:")
         print(f"  Total text length: {report.total_text_length:,}")
         print(f"  Claimed text length: {report.claimed_text_length:,}")
         print(f"  Coverage: {report.coverage_percentage:.1f}%")
         print(f"  Flagged unclaimed: {report.unclaimed_flagged_count}")
         print(f"  Ignored unclaimed: {report.unclaimed_ignored_count}")
         print()
-        print(f"Amendments:")
+        print("Amendments:")
         print(f"  Total: {report.total_amendments}")
         print(f"  High confidence: {report.high_confidence_count}")
         print(f"  Needs review: {report.needs_review_count}")
@@ -520,7 +555,7 @@ async def show_ingestion_report_command(
             print(f"  By pattern: {report.amendments_by_pattern}")
 
         print()
-        print(f"Decision:")
+        print("Decision:")
         print(f"  Auto-approve eligible: {'Yes' if report.auto_approve_eligible else 'No'}")
         print(f"  Escalation recommended: {'Yes' if report.escalation_recommended else 'No'}")
         if report.escalation_reason:
@@ -564,14 +599,14 @@ async def validate_corpus_command(verbose: bool = False) -> int:
         manager = GoldenCorpusManager(session)
         result = await manager.run_regression_tests(verbose=verbose)
 
-        print(f"\nGolden Corpus Validation")
+        print("\nGolden Corpus Validation")
         print(f"  Total laws: {result.total_laws}")
         print(f"  Passed: {result.passed}")
         print(f"  Failed: {result.failed}")
         print(f"  All passed: {'Yes' if result.all_passed else 'No'}")
 
         if verbose and result.results:
-            print(f"\nDetailed Results:")
+            print("\nDetailed Results:")
             for r in result.results:
                 status = "PASS" if r.passed else "FAIL"
                 print(f"  [{status}] PL {r.congress}-{r.law_number}")
@@ -1063,6 +1098,11 @@ def main() -> int:
         action="store_true",
         help="Parse without saving to database",
     )
+    parse_law_parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="Skip GovInfo metadata validation",
+    )
 
     # show-ingestion-report command
     show_report_parser = subparsers.add_parser(
@@ -1273,6 +1313,7 @@ def main() -> int:
                 default_title=args.default_title,
                 min_confidence=args.min_confidence,
                 dry_run=args.dry_run,
+                validate=not args.no_validate,
             )
         )
 
