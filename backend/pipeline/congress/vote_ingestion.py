@@ -301,9 +301,12 @@ class VoteIngestionService:
             existing.present = detail.present_total
             existing.not_voting = detail.not_voting_total
 
-            # Delete existing individual votes and re-add
-            for iv in existing.individual_votes:
-                await self.session.delete(iv)
+            # Delete existing individual votes using direct query (avoids lazy loading)
+            from sqlalchemy import delete
+
+            await self.session.execute(
+                delete(IndividualVote).where(IndividualVote.vote_id == existing.vote_id)
+            )
             await self.session.flush()
 
             # Add individual votes
