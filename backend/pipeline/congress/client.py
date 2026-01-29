@@ -30,6 +30,16 @@ CONGRESS_BASE_URL = "https://api.congress.gov/v3"
 DEFAULT_PAGE_SIZE = 250
 
 
+def _safe_int(value: Any) -> int | None:
+    """Safely convert a value to int, returning None if not possible."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
 @dataclass
 class MemberTerm:
     """A single term served by a member of Congress."""
@@ -147,8 +157,8 @@ class MemberDetail:
             state=data.get("state"),
             district=data.get("district"),
             current_member=data.get("currentMember", False),
-            birth_year=data.get("birthYear"),
-            death_year=data.get("deathYear"),
+            birth_year=_safe_int(data.get("birthYear")),
+            death_year=_safe_int(data.get("deathYear")),
             official_website_url=data.get("officialWebsiteUrl"),
             depiction_url=depiction_url,
             depiction_attribution=depiction_attribution,

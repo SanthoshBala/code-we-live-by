@@ -334,10 +334,19 @@ class LegislatorIngestionService:
                 last_served = None
 
         # Extract state/district from most recent term
-        state: str | None = detail.state
+        # Note: detail.state returns full name (e.g., "Ohio"), but we need 2-letter code
+        state: str | None = None
         district: str | None = None
-        if detail.district is not None:
-            district = str(detail.district)
+        if detail.terms:
+            sorted_terms = sorted(
+                detail.terms,
+                key=lambda t: t.start_year or 0,
+                reverse=True,
+            )
+            if sorted_terms:
+                state = sorted_terms[0].state  # This is the 2-letter code
+                if sorted_terms[0].district is not None:
+                    district = str(sorted_terms[0].district)
 
         if existing:
             # Update existing record
