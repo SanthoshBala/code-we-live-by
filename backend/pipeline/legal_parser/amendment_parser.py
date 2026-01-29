@@ -26,7 +26,7 @@ class SectionReference:
     Attributes:
         title: US Code title number (e.g., 17 for Copyright).
         section: Section number/identifier (e.g., "106", "106A").
-        subsection_path: Path to subsection (e.g., "(a)(1)(A)").
+        subsection_path: Path to subsection at any depth (e.g., "(a)", "(a)(1)", "(a)(1)(A)").
     """
 
     title: int | None
