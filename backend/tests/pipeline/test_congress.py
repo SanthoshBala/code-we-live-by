@@ -7,9 +7,12 @@ import pytest
 
 from pipeline.congress.client import (
     CongressClient,
+    HouseVoteDetail,
+    HouseVoteInfo,
     MemberDetail,
     MemberInfo,
     MemberTerm,
+    MemberVoteInfo,
     SponsorInfo,
 )
 
@@ -267,3 +270,162 @@ class TestCongressClient:
 
         assert client.max_retries == 3
         assert client.retry_delay == 2.0
+
+
+class TestHouseVoteInfo:
+    """Tests for HouseVoteInfo dataclass."""
+
+    def test_from_api_response_basic(self) -> None:
+        """Test parsing basic vote info from API response."""
+        data = {
+            "congress": 118,
+            "sessionNumber": 1,
+            "rollCallNumber": 100,
+            "startDate": "2023-03-15T14:05:00-04:00",
+            "voteType": "Recorded Vote",
+            "result": "Passed",
+        }
+
+        info = HouseVoteInfo.from_api_response(data)
+
+        assert info.congress == 118
+        assert info.session == 1
+        assert info.roll_number == 100
+        assert info.vote_date == "2023-03-15T14:05:00-04:00"
+        assert info.question == "Recorded Vote"
+        assert info.result == "Passed"
+
+    def test_from_api_response_with_bill(self) -> None:
+        """Test parsing vote info with related bill."""
+        data = {
+            "congress": 118,
+            "sessionNumber": 1,
+            "rollCallNumber": 50,
+            "startDate": "2023-02-01",
+            "voteType": "On Passage",
+            "result": "Passed",
+            "legislationType": "HR",
+            "legislationNumber": "123",
+        }
+
+        info = HouseVoteInfo.from_api_response(data)
+
+        assert info.bill_type == "HR"
+        assert info.bill_number == 123
+
+
+class TestHouseVoteDetail:
+    """Tests for HouseVoteDetail dataclass."""
+
+    def test_from_api_response_full(self) -> None:
+        """Test parsing full vote detail from API response."""
+        data = {
+            "houseRollCallVote": {
+                "congress": 118,
+                "sessionNumber": 1,
+                "rollCallNumber": 100,
+                "startDate": "2023-03-15T14:05:00-04:00",
+                "voteType": "Recorded Vote",
+                "voteQuestion": "On Passage",
+                "result": "Passed",
+                "votePartyTotal": [
+                    {
+                        "yeaTotal": 200,
+                        "nayTotal": 10,
+                        "presentTotal": 0,
+                        "notVotingTotal": 2,
+                    },
+                    {
+                        "yeaTotal": 17,
+                        "nayTotal": 205,
+                        "presentTotal": 0,
+                        "notVotingTotal": 1,
+                    },
+                ],
+                "legislationType": "HR",
+                "legislationNumber": "2811",
+            }
+        }
+
+        detail = HouseVoteDetail.from_api_response(data)
+
+        assert detail.congress == 118
+        assert detail.session == 1
+        assert detail.roll_number == 100
+        assert detail.question == "Recorded Vote"
+        assert detail.result == "Passed"
+        assert detail.yea_total == 217
+        assert detail.nay_total == 215
+        assert detail.present_total == 0
+        assert detail.not_voting_total == 3
+        assert detail.bill_type == "HR"
+        assert detail.bill_number == 2811
+
+    def test_from_api_response_minimal(self) -> None:
+        """Test parsing with minimal fields."""
+        data = {
+            "houseRollCallVote": {
+                "congress": 118,
+                "sessionNumber": 1,
+                "rollCallNumber": 1,
+                "votePartyTotal": [],
+            }
+        }
+
+        detail = HouseVoteDetail.from_api_response(data)
+
+        assert detail.congress == 118
+        assert detail.roll_number == 1
+        assert detail.yea_total == 0
+        assert detail.nay_total == 0
+
+
+class TestMemberVoteInfo:
+    """Tests for MemberVoteInfo dataclass."""
+
+    def test_from_api_response_yea(self) -> None:
+        """Test parsing yea vote."""
+        data = {
+            "bioguideID": "A000001",
+            "firstName": "John",
+            "lastName": "Smith",
+            "voteParty": "R",
+            "voteState": "TX",
+            "voteCast": "Aye",
+        }
+
+        info = MemberVoteInfo.from_api_response(data)
+
+        assert info.bioguide_id == "A000001"
+        assert info.name == "Smith, John"
+        assert info.party == "R"
+        assert info.state == "TX"
+        assert info.vote_cast == "Aye"
+
+    def test_from_api_response_nay(self) -> None:
+        """Test parsing nay vote."""
+        data = {
+            "bioguideID": "B000002",
+            "firstName": "Jane",
+            "lastName": "Jones",
+            "voteParty": "D",
+            "voteState": "CA",
+            "voteCast": "No",
+        }
+
+        info = MemberVoteInfo.from_api_response(data)
+
+        assert info.vote_cast == "No"
+
+    def test_from_api_response_not_voting(self) -> None:
+        """Test parsing not voting."""
+        data = {
+            "bioguideID": "C000003",
+            "firstName": "Bob",
+            "lastName": "Brown",
+            "voteCast": "Not Voting",
+        }
+
+        info = MemberVoteInfo.from_api_response(data)
+
+        assert info.vote_cast == "Not Voting"

@@ -161,10 +161,12 @@ This document translates the CWLB specification into an actionable backlog of im
   - Store in Legislator and LegislatorTerm tables
   - **Completed**: Congress.gov API client, ingestion service, CLI commands
 
-- [ ] **Task 1.9**: Implement vote record ingestion
-  - Fetch voting records for laws
+- [x] **Task 1.9**: Implement vote record ingestion ✅
+  - Fetch House roll call votes from Congress.gov API (118th Congress+)
   - Parse votes by legislator (Yea, Nay, Present, Not Voting)
-  - Store in Vote table
+  - Store in Vote and IndividualVote tables
+  - **Note**: Senate votes require XML parsing (deferred to future task)
+  - **Completed**: House vote API client, ingestion service, CLI commands
 
 ### Data Pipeline - Law Change Parsing
 - [ ] **Task 1.10**: Build legal language parser for common amendment patterns
