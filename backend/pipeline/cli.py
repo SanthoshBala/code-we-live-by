@@ -205,6 +205,138 @@ async def ingest_recent_laws(
             return 1
 
 
+# =============================================================================
+# Congress.gov Legislator functions
+# =============================================================================
+
+
+async def list_members(
+    congress: int | None = None,
+    current: bool = False,
+    limit: int = 20,
+) -> None:
+    """List members of Congress.
+
+    Args:
+        congress: Filter by Congress number (optional).
+        current: If True, show only current members.
+        limit: Maximum number of results to display.
+    """
+    from pipeline.congress.client import CongressClient
+
+    client = CongressClient()
+
+    if congress:
+        members = await client.get_members_by_congress(congress, current_member=current)
+        print(f"\nMembers of Congress {congress}")
+    else:
+        members = await client.get_members(current_member=current if current else None)
+        print("\nMembers of Congress")
+
+    if current:
+        print("(Current members only)")
+    print(f"Found {len(members)} members\n")
+
+    for i, member in enumerate(members[:limit]):
+        party = member.party_name or "Unknown"
+        state = member.state or "??"
+        print(f"  {member.bioguide_id}: {member.name} ({party}, {state})")
+        if i >= limit - 1 and len(members) > limit:
+            print(f"\n  ... and {len(members) - limit} more")
+            break
+
+
+async def ingest_member(
+    bioguide_id: str,
+    force: bool = False,
+) -> int:
+    """Ingest a single member of Congress.
+
+    Args:
+        bioguide_id: The member's Bioguide ID.
+        force: If True, update existing record.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.congress.ingestion import LegislatorIngestionService
+
+    async with async_session_maker() as session:
+        service = LegislatorIngestionService(session)
+        log = await service.ingest_member(bioguide_id, force=force)
+
+        if log.status == "completed":
+            logger.info(f"Ingested member {bioguide_id}: {log.details}")
+            return 0
+        else:
+            logger.error(f"Failed to ingest member {bioguide_id}: {log.error_message}")
+            return 1
+
+
+async def ingest_congress_members(
+    congress: int,
+    force: bool = False,
+) -> int:
+    """Ingest all members from a Congress.
+
+    Args:
+        congress: Congress number.
+        force: If True, update existing records.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.congress.ingestion import LegislatorIngestionService
+
+    async with async_session_maker() as session:
+        service = LegislatorIngestionService(session)
+        log = await service.ingest_congress(congress, force=force)
+
+        if log.status == "completed":
+            logger.info(
+                f"Ingested Congress {congress}: {log.records_created} created, "
+                f"{log.records_updated} updated, "
+                f"{log.records_processed - log.records_created - log.records_updated} skipped"
+            )
+            return 0
+        else:
+            logger.error(
+                f"Failed to ingest Congress {congress} members: {log.error_message}"
+            )
+            return 1
+
+
+async def ingest_current_members(
+    force: bool = False,
+) -> int:
+    """Ingest all current members of Congress.
+
+    Args:
+        force: If True, update existing records.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.congress.ingestion import LegislatorIngestionService
+
+    async with async_session_maker() as session:
+        service = LegislatorIngestionService(session)
+        log = await service.ingest_current_members(force=force)
+
+        if log.status == "completed":
+            logger.info(
+                f"Ingested current members: {log.records_created} created, "
+                f"{log.records_updated} updated"
+            )
+            return 0
+        else:
+            logger.error(f"Failed to ingest current members: {log.error_message}")
+            return 1
+
+
 def main() -> int:
     """Main entry point for CLI."""
     parser = argparse.ArgumentParser(description="US Code data ingestion pipeline CLI")
@@ -330,6 +462,71 @@ def main() -> int:
         help="Update existing records if present",
     )
 
+    # =========================================================================
+    # Congress.gov Legislator commands
+    # =========================================================================
+
+    # congress-list-members command
+    congress_list_parser = subparsers.add_parser(
+        "congress-list-members", help="List members of Congress"
+    )
+    congress_list_parser.add_argument(
+        "--congress",
+        type=int,
+        help="Filter by Congress number (e.g., 118)",
+    )
+    congress_list_parser.add_argument(
+        "--current",
+        action="store_true",
+        help="Show only currently serving members",
+    )
+    congress_list_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum results to display (default: 20)",
+    )
+
+    # congress-ingest-member command
+    congress_member_parser = subparsers.add_parser(
+        "congress-ingest-member", help="Ingest a single member of Congress"
+    )
+    congress_member_parser.add_argument(
+        "bioguide_id",
+        type=str,
+        help="Bioguide ID (e.g., B000944)",
+    )
+    congress_member_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing record if present",
+    )
+
+    # congress-ingest-congress command
+    congress_congress_parser = subparsers.add_parser(
+        "congress-ingest-congress", help="Ingest all members from a Congress"
+    )
+    congress_congress_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number to ingest (e.g., 118)",
+    )
+    congress_congress_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing records if present",
+    )
+
+    # congress-ingest-current command
+    congress_current_parser = subparsers.add_parser(
+        "congress-ingest-current", help="Ingest all current members of Congress"
+    )
+    congress_current_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Update existing records if present",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -398,6 +595,43 @@ def main() -> int:
         return asyncio.run(
             ingest_recent_laws(
                 days=args.days,
+                force=args.force,
+            )
+        )
+
+    # =========================================================================
+    # Congress.gov command handlers
+    # =========================================================================
+
+    elif args.command == "congress-list-members":
+        asyncio.run(
+            list_members(
+                congress=args.congress,
+                current=args.current,
+                limit=args.limit,
+            )
+        )
+        return 0
+
+    elif args.command == "congress-ingest-member":
+        return asyncio.run(
+            ingest_member(
+                bioguide_id=args.bioguide_id,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "congress-ingest-congress":
+        return asyncio.run(
+            ingest_congress_members(
+                congress=args.congress,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "congress-ingest-current":
+        return asyncio.run(
+            ingest_current_members(
                 force=args.force,
             )
         )

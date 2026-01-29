@@ -155,11 +155,11 @@ This document translates the CWLB specification into an actionable backlog of im
   - Store in PublicLaw table
   - **Completed**: GovInfo API client, ingestion service, CLI commands
 
-- [ ] **Task 1.8**: Implement legislator data ingestion
-  - Fetch legislator data from ProPublica/Congress.gov
+- [x] **Task 1.8**: Implement legislator data ingestion ✅
+  - Fetch legislator data from Congress.gov API
   - Parse legislator details (name, party, state, photo)
-  - Store in Legislator table
-  - Link sponsors to laws via Sponsorship table
+  - Store in Legislator and LegislatorTerm tables
+  - **Completed**: Congress.gov API client, ingestion service, CLI commands
 
 - [ ] **Task 1.9**: Implement vote record ingestion
   - Fetch voting records for laws
