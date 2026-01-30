@@ -350,6 +350,7 @@ def _parse_section_reference(ref: str) -> tuple[int, str] | None:
     - "17/106"
     - "17 106"
     - "Title 17 Section 106"
+    - "15 USC 80a-3a" (hyphenated section numbers)
 
     Returns:
         Tuple of (title_number, section_number) or None if parsing fails.
@@ -358,21 +359,24 @@ def _parse_section_reference(ref: str) -> tuple[int, str] | None:
 
     ref = ref.strip()
 
+    # Section number pattern: digits, letters, and hyphens (e.g., 106, 106a, 80a-3a)
+    section_pattern = r"(\d+[A-Za-z0-9-]*)"
+
     # Format: "17/106" or "17 106"
-    match = re.match(r"^(\d+)[/\s]+(\d+[A-Za-z]?)$", ref)
+    match = re.match(rf"^(\d+)[/\s]+{section_pattern}$", ref)
     if match:
         return int(match.group(1)), match.group(2)
 
     # Format: "17 USC 106" or "17 U.S.C. 106" or "17 U.S.C. § 106"
     match = re.match(
-        r"^(\d+)\s+(?:U\.?S\.?C\.?|USC)\s*§?\s*(\d+[A-Za-z]?)$", ref, re.IGNORECASE
+        rf"^(\d+)\s+(?:U\.?S\.?C\.?|USC)\s*§?\s*{section_pattern}$", ref, re.IGNORECASE
     )
     if match:
         return int(match.group(1)), match.group(2)
 
     # Format: "Title 17 Section 106"
     match = re.match(
-        r"^[Tt]itle\s+(\d+)\s+[Ss]ection\s+(\d+[A-Za-z]?)$", ref, re.IGNORECASE
+        rf"^[Tt]itle\s+(\d+)\s+[Ss]ection\s+{section_pattern}$", ref, re.IGNORECASE
     )
     if match:
         return int(match.group(1)), match.group(2)
