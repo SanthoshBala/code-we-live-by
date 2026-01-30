@@ -2,7 +2,7 @@
 
 import pytest
 
-from pipeline.legal_parser.line_normalizer import (
+from pipeline.olrc.line_normalizer import (
     Citation,
     NormalizedLine,
     NormalizedSection,
