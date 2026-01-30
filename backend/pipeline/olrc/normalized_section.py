@@ -1178,12 +1178,13 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     ]
 
     # Also capture law-specific headers that appear in title case
-    # Pattern: Title Case Words (at least 3 words, capitalized)
+    # Pattern: Title Case Words (at least 2 words, capitalized)
+    # Include "YYYY Amendment" suffix for "Effective Date Of YYYY Amendment" patterns
     all_header_pattern = re.compile(
         r"(?:^|\n)\s*"
-        r"([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|[Oo]f|[Aa]nd|[Tt]he|[Ff]or))+)"
-        r"(?:\s+[Oo]f\s+\d{4}\s+[A-Za-z]+)?"  # Optional "of YYYY Amendment"
-        r"\s*(?:\n|$|Pub\.)",
+        r"([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|[Oo]f|[Aa]nd|[Tt]he|[Ff]or))+"
+        r"(?:\s+\d{4}\s+Amendment)?)"  # Include "YYYY Amendment" suffix (no leading "of")
+        r"\s*(?=\n|$|Pub\.|Amendment\s+by\s)",  # Lookahead: newline, end, Pub., or body text
         re.MULTILINE,
     )
 
