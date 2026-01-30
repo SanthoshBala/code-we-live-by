@@ -22,20 +22,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cd backend
 
-# Install dependencies
-pip install -e ".[dev]"
+# Install dependencies (uses uv for package management)
+uv sync
 
 # Run development server
-uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
 
 # Linting and formatting
-ruff check .              # Lint
-black .                   # Format
-mypy app                  # Type check
+uv run ruff check .       # Lint
+uv run black .            # Format
+uv run mypy app           # Type check
 
 # Testing
-pytest                    # Run tests
-pytest --cov=app          # With coverage
+uv run pytest             # Run tests
+uv run pytest --cov=app   # With coverage
 ```
 
 ### Frontend (Next.js)
