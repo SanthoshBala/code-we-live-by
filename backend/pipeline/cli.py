@@ -452,7 +452,7 @@ def normalize_text_command(
     Returns:
         0 on success, 1 on failure.
     """
-    from pipeline.olrc.line_normalizer import normalize_section
+    from pipeline.olrc.normalized_section import normalize_section
 
     content = None
     source_info = None
