@@ -5,6 +5,7 @@ related to the ingestion validation system.
 """
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -302,7 +303,7 @@ class GoldenCorpusLawCreate(BaseModel):
     verification_notes: str | None = None
     expected_amendment_count: int
     expected_coverage_percentage: float
-    expected_results_json: dict | None = None
+    expected_results_json: dict[str, Any] | None = None
 
 
 class GoldenCorpusLawResponse(BaseModel):
