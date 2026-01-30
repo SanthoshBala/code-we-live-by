@@ -907,15 +907,25 @@ def char_span_to_line_span(
     return None
 
 
-# Level name to indent level mapping
-_LEVEL_INDENT = {
-    "subsection": 1,      # (a), (b), (c)
-    "paragraph": 2,       # (1), (2), (3)
-    "subparagraph": 3,    # (A), (B), (C)
-    "clause": 4,          # (i), (ii), (iii)
-    "subclause": 5,       # (I), (II), (III)
-    "item": 6,            # Deeper nesting
-}
+def _add_blank_line(
+    lines: list[NormalizedLine],
+    line_counter: list[int],
+    char_pos: list[int],
+) -> None:
+    """Add a blank line for visual separation."""
+    line_counter[0] += 1
+    start_pos = char_pos[0]
+    char_pos[0] += 1  # Just the newline
+    lines.append(
+        NormalizedLine(
+            line_number=line_counter[0],
+            content="",
+            indent_level=0,
+            marker=None,
+            start_char=start_pos,
+            end_char=char_pos[0],
+        )
+    )
 
 
 def _normalize_subsection_recursive(
@@ -923,6 +933,7 @@ def _normalize_subsection_recursive(
     lines: list[NormalizedLine],
     line_counter: list[int],  # Mutable counter passed by reference
     char_pos: list[int],  # Mutable position tracker
+    base_indent: int = 1,  # Starting indent level for this subsection
 ) -> None:
     """Recursively normalize a subsection and its children into lines.
 
@@ -931,11 +942,14 @@ def _normalize_subsection_recursive(
         lines: List to append lines to.
         line_counter: Mutable list containing [current_line_number].
         char_pos: Mutable list containing [current_char_position].
+        base_indent: The indent level for this subsection's header/marker line.
     """
-    indent_level = _LEVEL_INDENT.get(subsection.level, 1)
-
     # If there's a heading, create a separate header line
     if subsection.heading:
+        # Add blank line before headers (for readability), except for the first line
+        if lines:
+            _add_blank_line(lines, line_counter, char_pos)
+
         line_counter[0] += 1
         header_content = f"{subsection.marker} {subsection.heading}"
         start_pos = char_pos[0]
@@ -944,7 +958,7 @@ def _normalize_subsection_recursive(
             NormalizedLine(
                 line_number=line_counter[0],
                 content=header_content,
-                indent_level=indent_level,
+                indent_level=base_indent,
                 marker=subsection.marker,
                 start_char=start_pos,
                 end_char=char_pos[0],
@@ -960,12 +974,15 @@ def _normalize_subsection_recursive(
                 NormalizedLine(
                     line_number=line_counter[0],
                     content=subsection.content,
-                    indent_level=indent_level + 1,  # Indent under header
+                    indent_level=base_indent + 1,  # Indent under header
                     marker=None,
                     start_char=start_pos,
                     end_char=char_pos[0],
                 )
             )
+
+        # Children are indented under the content (base + 2)
+        child_indent = base_indent + 2
     else:
         # No heading - marker and content on one line
         if subsection.content:
@@ -977,7 +994,7 @@ def _normalize_subsection_recursive(
                 NormalizedLine(
                     line_number=line_counter[0],
                     content=content,
-                    indent_level=indent_level,
+                    indent_level=base_indent,
                     marker=subsection.marker if subsection.marker else None,
                     start_char=start_pos,
                     end_char=char_pos[0],
@@ -992,16 +1009,19 @@ def _normalize_subsection_recursive(
                 NormalizedLine(
                     line_number=line_counter[0],
                     content=subsection.marker,
-                    indent_level=indent_level,
+                    indent_level=base_indent,
                     marker=subsection.marker,
                     start_char=start_pos,
                     end_char=char_pos[0],
                 )
             )
 
-    # Process children recursively
+        # Children are indented one level deeper
+        child_indent = base_indent + 1
+
+    # Process children recursively with increased indent
     for child in subsection.children:
-        _normalize_subsection_recursive(child, lines, line_counter, char_pos)
+        _normalize_subsection_recursive(child, lines, line_counter, char_pos, child_indent)
 
 
 def normalize_parsed_section(
