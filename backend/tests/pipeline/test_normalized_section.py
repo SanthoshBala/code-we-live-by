@@ -494,3 +494,140 @@ class TestCitationParsing:
         assert citations[0].congress == 94  # Oldest
         assert citations[1].congress == 101
         assert citations[2].congress == 106  # Newest
+
+
+class TestNormalizeParsedSection:
+    """Tests for normalizing ParsedSection with structured subsections."""
+
+    def test_normalize_with_headings(self) -> None:
+        """Subsections with headings create header + content lines."""
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+
+        section = ParsedSection(
+            section_number="101",
+            heading="Test Section",
+            full_citation="17 U.S.C. § 101",
+            text_content="Test content",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading="First Item",
+                    content="This is the content.",
+                    level="subsection",
+                ),
+                ParsedSubsection(
+                    marker="(b)",
+                    heading="Second Item",
+                    content="More content here.",
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.line_count == 4
+        # Header lines
+        assert result.lines[0].content == "(a) First Item"
+        assert result.lines[0].marker == "(a)"
+        assert result.lines[0].indent_level == 1
+        # Content lines are indented under headers
+        assert result.lines[1].content == "This is the content."
+        assert result.lines[1].marker is None
+        assert result.lines[1].indent_level == 2
+        # Second subsection
+        assert result.lines[2].content == "(b) Second Item"
+        assert result.lines[3].content == "More content here."
+
+    def test_normalize_without_headings(self) -> None:
+        """Subsections without headings create single lines."""
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+
+        section = ParsedSection(
+            section_number="102",
+            heading="Test Section",
+            full_citation="17 U.S.C. § 102",
+            text_content="Test content",
+            subsections=[
+                ParsedSubsection(
+                    marker="(1)",
+                    heading=None,
+                    content="Item without heading.",
+                    level="paragraph",
+                ),
+                ParsedSubsection(
+                    marker="(2)",
+                    heading=None,
+                    content="Another item.",
+                    level="paragraph",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.line_count == 2
+        assert result.lines[0].content == "(1) Item without heading."
+        assert result.lines[0].indent_level == 2  # paragraph level
+        assert result.lines[1].content == "(2) Another item."
+
+    def test_normalize_with_nested_children(self) -> None:
+        """Nested subsections are properly indented."""
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+
+        section = ParsedSection(
+            section_number="103",
+            heading="Test Section",
+            full_citation="17 U.S.C. § 103",
+            text_content="Test content",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading="Parent",
+                    content="Parent content.",
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="Child item.",
+                            level="paragraph",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.line_count == 3
+        # Parent header
+        assert result.lines[0].content == "(a) Parent"
+        assert result.lines[0].indent_level == 1
+        # Parent content
+        assert result.lines[1].content == "Parent content."
+        assert result.lines[1].indent_level == 2
+        # Child
+        assert result.lines[2].content == "(1) Child item."
+        assert result.lines[2].indent_level == 2  # paragraph level
+
+    def test_empty_subsections(self) -> None:
+        """Section with no subsections returns empty lines."""
+        from pipeline.olrc.parser import ParsedSection
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+
+        section = ParsedSection(
+            section_number="104",
+            heading="Empty Section",
+            full_citation="17 U.S.C. § 104",
+            text_content="Some text",
+            subsections=[],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.line_count == 0
+        assert result.lines == []
