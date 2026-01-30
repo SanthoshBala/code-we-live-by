@@ -644,8 +644,37 @@ class USLMParser:
         if notes_elem is None:
             notes_elem = section_elem.find(".//sourceCredit")
         if notes_elem is not None:
-            return self._get_text_content(notes_elem)
+            return self._get_notes_text_content(notes_elem)
         return None
+
+    def _get_notes_text_content(self, elem: etree._Element) -> str:
+        """Get text content from notes, applying title case to smallCaps headings.
+
+        In USLM XML, headings like "house report no. 94-1476" are stored lowercase
+        but have class="smallCaps" to indicate they should be rendered in small caps.
+        We apply title case to these headings for better readability.
+        """
+        parts = []
+        for el in elem.iter():
+            tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+
+            # Check if this is a heading with smallCaps class
+            if tag == "heading":
+                css_class = el.get("class", "")
+                if "smallCaps" in css_class:
+                    # Apply title case to smallCaps headings
+                    text = "".join(el.itertext()).strip()
+                    if text:
+                        parts.append(text.title())
+                    continue
+
+            # For non-heading elements, just get direct text (not children's text)
+            if el.text:
+                parts.append(el.text)
+            if el.tail:
+                parts.append(el.tail)
+
+        return " ".join(parts).strip()
 
 
 def compute_text_hash(text: str) -> str:
