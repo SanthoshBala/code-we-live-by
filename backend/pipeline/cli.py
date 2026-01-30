@@ -418,16 +418,21 @@ def _normalize_section_number(section_num: str) -> str:
 
 def _fetch_section_from_xml(
     title_num: int, section_num: str, data_dir: Path
-) -> str | None:
-    """Fetch section text from OLRC XML files."""
+) -> tuple[str | None, "ParsedSection | None"]:
+    """Fetch section text from OLRC XML files.
+
+    Returns:
+        Tuple of (text_content, ParsedSection).
+        ParsedSection is returned if structured subsections are available.
+    """
     from pipeline.olrc.downloader import OLRCDownloader
-    from pipeline.olrc.parser import USLMParser
+    from pipeline.olrc.parser import ParsedSection, USLMParser
 
     downloader = OLRCDownloader(download_dir=data_dir)
     xml_path = downloader.get_xml_path(title_num)
 
     if not xml_path:
-        return None
+        return None, None
 
     parser = USLMParser()
     result = parser.parse_file(xml_path)
@@ -437,9 +442,9 @@ def _fetch_section_from_xml(
 
     for section in result.sections:
         if section.section_number == normalized_input:
-            return section.text_content
+            return section.text_content, section
 
-    return None
+    return None, None
 
 
 def normalize_text_command(
@@ -467,10 +472,11 @@ def normalize_text_command(
     Returns:
         0 on success, 1 on failure.
     """
-    from pipeline.olrc.normalized_section import normalize_section
+    from pipeline.olrc.normalized_section import normalize_parsed_section, normalize_section
 
     content = None
     source_info = None
+    parsed_section = None  # Structured section from XML (if available)
 
     # Priority: section_ref > file > text > stdin
     if section_ref:
@@ -488,8 +494,8 @@ def normalize_text_command(
         if content:
             source_info += " (from database)"
         else:
-            # Try XML files
-            content = _fetch_section_from_xml(title_num, section_num, data_dir)
+            # Try XML files - get structured section if available
+            content, parsed_section = _fetch_section_from_xml(title_num, section_num, data_dir)
             if content:
                 source_info += f" (from XML: {data_dir})"
 
@@ -521,8 +527,14 @@ def normalize_text_command(
         print("Error: No text provided")
         return 1
 
-    # Normalize the text
-    result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
+    # Normalize the text - use structured data if available
+    if parsed_section and parsed_section.subsections:
+        # Use structured subsections from XML (explicit headings, no heuristics)
+        result = normalize_parsed_section(parsed_section, use_tabs=use_tabs, indent_width=indent_width)
+        source_info += " [structured]"
+    else:
+        # Fall back to heuristic-based normalization
+        result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
 
     # Display results
     print()
