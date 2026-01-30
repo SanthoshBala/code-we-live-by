@@ -534,17 +534,13 @@ def normalize_text_command(
         source_info += " [structured]"
     else:
         # Fall back to heuristic-based normalization
-        # If we have XML-parsed notes, use those instead of trying to extract from text
+        result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
+        # If we have XML-parsed notes, use those instead (they're cleaner than heuristic extraction)
         if parsed_section and parsed_section.notes:
             from pipeline.olrc.normalized_section import _parse_notes_structure, SectionNotes
-            # Normalize without stripping notes (we'll use XML notes instead)
-            result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width, strip_notes=False)
-            # Use the XML notes which are cleaner
             result.notes = SectionNotes()
             result.notes.raw_notes = parsed_section.notes
             _parse_notes_structure(parsed_section.notes, result.notes)
-        else:
-            result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
 
     # Display results
     print()
