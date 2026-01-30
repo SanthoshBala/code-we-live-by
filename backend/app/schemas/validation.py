@@ -300,7 +300,11 @@ class GoldenCorpusLawCreate(BaseModel):
     law_id: int
     session_id: int | None = None
     verified_by: str
-    verification_notes: str | None = None
+    verification_notes: str | None = Field(
+        default=None,
+        description="Free-form notes: why this law was chosen, verification methodology, "
+        "known acceptable gaps in coverage, any parser quirks specific to this law",
+    )
     expected_amendment_count: int
     expected_coverage_percentage: float
     expected_results_json: dict[str, Any] | None = None
@@ -314,7 +318,11 @@ class GoldenCorpusLawResponse(BaseModel):
     session_id: int | None = None
     verified_by: str
     verified_at: datetime
-    verification_notes: str | None = None
+    verification_notes: str | None = Field(
+        default=None,
+        description="Free-form notes: why this law was chosen, verification methodology, "
+        "known acceptable gaps in coverage, any parser quirks specific to this law",
+    )
     expected_amendment_count: int
     expected_coverage_percentage: float
     last_regression_test: datetime | None = None
