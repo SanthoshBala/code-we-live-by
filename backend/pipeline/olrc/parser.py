@@ -52,17 +52,32 @@ class ParsedSubchapter:
 
 
 @dataclass
+class ParsedSubsection:
+    """A subsection, paragraph, or other subdivision within a section.
+
+    Subsections can be nested (paragraphs within subsections, etc.).
+    """
+
+    marker: str  # e.g., "(a)", "(1)", "(A)"
+    heading: str | None  # e.g., "Registration requirements"
+    content: str  # The text content (may include chapeau for list intros)
+    children: list["ParsedSubsection"] = field(default_factory=list)
+    level: str = "subsection"  # subsection, paragraph, subparagraph, clause, subclause
+
+
+@dataclass
 class ParsedSection:
     """Parsed US Code Section data."""
 
     section_number: str
     heading: str
     full_citation: str
-    text_content: str
+    text_content: str  # Flattened text (for backwards compatibility)
     chapter_number: str | None = None
     subchapter_number: str | None = None
     notes: str | None = None
     sort_order: int = 0
+    subsections: list[ParsedSubsection] = field(default_factory=list)  # Structured content
 
 
 @dataclass
@@ -434,8 +449,11 @@ class USLMParser:
         # Build full citation
         full_citation = f"{title_number} U.S.C. § {section_number}"
 
-        # Extract text content
+        # Extract text content (flattened for backwards compatibility)
         text_content = self._extract_section_text(section_elem)
+
+        # Extract structured subsections from XML
+        subsections = self._extract_subsections(section_elem)
 
         # Extract notes if present
         notes = self._extract_notes(section_elem)
@@ -449,6 +467,7 @@ class USLMParser:
             subchapter_number=self._current_subchapter,
             notes=notes,
             sort_order=self._section_order,
+            subsections=subsections,
         )
 
     def _get_level_type(self, elem: etree._Element) -> str | None:
@@ -542,6 +561,77 @@ class USLMParser:
                 parts.append(self._get_text_content(child))
 
         return " ".join(parts).strip()
+
+    def _parse_subsection(
+        self, elem: etree._Element, level: str = "subsection"
+    ) -> ParsedSubsection:
+        """Parse a subsection/paragraph/etc. element into structured data."""
+        # Get marker (num)
+        num_elem = elem.find("{*}num")
+        if num_elem is None:
+            num_elem = elem.find("num")
+        marker = self._get_text_content(num_elem) if num_elem is not None else ""
+
+        # Get heading
+        heading_elem = elem.find("{*}heading")
+        if heading_elem is None:
+            heading_elem = elem.find("heading")
+        heading = self._get_text_content(heading_elem) if heading_elem is not None else None
+
+        # Get content (may be in <content> or <chapeau> or directly in element)
+        content_elem = elem.find("{*}content")
+        if content_elem is None:
+            content_elem = elem.find("content")
+        chapeau_elem = elem.find("{*}chapeau")
+        if chapeau_elem is None:
+            chapeau_elem = elem.find("chapeau")
+
+        content_parts = []
+        if chapeau_elem is not None:
+            content_parts.append(self._get_text_content(chapeau_elem))
+        if content_elem is not None:
+            content_parts.append(self._get_text_content(content_elem))
+
+        content = " ".join(content_parts).strip()
+
+        # Parse nested children
+        children = []
+        child_levels = {
+            "subsection": ("paragraph", "paragraph"),
+            "paragraph": ("subparagraph", "subparagraph"),
+            "subparagraph": ("clause", "clause"),
+            "clause": ("subclause", "subclause"),
+            "subclause": ("item", "item"),
+        }
+
+        if level in child_levels:
+            child_tag, child_level = child_levels[level]
+            for child_elem in elem.findall(f"{{*}}{child_tag}") or elem.findall(child_tag):
+                children.append(self._parse_subsection(child_elem, child_level))
+
+        return ParsedSubsection(
+            marker=marker,
+            heading=heading,
+            content=content,
+            children=children,
+            level=level,
+        )
+
+    def _extract_subsections(
+        self, section_elem: etree._Element
+    ) -> list[ParsedSubsection]:
+        """Extract structured subsections from a section element."""
+        subsections = []
+
+        # Try namespaced first, then non-namespaced
+        subsec_elems = section_elem.findall("{*}subsection")
+        if not subsec_elems:
+            subsec_elems = section_elem.findall("subsection")
+
+        for subsec_elem in subsec_elems:
+            subsections.append(self._parse_subsection(subsec_elem, "subsection"))
+
+        return subsections
 
     def _extract_notes(self, section_elem: etree._Element) -> str | None:
         """Extract notes/annotations from a section."""
