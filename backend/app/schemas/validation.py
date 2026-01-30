@@ -5,7 +5,6 @@ related to the ingestion validation system.
 """
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,6 +14,8 @@ from app.models.enums import (
     ParsingMode,
     ParsingSessionStatus,
     PatternDiscoveryStatus,
+    VerificationMethod,
+    VerificationResult,
 )
 
 # =============================================================================
@@ -290,72 +291,49 @@ class PatternDiscoveryResponse(BaseModel):
 
 
 # =============================================================================
-# Golden Corpus Schemas
+# Parsing Verification Schemas
 # =============================================================================
 
 
-class GoldenCorpusLawCreate(BaseModel):
-    """Data for adding a law to the golden corpus."""
+class ParsingVerificationCreate(BaseModel):
+    """Data for creating a verification of a parsing session."""
 
-    law_id: int
-    session_id: int | None = None
+    session_id: int
     verified_by: str
-    verification_notes: str | None = Field(
+    method: VerificationMethod
+    result: VerificationResult
+    notes: str | None = Field(
         default=None,
-        description="Free-form notes: why this law was chosen, verification methodology, "
-        "known acceptable gaps in coverage, any parser quirks specific to this law",
+        description="Free-form notes: methodology used, issues found, "
+        "coverage gaps, any parser quirks specific to this law",
     )
-    expected_amendment_count: int
-    expected_coverage_percentage: float
-    expected_results_json: dict[str, Any] | None = None
+    issues_found: list[str] | None = None
 
 
-class GoldenCorpusLawResponse(BaseModel):
-    """Response schema for golden corpus law."""
+class ParsingVerificationResponse(BaseModel):
+    """Response schema for a parsing verification."""
 
-    corpus_id: int
-    law_id: int
-    session_id: int | None = None
+    verification_id: int
+    session_id: int
     verified_by: str
     verified_at: datetime
-    verification_notes: str | None = Field(
-        default=None,
-        description="Free-form notes: why this law was chosen, verification methodology, "
-        "known acceptable gaps in coverage, any parser quirks specific to this law",
-    )
-    expected_amendment_count: int
-    expected_coverage_percentage: float
-    last_regression_test: datetime | None = None
-    last_regression_passed: bool | None = None
-    regression_notes: str | None = None
+    method: VerificationMethod
+    result: VerificationResult
+    notes: str | None = None
+    issues_found: list[str] | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class RegressionTestResult(BaseModel):
-    """Result of a regression test against the golden corpus."""
+class VerificationSummary(BaseModel):
+    """Summary of verifications for a parsing session."""
 
-    corpus_id: int
-    law_id: int
-    congress: int
-    law_number: str
-    passed: bool
-    expected_amendment_count: int
-    actual_amendment_count: int
-    expected_coverage: float
-    actual_coverage: float
-    discrepancies: list[str] = Field(default_factory=list)
-    error_message: str | None = None
-
-
-class GoldenCorpusValidationResult(BaseModel):
-    """Result of validating the entire golden corpus."""
-
-    total_laws: int
-    passed: int
-    failed: int
-    all_passed: bool
-    results: list[RegressionTestResult]
-    run_at: datetime
+    session_id: int
+    total_verifications: int
+    passed_count: int
+    failed_count: int
+    passed_with_issues_count: int
+    verifiers: list[str]
+    latest_verification: datetime | None = None

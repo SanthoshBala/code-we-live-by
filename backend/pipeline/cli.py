@@ -601,40 +601,6 @@ async def show_ingestion_report_command(
     return 0
 
 
-async def validate_corpus_command(verbose: bool = False) -> int:
-    """Run regression tests against golden corpus.
-
-    Args:
-        verbose: Show detailed results.
-
-    Returns:
-        0 on success, 1 on failure.
-    """
-    from app.models.base import async_session_maker
-    from pipeline.legal_parser.golden_corpus import GoldenCorpusManager
-
-    async with async_session_maker() as session:
-        manager = GoldenCorpusManager(session)
-        result = await manager.run_regression_tests(verbose=verbose)
-
-        print("\nGolden Corpus Validation")
-        print(f"  Total laws: {result.total_laws}")
-        print(f"  Passed: {result.passed}")
-        print(f"  Failed: {result.failed}")
-        print(f"  All passed: {'Yes' if result.all_passed else 'No'}")
-
-        if verbose and result.results:
-            print("\nDetailed Results:")
-            for r in result.results:
-                status = "PASS" if r.passed else "FAIL"
-                print(f"  [{status}] PL {r.congress}-{r.law_number}")
-                if not r.passed:
-                    for d in r.discrepancies:
-                        print(f"    - {d}")
-
-    return 0 if result.all_passed else 1
-
-
 async def list_pending_patterns_command(limit: int = 20) -> int:
     """List pattern discoveries awaiting review.
 
@@ -1138,17 +1104,6 @@ def main() -> int:
         help="Show detailed amendment list",
     )
 
-    # validate-corpus command
-    validate_corpus_parser = subparsers.add_parser(
-        "validate-corpus", help="Run regression tests against golden corpus"
-    )
-    validate_corpus_parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Show detailed results for each law",
-    )
-
     # list-pending-patterns command
     list_patterns_parser = subparsers.add_parser(
         "list-pending-patterns", help="List pattern discoveries awaiting review"
@@ -1339,13 +1294,6 @@ def main() -> int:
         return asyncio.run(
             show_ingestion_report_command(
                 report_id=args.report_id,
-                verbose=args.verbose,
-            )
-        )
-
-    elif args.command == "validate-corpus":
-        return asyncio.run(
-            validate_corpus_command(
                 verbose=args.verbose,
             )
         )

@@ -16,6 +16,8 @@ from app.models.enums import (
     ReferenceType,
     SpanType,
     SponsorshipRole,
+    VerificationMethod,
+    VerificationResult,
     VoteType,
 )
 from app.models.history import LineHistory, SectionHistory
@@ -43,10 +45,10 @@ from app.models.us_code import (
     USCodeTitle,
 )
 from app.models.validation import (
-    GoldenCorpusLaw,
     IngestionReport,
     ParsedAmendmentRecord,
     ParsingSession,
+    ParsingVerification,
     PatternDiscovery,
     TextSpan,
 )
@@ -102,9 +104,11 @@ __all__ = [
     "DataCorrection",
     # Validation (Task 1.11)
     "ParsingSession",
+    "ParsingVerification",
     "TextSpan",
     "ParsedAmendmentRecord",
     "IngestionReport",
     "PatternDiscovery",
-    "GoldenCorpusLaw",
+    "VerificationMethod",
+    "VerificationResult",
 ]

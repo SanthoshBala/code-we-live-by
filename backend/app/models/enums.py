@@ -157,3 +157,19 @@ class PatternDiscoveryStatus(str, enum.Enum):
     UNDER_REVIEW = "Under_Review"
     PROMOTED = "Promoted"
     REJECTED = "Rejected"
+
+
+class VerificationResult(str, enum.Enum):
+    """Result of a parsing verification."""
+
+    PASSED = "Passed"  # Verification confirmed parsing is correct
+    FAILED = "Failed"  # Verification found significant errors
+    PASSED_WITH_ISSUES = "Passed_With_Issues"  # Mostly correct, minor issues noted
+
+
+class VerificationMethod(str, enum.Enum):
+    """Method used for verification."""
+
+    MANUAL_REVIEW = "Manual_Review"  # Human reviewed the results
+    AUTOMATED_COMPARISON = "Automated_Comparison"  # Compared against known source
+    THIRD_PARTY_AUDIT = "Third_Party_Audit"  # External reviewer

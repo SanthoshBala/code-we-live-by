@@ -30,6 +30,8 @@ from app.models.enums import (
     ParsingSessionStatus,
     PatternDiscoveryStatus,
     SpanType,
+    VerificationMethod,
+    VerificationResult,
 )
 
 if TYPE_CHECKING:
@@ -89,6 +91,9 @@ class ParsingSession(Base, TimestampMixin):
     )
     ingestion_report: Mapped[Optional["IngestionReport"]] = relationship(
         back_populates="session", uselist=False
+    )
+    verifications: Mapped[list["ParsingVerification"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
@@ -370,53 +375,52 @@ class PatternDiscovery(Base, TimestampMixin):
         return f"<PatternDiscovery({self.discovery_id}: {self.status.value})>"
 
 
-class GoldenCorpusLaw(Base, TimestampMixin):
-    """A verified law in the golden corpus for regression testing.
+class ParsingVerification(Base, TimestampMixin):
+    """A verification of a parsing session's results.
 
-    Laws added to the golden corpus have been human-verified and serve
-    as ground truth for parser regression testing.
+    Multiple verifications can exist for a single parsing session,
+    allowing quality to be measured by number and type of verifications.
     """
 
-    __tablename__ = "golden_corpus_law"
+    __tablename__ = "parsing_verification"
 
-    corpus_id: Mapped[int] = mapped_column(primary_key=True)
-    law_id: Mapped[int] = mapped_column(
-        ForeignKey("public_law.law_id", ondelete="CASCADE"), nullable=False, unique=True
-    )
+    verification_id: Mapped[int] = mapped_column(primary_key=True)
     session_id: Mapped[int] = mapped_column(
-        ForeignKey("parsing_session.session_id", ondelete="SET NULL"), nullable=True
+        ForeignKey("parsing_session.session_id", ondelete="CASCADE"), nullable=False
     )
 
-    # Verification info
+    # Who and when
     verified_by: Mapped[str] = mapped_column(String(100), nullable=False)
     verified_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
-    verification_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Expected results
-    expected_amendment_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    expected_coverage_percentage: Mapped[float] = mapped_column(Float, nullable=False)
-    expected_results_json: Mapped[str | None] = mapped_column(
-        JSONB, nullable=True
-    )  # Detailed expected results
-
-    # Regression tracking
-    last_regression_test: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    # How and result
+    method: Mapped["VerificationMethod"] = mapped_column(
+        Enum(VerificationMethod, name="verification_method"), nullable=False
     )
-    last_regression_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    regression_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result: Mapped["VerificationResult"] = mapped_column(
+        Enum(VerificationResult, name="verification_result"), nullable=False
+    )
+
+    # Details
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Free-form notes: methodology, issues found, coverage gaps, etc.",
+    )
+    issues_found: Mapped[str | None] = mapped_column(
+        JSONB, nullable=True
+    )  # Structured list of issues if any
 
     # Relationships
-    law: Mapped["PublicLaw"] = relationship()
+    session: Mapped["ParsingSession"] = relationship(back_populates="verifications")
 
     __table_args__ = (
-        Index("idx_golden_corpus_law", "law_id"),
-        Index("idx_golden_corpus_verified", "verified_at"),
+        Index("idx_parsing_verification_session", "session_id"),
+        Index("idx_parsing_verification_result", "result"),
+        Index("idx_parsing_verification_verified_at", "verified_at"),
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<GoldenCorpusLaw(law_id={self.law_id}, verified_by={self.verified_by})>"
-        )
+        return f"<ParsingVerification({self.verification_id}: {self.result.value} by {self.verified_by})>"

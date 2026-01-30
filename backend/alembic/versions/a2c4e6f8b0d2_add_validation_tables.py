@@ -301,47 +301,71 @@ def upgrade() -> None:
     )
     op.create_index("idx_pattern_discovery_status", "pattern_discovery", ["status"])
 
-    # Create golden_corpus_law table
+    # Create verification enums
+    verification_method = sa.Enum(
+        "MANUAL_REVIEW",
+        "AUTOMATED_COMPARISON",
+        "THIRD_PARTY_AUDIT",
+        name="verification_method",
+        create_type=False,
+    )
+    verification_method.create(op.get_bind(), checkfirst=True)
+
+    verification_result = sa.Enum(
+        "PASSED",
+        "FAILED",
+        "PASSED_WITH_ISSUES",
+        name="verification_result",
+        create_type=False,
+    )
+    verification_result.create(op.get_bind(), checkfirst=True)
+
+    # Create parsing_verification table
     op.create_table(
-        "golden_corpus_law",
-        sa.Column("corpus_id", sa.Integer(), nullable=False),
-        sa.Column("law_id", sa.Integer(), nullable=False),
-        sa.Column("session_id", sa.Integer(), nullable=True),
+        "parsing_verification",
+        sa.Column("verification_id", sa.Integer(), nullable=False),
+        sa.Column("session_id", sa.Integer(), nullable=False),
         sa.Column("verified_by", sa.String(length=100), nullable=False),
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("verification_notes", sa.Text(), nullable=True),
-        sa.Column("expected_amendment_count", sa.Integer(), nullable=False),
-        sa.Column("expected_coverage_percentage", sa.Float(), nullable=False),
-        sa.Column("expected_results_json", JSONB, nullable=True),
-        sa.Column("last_regression_test", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_regression_passed", sa.Boolean(), nullable=True),
-        sa.Column("regression_notes", sa.Text(), nullable=True),
+        sa.Column("method", verification_method, nullable=False),
+        sa.Column("result", verification_result, nullable=False),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("issues_found", JSONB, nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["law_id"],
-            ["public_law.law_id"],
-            name=op.f("fk_golden_corpus_law_law_id_public_law"),
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
             ["session_id"],
             ["parsing_session.session_id"],
-            name=op.f("fk_golden_corpus_law_session_id_parsing_session"),
-            ondelete="SET NULL",
+            name=op.f("fk_parsing_verification_session_id_parsing_session"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("corpus_id", name=op.f("pk_golden_corpus_law")),
-        sa.UniqueConstraint("law_id", name=op.f("uq_golden_corpus_law_law_id")),
+        sa.PrimaryKeyConstraint(
+            "verification_id", name=op.f("pk_parsing_verification")
+        ),
     )
-    op.create_index("idx_golden_corpus_law", "golden_corpus_law", ["law_id"])
-    op.create_index("idx_golden_corpus_verified", "golden_corpus_law", ["verified_at"])
+    op.create_index(
+        "idx_parsing_verification_session", "parsing_verification", ["session_id"]
+    )
+    op.create_index(
+        "idx_parsing_verification_result", "parsing_verification", ["result"]
+    )
+    op.create_index(
+        "idx_parsing_verification_verified_at", "parsing_verification", ["verified_at"]
+    )
 
 
 def downgrade() -> None:
     """Remove validation tables."""
-    op.drop_index("idx_golden_corpus_verified", table_name="golden_corpus_law")
-    op.drop_index("idx_golden_corpus_law", table_name="golden_corpus_law")
-    op.drop_table("golden_corpus_law")
+    op.drop_index(
+        "idx_parsing_verification_verified_at", table_name="parsing_verification"
+    )
+    op.drop_index("idx_parsing_verification_result", table_name="parsing_verification")
+    op.drop_index("idx_parsing_verification_session", table_name="parsing_verification")
+    op.drop_table("parsing_verification")
+
+    # Drop verification enums
+    sa.Enum(name="verification_result").drop(op.get_bind(), checkfirst=True)
+    sa.Enum(name="verification_method").drop(op.get_bind(), checkfirst=True)
 
     op.drop_index("idx_pattern_discovery_status", table_name="pattern_discovery")
     op.drop_index("idx_pattern_discovery_session", table_name="pattern_discovery")

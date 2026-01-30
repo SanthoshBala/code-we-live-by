@@ -225,11 +225,11 @@ These are flagged with `needs_review=True` for human verification.
 │ - Extract       │  │ - Find unclaimed│  └─────────────────────────────────┘
 │   amendments    │  │   gaps          │
 │ - Confidence    │  │ - Keyword       │  ┌─────────────────────────────────┐
-│   scoring       │  │   detection     │  │ golden_corpus.py                │
+│   scoring       │  │   detection     │  │ verification.py                 │
 └─────────────────┘  └─────────────────┘  │                                 │
-         │                                 │ - Manage verified test laws     │
-         ▼                                 │ - Run regression tests          │
-┌─────────────────┐                        │ - Track parser accuracy         │
+         │                                 │ - Record session verifications  │
+         ▼                                 │ - Multiple verifiers per session│
+┌─────────────────┐                        │ - Quality = f(# verifications)  │
 │ patterns.py     │                        └─────────────────────────────────┘
 │                 │
 │ - 26 regex      │                        ┌─────────────────────────────────┐
@@ -250,7 +250,7 @@ These are flagged with `needs_review=True` for human verification.
 | **text_accounting.py** | `TextAccountant` tracks which text was claimed by patterns vs. unclaimed gaps |
 | **parsing_modes.py** | Orchestrates parsing sessions (RegEx/LLM/Human+LLM modes), generates reports |
 | **graduation.py** | Decides when to escalate to human review, evaluates pattern graduation criteria |
-| **golden_corpus.py** | Manages verified laws for regression testing, ensures parser doesn't regress |
+| **verification.py** | Records verifications of parsing sessions; quality measured by verification count |
 | **pattern_learning.py** | Captures unmatched text with amendment keywords for future pattern development |
 
 ### Data Flow
@@ -260,6 +260,7 @@ These are flagged with `needs_review=True` for human verification.
 3. **TextAccountant** claims spans → `CoverageReport` with gaps
 4. **GraduationManager** checks thresholds → escalation decision
 5. **Output**: `IngestionReport` with coverage stats, confidence scores, approval status
+6. **VerificationManager** records human/automated verifications → quality signal
 
 ## Usage
 
