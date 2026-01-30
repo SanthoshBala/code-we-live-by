@@ -1063,6 +1063,31 @@ def normalize_parsed_section(
         notes.raw_notes = parsed_section.notes
         notes.citations = parse_citations(parsed_section.notes)
 
+        # Extract note types (historical, editorial, statutory)
+        hist_match = re.search(
+            r"Historical and Revision Notes\s*(.*?)(?=Editorial Notes|Statutory Notes|$)",
+            parsed_section.notes,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if hist_match:
+            notes.historical_notes = hist_match.group(1).strip()
+
+        edit_match = re.search(
+            r"Editorial Notes\s*(.*?)(?=Statutory Notes|$)",
+            parsed_section.notes,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if edit_match:
+            notes.editorial_notes = edit_match.group(1).strip()
+
+        stat_match = re.search(
+            r"Statutory Notes and Related Subsidiaries\s*(.*)",
+            parsed_section.notes,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if stat_match:
+            notes.statutory_notes = stat_match.group(1).strip()
+
     return NormalizedSection(
         lines=lines,
         original_text=parsed_section.text_content,

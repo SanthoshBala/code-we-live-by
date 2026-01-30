@@ -559,15 +559,13 @@ def normalize_text_command(
     print("-" * 70)
     for line in result.lines:
         prefix = f"L{line.line_number:3d} │"
-        display = line.to_display(use_tabs=use_tabs, indent_width=indent_width)
+        # Always use spaces for CLI display (tabs don't align well with prefix)
+        display = line.to_display(use_tabs=False, indent_width=indent_width)
         print(f"{prefix} {display}")
 
     print("-" * 70)
     print(f"Total lines: {result.line_count}")
     print(f"Law text: {len(result.law_text):,} chars")
-
-    if result.notes.has_notes:
-        print(f"Notes stripped: {len(result.notes.raw_notes):,} chars")
 
     if show_metadata:
         print()
@@ -619,7 +617,7 @@ def normalize_text_command(
     # Show notes summary if present
     if result.notes.has_notes:
         print()
-        print("NOTES (stripped from law text):")
+        print("NOTES:")
         print("-" * 70)
         if result.notes.historical_notes:
             preview = result.notes.historical_notes[:200].replace("\n", " ")
@@ -630,6 +628,10 @@ def normalize_text_command(
         if result.notes.statutory_notes:
             preview = result.notes.statutory_notes[:200].replace("\n", " ")
             print(f"  Statutory: {preview}...")
+        # If no specific notes were parsed, show raw preview
+        if not (result.notes.historical_notes or result.notes.editorial_notes or result.notes.statutory_notes):
+            preview = result.notes.raw_notes[:300].replace("\n", " ")
+            print(f"  Raw: {preview}...")
         print("-" * 70)
 
     return 0
