@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Commit messages**: Use the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) standard for semantic commit messages (e.g., `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`). Include the task reference at the end of the subject line: `feat: add feature X (Task 1.10)`
 - **Branching**: Always start new tasks in a fresh branch and create a pull request back into main when done
 - **LLM-agnostic code**: Keep comments, variable names, and logic generic to allow for different LLM providers in the future. Use "LLM" instead of specific model names (e.g., "Claude") in code comments and documentation
+- **Directory READMEs**: Every directory should include a README.md explaining the architecture of that sub-directory—what modules exist, how they relate to each other, and the data flow between them
 
 ## Project Overview
 

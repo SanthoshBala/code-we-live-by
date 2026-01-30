@@ -200,6 +200,67 @@ Some patterns cannot be fully automated:
 
 These are flagged with `needs_review=True` for human verification.
 
+## Module Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              parsing_modes.py                                │
+│                         (Orchestration Layer)                                │
+│  RegExParsingSession / LLMParsingSession / HumanPlusLLMParsingSession       │
+│                                                                              │
+│  - Coordinates the full parsing workflow                                     │
+│  - Creates ParsingSession records                                            │
+│  - Calls AmendmentParser, TextAccountant                                     │
+│  - Generates IngestionReport                                                 │
+│  - Triggers escalation decisions                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │                    │                         │
+         ▼                    ▼                         ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────────┐
+│ amendment_      │  │ text_           │  │ graduation.py                   │
+│ parser.py       │  │ accounting.py   │  │                                 │
+│                 │  │                 │  │ - Check escalation triggers     │
+│ - Pattern       │  │ - Track claimed │  │ - Evaluate pattern graduation   │
+│   matching      │  │   text spans    │  │ - Coverage/review thresholds    │
+│ - Extract       │  │ - Find unclaimed│  └─────────────────────────────────┘
+│   amendments    │  │   gaps          │
+│ - Confidence    │  │ - Keyword       │  ┌─────────────────────────────────┐
+│   scoring       │  │   detection     │  │ golden_corpus.py                │
+└─────────────────┘  └─────────────────┘  │                                 │
+         │                                 │ - Manage verified test laws     │
+         ▼                                 │ - Run regression tests          │
+┌─────────────────┐                        │ - Track parser accuracy         │
+│ patterns.py     │                        └─────────────────────────────────┘
+│                 │
+│ - 26 regex      │                        ┌─────────────────────────────────┐
+│   patterns      │                        │ pattern_learning.py             │
+│ - PatternType   │                        │                                 │
+│   enum          │                        │ - Record unmatched text         │
+│ - Change types  │                        │ - Suggest new patterns          │
+└─────────────────┘                        │ - Pattern promotion workflow    │
+                                           └─────────────────────────────────┘
+```
+
+### Module Descriptions
+
+| Module | Purpose |
+|--------|---------|
+| **patterns.py** | Defines 26 regex patterns for amendment detection with confidence scores |
+| **amendment_parser.py** | `AmendmentParser` class that applies patterns to extract structured amendments |
+| **text_accounting.py** | `TextAccountant` tracks which text was claimed by patterns vs. unclaimed gaps |
+| **parsing_modes.py** | Orchestrates parsing sessions (RegEx/LLM/Human+LLM modes), generates reports |
+| **graduation.py** | Decides when to escalate to human review, evaluates pattern graduation criteria |
+| **golden_corpus.py** | Manages verified laws for regression testing, ensures parser doesn't regress |
+| **pattern_learning.py** | Captures unmatched text with amendment keywords for future pattern development |
+
+### Data Flow
+
+1. **Input**: Raw Public Law text
+2. **AmendmentParser** applies patterns → list of `ParsedAmendment`
+3. **TextAccountant** claims spans → `CoverageReport` with gaps
+4. **GraduationManager** checks thresholds → escalation decision
+5. **Output**: `IngestionReport` with coverage stats, confidence scores, approval status
+
 ## Usage
 
 ```python
@@ -242,7 +303,8 @@ Currently supported (26 patterns):
 
 ## Future Enhancements
 
+- **LLM parsing mode**: Use an LLM to parse amendments when regex patterns fail
+- **Human+LLM mode**: Interactive interface for human reviewers working with an LLM
 - USLM XML parsing for structured amendments (113th Congress+)
-- Machine learning for ambiguous pattern resolution
 - Cross-reference resolution ("as defined in section X")
 - Confidence calibration based on manual review feedback
