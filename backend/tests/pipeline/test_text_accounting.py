@@ -5,7 +5,6 @@ import pytest
 from pipeline.legal_parser.text_accounting import (
     AMENDMENT_KEYWORDS,
     ClaimedSpan,
-    CoverageReport,
     TextAccountant,
     UnclaimedSpan,
 )
@@ -354,7 +353,6 @@ class TestIntegration:
 
         # Should flag the section title as containing "amended" keyword
         # (though it's not a real amendment instruction)
-        has_flagged = len(report.flagged_unclaimed) > 0
         # This is expected behavior - keyword detection finds "amended" in section headers too
         assert report.total_length > report.claimed_length
 

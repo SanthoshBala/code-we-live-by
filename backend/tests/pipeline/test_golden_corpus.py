@@ -1,7 +1,5 @@
 """Tests for golden corpus management (Task 1.11)."""
 
-import pytest
-
 from app.schemas.validation import (
     GoldenCorpusValidationResult,
     RegressionTestResult,

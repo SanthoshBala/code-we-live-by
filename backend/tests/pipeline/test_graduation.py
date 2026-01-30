@@ -1,7 +1,5 @@
 """Tests for graduation and escalation system (Task 1.11)."""
 
-import pytest
-
 from app.models.enums import ParsingMode
 from pipeline.legal_parser.graduation import (
     EscalationDecision,
