@@ -12,8 +12,14 @@ Historical notes, editorial notes, and revision notes are separated
 from the law text and returned as metadata (like README/docstrings).
 """
 
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
 # Common legal abbreviations that contain periods but aren't sentence endings
 LEGAL_ABBREVIATIONS = {
@@ -102,6 +108,65 @@ REFERENCE_WORDS = {
 
 # Pattern to detect the nesting level from a marker
 MARKER_PATTERN = re.compile(r"\(([a-zA-Z0-9]+)\)")
+
+# Words that commonly start sentences in legal text (after a subsection header)
+SENTENCE_STARTERS = {
+    "a", "an", "the", "no", "any", "each", "if", "for", "in", "on", "to",
+    "as", "by", "under", "subject", "notwithstanding", "unless", "except",
+    "upon", "after", "before", "when", "where", "this", "that", "such",
+    "nothing", "whoever", "whenever", "every", "all", "there",
+}
+
+# Pattern to detect subsection headers like "Registration requirements" or "Definitions"
+# Headers are typically 1-5 title-case words followed by a sentence starter or em-dash
+SUBSECTION_HEADER_PATTERN = re.compile(
+    r"^(\s*)"  # Leading whitespace
+    r"([A-Z][a-z]+(?:\s+(?:and|or|of|the|for|in|to|a|an)?\s*[A-Za-z]+){0,6}?)"  # Header (title case words)
+    r"(?="  # Followed by (lookahead):
+    r"\s*—"  # em-dash, OR
+    r"|"
+    r"\s+[A-Z][a-z]*\s"  # Capital word + space (sentence start)
+    r")",
+    re.UNICODE,
+)
+
+
+def _extract_subsection_header(content: str) -> tuple[str | None, str]:
+    """Extract a subsection header from content if present.
+
+    Legal subsections often have a short header like "Registration requirements"
+    followed by the actual content. This function detects and splits them.
+
+    Args:
+        content: The content after the marker (e.g., "Registration requirements A security...")
+
+    Returns:
+        Tuple of (header, remaining_content). Header is None if not detected.
+    """
+    # Check for em-dash separator (clearest case)
+    if "—" in content:
+        parts = content.split("—", 1)
+        header_candidate = parts[0].strip()
+        # Header should be short (1-6 words) and not look like a sentence
+        words = header_candidate.split()
+        if 1 <= len(words) <= 6 and not header_candidate.endswith((".", ",", ";")):
+            return header_candidate, parts[1].strip() if len(parts) > 1 else ""
+
+    # Try pattern matching for headers without em-dash
+    match = SUBSECTION_HEADER_PATTERN.match(content)
+    if match:
+        header = match.group(2).strip()
+        remaining = content[match.end(2):].strip()
+
+        # Validate: header should be 1-6 words, remaining should start with sentence starter
+        words = header.split()
+        if 1 <= len(words) <= 6:
+            # Check if remaining starts with a sentence starter
+            first_word = remaining.split()[0].lower() if remaining.split() else ""
+            if first_word.rstrip(".,;") in SENTENCE_STARTERS or remaining.startswith("—"):
+                return header, remaining
+
+    return None, content
 
 # Patterns that indicate the start of notes/metadata sections (not law text)
 # These appear after the actual law text in US Code sections
@@ -699,22 +764,50 @@ def normalize_section(
             indent_level = _detect_marker_level(marker_text)
             current_indent = indent_level
 
-            # The full line includes the marker
-            full_content = f"{marker_text} {item_content}" if item_content else marker_text
+            # Check if content has a subsection header (e.g., "Registration requirements")
+            header, remaining_content = _extract_subsection_header(item_content)
 
-            # If the content is very long, we might want to split into sentences
-            # But for now, keep list items as single lines
-            line_number += 1
-            lines.append(
-                NormalizedLine(
-                    line_number=line_number,
-                    content=full_content,
-                    indent_level=indent_level,
-                    marker=marker_text,
-                    start_char=pos,
-                    end_char=item_end,
+            if header and remaining_content:
+                # Split into header line and content line
+                # Header line: marker + header
+                line_number += 1
+                lines.append(
+                    NormalizedLine(
+                        line_number=line_number,
+                        content=f"{marker_text} {header}",
+                        indent_level=indent_level,
+                        marker=marker_text,
+                        start_char=pos,
+                        end_char=marker_end + len(header),
+                    )
                 )
-            )
+
+                # Content line: indented under the header
+                line_number += 1
+                lines.append(
+                    NormalizedLine(
+                        line_number=line_number,
+                        content=remaining_content,
+                        indent_level=indent_level + 1,  # Indent under header
+                        marker=None,
+                        start_char=marker_end + len(header),
+                        end_char=item_end,
+                    )
+                )
+            else:
+                # No header detected - keep as single line
+                full_content = f"{marker_text} {item_content}" if item_content else marker_text
+                line_number += 1
+                lines.append(
+                    NormalizedLine(
+                        line_number=line_number,
+                        content=full_content,
+                        indent_level=indent_level,
+                        marker=marker_text,
+                        start_char=pos,
+                        end_char=item_end,
+                    )
+                )
 
             pos = item_end
 
@@ -812,3 +905,148 @@ def char_span_to_line_span(
     if start_line is not None and end_line is not None:
         return (start_line, end_line)
     return None
+
+
+# Level name to indent level mapping
+_LEVEL_INDENT = {
+    "subsection": 1,      # (a), (b), (c)
+    "paragraph": 2,       # (1), (2), (3)
+    "subparagraph": 3,    # (A), (B), (C)
+    "clause": 4,          # (i), (ii), (iii)
+    "subclause": 5,       # (I), (II), (III)
+    "item": 6,            # Deeper nesting
+}
+
+
+def _normalize_subsection_recursive(
+    subsection: ParsedSubsection,
+    lines: list[NormalizedLine],
+    line_counter: list[int],  # Mutable counter passed by reference
+    char_pos: list[int],  # Mutable position tracker
+) -> None:
+    """Recursively normalize a subsection and its children into lines.
+
+    Args:
+        subsection: The subsection to normalize.
+        lines: List to append lines to.
+        line_counter: Mutable list containing [current_line_number].
+        char_pos: Mutable list containing [current_char_position].
+    """
+    indent_level = _LEVEL_INDENT.get(subsection.level, 1)
+
+    # If there's a heading, create a separate header line
+    if subsection.heading:
+        line_counter[0] += 1
+        header_content = f"{subsection.marker} {subsection.heading}"
+        start_pos = char_pos[0]
+        char_pos[0] += len(header_content) + 1  # +1 for newline
+        lines.append(
+            NormalizedLine(
+                line_number=line_counter[0],
+                content=header_content,
+                indent_level=indent_level,
+                marker=subsection.marker,
+                start_char=start_pos,
+                end_char=char_pos[0],
+            )
+        )
+
+        # Content goes on a separate line, indented under the header
+        if subsection.content:
+            line_counter[0] += 1
+            start_pos = char_pos[0]
+            char_pos[0] += len(subsection.content) + 1
+            lines.append(
+                NormalizedLine(
+                    line_number=line_counter[0],
+                    content=subsection.content,
+                    indent_level=indent_level + 1,  # Indent under header
+                    marker=None,
+                    start_char=start_pos,
+                    end_char=char_pos[0],
+                )
+            )
+    else:
+        # No heading - marker and content on one line
+        if subsection.content:
+            line_counter[0] += 1
+            content = f"{subsection.marker} {subsection.content}" if subsection.marker else subsection.content
+            start_pos = char_pos[0]
+            char_pos[0] += len(content) + 1
+            lines.append(
+                NormalizedLine(
+                    line_number=line_counter[0],
+                    content=content,
+                    indent_level=indent_level,
+                    marker=subsection.marker if subsection.marker else None,
+                    start_char=start_pos,
+                    end_char=char_pos[0],
+                )
+            )
+        elif subsection.marker:
+            # Just a marker with no content (rare but possible)
+            line_counter[0] += 1
+            start_pos = char_pos[0]
+            char_pos[0] += len(subsection.marker) + 1
+            lines.append(
+                NormalizedLine(
+                    line_number=line_counter[0],
+                    content=subsection.marker,
+                    indent_level=indent_level,
+                    marker=subsection.marker,
+                    start_char=start_pos,
+                    end_char=char_pos[0],
+                )
+            )
+
+    # Process children recursively
+    for child in subsection.children:
+        _normalize_subsection_recursive(child, lines, line_counter, char_pos)
+
+
+def normalize_parsed_section(
+    parsed_section: ParsedSection,
+    use_tabs: bool = True,
+    indent_width: int = 4,
+) -> NormalizedSection:
+    """Normalize a ParsedSection using its structured subsection data.
+
+    This function uses the explicit heading/content structure from XML
+    rather than heuristic-based header detection.
+
+    Args:
+        parsed_section: A ParsedSection with subsections populated.
+        use_tabs: If True, use tab characters for indentation.
+        indent_width: Number of spaces per indent level (if use_tabs=False).
+
+    Returns:
+        NormalizedSection with lines generated from structured data.
+    """
+    lines: list[NormalizedLine] = []
+    line_counter = [0]  # Mutable counter
+    char_pos = [0]  # Mutable position tracker
+
+    # Process each top-level subsection
+    for subsection in parsed_section.subsections:
+        _normalize_subsection_recursive(subsection, lines, line_counter, char_pos)
+
+    # Build normalized text
+    normalized_lines = [
+        line.to_display(use_tabs=use_tabs, indent_width=indent_width)
+        for line in lines
+    ]
+    normalized_text = "\n".join(normalized_lines)
+
+    # Parse notes/citations from the notes text
+    notes = SectionNotes()
+    if parsed_section.notes:
+        notes.raw_notes = parsed_section.notes
+        notes.citations = parse_citations(parsed_section.notes)
+
+    return NormalizedSection(
+        lines=lines,
+        original_text=parsed_section.text_content,
+        normalized_text=normalized_text,
+        law_text=parsed_section.text_content,
+        notes=notes,
+    )
