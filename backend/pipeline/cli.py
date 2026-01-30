@@ -656,9 +656,9 @@ def normalize_text_command(
         if result.notes.effective_dates:
             print(f"\n  Effective Dates ({len(result.notes.effective_dates)}):")
             for ed in result.notes.effective_dates[:3]:
-                date_str = ed.date or "unspecified"
-                desc = ed.description[:50].replace("\n", " ")
-                print(f"    {date_str}: {desc}...")
+                year_str = f"[{ed.amendment_year}] " if ed.amendment_year else ""
+                desc = ed.description[:70].replace("\n", " ")
+                print(f"    {year_str}{desc}...")
             if len(result.notes.effective_dates) > 3:
                 print(f"    ... and {len(result.notes.effective_dates) - 3} more")
 

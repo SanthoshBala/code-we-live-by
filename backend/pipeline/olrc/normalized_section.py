@@ -407,11 +407,17 @@ class Amendment:
 
 @dataclass
 class EffectiveDate:
-    """An effective date provision."""
+    """An effective date provision.
 
-    description: str  # The full text
-    date: str | None = None  # Extracted date if present
+    Note: We store the full description text rather than trying to extract
+    specific dates, because effective dates often involve complex calculations
+    (e.g., "3 months after Nov. 1, 1995") or conditional logic that requires
+    human interpretation.
+    """
+
+    description: str  # The full text describing when the provision takes effect
     public_law: str | None = None  # Related Pub. L. if specified
+    amendment_year: int | None = None  # Year of the amendment this applies to
 
 
 @dataclass
@@ -707,51 +713,93 @@ def _parse_amendments(text: str) -> list[Amendment]:
     "2010—Pub. L. 111-203 substituted 'Bureau' for 'Board'."
     "1976—Subsec. (e). Pub. L. 94-239 substituted provisions..."
 
+    Multiple amendments can occur in the same year:
+    "1990— Pub. L. 101–650 substituted...
+     Pub. L. 101–318 substituted..."
+
     Args:
         text: The amendments subsection text.
 
     Returns:
-        List of Amendment objects.
+        List of Amendment objects, one per Pub. L. reference.
     """
     amendments = []
 
-    # Pattern for amendment entries: year followed by description
-    # Format: "YYYY—" or "YYYY—Subsec." or "YYYY—Par."
-    amendment_pattern = re.compile(
-        r"(\d{4})\s*[—–-]\s*"  # Year and em-dash
-        r"((?:Subsec\.|Par\.|Pub\.\s*L\.).*?)"  # Description start
-        r"(?=\d{4}\s*[—–-]|$)",  # Until next year or end
-        re.DOTALL,
-    )
+    # First, split by year markers to get year blocks
+    # Pattern: "YYYY—" at start of line or after whitespace
+    year_pattern = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
 
-    for match in amendment_pattern.finditer(text):
-        year = int(match.group(1))
-        description = match.group(2).strip()
+    # Find all year markers and their positions
+    year_matches = list(year_pattern.finditer(text))
 
-        # Extract Pub. L. reference from description
-        pub_l_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—–-](\d+)", description)
-        congress = None
-        law_number = None
-        public_law = ""
+    for i, year_match in enumerate(year_matches):
+        year = int(year_match.group(1))
+        start = year_match.end()
 
-        if pub_l_match:
-            congress = int(pub_l_match.group(1))
-            law_number = int(pub_l_match.group(2))
-            public_law = f"Pub. L. {congress}-{law_number}"
+        # End is either next year marker or end of text
+        if i + 1 < len(year_matches):
+            end = year_matches[i + 1].start()
+        else:
+            end = len(text)
 
-        amendments.append(Amendment(
-            year=year,
-            public_law=public_law,
-            description=description,
-            congress=congress,
-            law_number=law_number,
-        ))
+        year_block = text[start:end].strip()
+
+        # Now find all Pub. L. references within this year block
+        # Each Pub. L. reference is a separate amendment
+        pub_l_pattern = re.compile(
+            r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
+            r"(.*?)"  # Description
+            r"(?=Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Pub. L. or end
+            re.DOTALL,
+        )
+
+        for pub_match in pub_l_pattern.finditer(year_block):
+            public_law_text = pub_match.group(1)
+            congress = int(pub_match.group(2))
+            law_number = int(pub_match.group(3))
+            description = (public_law_text + pub_match.group(4)).strip()
+
+            # Clean up description - remove trailing whitespace and normalize
+            description = " ".join(description.split())
+
+            amendments.append(Amendment(
+                year=year,
+                public_law=f"Pub. L. {congress}-{law_number}",
+                description=description,
+                congress=congress,
+                law_number=law_number,
+            ))
+
+        # If no Pub. L. found in the block, still record the year with the description
+        if not list(pub_l_pattern.finditer(year_block)) and year_block:
+            # Try to extract any Pub. L. reference
+            simple_pub_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—–-](\d+)", year_block)
+            if simple_pub_match:
+                congress = int(simple_pub_match.group(1))
+                law_number = int(simple_pub_match.group(2))
+                public_law = f"Pub. L. {congress}-{law_number}"
+            else:
+                congress = None
+                law_number = None
+                public_law = ""
+
+            amendments.append(Amendment(
+                year=year,
+                public_law=public_law,
+                description=" ".join(year_block.split()),
+                congress=congress,
+                law_number=law_number,
+            ))
 
     return amendments
 
 
 def _parse_effective_dates(text: str) -> list[EffectiveDate]:
     """Parse effective date entries from the Statutory Notes.
+
+    We capture the full description text rather than trying to extract
+    specific dates, since effective dates often involve complex calculations
+    or conditional logic.
 
     Args:
         text: The statutory notes text.
@@ -761,25 +809,22 @@ def _parse_effective_dates(text: str) -> list[EffectiveDate]:
     """
     effective_dates = []
 
-    # Look for "Effective Date" sections
+    # Look for "Effective Date" sections, including "Effective Date of YYYY Amendment"
     eff_pattern = re.compile(
-        r"Effective Date(?: of \d{4} Amendment)?\s+"
+        r"Effective Date(?: of (\d{4}) Amendment)?\s+"
         r"(.*?)"
-        r"(?=Effective Date|Short Title|Change of Name|Transfer of Functions|$)",
+        r"(?=Effective Date|Short Title|Change of Name|Transfer of Functions|Regulations|$)",
         re.DOTALL | re.IGNORECASE,
     )
 
     for match in eff_pattern.finditer(text):
-        description = match.group(1).strip()
+        amendment_year = int(match.group(1)) if match.group(1) else None
+        description = match.group(2).strip()
         if not description:
             continue
 
-        # Try to extract a date
-        date_match = re.search(
-            r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})",
-            description,
-        )
-        date = date_match.group(1) if date_match else None
+        # Clean up description - normalize whitespace
+        description = " ".join(description.split())
 
         # Try to extract Pub. L.
         pub_l_match = re.search(r"Pub\.\s*L\.\s*\d+[—–-]\d+", description)
@@ -787,8 +832,8 @@ def _parse_effective_dates(text: str) -> list[EffectiveDate]:
 
         effective_dates.append(EffectiveDate(
             description=description[:500],  # Limit length
-            date=date,
             public_law=public_law,
+            amendment_year=amendment_year,
         ))
 
     return effective_dates
