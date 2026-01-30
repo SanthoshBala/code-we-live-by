@@ -408,6 +408,14 @@ async def _fetch_section_from_db(title_num: int, section_num: str) -> str | None
     return None
 
 
+def _normalize_section_number(section_num: str) -> str:
+    """Normalize section number for comparison.
+
+    Converts hyphens to en-dashes since OLRC XML uses en-dashes.
+    """
+    return section_num.replace("-", "–")  # hyphen to en-dash
+
+
 def _fetch_section_from_xml(
     title_num: int, section_num: str, data_dir: Path
 ) -> str | None:
@@ -424,8 +432,11 @@ def _fetch_section_from_xml(
     parser = USLMParser()
     result = parser.parse_file(xml_path)
 
+    # Normalize input for comparison (OLRC uses en-dashes)
+    normalized_input = _normalize_section_number(section_num)
+
     for section in result.sections:
-        if section.section_number == section_num:
+        if section.section_number == normalized_input:
             return section.text_content
 
     return None
