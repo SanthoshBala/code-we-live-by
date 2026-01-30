@@ -535,6 +535,11 @@ def normalize_text_command(
     else:
         # Fall back to heuristic-based normalization
         result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
+        # If we have a parsed section with notes, use its notes for better parsing
+        if parsed_section and parsed_section.notes:
+            from pipeline.olrc.normalized_section import SectionNotes, _parse_notes_structure
+            result.notes.raw_notes = parsed_section.notes
+            _parse_notes_structure(parsed_section.notes, result.notes)
 
     # Display results
     print()
@@ -619,19 +624,73 @@ def normalize_text_command(
         print()
         print("NOTES:")
         print("-" * 70)
-        if result.notes.historical_notes:
-            preview = result.notes.historical_notes[:200].replace("\n", " ")
-            print(f"  Historical: {preview}...")
-        if result.notes.editorial_notes:
-            preview = result.notes.editorial_notes[:200].replace("\n", " ")
-            print(f"  Editorial: {preview}...")
-        if result.notes.statutory_notes:
-            preview = result.notes.statutory_notes[:200].replace("\n", " ")
-            print(f"  Statutory: {preview}...")
-        # If no specific notes were parsed, show raw preview
-        if not (result.notes.historical_notes or result.notes.editorial_notes or result.notes.statutory_notes):
-            preview = result.notes.raw_notes[:300].replace("\n", " ")
-            print(f"  Raw: {preview}...")
+
+        # Section status
+        if result.notes.is_transferred:
+            print(f"  ** TRANSFERRED to {result.notes.transferred_to}")
+        if result.notes.is_omitted:
+            print("  ** OMITTED")
+
+        # Historical and Revision Notes (older sections)
+        if result.notes.historical_revision_notes:
+            preview = result.notes.historical_revision_notes[:200].replace("\n", " ")
+            print(f"\n  Historical and Revision Notes:")
+            print(f"    {preview}...")
+
+        # Codification
+        if result.notes.codification:
+            preview = result.notes.codification[:200].replace("\n", " ")
+            print(f"\n  Codification:")
+            print(f"    {preview}...")
+
+        # Amendments
+        if result.notes.has_amendments:
+            print(f"\n  Amendments ({len(result.notes.amendments)}):")
+            for amend in result.notes.amendments[:5]:
+                desc = amend.description[:60].replace("\n", " ")
+                print(f"    {amend.year}: {desc}...")
+            if len(result.notes.amendments) > 5:
+                print(f"    ... and {len(result.notes.amendments) - 5} more")
+
+        # Effective Dates
+        if result.notes.effective_dates:
+            print(f"\n  Effective Dates ({len(result.notes.effective_dates)}):")
+            for ed in result.notes.effective_dates[:3]:
+                date_str = ed.date or "unspecified"
+                desc = ed.description[:50].replace("\n", " ")
+                print(f"    {date_str}: {desc}...")
+            if len(result.notes.effective_dates) > 3:
+                print(f"    ... and {len(result.notes.effective_dates) - 3} more")
+
+        # Short Titles
+        if result.notes.short_titles:
+            print(f"\n  Short Titles ({len(result.notes.short_titles)}):")
+            for st in result.notes.short_titles[:3]:
+                year_str = f" ({st.year})" if st.year else ""
+                print(f"    {st.title[:60]}{year_str}")
+            if len(result.notes.short_titles) > 3:
+                print(f"    ... and {len(result.notes.short_titles) - 3} more")
+
+        # References in Text
+        if result.notes.references_in_text:
+            print(f"\n  References in Text ({len(result.notes.references_in_text)}):")
+            for ref in result.notes.references_in_text[:2]:
+                preview = ref[:80].replace("\n", " ")
+                print(f"    {preview}...")
+            if len(result.notes.references_in_text) > 2:
+                print(f"    ... and {len(result.notes.references_in_text) - 2} more")
+
+        # Other fields (show if present)
+        if result.notes.regulations:
+            preview = result.notes.regulations[:100].replace("\n", " ")
+            print(f"\n  Regulations: {preview}...")
+        if result.notes.change_of_name:
+            preview = result.notes.change_of_name[:100].replace("\n", " ")
+            print(f"\n  Change of Name: {preview}...")
+        if result.notes.termination:
+            preview = result.notes.termination[:100].replace("\n", " ")
+            print(f"\n  Termination: {preview}...")
+
         print("-" * 70)
 
     return 0

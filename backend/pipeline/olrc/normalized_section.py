@@ -384,21 +384,93 @@ def parse_citations(text: str) -> list[Citation]:
 
 
 @dataclass
+class Amendment:
+    """A single amendment to a section.
+
+    Represents one change made to a section by a Public Law,
+    like a commit in version control.
+    """
+
+    year: int
+    public_law: str  # e.g., "Pub. L. 103-322"
+    description: str  # What changed
+    congress: int | None = None
+    law_number: int | None = None
+
+    @property
+    def public_law_id(self) -> str:
+        """Return normalized PL identifier."""
+        if self.congress and self.law_number:
+            return f"PL {self.congress}-{self.law_number}"
+        return self.public_law
+
+
+@dataclass
+class EffectiveDate:
+    """An effective date provision."""
+
+    description: str  # The full text
+    date: str | None = None  # Extracted date if present
+    public_law: str | None = None  # Related Pub. L. if specified
+
+
+@dataclass
+class ShortTitle:
+    """A short title (common name) for an act."""
+
+    title: str  # e.g., "Philanthropy Protection Act of 1995"
+    year: int | None = None
+    public_law: str | None = None
+
+
+@dataclass
 class SectionNotes:
     """Metadata notes extracted from a US Code section.
 
-    These are separated from the law text and treated like documentation:
-    - citations: Public Law citations (parsed as structured data)
-    - historical_notes: Historical and revision notes
-    - editorial_notes: Editorial notes, amendments, codification info
-    - statutory_notes: Statutory notes and related subsidiaries
+    These are separated from the law text and treated like documentation.
+    The structure mirrors the OLRC's organization of notes.
+
+    Main categories:
+    - Historical and Revision Notes (older sections)
+    - Editorial Notes (codification, amendments, references)
+    - Statutory Notes (effective dates, short titles, regulations)
     """
 
+    # Citations (already structured)
     citations: list[Citation] = field(default_factory=list)
-    historical_notes: str = ""
-    editorial_notes: str = ""
-    statutory_notes: str = ""
-    raw_notes: str = ""  # Everything after the law text
+
+    # Historical and Revision Notes (older sections, pre-1947 codification)
+    historical_revision_notes: str = ""
+
+    # Editorial Notes subsections
+    codification: str = ""
+    references_in_text: list[str] = field(default_factory=list)
+    amendments: list[Amendment] = field(default_factory=list)
+    prior_provisions: str = ""
+
+    # Statutory Notes subsections
+    effective_dates: list[EffectiveDate] = field(default_factory=list)
+    short_titles: list[ShortTitle] = field(default_factory=list)
+    regulations: str = ""
+    change_of_name: str = ""
+    transfer_of_functions: str = ""
+    termination: str = ""
+    definitions: str = ""
+    construction: str = ""
+    savings_provision: str = ""
+
+    # Section status
+    transferred_to: str | None = None  # Section moved to another location
+    omitted: bool = False  # Section was omitted
+    renumbered_from: str | None = None  # Previous section number
+
+    # Raw text (for anything not parsed)
+    raw_notes: str = ""
+
+    # Legacy fields (for backwards compatibility)
+    historical_notes: str = ""  # Deprecated, use historical_revision_notes
+    editorial_notes: str = ""  # Deprecated, use specific fields
+    statutory_notes: str = ""  # Deprecated, use specific fields
 
     @property
     def has_notes(self) -> bool:
@@ -409,6 +481,21 @@ class SectionNotes:
     def has_citations(self) -> bool:
         """Return True if any citations were parsed."""
         return len(self.citations) > 0
+
+    @property
+    def has_amendments(self) -> bool:
+        """Return True if any amendments were parsed."""
+        return len(self.amendments) > 0
+
+    @property
+    def is_transferred(self) -> bool:
+        """Return True if section was transferred to another location."""
+        return self.transferred_to is not None
+
+    @property
+    def is_omitted(self) -> bool:
+        """Return True if section was omitted."""
+        return self.omitted
 
 
 @dataclass
@@ -613,6 +700,339 @@ def _split_into_sentences(text: str, start_offset: int = 0) -> list[tuple[str, i
     return sentences
 
 
+def _parse_amendments(text: str) -> list[Amendment]:
+    """Parse amendment entries from the Amendments subsection.
+
+    Amendments are listed chronologically (newest first) like:
+    "2010—Pub. L. 111-203 substituted 'Bureau' for 'Board'."
+    "1976—Subsec. (e). Pub. L. 94-239 substituted provisions..."
+
+    Args:
+        text: The amendments subsection text.
+
+    Returns:
+        List of Amendment objects.
+    """
+    amendments = []
+
+    # Pattern for amendment entries: year followed by description
+    # Format: "YYYY—" or "YYYY—Subsec." or "YYYY—Par."
+    amendment_pattern = re.compile(
+        r"(\d{4})\s*[—–-]\s*"  # Year and em-dash
+        r"((?:Subsec\.|Par\.|Pub\.\s*L\.).*?)"  # Description start
+        r"(?=\d{4}\s*[—–-]|$)",  # Until next year or end
+        re.DOTALL,
+    )
+
+    for match in amendment_pattern.finditer(text):
+        year = int(match.group(1))
+        description = match.group(2).strip()
+
+        # Extract Pub. L. reference from description
+        pub_l_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—–-](\d+)", description)
+        congress = None
+        law_number = None
+        public_law = ""
+
+        if pub_l_match:
+            congress = int(pub_l_match.group(1))
+            law_number = int(pub_l_match.group(2))
+            public_law = f"Pub. L. {congress}-{law_number}"
+
+        amendments.append(Amendment(
+            year=year,
+            public_law=public_law,
+            description=description,
+            congress=congress,
+            law_number=law_number,
+        ))
+
+    return amendments
+
+
+def _parse_effective_dates(text: str) -> list[EffectiveDate]:
+    """Parse effective date entries from the Statutory Notes.
+
+    Args:
+        text: The statutory notes text.
+
+    Returns:
+        List of EffectiveDate objects.
+    """
+    effective_dates = []
+
+    # Look for "Effective Date" sections
+    eff_pattern = re.compile(
+        r"Effective Date(?: of \d{4} Amendment)?\s+"
+        r"(.*?)"
+        r"(?=Effective Date|Short Title|Change of Name|Transfer of Functions|$)",
+        re.DOTALL | re.IGNORECASE,
+    )
+
+    for match in eff_pattern.finditer(text):
+        description = match.group(1).strip()
+        if not description:
+            continue
+
+        # Try to extract a date
+        date_match = re.search(
+            r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})",
+            description,
+        )
+        date = date_match.group(1) if date_match else None
+
+        # Try to extract Pub. L.
+        pub_l_match = re.search(r"Pub\.\s*L\.\s*\d+[—–-]\d+", description)
+        public_law = pub_l_match.group(0) if pub_l_match else None
+
+        effective_dates.append(EffectiveDate(
+            description=description[:500],  # Limit length
+            date=date,
+            public_law=public_law,
+        ))
+
+    return effective_dates
+
+
+def _parse_short_titles(text: str) -> list[ShortTitle]:
+    """Parse short title entries from the Statutory Notes.
+
+    Args:
+        text: The statutory notes text.
+
+    Returns:
+        List of ShortTitle objects.
+    """
+    short_titles = []
+
+    # Look for "Short Title" sections
+    title_pattern = re.compile(
+        r"Short Title(?: of \d{4} (?:Amendment|Act))?\s+"
+        r"(.*?)"
+        r"(?=Short Title|Effective Date|Change of Name|Transfer of Functions|Regulations|$)",
+        re.DOTALL | re.IGNORECASE,
+    )
+
+    for match in title_pattern.finditer(text):
+        description = match.group(1).strip()
+        if not description:
+            continue
+
+        # Try to extract the actual title name (usually in quotes)
+        name_match = re.search(r'"([^"]+(?:Act|Law)[^"]*)"', description)
+        if name_match:
+            title = name_match.group(1)
+        else:
+            # Try without quotes
+            name_match = re.search(r"(?:cited as|known as)(?: the)?\s+['\"]?([^'\"]+(?:Act|Law)[^'\"]*)", description, re.IGNORECASE)
+            title = name_match.group(1).strip() if name_match else description[:100]
+
+        # Extract year
+        year_match = re.search(r"\b(19\d{2}|20\d{2})\b", title)
+        year = int(year_match.group(1)) if year_match else None
+
+        # Extract Pub. L.
+        pub_l_match = re.search(r"Pub\.\s*L\.\s*\d+[—–-]\d+", description)
+        public_law = pub_l_match.group(0) if pub_l_match else None
+
+        short_titles.append(ShortTitle(
+            title=title,
+            year=year,
+            public_law=public_law,
+        ))
+
+    return short_titles
+
+
+def _parse_references_in_text(text: str) -> list[str]:
+    """Parse References in Text entries.
+
+    Args:
+        text: The editorial notes text.
+
+    Returns:
+        List of reference descriptions.
+    """
+    references = []
+
+    # Look for "References in Text" section
+    ref_match = re.search(
+        r"References in Text\s+(.*?)(?=Codification|Amendments|Prior Provisions|$)",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+
+    if ref_match:
+        ref_text = ref_match.group(1).strip()
+        # Split by sentence-like boundaries
+        # References often start with "The X, referred to in..."
+        parts = re.split(r"(?<=\.)\s+(?=[A-Z])", ref_text)
+        for part in parts:
+            part = part.strip()
+            if part and len(part) > 20:  # Skip very short fragments
+                references.append(part[:500])  # Limit length
+
+    return references
+
+
+def _parse_notes_structure(raw_notes: str, notes: SectionNotes) -> None:
+    """Parse all structured fields from raw notes text.
+
+    Args:
+        raw_notes: The raw notes text.
+        notes: SectionNotes object to populate.
+    """
+    # Citations
+    notes.citations = parse_citations(raw_notes)
+
+    # Check for section status
+    if re.search(r"\bTransferred\b", raw_notes[:100], re.IGNORECASE):
+        # Try to find where it was transferred to
+        transfer_match = re.search(
+            r"reclassified as section (\d+[a-z]?) of Title (\d+)",
+            raw_notes,
+            re.IGNORECASE,
+        )
+        if transfer_match:
+            notes.transferred_to = f"{transfer_match.group(2)} U.S.C. § {transfer_match.group(1)}"
+        else:
+            notes.transferred_to = "another location"
+
+    if re.search(r"\bOmitted\b", raw_notes[:100], re.IGNORECASE):
+        notes.omitted = True
+
+    # Historical and Revision Notes
+    hist_match = re.search(
+        r"Historical and Revision Notes\s*(.*?)(?=Editorial Notes|Statutory Notes|$)",
+        raw_notes,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if hist_match:
+        notes.historical_revision_notes = hist_match.group(1).strip()
+        notes.historical_notes = notes.historical_revision_notes  # Legacy
+
+    # Editorial Notes section
+    edit_match = re.search(
+        r"Editorial Notes\s*(.*?)(?=Statutory Notes|$)",
+        raw_notes,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if edit_match:
+        editorial_text = edit_match.group(1).strip()
+        notes.editorial_notes = editorial_text  # Legacy
+
+        # Parse subsections within Editorial Notes
+        # Codification
+        codif_match = re.search(
+            r"Codification\s+(.*?)(?=References in Text|Amendments|Prior Provisions|$)",
+            editorial_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if codif_match:
+            notes.codification = codif_match.group(1).strip()
+
+        # References in Text
+        notes.references_in_text = _parse_references_in_text(editorial_text)
+
+        # Amendments
+        amend_match = re.search(
+            r"Amendments\s+(.*?)(?=Prior Provisions|$)",
+            editorial_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if amend_match:
+            notes.amendments = _parse_amendments(amend_match.group(1))
+
+        # Prior Provisions
+        prior_match = re.search(
+            r"Prior Provisions?\s+(.*?)$",
+            editorial_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if prior_match:
+            notes.prior_provisions = prior_match.group(1).strip()
+
+    # Statutory Notes section
+    stat_match = re.search(
+        r"Statutory Notes and Related Subsidiaries\s*(.*)",
+        raw_notes,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if stat_match:
+        statutory_text = stat_match.group(1).strip()
+        notes.statutory_notes = statutory_text  # Legacy
+
+        # Parse subsections within Statutory Notes
+        # Effective Dates
+        notes.effective_dates = _parse_effective_dates(statutory_text)
+
+        # Short Titles
+        notes.short_titles = _parse_short_titles(statutory_text)
+
+        # Regulations
+        reg_match = re.search(
+            r"Regulations?\s+(.*?)(?=Change of Name|Transfer of Functions|Termination|$)",
+            statutory_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if reg_match:
+            notes.regulations = reg_match.group(1).strip()[:500]
+
+        # Change of Name
+        name_match = re.search(
+            r"Change of Name\s+(.*?)(?=Transfer of Functions|Termination|Effective Date|$)",
+            statutory_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if name_match:
+            notes.change_of_name = name_match.group(1).strip()[:500]
+
+        # Transfer of Functions
+        transfer_match = re.search(
+            r"Transfer of Functions\s+(.*?)(?=Termination|Effective Date|Change of Name|$)",
+            statutory_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if transfer_match:
+            notes.transfer_of_functions = transfer_match.group(1).strip()[:500]
+
+        # Termination
+        term_match = re.search(
+            r"Termination\s+(.*?)(?=Effective Date|Change of Name|Transfer of Functions|$)",
+            statutory_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if term_match:
+            notes.termination = term_match.group(1).strip()[:500]
+
+        # Definitions
+        def_match = re.search(
+            r"Definitions?\s+(.*?)(?=Effective Date|Short Title|$)",
+            statutory_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if def_match:
+            notes.definitions = def_match.group(1).strip()[:500]
+
+        # Construction
+        const_match = re.search(
+            r"Construction\s+(.*?)(?=Effective Date|Short Title|Regulations|$)",
+            statutory_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if const_match:
+            notes.construction = const_match.group(1).strip()[:500]
+
+        # Savings Provision
+        save_match = re.search(
+            r"Savings? Provisions?\s+(.*?)(?=Effective Date|Short Title|$)",
+            statutory_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if save_match:
+            notes.savings_provision = save_match.group(1).strip()[:500]
+
+
 def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
     """Separate law text from notes/metadata sections.
 
@@ -658,37 +1078,7 @@ def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
 
     if raw_notes:
         notes.raw_notes = raw_notes
-
-        # Extract specific note sections
-        # Citations (Pub. L. references) - parse into structured data
-        notes.citations = parse_citations(raw_notes)
-
-        # Historical notes
-        hist_match = re.search(
-            r"Historical and Revision Notes\s*(.*?)(?=Editorial Notes|Statutory Notes|$)",
-            raw_notes,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if hist_match:
-            notes.historical_notes = hist_match.group(1).strip()
-
-        # Editorial notes
-        edit_match = re.search(
-            r"Editorial Notes\s*(.*?)(?=Statutory Notes|$)",
-            raw_notes,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if edit_match:
-            notes.editorial_notes = edit_match.group(1).strip()
-
-        # Statutory notes
-        stat_match = re.search(
-            r"Statutory Notes and Related Subsidiaries\s*(.*)",
-            raw_notes,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if stat_match:
-            notes.statutory_notes = stat_match.group(1).strip()
+        _parse_notes_structure(raw_notes, notes)
 
     return law_text, notes
 
@@ -1061,32 +1451,7 @@ def normalize_parsed_section(
     notes = SectionNotes()
     if parsed_section.notes:
         notes.raw_notes = parsed_section.notes
-        notes.citations = parse_citations(parsed_section.notes)
-
-        # Extract note types (historical, editorial, statutory)
-        hist_match = re.search(
-            r"Historical and Revision Notes\s*(.*?)(?=Editorial Notes|Statutory Notes|$)",
-            parsed_section.notes,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if hist_match:
-            notes.historical_notes = hist_match.group(1).strip()
-
-        edit_match = re.search(
-            r"Editorial Notes\s*(.*?)(?=Statutory Notes|$)",
-            parsed_section.notes,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if edit_match:
-            notes.editorial_notes = edit_match.group(1).strip()
-
-        stat_match = re.search(
-            r"Statutory Notes and Related Subsidiaries\s*(.*)",
-            parsed_section.notes,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if stat_match:
-            notes.statutory_notes = stat_match.group(1).strip()
+        _parse_notes_structure(parsed_section.notes, notes)
 
     return NormalizedSection(
         lines=lines,
