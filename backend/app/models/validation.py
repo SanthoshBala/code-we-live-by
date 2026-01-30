@@ -120,6 +120,9 @@ class TextSpan(Base):
     session_id: Mapped[int] = mapped_column(
         ForeignKey("parsing_session.session_id", ondelete="CASCADE"), nullable=False
     )
+    # Character positions in the law's full text (0-indexed).
+    # The span covers law_text[start_pos:end_pos] (Python slice notation).
+    # Example: start_pos=100, end_pos=150 means characters 100-149 inclusive.
     start_pos: Mapped[int] = mapped_column(Integer, nullable=False)
     end_pos: Mapped[int] = mapped_column(Integer, nullable=False)
     span_type: Mapped[SpanType] = mapped_column(
@@ -191,7 +194,8 @@ class ParsedAmendmentRecord(Base, TimestampMixin):
     old_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     new_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Position in source
+    # Position in source law text (0-indexed, Python slice notation).
+    # law_text[start_pos:end_pos] gives the matched text.
     start_pos: Mapped[int] = mapped_column(Integer, nullable=False)
     end_pos: Mapped[int] = mapped_column(Integer, nullable=False)
     full_match_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -333,7 +337,8 @@ class PatternDiscovery(Base, TimestampMixin):
         ForeignKey("parsing_session.session_id", ondelete="CASCADE"), nullable=False
     )
 
-    # Unmatched text
+    # Unmatched text and its position (0-indexed, Python slice notation).
+    # law_text[start_pos:end_pos] gives the unmatched text.
     unmatched_text: Mapped[str] = mapped_column(Text, nullable=False)
     detected_keywords: Mapped[str | None] = mapped_column(Text, nullable=True)
     context_text: Mapped[str | None] = mapped_column(Text, nullable=True)
