@@ -580,7 +580,7 @@ def normalize_text_command(
         for line in result.lines:
             marker_info = f"marker='{line.marker}'" if line.marker else "prose"
             print(
-                f"  L{line.line_number}: indent={line.indent_level}, "
+                f"    L{line.line_number}: indent={line.indent_level}, "
                 f"{marker_info}, chars=[{line.start_char}:{line.end_char}]"
             )
 
@@ -607,16 +607,16 @@ def normalize_text_command(
             return ", ".join(parts)
 
         if enactment:
-            print("  # Enactment")
+            print("    # Enactment")
             for citation in enactment:
-                print(f"  {format_citation(citation)}")
+                print(f"    {format_citation(citation)}")
 
         if amendments:
             if enactment:
                 print()  # Blank line between sections
-            print("  # Amendments")
+            print("    # Amendments")
             for citation in amendments:
-                print(f"  {format_citation(citation)}")
+                print(f"    {format_citation(citation)}")
 
         print("-" * 70)
 
@@ -628,9 +628,9 @@ def normalize_text_command(
 
         # Section status
         if result.notes.is_transferred:
-            print(f"  ** TRANSFERRED to {result.notes.transferred_to}")
+            print(f"    ** TRANSFERRED to {result.notes.transferred_to}")
         if result.notes.is_omitted:
-            print("  ** OMITTED")
+            print("    ** OMITTED")
 
         # Display notes by category, showing headers within each
         historical = result.notes.historical_notes
@@ -638,48 +638,48 @@ def normalize_text_command(
         statutory = result.notes.statutory_notes
 
         if historical:
-            print(f"\n  Historical and Revision Notes ({len(historical)}):")
+            print(f"\n    Historical and Revision Notes ({len(historical)}):")
             for note in historical:
-                print(f"    - {note.header}")
+                print(f"        - {note.header}")
 
         if editorial:
-            print(f"\n  Editorial Notes ({len(editorial)}):")
+            print(f"\n    Editorial Notes ({len(editorial)}):")
             for note in editorial:
-                print(f"    - {note.header}")
+                print(f"        - {note.header}")
 
         if statutory:
-            print(f"\n  Statutory Notes ({len(statutory)}):")
+            print(f"\n    Statutory Notes ({len(statutory)}):")
             for note in statutory:
-                print(f"    - {note.header}")
+                print(f"        - {note.header}")
 
         # Structured fields with detailed display
         # Amendments (use consistent [YEAR] format)
         if result.notes.has_amendments:
-            print(f"\n  Amendments ({len(result.notes.amendments)}):")
+            print(f"\n    Amendments ({len(result.notes.amendments)}):")
             for amend in result.notes.amendments[:5]:
                 desc = amend.description[:60].replace("\n", " ")
-                print(f"    [{amend.year}] {desc}...")
+                print(f"        [{amend.year}] {desc}...")
             if len(result.notes.amendments) > 5:
-                print(f"    ... and {len(result.notes.amendments) - 5} more")
+                print(f"        ... and {len(result.notes.amendments) - 5} more")
 
         # Effective Dates (use consistent [YEAR] format)
         if result.notes.effective_dates:
-            print(f"\n  Effective Dates ({len(result.notes.effective_dates)}):")
+            print(f"\n    Effective Dates ({len(result.notes.effective_dates)}):")
             for ed in result.notes.effective_dates[:3]:
                 year_str = f"[{ed.amendment_year}] " if ed.amendment_year else ""
                 desc = ed.description[:70].replace("\n", " ")
-                print(f"    {year_str}{desc}...")
+                print(f"        {year_str}{desc}...")
             if len(result.notes.effective_dates) > 3:
-                print(f"    ... and {len(result.notes.effective_dates) - 3} more")
+                print(f"        ... and {len(result.notes.effective_dates) - 3} more")
 
         # Short Titles
         if result.notes.short_titles:
-            print(f"\n  Short Titles ({len(result.notes.short_titles)}):")
+            print(f"\n    Short Titles ({len(result.notes.short_titles)}):")
             for st in result.notes.short_titles[:3]:
                 year_str = f" ({st.year})" if st.year else ""
-                print(f"    {st.title[:60]}{year_str}")
+                print(f"        {st.title[:60]}{year_str}")
             if len(result.notes.short_titles) > 3:
-                print(f"    ... and {len(result.notes.short_titles) - 3} more")
+                print(f"        ... and {len(result.notes.short_titles) - 3} more")
 
         print("-" * 70)
 
