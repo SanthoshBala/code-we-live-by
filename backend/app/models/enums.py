@@ -119,8 +119,8 @@ class ParsingMode(str, enum.Enum):
     Defines the level of automation and human oversight for parsing operations.
     """
 
-    HUMAN_PLUS_LLM = "Human_Plus_LLM"  # Human + Claude review together
-    LLM = "LLM"  # Claude autonomous with parser tools
+    HUMAN_PLUS_LLM = "Human_Plus_LLM"  # Human + LLM review together
+    LLM = "LLM"  # LLM autonomous with parser tools
     REGEX = "RegEx"  # Pure programmatic parsing
 
 

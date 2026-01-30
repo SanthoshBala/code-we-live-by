@@ -2,8 +2,8 @@
 
 This module provides different parsing mode implementations:
 - RegExParsingSession: Pure programmatic parsing using regex patterns
-- LLMParsingSession: (Future) Claude-assisted parsing
-- HumanPlusLLMParsingSession: (Future) Human + Claude collaborative parsing
+- LLMParsingSession: (Future) LLM-assisted parsing
+- HumanPlusLLMParsingSession: (Future) Human + LLM collaborative parsing
 """
 
 import json
@@ -486,7 +486,7 @@ async def validate_against_govinfo(
 class LLMParsingSession:
     """LLM-assisted parsing session (Future implementation).
 
-    This will use Claude to parse amendments when regex patterns
+    This will use an LLM to parse amendments when regex patterns
     fail or need verification.
     """
 
@@ -504,7 +504,7 @@ class HumanPlusLLMParsingSession:
     """Human + LLM collaborative parsing session (Future implementation).
 
     This will provide an interactive interface for human reviewers
-    to work with Claude on parsing complex amendments.
+    to work with an LLM on parsing complex amendments.
     """
 
     def __init__(self, db: AsyncSession, default_title: int | None = None):
