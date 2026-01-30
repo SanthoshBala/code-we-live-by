@@ -687,9 +687,6 @@ def normalize_text_command(
         if result.notes.change_of_name:
             preview = result.notes.change_of_name[:100].replace("\n", " ")
             print(f"\n  Change of Name: {preview}...")
-        if result.notes.termination:
-            preview = result.notes.termination[:100].replace("\n", " ")
-            print(f"\n  Termination: {preview}...")
 
         print("-" * 70)
 

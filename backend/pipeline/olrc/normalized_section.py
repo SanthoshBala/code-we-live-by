@@ -180,7 +180,6 @@ NOTES_SECTION_HEADERS = [
     r"Effective Date",
     r"Short Title",
     r"Regulations",
-    r"Termination of",
     r"Transfer of Functions",
     r"Savings Provision",
 ]
@@ -460,7 +459,6 @@ class SectionNotes:
     regulations: str = ""
     change_of_name: str = ""
     transfer_of_functions: str = ""
-    termination: str = ""
     definitions: str = ""
     construction: str = ""
     savings_provision: str = ""
@@ -1040,15 +1038,6 @@ def _parse_notes_structure(raw_notes: str, notes: SectionNotes) -> None:
         )
         if transfer_match:
             notes.transfer_of_functions = transfer_match.group(1).strip()[:500]
-
-        # Termination
-        term_match = re.search(
-            r"Termination\s+(.*?)(?=Effective Date|Change of Name|Transfer of Functions|$)",
-            statutory_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if term_match:
-            notes.termination = term_match.group(1).strip()[:500]
 
         # Definitions
         def_match = re.search(
