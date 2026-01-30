@@ -335,7 +335,7 @@ class TestIntegration:
         accountant = TextAccountant(text)
 
         # Simulate claiming the amendment portion (lines 4-5)
-        amendment_start = text.find('is amended by striking')
+        amendment_start = text.find("is amended by striking")
         amendment_end = text.find('distribution"') + len('distribution"')
         if amendment_end > 0:
             accountant.claim_span(
@@ -375,8 +375,8 @@ class TestIntegration:
         end2 = text.find('new2";') + len('new2";')
         accountant.claim_span(pos2, end2, amendment_id=2, pattern_name="strike_insert")
 
-        pos3 = text.find('by adding at the end')
-        end3 = text.find('following:') + len('following:')
+        pos3 = text.find("by adding at the end")
+        end3 = text.find("following:") + len("following:")
         accountant.claim_span(pos3, end3, amendment_id=3, pattern_name="add_at_end")
 
         report = accountant.generate_coverage_report()

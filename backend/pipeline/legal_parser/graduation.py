@@ -134,10 +134,7 @@ class GraduationManager:
             )
 
         # Check amendment count mismatch
-        if (
-            report.govinfo_amendment_count is not None
-            and report.total_amendments > 0
-        ):
+        if report.govinfo_amendment_count is not None and report.total_amendments > 0:
             expected = report.govinfo_amendment_count
             actual = report.total_amendments
             if expected > 0:
@@ -265,9 +262,7 @@ class GraduationManager:
             blockers=blockers,
         )
 
-    async def get_pattern_performance(
-        self, pattern_name: str
-    ) -> PatternPerformance:
+    async def get_pattern_performance(self, pattern_name: str) -> PatternPerformance:
         """Get detailed performance metrics for a pattern.
 
         Args:
@@ -346,7 +341,10 @@ class GraduationManager:
                 func.count(ParsedAmendmentRecord.record_id).label("count"),
             )
             .group_by(ParsedAmendmentRecord.pattern_name)
-            .having(func.count(ParsedAmendmentRecord.record_id) >= self.MIN_USES_FOR_GRADUATION)
+            .having(
+                func.count(ParsedAmendmentRecord.record_id)
+                >= self.MIN_USES_FOR_GRADUATION
+            )
         )
         candidates = result.all()
 

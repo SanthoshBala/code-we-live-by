@@ -113,6 +113,7 @@ class TestGetParsingSession:
 
     def test_get_regex_session_returns_correct_type(self) -> None:
         """Test that get_parsing_session returns correct session type."""
+
         # Create a mock session-like object
         class MockSession:
             pass
@@ -123,6 +124,7 @@ class TestGetParsingSession:
 
     def test_llm_mode_not_implemented(self) -> None:
         """Test that LLM mode raises NotImplementedError."""
+
         # Create a mock session-like object
         class MockSession:
             pass

@@ -143,7 +143,9 @@ class RegExParsingSession:
             amendment_records: list[ParsedAmendmentRecord] = []
             if save_to_db:
                 for _i, amendment in enumerate(amendments):
-                    record = self._create_amendment_record(session.session_id, amendment)
+                    record = self._create_amendment_record(
+                        session.session_id, amendment
+                    )
                     self.db.add(record)
                     amendment_records.append(record)
                 await self.db.flush()
@@ -155,15 +157,17 @@ class RegExParsingSession:
                         start_pos=amendment.start_pos,
                         end_pos=amendment.end_pos,
                         span_type=SpanType.CLAIMED,
-                        amendment_record_id=amendment_records[i].record_id if i < len(amendment_records) else None,
+                        amendment_record_id=(
+                            amendment_records[i].record_id
+                            if i < len(amendment_records)
+                            else None
+                        ),
                         pattern_name=amendment.pattern_name,
                     )
                     self.db.add(span)
 
                 # Save unclaimed spans and pattern discoveries
-                await self._save_unclaimed_spans(
-                    session.session_id, coverage, law_text
-                )
+                await self._save_unclaimed_spans(session.session_id, coverage, law_text)
 
             # Check for escalation
             escalation_recommended, escalation_reason = self._check_escalation(
@@ -244,8 +248,12 @@ class RegExParsingSession:
             pattern_type=amendment.pattern_type.value,
             change_type=amendment.change_type,
             target_title=amendment.section_ref.title if amendment.section_ref else None,
-            target_section=amendment.section_ref.section if amendment.section_ref else None,
-            target_subsection_path=amendment.section_ref.subsection_path if amendment.section_ref else None,
+            target_section=(
+                amendment.section_ref.section if amendment.section_ref else None
+            ),
+            target_subsection_path=(
+                amendment.section_ref.subsection_path if amendment.section_ref else None
+            ),
             old_text=amendment.old_text,
             new_text=amendment.new_text,
             start_pos=amendment.start_pos,
@@ -447,7 +455,9 @@ async def validate_against_govinfo(
                 f"~{expected_count} (keywords: {metadata.amendment_keyword_count}, "
                 f"titles: {metadata.titles_amended})"
             )
-            logger.warning(f"Amendment count mismatch for PL {congress}-{law_number}: {mismatch_desc}")
+            logger.warning(
+                f"Amendment count mismatch for PL {congress}-{law_number}: {mismatch_desc}"
+            )
 
         # Update report with GovInfo data
         report.govinfo_amendment_count = expected_count

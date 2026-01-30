@@ -92,13 +92,17 @@ class PLAWAmendmentMetadata:
 
         # Find USC titles being amended
         # Pattern: "title X, United States Code" or "title X of the United States Code"
-        title_pattern = r"title\s+(\d+)(?:\s+of)?\s*,?\s*(?:the\s+)?United\s+States\s+Code"
+        title_pattern = (
+            r"title\s+(\d+)(?:\s+of)?\s*,?\s*(?:the\s+)?United\s+States\s+Code"
+        )
         title_matches = re.findall(title_pattern, xml_content, re.IGNORECASE)
         metadata.titles_amended = sorted({int(t) for t in title_matches})
 
         # Estimate amendment sections
         # Look for sections with amendment-related headings
-        section_with_amend = r"<section[^>]*>.*?(?:amend|striking|inserting).*?</section>"
+        section_with_amend = (
+            r"<section[^>]*>.*?(?:amend|striking|inserting).*?</section>"
+        )
         amendment_sections = re.findall(
             section_with_amend, xml_content, re.IGNORECASE | re.DOTALL
         )
@@ -559,9 +563,7 @@ class GovInfoClient:
 
         url = detail.htm_url if format == "htm" else detail.xml_url
         if not url:
-            logger.warning(
-                f"No {format.upper()} URL for PL {congress}-{law_number}"
-            )
+            logger.warning(f"No {format.upper()} URL for PL {congress}-{law_number}")
             return None
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:

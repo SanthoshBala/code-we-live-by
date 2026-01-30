@@ -205,9 +205,7 @@ class GoldenCorpusManager:
         Returns:
             Number of laws.
         """
-        result = await self.db.execute(
-            select(func.count(GoldenCorpusLaw.corpus_id))
-        )
+        result = await self.db.execute(select(func.count(GoldenCorpusLaw.corpus_id)))
         return result.scalar() or 0
 
     def is_corpus_complete(self, size: int) -> bool:
@@ -397,9 +395,7 @@ class GoldenCorpusManager:
             run_at=datetime.utcnow(),
         )
 
-    async def get_law_regression_history(
-        self, law_id: int
-    ) -> list[dict]:
+    async def get_law_regression_history(self, law_id: int) -> list[dict]:
         """Get regression test history for a specific law.
 
         Args:

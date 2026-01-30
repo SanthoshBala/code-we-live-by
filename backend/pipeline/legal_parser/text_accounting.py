@@ -117,7 +117,9 @@ class TextAccountant:
                 f"(text length: {self.total_length})"
             )
         if end_pos <= start_pos:
-            raise ValueError(f"Invalid span: end ({end_pos}) must be > start ({start_pos})")
+            raise ValueError(
+                f"Invalid span: end ({end_pos}) must be > start ({start_pos})"
+            )
 
         self._claimed_spans.append(
             ClaimedSpan(
@@ -226,7 +228,9 @@ class TextAccountant:
             span.detected_keywords = list({m.lower() for m in matches})
         return span
 
-    def generate_coverage_report(self, min_unclaimed_length: int = 10) -> CoverageReport:
+    def generate_coverage_report(
+        self, min_unclaimed_length: int = 10
+    ) -> CoverageReport:
         """Generate a comprehensive coverage report.
 
         Args:
@@ -243,9 +247,7 @@ class TextAccountant:
 
         # Calculate coverage percentage
         coverage_percentage = (
-            (claimed_length / self.total_length * 100)
-            if self.total_length > 0
-            else 0.0
+            (claimed_length / self.total_length * 100) if self.total_length > 0 else 0.0
         )
 
         # Get and classify unclaimed spans

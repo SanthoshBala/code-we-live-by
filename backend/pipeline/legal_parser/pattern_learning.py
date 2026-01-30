@@ -82,7 +82,9 @@ class PatternLearningService:
         discovery = PatternDiscovery(
             session_id=session_id,
             unmatched_text=unmatched_text,
-            detected_keywords=json.dumps(detected_keywords) if detected_keywords else None,
+            detected_keywords=(
+                json.dumps(detected_keywords) if detected_keywords else None
+            ),
             context_text=context_text,
             start_pos=start_pos,
             end_pos=end_pos,
@@ -119,10 +121,12 @@ class PatternLearningService:
             query = query.where(PatternDiscovery.status == status)
         else:
             query = query.where(
-                PatternDiscovery.status.in_([
-                    PatternDiscoveryStatus.NEW,
-                    PatternDiscoveryStatus.UNDER_REVIEW,
-                ])
+                PatternDiscovery.status.in_(
+                    [
+                        PatternDiscoveryStatus.NEW,
+                        PatternDiscoveryStatus.UNDER_REVIEW,
+                    ]
+                )
             )
 
         query = query.order_by(PatternDiscovery.created_at.desc()).limit(limit)
@@ -372,7 +376,7 @@ class PatternLearningService:
             return None
 
         # Generate the Python code
-        code = f'''    # Discovered from parsing session {discovery.session_id}
+        code = f"""    # Discovered from parsing session {discovery.session_id}
     # Original text: {discovery.unmatched_text[:100]}...
     AmendmentPattern(
         name="{discovery.promoted_pattern_name}",
@@ -380,6 +384,6 @@ class PatternLearningService:
         regex=r"{discovery.suggested_pattern_regex}",
         confidence=0.85,  # Start with lower confidence, raise after validation
         description="{discovery.review_notes or 'Auto-discovered pattern'}",
-    ),'''
+    ),"""
 
         return code

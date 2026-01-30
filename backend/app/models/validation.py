@@ -228,7 +228,11 @@ class ParsedAmendmentRecord(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        target = f"{self.target_title} USC {self.target_section}" if self.target_title else "unknown"
+        target = (
+            f"{self.target_title} USC {self.target_section}"
+            if self.target_title
+            else "unknown"
+        )
         return f"<ParsedAmendmentRecord({self.pattern_name}: {target})>"
 
 
@@ -283,7 +287,9 @@ class IngestionReport(Base, TimestampMixin):
 
     # External validation
     govinfo_amendment_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    amendment_count_mismatch: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    amendment_count_mismatch: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True
+    )
 
     # Relationships
     session: Mapped["ParsingSession"] = relationship(back_populates="ingestion_report")
@@ -411,4 +417,6 @@ class GoldenCorpusLaw(Base, TimestampMixin):
     )
 
     def __repr__(self) -> str:
-        return f"<GoldenCorpusLaw(law_id={self.law_id}, verified_by={self.verified_by})>"
+        return (
+            f"<GoldenCorpusLaw(law_id={self.law_id}, verified_by={self.verified_by})>"
+        )

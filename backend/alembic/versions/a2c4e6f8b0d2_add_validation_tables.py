@@ -28,26 +28,41 @@ def upgrade() -> None:
     parsing_mode.create(op.get_bind(), checkfirst=True)
 
     parsing_session_status = sa.Enum(
-        "IN_PROGRESS", "COMPLETED", "FAILED", "ESCALATED",
-        name="parsing_session_status", create_type=False
+        "IN_PROGRESS",
+        "COMPLETED",
+        "FAILED",
+        "ESCALATED",
+        name="parsing_session_status",
+        create_type=False,
     )
     parsing_session_status.create(op.get_bind(), checkfirst=True)
 
     span_type = sa.Enum(
-        "CLAIMED", "UNCLAIMED_FLAGGED", "UNCLAIMED_IGNORED",
-        name="span_type", create_type=False
+        "CLAIMED",
+        "UNCLAIMED_FLAGGED",
+        "UNCLAIMED_IGNORED",
+        name="span_type",
+        create_type=False,
     )
     span_type.create(op.get_bind(), checkfirst=True)
 
     amendment_review_status = sa.Enum(
-        "PENDING", "APPROVED", "REJECTED", "CORRECTED",
-        name="amendment_review_status", create_type=False
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "CORRECTED",
+        name="amendment_review_status",
+        create_type=False,
     )
     amendment_review_status.create(op.get_bind(), checkfirst=True)
 
     pattern_discovery_status = sa.Enum(
-        "NEW", "UNDER_REVIEW", "PROMOTED", "REJECTED",
-        name="pattern_discovery_status", create_type=False
+        "NEW",
+        "UNDER_REVIEW",
+        "PROMOTED",
+        "REJECTED",
+        name="pattern_discovery_status",
+        create_type=False,
     )
     pattern_discovery_status.create(op.get_bind(), checkfirst=True)
 
@@ -96,8 +111,14 @@ def upgrade() -> None:
         sa.Column(
             "change_type",
             sa.Enum(
-                "ADD", "DELETE", "MODIFY", "REPEAL", "REDESIGNATE", "TRANSFER",
-                name="change_type", create_type=False
+                "ADD",
+                "DELETE",
+                "MODIFY",
+                "REPEAL",
+                "REDESIGNATE",
+                "TRANSFER",
+                name="change_type",
+                create_type=False,
             ),
             nullable=False,
         ),
@@ -132,10 +153,18 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("record_id", name=op.f("pk_parsed_amendment_record")),
     )
-    op.create_index("idx_parsed_amendment_session", "parsed_amendment_record", ["session_id"])
-    op.create_index("idx_parsed_amendment_pattern", "parsed_amendment_record", ["pattern_name"])
-    op.create_index("idx_parsed_amendment_review", "parsed_amendment_record", ["review_status"])
-    op.create_index("idx_parsed_amendment_needs_review", "parsed_amendment_record", ["needs_review"])
+    op.create_index(
+        "idx_parsed_amendment_session", "parsed_amendment_record", ["session_id"]
+    )
+    op.create_index(
+        "idx_parsed_amendment_pattern", "parsed_amendment_record", ["pattern_name"]
+    )
+    op.create_index(
+        "idx_parsed_amendment_review", "parsed_amendment_record", ["review_status"]
+    )
+    op.create_index(
+        "idx_parsed_amendment_needs_review", "parsed_amendment_record", ["needs_review"]
+    )
     op.create_index(
         "idx_parsed_amendment_target",
         "parsed_amendment_record",
@@ -232,8 +261,12 @@ def upgrade() -> None:
         sa.UniqueConstraint("session_id", name=op.f("uq_ingestion_report_session_id")),
     )
     op.create_index("idx_ingestion_report_law", "ingestion_report", ["law_id"])
-    op.create_index("idx_ingestion_report_coverage", "ingestion_report", ["coverage_percentage"])
-    op.create_index("idx_ingestion_report_eligible", "ingestion_report", ["auto_approve_eligible"])
+    op.create_index(
+        "idx_ingestion_report_coverage", "ingestion_report", ["coverage_percentage"]
+    )
+    op.create_index(
+        "idx_ingestion_report_eligible", "ingestion_report", ["auto_approve_eligible"]
+    )
 
     # Create pattern_discovery table
     op.create_table(
@@ -263,7 +296,9 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("discovery_id", name=op.f("pk_pattern_discovery")),
     )
-    op.create_index("idx_pattern_discovery_session", "pattern_discovery", ["session_id"])
+    op.create_index(
+        "idx_pattern_discovery_session", "pattern_discovery", ["session_id"]
+    )
     op.create_index("idx_pattern_discovery_status", "pattern_discovery", ["status"])
 
     # Create golden_corpus_law table
@@ -323,7 +358,9 @@ def downgrade() -> None:
     op.drop_table("text_span")
 
     op.drop_index("idx_parsed_amendment_target", table_name="parsed_amendment_record")
-    op.drop_index("idx_parsed_amendment_needs_review", table_name="parsed_amendment_record")
+    op.drop_index(
+        "idx_parsed_amendment_needs_review", table_name="parsed_amendment_record"
+    )
     op.drop_index("idx_parsed_amendment_review", table_name="parsed_amendment_record")
     op.drop_index("idx_parsed_amendment_pattern", table_name="parsed_amendment_record")
     op.drop_index("idx_parsed_amendment_session", table_name="parsed_amendment_record")

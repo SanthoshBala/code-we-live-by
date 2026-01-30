@@ -399,7 +399,11 @@ async def parse_law_command(
         return 1
 
     print(f"\nParsing PL {congress}-{law_number}")
-    print(f"  Title: {law_info.title[:70]}..." if len(law_info.title) > 70 else f"  Title: {law_info.title}")
+    print(
+        f"  Title: {law_info.title[:70]}..."
+        if len(law_info.title) > 70
+        else f"  Title: {law_info.title}"
+    )
     print(f"  Text length: {len(law_text):,} characters")
     print(f"  Mode: {parsing_mode.value}")
     print()
@@ -458,11 +462,15 @@ async def parse_law_command(
                     govinfo_mismatch = mismatch_desc
 
         # Display results
-        print(f"Parsing {'completed' if result.status.value == 'Completed' else result.status.value}")
+        print(
+            f"Parsing {'completed' if result.status.value == 'Completed' else result.status.value}"
+        )
         print(f"  Session ID: {result.session_id}")
         print(f"  Amendments found: {len(result.amendments)}")
         print(f"  Coverage: {result.coverage_report.coverage_percentage:.1f}%")
-        print(f"    Claimed: {result.coverage_report.claimed_length:,} / {result.coverage_report.total_length:,} chars")
+        print(
+            f"    Claimed: {result.coverage_report.claimed_length:,} / {result.coverage_report.total_length:,} chars"
+        )
         print(f"    Flagged unclaimed: {len(result.coverage_report.flagged_unclaimed)}")
         print(f"    Ignored unclaimed: {len(result.coverage_report.ignored_unclaimed)}")
 
@@ -533,7 +541,9 @@ async def show_ingestion_report_command(
         print(f"  Law ID: {report.law_id}")
         print(f"  Session ID: {report.session_id}")
         print(f"  Mode: {report.session.mode.value if report.session else 'Unknown'}")
-        print(f"  Status: {report.session.status.value if report.session else 'Unknown'}")
+        print(
+            f"  Status: {report.session.status.value if report.session else 'Unknown'}"
+        )
         print()
         print("Coverage:")
         print(f"  Total text length: {report.total_text_length:,}")
@@ -556,8 +566,12 @@ async def show_ingestion_report_command(
 
         print()
         print("Decision:")
-        print(f"  Auto-approve eligible: {'Yes' if report.auto_approve_eligible else 'No'}")
-        print(f"  Escalation recommended: {'Yes' if report.escalation_recommended else 'No'}")
+        print(
+            f"  Auto-approve eligible: {'Yes' if report.auto_approve_eligible else 'No'}"
+        )
+        print(
+            f"  Escalation recommended: {'Yes' if report.escalation_recommended else 'No'}"
+        )
         if report.escalation_reason:
             print(f"  Escalation reason: {report.escalation_reason}")
 
@@ -573,7 +587,11 @@ async def show_ingestion_report_command(
             if amendments:
                 print(f"\nAmendments ({len(amendments)}):")
                 for amend in amendments:
-                    target = f"{amend.target_title} USC {amend.target_section}" if amend.target_title else "unknown"
+                    target = (
+                        f"{amend.target_title} USC {amend.target_section}"
+                        if amend.target_title
+                        else "unknown"
+                    )
                     review = " [NEEDS REVIEW]" if amend.needs_review else ""
                     print(
                         f"  - {amend.pattern_name}: {target} "
