@@ -433,45 +433,140 @@ class SectionNotes:
     """Metadata notes extracted from a US Code section.
 
     These are separated from the law text and treated like documentation.
-    The structure mirrors the OLRC's organization of notes.
+    The structure mirrors the OLRC's organization of notes into three
+    main categories:
 
-    Main categories:
-    - Historical and Revision Notes (older sections)
-    - Editorial Notes (codification, amendments, references)
-    - Statutory Notes (effective dates, short titles, regulations)
+    1. Historical and Revision Notes - Legislative history from codification
+    2. Editorial Notes - OLRC editorial annotations (codification, references, amendments)
+    3. Statutory Notes - Provisions from enacting laws that aren't part of the Code itself
+
+    Note: Some statutory note types are very law-specific (e.g., "Performing Rights
+    Society Consent Decrees" in 17 USC 101). We only parse the common/universal types
+    listed below. Law-specific notes remain in raw_notes.
+
+    Field frequency estimates based on ~10,700 sections across titles 10, 17, 18, 20, 22, 26, 42, 50.
     """
 
-    # Citations (already structured)
+    # =========================================================================
+    # CITATIONS - Structured references to Public Laws that enacted/amended this section
+    # =========================================================================
+    # Example: 17 USC 106 cites "Pub. L. 94-553" as the enacting law
+    # Frequency: >90% of sections have at least one citation
     citations: list[Citation] = field(default_factory=list)
 
-    # Historical and Revision Notes (older sections, pre-1947 codification)
+    # =========================================================================
+    # HISTORICAL AND REVISION NOTES (<10% of sections)
+    # =========================================================================
+    # Legislative history and explanatory notes from the original codification,
+    # typically from House Reports. Common in older titles codified before 1947.
+    # Contains committee explanations of the law's purpose and interpretation.
+    # Example: 17 USC 102 - explains "original works of authorship" language
+    # Example: 18 USC 2 - explains principals vs accessories distinction
     historical_revision_notes: str = ""
 
-    # Editorial Notes subsections
+    # =========================================================================
+    # EDITORIAL NOTES - Added by OLRC to clarify the Code
+    # =========================================================================
+
+    # Codification (~30-40% of sections)
+    # Notes about how the section was placed in the Code, including any
+    # adjustments made during codification (e.g., renumbering references).
+    # Example: 18 USC 39 - notes about section's placement in chapter 2
+    # Example: 42 USC 2 - codification of Public Health Service Act provisions
     codification: str = ""
+
+    # References in Text (~40% of sections)
+    # Explains where referenced laws/sections can be found in the Code.
+    # Helps readers locate cross-referenced provisions.
+    # Example: 17 USC 106A - explains where "Visual Artists Rights Act" is classified
+    # Example: 26 USC 45B - explains references to Social Security Act sections
     references_in_text: list[str] = field(default_factory=list)
+
+    # Amendments (~70-80% of sections) - Most common note type
+    # Chronological list of changes made to this section by subsequent laws.
+    # Each entry identifies the Public Law and describes what was changed.
+    # Example: 17 USC 106 - lists 5 amendments from 1990-2002
+    # Example: 42 USC 201 - extensive amendment history back to 1944
     amendments: list[Amendment] = field(default_factory=list)
+
+    # Prior Provisions (~20-30% of sections)
+    # References to earlier sections that covered similar subject matter
+    # before being repealed, omitted, or superseded by this section.
+    # Example: 18 USC 4248 - references prior civil commitment provisions
     prior_provisions: str = ""
 
-    # Statutory Notes subsections
+    # =========================================================================
+    # STATUTORY NOTES - Provisions from enacting laws, not part of Code text
+    # =========================================================================
+
+    # Effective Dates (~20-30% of sections)
+    # When amendments or the original section took/take effect.
+    # Often includes complex conditions (e.g., "effective 3 months after enactment").
+    # Example: 17 USC 106 - effective dates for 1990 and 1995 amendments
+    # Example: 18 USC 4285 - delayed effective date provisions
     effective_dates: list[EffectiveDate] = field(default_factory=list)
+
+    # Short Titles (<10% of sections)
+    # Popular names for acts (e.g., "USA PATRIOT Act", "Clean Air Act").
+    # Helps identify which well-known law created or amended the section.
+    # Example: 18 USC 3591 - "Federal Death Penalty Act of 1994"
+    # Example: 42 USC 280c - various short titles for health programs
     short_titles: list[ShortTitle] = field(default_factory=list)
+
+    # Regulations (<10% of sections)
+    # Notes about regulatory authority or required rulemaking.
+    # Example: 18 USC 3600A - notes about DNA testing regulations
     regulations: str = ""
+
+    # Change of Name (<10% of sections)
+    # Documents when agency or office names changed (e.g., INS → DHS).
+    # Important for understanding historical references in the text.
+    # Example: 18 USC 5034 - notes about agency name changes
     change_of_name: str = ""
+
+    # Transfer of Functions (~10% of sections)
+    # Documents when responsibilities moved between agencies.
+    # Common after government reorganizations.
+    # Example: 18 USC 4351 - transfer of Bureau of Prisons functions
     transfer_of_functions: str = ""
+
+    # Definitions (<10% of sections)
+    # Statutory definitions that apply to the section but aren't in Code text.
+    # Example: 18 USC 5043 - definitions for juvenile delinquency chapter
     definitions: str = ""
+
+    # Construction (<1% of sections)
+    # How the section should be interpreted relative to other laws.
+    # Example: 18 USC 2252C - construction relative to state laws
     construction: str = ""
+
+    # Savings Provision (<10% of sections)
+    # Preserves rights/proceedings under prior law during transition.
+    # Example: 18 USC 6001 - savings provisions for immunity orders
     savings_provision: str = ""
 
-    # Section status
-    transferred_to: str | None = None  # Section moved to another location
-    omitted: bool = False  # Section was omitted
-    renumbered_from: str | None = None  # Previous section number
+    # =========================================================================
+    # SECTION STATUS - Metadata about the section's current state
+    # =========================================================================
 
-    # Raw text (for anything not parsed)
+    # Section was moved to another location in the Code
+    transferred_to: str | None = None
+
+    # Section was omitted from the Code (not repealed, just not carried forward)
+    omitted: bool = False
+
+    # Section was renumbered from a previous section number
+    renumbered_from: str | None = None
+
+    # =========================================================================
+    # RAW/UNPARSED CONTENT
+    # =========================================================================
+
+    # Full raw text of all notes (for anything not parsed into structured fields)
+    # Includes law-specific statutory notes that don't fit the common categories
     raw_notes: str = ""
 
-    # Legacy fields (for backwards compatibility)
+    # Legacy fields (for backwards compatibility, prefer specific fields above)
     historical_notes: str = ""  # Deprecated, use historical_revision_notes
     editorial_notes: str = ""  # Deprecated, use specific fields
     statutory_notes: str = ""  # Deprecated, use specific fields
