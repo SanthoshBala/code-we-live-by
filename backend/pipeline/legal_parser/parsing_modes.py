@@ -258,8 +258,6 @@ class RegExParsingSession:
             new_text=amendment.new_text,
             start_pos=amendment.start_pos,
             end_pos=amendment.end_pos,
-            full_match_text=amendment.full_match,
-            context_text=amendment.context,
             confidence=amendment.confidence,
             needs_review=amendment.needs_review,
             review_status=AmendmentReviewStatus.PENDING,

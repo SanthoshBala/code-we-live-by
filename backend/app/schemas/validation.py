@@ -110,7 +110,6 @@ class ParsedAmendmentSchema(BaseModel):
     new_text: str | None = Field(None, description="Text being added")
     start_pos: int = Field(..., ge=0, description="Start position in source")
     end_pos: int = Field(..., gt=0, description="End position in source")
-    full_match_text: str = Field(..., description="The full matched text")
     confidence: float = Field(..., ge=0, le=1, description="Confidence score")
     needs_review: bool = Field(
         default=False, description="Whether manual review is needed"

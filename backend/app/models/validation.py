@@ -198,8 +198,6 @@ class ParsedAmendmentRecord(Base, TimestampMixin):
     # law_text[start_pos:end_pos] gives the matched text.
     start_pos: Mapped[int] = mapped_column(Integer, nullable=False)
     end_pos: Mapped[int] = mapped_column(Integer, nullable=False)
-    full_match_text: Mapped[str] = mapped_column(Text, nullable=False)
-    context_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Confidence and review
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
