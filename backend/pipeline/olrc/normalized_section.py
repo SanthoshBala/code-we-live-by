@@ -933,7 +933,7 @@ def _normalize_subsection_recursive(
     lines: list[NormalizedLine],
     line_counter: list[int],  # Mutable counter passed by reference
     char_pos: list[int],  # Mutable position tracker
-    base_indent: int = 1,  # Starting indent level for this subsection
+    base_indent: int = 0,  # Starting indent level for this subsection
 ) -> None:
     """Recursively normalize a subsection and its children into lines.
 

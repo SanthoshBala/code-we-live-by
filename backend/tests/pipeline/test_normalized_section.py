@@ -529,14 +529,14 @@ class TestNormalizeParsedSection:
 
         # 5 lines: header + content + blank + header + content
         assert result.line_count == 5
-        # First header
+        # First header at indent 0 (top-level, like a function)
         assert result.lines[0].content == "(a) First Item"
         assert result.lines[0].marker == "(a)"
-        assert result.lines[0].indent_level == 1
+        assert result.lines[0].indent_level == 0
         # First content (indented under header)
         assert result.lines[1].content == "This is the content."
         assert result.lines[1].marker is None
-        assert result.lines[1].indent_level == 2
+        assert result.lines[1].indent_level == 1
         # Blank line before second header
         assert result.lines[2].content == ""
         assert result.lines[2].indent_level == 0
@@ -575,7 +575,7 @@ class TestNormalizeParsedSection:
 
         assert result.line_count == 2
         assert result.lines[0].content == "(1) Item without heading."
-        assert result.lines[0].indent_level == 1  # base indent for top-level
+        assert result.lines[0].indent_level == 0  # top-level, like a function
         assert result.lines[1].content == "(2) Another item."
 
     def test_normalize_with_nested_children(self) -> None:
@@ -609,15 +609,15 @@ class TestNormalizeParsedSection:
         result = normalize_parsed_section(section)
 
         assert result.line_count == 3
-        # Parent header at indent 1
+        # Parent header at indent 0 (top-level)
         assert result.lines[0].content == "(a) Parent"
-        assert result.lines[0].indent_level == 1
-        # Parent content at indent 2
+        assert result.lines[0].indent_level == 0
+        # Parent content at indent 1
         assert result.lines[1].content == "Parent content."
-        assert result.lines[1].indent_level == 2
-        # Child at indent 3 (parent base + 2 because parent has heading)
+        assert result.lines[1].indent_level == 1
+        # Child at indent 2 (parent base + 2 because parent has heading)
         assert result.lines[2].content == "(1) Child item."
-        assert result.lines[2].indent_level == 3
+        assert result.lines[2].indent_level == 2
 
     def test_empty_subsections(self) -> None:
         """Section with no subsections returns empty lines."""
