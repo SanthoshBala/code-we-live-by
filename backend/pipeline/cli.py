@@ -338,6 +338,277 @@ async def ingest_current_members(
 
 
 # =============================================================================
+# Line Normalizer functions (Task 1.11)
+# =============================================================================
+
+
+def _parse_section_reference(ref: str) -> tuple[int, str] | None:
+    """Parse a section reference like '17 USC 106' or '17/106' into (title, section).
+
+    Supported formats:
+    - "17 USC 106" or "17 U.S.C. 106"
+    - "17/106"
+    - "17 106"
+    - "Title 17 Section 106"
+
+    Returns:
+        Tuple of (title_number, section_number) or None if parsing fails.
+    """
+    import re
+
+    ref = ref.strip()
+
+    # Format: "17/106" or "17 106"
+    match = re.match(r"^(\d+)[/\s]+(\d+[A-Za-z]?)$", ref)
+    if match:
+        return int(match.group(1)), match.group(2)
+
+    # Format: "17 USC 106" or "17 U.S.C. 106" or "17 U.S.C. § 106"
+    match = re.match(
+        r"^(\d+)\s+(?:U\.?S\.?C\.?|USC)\s*§?\s*(\d+[A-Za-z]?)$", ref, re.IGNORECASE
+    )
+    if match:
+        return int(match.group(1)), match.group(2)
+
+    # Format: "Title 17 Section 106"
+    match = re.match(
+        r"^[Tt]itle\s+(\d+)\s+[Ss]ection\s+(\d+[A-Za-z]?)$", ref, re.IGNORECASE
+    )
+    if match:
+        return int(match.group(1)), match.group(2)
+
+    return None
+
+
+async def _fetch_section_from_db(title_num: int, section_num: str) -> str | None:
+    """Fetch section text from the database."""
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.us_code import USCodeSection, USCodeTitle
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(USCodeSection)
+            .join(USCodeTitle)
+            .where(
+                USCodeTitle.title_number == title_num,
+                USCodeSection.section_number == section_num,
+            )
+        )
+        section = result.scalar_one_or_none()
+
+        if section and section.text_content:
+            return section.text_content
+
+    return None
+
+
+def _fetch_section_from_xml(
+    title_num: int, section_num: str, data_dir: Path
+) -> str | None:
+    """Fetch section text from OLRC XML files."""
+    from pipeline.olrc.downloader import OLRCDownloader
+    from pipeline.olrc.parser import USLMParser
+
+    downloader = OLRCDownloader(download_dir=data_dir)
+    xml_path = downloader.get_xml_path(title_num)
+
+    if not xml_path:
+        return None
+
+    parser = USLMParser()
+    result = parser.parse_file(xml_path)
+
+    for section in result.sections:
+        if section.section_number == section_num:
+            return section.text_content
+
+    return None
+
+
+def normalize_text_command(
+    section_ref: str | None = None,
+    text: str | None = None,
+    file: Path | None = None,
+    data_dir: Path = Path("data/olrc"),
+    use_tabs: bool = True,
+    indent_width: int = 4,
+    show_metadata: bool = False,
+    show_raw: bool = False,
+) -> int:
+    """Normalize legal text into lines and display the result.
+
+    Args:
+        section_ref: Section reference like "17 USC 106".
+        text: Text to normalize (if not using section_ref or file).
+        file: Path to file containing text.
+        data_dir: Directory containing OLRC XML files.
+        use_tabs: If True, use tabs for indentation; if False, use spaces.
+        indent_width: Spaces per indent level (only used if use_tabs=False).
+        show_metadata: Show line metadata (positions, markers).
+        show_raw: Show raw text before normalization.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from pipeline.legal_parser.line_normalizer import normalize_section
+
+    content = None
+    source_info = None
+
+    # Priority: section_ref > file > text > stdin
+    if section_ref:
+        parsed = _parse_section_reference(section_ref)
+        if not parsed:
+            print(f"Error: Could not parse section reference: {section_ref}")
+            print("Supported formats: '17 USC 106', '17/106', 'Title 17 Section 106'")
+            return 1
+
+        title_num, section_num = parsed
+        source_info = f"{title_num} U.S.C. § {section_num}"
+
+        # Try database first
+        content = asyncio.run(_fetch_section_from_db(title_num, section_num))
+        if content:
+            source_info += " (from database)"
+        else:
+            # Try XML files
+            content = _fetch_section_from_xml(title_num, section_num, data_dir)
+            if content:
+                source_info += f" (from XML: {data_dir})"
+
+        if not content:
+            print(f"Error: Section {title_num} U.S.C. § {section_num} not found")
+            print("  - Not in database")
+            print(f"  - XML file not found in {data_dir}")
+            print(f"\nTry downloading first: uv run python -m pipeline.cli download --titles {title_num}")
+            return 1
+
+    elif file:
+        if not file.exists():
+            print(f"Error: File not found: {file}")
+            return 1
+        content = file.read_text()
+        source_info = f"file: {file}"
+
+    elif text:
+        content = text
+        source_info = "command line text"
+
+    else:
+        # Read from stdin
+        print("Enter text to normalize (Ctrl+D to finish):")
+        content = sys.stdin.read()
+        source_info = "stdin"
+
+    if not content.strip():
+        print("Error: No text provided")
+        return 1
+
+    # Normalize the text
+    result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
+
+    # Display results
+    print()
+    print("=" * 70)
+    print(f"SOURCE: {source_info}")
+    print("=" * 70)
+
+    if show_raw:
+        print()
+        print("RAW TEXT:")
+        print("-" * 70)
+        # Show first 1000 chars
+        if len(content) > 1000:
+            print(content[:1000] + "...")
+            print(f"  [truncated, {len(content)} chars total]")
+        else:
+            print(content)
+        print("-" * 70)
+
+    print()
+    print("NORMALIZED OUTPUT:")
+    print("-" * 70)
+    for line in result.lines:
+        prefix = f"L{line.line_number:3d} │"
+        display = line.to_display(use_tabs=use_tabs, indent_width=indent_width)
+        print(f"{prefix} {display}")
+
+    print("-" * 70)
+    print(f"Total lines: {result.line_count}")
+    print(f"Law text: {len(result.law_text):,} chars")
+
+    if result.notes.has_notes:
+        print(f"Notes stripped: {len(result.notes.raw_notes):,} chars")
+
+    if show_metadata:
+        print()
+        print("LINE METADATA:")
+        print("-" * 70)
+        for line in result.lines:
+            marker_info = f"marker='{line.marker}'" if line.marker else "prose"
+            print(
+                f"  L{line.line_number}: indent={line.indent_level}, "
+                f"{marker_info}, chars=[{line.start_char}:{line.end_char}]"
+            )
+
+    # Show citations (like imports at the top of a file)
+    if result.notes.has_citations:
+        print()
+        print("CITATIONS:")
+        print("-" * 70)
+
+        # Group citations: first is enactment, rest are amendments
+        enactment = [c for c in result.notes.citations if c.is_original]
+        amendments = [c for c in result.notes.citations if not c.is_original]
+
+        def format_citation(citation):
+            parts = [citation.public_law_id]
+            if citation.title:
+                parts.append(f"title {citation.title}")
+            if citation.section:
+                parts.append(f"§ {citation.section}")
+            if citation.date:
+                parts.append(citation.date)
+            if citation.stat_reference:
+                parts.append(citation.stat_reference)
+            return ", ".join(parts)
+
+        if enactment:
+            print("  # Enactment")
+            for citation in enactment:
+                print(f"  {format_citation(citation)}")
+
+        if amendments:
+            if enactment:
+                print()  # Blank line between sections
+            print("  # Amendments")
+            for citation in amendments:
+                print(f"  {format_citation(citation)}")
+
+        print("-" * 70)
+
+    # Show notes summary if present
+    if result.notes.has_notes:
+        print()
+        print("NOTES (stripped from law text):")
+        print("-" * 70)
+        if result.notes.historical_notes:
+            preview = result.notes.historical_notes[:200].replace("\n", " ")
+            print(f"  Historical: {preview}...")
+        if result.notes.editorial_notes:
+            preview = result.notes.editorial_notes[:200].replace("\n", " ")
+            print(f"  Editorial: {preview}...")
+        if result.notes.statutory_notes:
+            preview = result.notes.statutory_notes[:200].replace("\n", " ")
+            print(f"  Statutory: {preview}...")
+        print("-" * 70)
+
+    return 0
+
+
+# =============================================================================
 # Legal Parser functions (Task 1.11)
 # =============================================================================
 
@@ -1042,6 +1313,81 @@ def main() -> int:
     )
 
     # =========================================================================
+    # Line Normalizer commands (Task 1.11)
+    # =========================================================================
+
+    # normalize-text command
+    normalize_parser = subparsers.add_parser(
+        "normalize-text",
+        help="Normalize legal text into lines (for testing line normalization)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Fetch and normalize a US Code section
+  %(prog)s "17 USC 106"
+  %(prog)s "17/106"
+  %(prog)s "Title 17 Section 106"
+
+  # Normalize text from a file
+  %(prog)s --file section.txt
+
+  # Normalize text directly
+  %(prog)s --text "(a) First item. (b) Second item."
+
+  # Show metadata and raw text
+  %(prog)s "17 USC 106" --metadata --raw
+""",
+    )
+    normalize_parser.add_argument(
+        "section",
+        nargs="?",
+        type=str,
+        help="Section reference (e.g., '17 USC 106', '17/106')",
+    )
+    normalize_parser.add_argument(
+        "--text",
+        "-t",
+        type=str,
+        help="Text to normalize directly (instead of section reference)",
+    )
+    normalize_parser.add_argument(
+        "--file",
+        "-f",
+        type=Path,
+        help="File containing text to normalize",
+    )
+    normalize_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="Directory containing OLRC XML files (default: data/olrc)",
+    )
+    normalize_parser.add_argument(
+        "--spaces",
+        "-s",
+        action="store_true",
+        help="Use spaces for indentation instead of tabs",
+    )
+    normalize_parser.add_argument(
+        "--indent-width",
+        type=int,
+        default=4,
+        help="Spaces per indent level when using --spaces (default: 4)",
+    )
+    normalize_parser.add_argument(
+        "--metadata",
+        "-m",
+        action="store_true",
+        help="Show line metadata (positions, markers)",
+    )
+    normalize_parser.add_argument(
+        "--raw",
+        "-r",
+        action="store_true",
+        help="Show raw text before normalization",
+    )
+
+    # =========================================================================
     # Legal Parser commands (Task 1.11)
     # =========================================================================
 
@@ -1271,6 +1617,22 @@ def main() -> int:
                 limit=args.limit,
                 force=args.force,
             )
+        )
+
+    # =========================================================================
+    # Line Normalizer command handlers (Task 1.11)
+    # =========================================================================
+
+    elif args.command == "normalize-text":
+        return normalize_text_command(
+            section_ref=args.section,
+            text=args.text,
+            file=args.file,
+            data_dir=args.dir,
+            use_tabs=not args.spaces,
+            indent_width=args.indent_width,
+            show_metadata=args.metadata,
+            show_raw=args.raw,
         )
 
     # =========================================================================
