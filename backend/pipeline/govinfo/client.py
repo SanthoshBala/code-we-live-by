@@ -78,15 +78,11 @@ class PLAWAmendmentMetadata:
         metadata.total_sections = len(sections)
 
         # Count amendment-related keywords in the text
-        amendment_keywords = [
-            r"\bamended\b",
-            r"\bamending\b",
-            r"\bstriking\b",
-            r"\binserting\b",
-            r"\brepealed\b",
-            r"\bredesignated\b",
-        ]
-        for pattern in amendment_keywords:
+        # Use centralized keywords from legal_parser module
+        from pipeline.legal_parser import AMENDMENT_KEYWORDS
+
+        for keyword in AMENDMENT_KEYWORDS:
+            pattern = rf"\b{re.escape(keyword)}\b"
             matches = re.findall(pattern, xml_content, re.IGNORECASE)
             metadata.amendment_keyword_count += len(matches)
 
