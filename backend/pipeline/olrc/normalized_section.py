@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -428,122 +429,96 @@ class ShortTitle:
     public_law: str | None = None
 
 
+class NoteCategory(Enum):
+    """Category of a section note in the US Code.
+
+    The OLRC organizes notes into three main categories:
+    - HISTORICAL: Legislative history from original codification
+    - EDITORIAL: OLRC editorial annotations added for clarity
+    - STATUTORY: Provisions from enacting laws not part of Code text
+    """
+
+    HISTORICAL = "historical"
+    EDITORIAL = "editorial"
+    STATUTORY = "statutory"
+
+
+@dataclass
+class SectionNote:
+    """A single note within a US Code section.
+
+    Notes are organized by the OLRC under headers like "Codification",
+    "Effective Date of 1995 Amendment", "Performing Rights Society
+    Consent Decrees", etc. This class captures both the header and
+    content, allowing dynamic storage of any note type.
+
+    Example headers by category:
+    - HISTORICAL: "House Report No. 94-1476", "Senate Report No. 99-541"
+    - EDITORIAL: "Codification", "References in Text", "Amendments", "Prior Provisions"
+    - STATUTORY: "Effective Date of 1995 Amendment", "Short Title",
+                 "Performing Rights Society Consent Decrees", "Regulations"
+    """
+
+    header: str  # e.g., "Performing Rights Society Consent Decrees"
+    content: str  # The note body text
+    category: NoteCategory  # Which section this note belongs to
+
+
 @dataclass
 class SectionNotes:
     """Metadata notes extracted from a US Code section.
 
     These are separated from the law text and treated like documentation.
-    The structure mirrors the OLRC's organization of notes into three
-    main categories:
+    The OLRC organizes notes into three main categories:
 
     1. Historical and Revision Notes - Legislative history from codification
     2. Editorial Notes - OLRC editorial annotations (codification, references, amendments)
     3. Statutory Notes - Provisions from enacting laws that aren't part of the Code itself
 
-    Note: Some statutory note types are very law-specific (e.g., "Performing Rights
-    Society Consent Decrees" in 17 USC 101). We only parse the common/universal types
-    listed below. Law-specific notes remain in raw_notes.
+    This class uses a hybrid approach:
+    - Structured fields for high-value, consistently formatted data (citations,
+      amendments, effective_dates, short_titles)
+    - Dynamic SectionNote list for all other notes, preserving their headers
+      and content for flexible rendering
 
-    Field frequency estimates based on ~10,700 sections across titles 10, 17, 18, 20, 22, 26, 42, 50.
+    Example section: 17 USC 106
     """
 
     # =========================================================================
-    # CITATIONS - Structured references to Public Laws that enacted/amended this section
+    # STRUCTURED FIELDS - Specially parsed for rich data
     # =========================================================================
+
+    # Citations (>90% of sections)
+    # Structured references to Public Laws that enacted/amended this section.
     # Example: 17 USC 106 cites "Pub. L. 94-553" as the enacting law
-    # Frequency: >90% of sections have at least one citation
     citations: list[Citation] = field(default_factory=list)
-
-    # =========================================================================
-    # HISTORICAL AND REVISION NOTES (<10% of sections)
-    # =========================================================================
-    # Legislative history and explanatory notes from the original codification,
-    # typically from House Reports. Common in older titles codified before 1947.
-    # Contains committee explanations of the law's purpose and interpretation.
-    # Example: 17 USC 102 - explains "original works of authorship" language
-    # Example: 18 USC 2 - explains principals vs accessories distinction
-    historical_revision_notes: str = ""
-
-    # =========================================================================
-    # EDITORIAL NOTES - Added by OLRC to clarify the Code
-    # =========================================================================
-
-    # Codification (~30-40% of sections)
-    # Notes about how the section was placed in the Code, including any
-    # adjustments made during codification (e.g., renumbering references).
-    # Example: 18 USC 39 - notes about section's placement in chapter 2
-    # Example: 42 USC 2 - codification of Public Health Service Act provisions
-    codification: str = ""
-
-    # References in Text (~40% of sections)
-    # Explains where referenced laws/sections can be found in the Code.
-    # Helps readers locate cross-referenced provisions.
-    # Example: 17 USC 106A - explains where "Visual Artists Rights Act" is classified
-    # Example: 26 USC 45B - explains references to Social Security Act sections
-    references_in_text: list[str] = field(default_factory=list)
 
     # Amendments (~70-80% of sections) - Most common note type
     # Chronological list of changes made to this section by subsequent laws.
     # Each entry identifies the Public Law and describes what was changed.
     # Example: 17 USC 106 - lists 5 amendments from 1990-2002
-    # Example: 42 USC 201 - extensive amendment history back to 1944
     amendments: list[Amendment] = field(default_factory=list)
-
-    # Prior Provisions (~20-30% of sections)
-    # References to earlier sections that covered similar subject matter
-    # before being repealed, omitted, or superseded by this section.
-    # Example: 18 USC 4248 - references prior civil commitment provisions
-    prior_provisions: str = ""
-
-    # =========================================================================
-    # STATUTORY NOTES - Provisions from enacting laws, not part of Code text
-    # =========================================================================
 
     # Effective Dates (~20-30% of sections)
     # When amendments or the original section took/take effect.
     # Often includes complex conditions (e.g., "effective 3 months after enactment").
     # Example: 17 USC 106 - effective dates for 1990 and 1995 amendments
-    # Example: 18 USC 4285 - delayed effective date provisions
     effective_dates: list[EffectiveDate] = field(default_factory=list)
 
     # Short Titles (<10% of sections)
     # Popular names for acts (e.g., "USA PATRIOT Act", "Clean Air Act").
-    # Helps identify which well-known law created or amended the section.
     # Example: 18 USC 3591 - "Federal Death Penalty Act of 1994"
-    # Example: 42 USC 280c - various short titles for health programs
     short_titles: list[ShortTitle] = field(default_factory=list)
 
-    # Regulations (<10% of sections)
-    # Notes about regulatory authority or required rulemaking.
-    # Example: 18 USC 3600A - notes about DNA testing regulations
-    regulations: str = ""
+    # =========================================================================
+    # DYNAMIC NOTES - All other notes with header/content preserved
+    # =========================================================================
 
-    # Change of Name (<10% of sections)
-    # Documents when agency or office names changed (e.g., INS → DHS).
-    # Important for understanding historical references in the text.
-    # Example: 18 USC 5034 - notes about agency name changes
-    change_of_name: str = ""
-
-    # Transfer of Functions (~10% of sections)
-    # Documents when responsibilities moved between agencies.
-    # Common after government reorganizations.
-    # Example: 18 USC 4351 - transfer of Bureau of Prisons functions
-    transfer_of_functions: str = ""
-
-    # Definitions (<10% of sections)
-    # Statutory definitions that apply to the section but aren't in Code text.
-    # Example: 18 USC 5043 - definitions for juvenile delinquency chapter
-    definitions: str = ""
-
-    # Construction (<1% of sections)
-    # How the section should be interpreted relative to other laws.
-    # Example: 18 USC 2252C - construction relative to state laws
-    construction: str = ""
-
-    # Savings Provision (<10% of sections)
-    # Preserves rights/proceedings under prior law during transition.
-    # Example: 18 USC 6001 - savings provisions for immunity orders
-    savings_provision: str = ""
+    # All notes organized by header, preserving the OLRC's structure.
+    # Each SectionNote has a header, content, and category.
+    # Example headers: "House Report No. 94-1476", "Codification",
+    #                  "Performing Rights Society Consent Decrees"
+    notes: list[SectionNote] = field(default_factory=list)
 
     # =========================================================================
     # SECTION STATUS - Metadata about the section's current state
@@ -562,19 +537,13 @@ class SectionNotes:
     # RAW/UNPARSED CONTENT
     # =========================================================================
 
-    # Full raw text of all notes (for anything not parsed into structured fields)
-    # Includes law-specific statutory notes that don't fit the common categories
+    # Full raw text of all notes (fallback for anything not parsed)
     raw_notes: str = ""
-
-    # Legacy fields (for backwards compatibility, prefer specific fields above)
-    historical_notes: str = ""  # Deprecated, use historical_revision_notes
-    editorial_notes: str = ""  # Deprecated, use specific fields
-    statutory_notes: str = ""  # Deprecated, use specific fields
 
     @property
     def has_notes(self) -> bool:
         """Return True if any notes were extracted."""
-        return bool(self.raw_notes.strip())
+        return bool(self.raw_notes.strip()) or len(self.notes) > 0
 
     @property
     def has_citations(self) -> bool:
@@ -595,6 +564,25 @@ class SectionNotes:
     def is_omitted(self) -> bool:
         """Return True if section was omitted."""
         return self.omitted
+
+    def notes_by_category(self, category: NoteCategory) -> list[SectionNote]:
+        """Get all notes in a specific category."""
+        return [n for n in self.notes if n.category == category]
+
+    @property
+    def historical_notes(self) -> list[SectionNote]:
+        """Get all historical and revision notes."""
+        return self.notes_by_category(NoteCategory.HISTORICAL)
+
+    @property
+    def editorial_notes(self) -> list[SectionNote]:
+        """Get all editorial notes."""
+        return self.notes_by_category(NoteCategory.EDITORIAL)
+
+    @property
+    def statutory_notes(self) -> list[SectionNote]:
+        """Get all statutory notes."""
+        return self.notes_by_category(NoteCategory.STATUTORY)
 
 
 @dataclass
@@ -1016,16 +1004,18 @@ def _parse_references_in_text(text: str) -> list[str]:
 def _parse_notes_structure(raw_notes: str, notes: SectionNotes) -> None:
     """Parse all structured fields from raw notes text.
 
+    Extracts both structured fields (citations, amendments, effective_dates,
+    short_titles) and dynamic SectionNote objects for all other notes.
+
     Args:
         raw_notes: The raw notes text.
         notes: SectionNotes object to populate.
     """
-    # Citations
+    # Citations (structured)
     notes.citations = parse_citations(raw_notes)
 
     # Check for section status
     if re.search(r"\bTransferred\b", raw_notes[:100], re.IGNORECASE):
-        # Try to find where it was transferred to
         transfer_match = re.search(
             r"reclassified as section (\d+[a-z]?) of Title (\d+)",
             raw_notes,
@@ -1039,127 +1029,194 @@ def _parse_notes_structure(raw_notes: str, notes: SectionNotes) -> None:
     if re.search(r"\bOmitted\b", raw_notes[:100], re.IGNORECASE):
         notes.omitted = True
 
-    # Historical and Revision Notes
+    # Parse the three main sections and extract notes from each
+    _parse_historical_notes(raw_notes, notes)
+    _parse_editorial_notes(raw_notes, notes)
+    _parse_statutory_notes(raw_notes, notes)
+
+
+def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
+    """Parse Historical and Revision Notes section."""
     hist_match = re.search(
         r"Historical and Revision Notes\s*(.*?)(?=Editorial Notes|Statutory Notes|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
-    if hist_match:
-        notes.historical_revision_notes = hist_match.group(1).strip()
-        notes.historical_notes = notes.historical_revision_notes  # Legacy
+    if not hist_match:
+        return
 
-    # Editorial Notes section
+    hist_text = hist_match.group(1).strip()
+    if not hist_text:
+        return
+
+    # Look for report headers (e.g., "House Report No. 94-1476")
+    # These are the primary sub-divisions in historical notes
+    report_pattern = re.compile(
+        r"((?:House|Senate)\s+Report\s+No\.\s*[\d–-]+)",
+        re.IGNORECASE,
+    )
+
+    matches = list(report_pattern.finditer(hist_text))
+    if not matches:
+        # No sub-headers, treat the whole section as one note
+        notes.notes.append(SectionNote(
+            header="Historical and Revision Notes",
+            content=hist_text,
+            category=NoteCategory.HISTORICAL,
+        ))
+        return
+
+    # Extract unique report sections
+    seen_headers: set[str] = set()
+    for i, match in enumerate(matches):
+        header = match.group(1).strip().title()
+        if header in seen_headers:
+            continue
+        seen_headers.add(header)
+
+        # Content runs from end of this header to start of next header (or end)
+        content_start = match.end()
+        content_end = matches[i + 1].start() if i + 1 < len(matches) else len(hist_text)
+        content = hist_text[content_start:content_end].strip()
+
+        if content:
+            notes.notes.append(SectionNote(
+                header=header,
+                content=content,
+                category=NoteCategory.HISTORICAL,
+            ))
+
+
+def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
+    """Parse Editorial Notes section."""
     edit_match = re.search(
         r"Editorial Notes\s*(.*?)(?=Statutory Notes|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
-    if edit_match:
-        editorial_text = edit_match.group(1).strip()
-        notes.editorial_notes = editorial_text  # Legacy
+    if not edit_match:
+        return
 
-        # Parse subsections within Editorial Notes
-        # Codification
-        codif_match = re.search(
-            r"Codification\s+(.*?)(?=References in Text|Amendments|Prior Provisions|$)",
-            editorial_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if codif_match:
-            notes.codification = codif_match.group(1).strip()
+    editorial_text = edit_match.group(1).strip()
+    if not editorial_text:
+        return
 
-        # References in Text
-        notes.references_in_text = _parse_references_in_text(editorial_text)
+    # Known editorial note headers in order they typically appear
+    editorial_headers = ["Codification", "References in Text", "Amendments", "Prior Provisions"]
 
-        # Amendments
-        amend_match = re.search(
-            r"Amendments\s+(.*?)(?=Prior Provisions|$)",
-            editorial_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if amend_match:
-            notes.amendments = _parse_amendments(amend_match.group(1))
+    # Find positions of each header
+    header_positions: list[tuple[int, str]] = []
+    for header in editorial_headers:
+        pattern = re.compile(rf"\b{re.escape(header)}\b", re.IGNORECASE)
+        match = pattern.search(editorial_text)
+        if match:
+            header_positions.append((match.start(), header))
 
-        # Prior Provisions
-        prior_match = re.search(
-            r"Prior Provisions?\s+(.*?)$",
-            editorial_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if prior_match:
-            notes.prior_provisions = prior_match.group(1).strip()
+    # Sort by position
+    header_positions.sort(key=lambda x: x[0])
 
-    # Statutory Notes section
+    # Extract content for each header
+    seen_headers: set[str] = set()
+    for i, (pos, header) in enumerate(header_positions):
+        if header in seen_headers:
+            continue
+        seen_headers.add(header)
+
+        # Content starts after header, ends at next header or end
+        # Find where header text ends
+        header_match = re.search(rf"\b{re.escape(header)}\b", editorial_text[pos:], re.IGNORECASE)
+        start = pos + header_match.end() if header_match else pos + len(header)
+
+        # End at next header or end of text
+        if i + 1 < len(header_positions):
+            end = header_positions[i + 1][0]
+        else:
+            end = len(editorial_text)
+
+        content = editorial_text[start:end].strip()
+        if content:
+            # Special handling for Amendments - also populate structured field
+            if header == "Amendments":
+                notes.amendments = _parse_amendments(content)
+
+            notes.notes.append(SectionNote(
+                header=header,
+                content=content,
+                category=NoteCategory.EDITORIAL,
+            ))
+
+
+def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
+    """Parse Statutory Notes section."""
     stat_match = re.search(
         r"Statutory Notes and Related Subsidiaries\s*(.*)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
-    if stat_match:
-        statutory_text = stat_match.group(1).strip()
-        notes.statutory_notes = statutory_text  # Legacy
+    if not stat_match:
+        return
 
-        # Parse subsections within Statutory Notes
-        # Effective Dates
-        notes.effective_dates = _parse_effective_dates(statutory_text)
+    statutory_text = stat_match.group(1).strip()
+    if not statutory_text:
+        return
 
-        # Short Titles
-        notes.short_titles = _parse_short_titles(statutory_text)
+    # Parse structured fields first
+    notes.effective_dates = _parse_effective_dates(statutory_text)
+    notes.short_titles = _parse_short_titles(statutory_text)
 
-        # Regulations
-        reg_match = re.search(
-            r"Regulations?\s+(.*?)(?=Change of Name|Transfer of Functions|Termination|$)",
-            statutory_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if reg_match:
-            notes.regulations = reg_match.group(1).strip()[:500]
+    # Known statutory note header patterns
+    # These are the common headers we want to capture
+    known_header_bases = [
+        "Effective Date",
+        "Short Title",
+        "Regulations",
+        "Change Of Name",
+        "Transfer Of Functions",
+        "Definitions",
+        "Construction",
+        "Savings Provision",
+    ]
 
-        # Change of Name
-        name_match = re.search(
-            r"Change of Name\s+(.*?)(?=Transfer of Functions|Termination|Effective Date|$)",
-            statutory_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if name_match:
-            notes.change_of_name = name_match.group(1).strip()[:500]
+    # Also capture law-specific headers that appear in title case
+    # Pattern: Title Case Words (at least 3 words, capitalized)
+    all_header_pattern = re.compile(
+        r"(?:^|\n)\s*"
+        r"([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|[Oo]f|[Aa]nd|[Tt]he|[Ff]or))+)"
+        r"(?:\s+[Oo]f\s+\d{4}\s+[A-Za-z]+)?"  # Optional "of YYYY Amendment"
+        r"\s*(?:\n|$|Pub\.)",
+        re.MULTILINE,
+    )
 
-        # Transfer of Functions
-        transfer_match = re.search(
-            r"Transfer of Functions\s+(.*?)(?=Termination|Effective Date|Change of Name|$)",
-            statutory_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if transfer_match:
-            notes.transfer_of_functions = transfer_match.group(1).strip()[:500]
+    # Find all headers and their positions
+    header_positions: list[tuple[int, int, str]] = []
+    for match in all_header_pattern.finditer(statutory_text):
+        header = match.group(1).strip()
+        # Skip if too short or a fragment
+        if len(header.split()) < 2:
+            continue
+        # Skip common false positives
+        skip_words = {"The", "And", "For", "With", "From", "That", "This", "Which", "Where"}
+        if header.split()[0] in skip_words:
+            continue
+        header_positions.append((match.start(), match.end(), header.title()))
 
-        # Definitions
-        def_match = re.search(
-            r"Definitions?\s+(.*?)(?=Effective Date|Short Title|$)",
-            statutory_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if def_match:
-            notes.definitions = def_match.group(1).strip()[:500]
+    # Deduplicate and extract content
+    seen_headers: set[str] = set()
+    for i, (start, end, header) in enumerate(header_positions):
+        if header in seen_headers:
+            continue
+        seen_headers.add(header)
 
-        # Construction
-        const_match = re.search(
-            r"Construction\s+(.*?)(?=Effective Date|Short Title|Regulations|$)",
-            statutory_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if const_match:
-            notes.construction = const_match.group(1).strip()[:500]
+        # Content runs to next header or end
+        content_end = header_positions[i + 1][0] if i + 1 < len(header_positions) else len(statutory_text)
+        content = statutory_text[end:content_end].strip()
 
-        # Savings Provision
-        save_match = re.search(
-            r"Savings? Provisions?\s+(.*?)(?=Effective Date|Short Title|$)",
-            statutory_text,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if save_match:
-            notes.savings_provision = save_match.group(1).strip()[:500]
+        if content and len(content) > 30:
+            notes.notes.append(SectionNote(
+                header=header,
+                content=content,
+                category=NoteCategory.STATUTORY,
+            ))
 
 
 def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
