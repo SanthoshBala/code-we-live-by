@@ -634,17 +634,32 @@ class USLMParser:
         return subsections
 
     def _extract_notes(self, section_elem: etree._Element) -> str | None:
-        """Extract notes/annotations from a section."""
-        # Try various paths for notes elements
+        """Extract notes/annotations from a section.
+
+        USLM XML has two relevant elements:
+        - <sourceCredit>: Contains the citation block (Pub. L. references)
+        - <notes>: Contains Historical/Editorial/Statutory notes
+
+        We extract both and combine them so citation parsing works correctly.
+        """
+        parts = []
+
+        # Extract sourceCredit (citation block) first
+        source_credit = section_elem.find(".//{*}sourceCredit")
+        if source_credit is None:
+            source_credit = section_elem.find(".//sourceCredit")
+        if source_credit is not None:
+            parts.append(self._get_text_content(source_credit))
+
+        # Extract notes (Historical/Editorial/Statutory)
         notes_elem = section_elem.find(".//{*}notes")
         if notes_elem is None:
             notes_elem = section_elem.find(".//notes")
-        if notes_elem is None:
-            notes_elem = section_elem.find(".//{*}sourceCredit")
-        if notes_elem is None:
-            notes_elem = section_elem.find(".//sourceCredit")
         if notes_elem is not None:
-            return self._get_notes_text_content(notes_elem)
+            parts.append(self._get_notes_text_content(notes_elem))
+
+        if parts:
+            return " ".join(parts)
         return None
 
     def _get_notes_text_content(self, elem: etree._Element) -> str:
