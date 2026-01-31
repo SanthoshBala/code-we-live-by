@@ -66,6 +66,25 @@ class ParsedSubsection:
 
 
 @dataclass
+class SourceCreditRef:
+    """A structured reference from the sourceCredit element.
+
+    Extracted from <ref href="/us/pl/116/136/..."> elements in USLM XML.
+    This provides reliable citation data without regex parsing.
+    """
+
+    congress: int  # e.g., 116
+    law_number: int  # e.g., 136
+    section: str | None = None  # e.g., "5001(a)"
+    division: str | None = None  # e.g., "A"
+    title: str | None = None  # e.g., "V"
+    date: str | None = None  # e.g., "Mar. 27, 2020"
+    stat_volume: int | None = None  # e.g., 134
+    stat_page: int | None = None  # e.g., 501
+    raw_text: str = ""  # The display text from the ref element
+
+
+@dataclass
 class ParsedSection:
     """Parsed US Code Section data."""
 
@@ -78,6 +97,7 @@ class ParsedSection:
     notes: str | None = None
     sort_order: int = 0
     subsections: list[ParsedSubsection] = field(default_factory=list)  # Structured content
+    source_credit_refs: list[SourceCreditRef] = field(default_factory=list)  # Structured citations
 
 
 @dataclass
@@ -458,6 +478,9 @@ class USLMParser:
         # Extract notes if present
         notes = self._extract_notes(section_elem)
 
+        # Extract structured citation refs from sourceCredit
+        source_credit_refs = self._extract_source_credit_refs(section_elem)
+
         return ParsedSection(
             section_number=section_number,
             heading=heading,
@@ -468,6 +491,7 @@ class USLMParser:
             notes=notes,
             sort_order=self._section_order,
             subsections=subsections,
+            source_credit_refs=source_credit_refs,
         )
 
     def _get_level_type(self, elem: etree._Element) -> str | None:
@@ -690,6 +714,84 @@ class USLMParser:
                 parts.append(el.tail)
 
         return " ".join(parts).strip()
+
+    def _extract_source_credit_refs(
+        self, section_elem: etree._Element
+    ) -> list[SourceCreditRef]:
+        """Extract structured citation refs from sourceCredit element.
+
+        Parses <ref href="/us/pl/116/136/..."> elements to get reliable
+        citation data without regex parsing.
+
+        Returns:
+            List of SourceCreditRef objects in document order.
+        """
+        refs: list[SourceCreditRef] = []
+
+        source_credit = section_elem.find(".//{*}sourceCredit")
+        if source_credit is None:
+            source_credit = section_elem.find(".//sourceCredit")
+        if source_credit is None:
+            return refs
+
+        # Find all ref elements within sourceCredit
+        ref_elems = source_credit.findall(".//{*}ref")
+        if not ref_elems:
+            ref_elems = source_credit.findall(".//ref")
+
+        # Track current date and stat for associating with PL refs
+        current_date: str | None = None
+        current_stat_volume: int | None = None
+        current_stat_page: int | None = None
+
+        for ref_elem in ref_elems:
+            href = ref_elem.get("href", "")
+            text = "".join(ref_elem.itertext()).strip()
+
+            # Parse /us/pl/CONGRESS/LAW/... hrefs
+            if "/us/pl/" in href:
+                match = re.match(
+                    r"/us/pl/(\d+)/(\d+)"  # Congress and law number
+                    r"(?:/d([A-Z]))?"  # Optional division
+                    r"(?:/t([IVXLCDM]+))?"  # Optional title
+                    r"(?:/s([\w()]+))?",  # Optional section
+                    href,
+                )
+                if match:
+                    ref = SourceCreditRef(
+                        congress=int(match.group(1)),
+                        law_number=int(match.group(2)),
+                        division=match.group(3),
+                        title=match.group(4),
+                        section=match.group(5),
+                        raw_text=text,
+                    )
+                    refs.append(ref)
+
+            # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
+            elif "/us/stat/" in href:
+                match = re.match(r"/us/stat/(\d+)/(\d+)", href)
+                if match:
+                    current_stat_volume = int(match.group(1))
+                    current_stat_page = int(match.group(2))
+                    # Apply to the most recent ref
+                    if refs:
+                        refs[-1].stat_volume = current_stat_volume
+                        refs[-1].stat_page = current_stat_page
+
+        # Extract dates from <date> elements and associate with refs
+        date_elems = source_credit.findall(".//{*}date")
+        if not date_elems:
+            date_elems = source_credit.findall(".//date")
+
+        # Simple heuristic: dates appear after their associated PL ref
+        # We'll match them by position in the text
+        for i, date_elem in enumerate(date_elems):
+            date_text = "".join(date_elem.itertext()).strip()
+            if i < len(refs):
+                refs[i].date = date_text
+
+        return refs
 
 
 def compute_text_hash(text: str) -> str:

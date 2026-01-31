@@ -20,7 +20,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+    from pipeline.olrc.parser import ParsedSection, ParsedSubsection, SourceCreditRef
 
 # Common legal abbreviations that contain periods but aren't sentence endings
 LEGAL_ABBREVIATIONS = {
@@ -382,6 +382,37 @@ def parse_citations(text: str) -> list[Citation]:
                 citation.order = len(citations)  # 0 = first/original
                 citations.append(citation)
 
+    return citations
+
+
+def citations_from_source_credit_refs(
+    refs: list["SourceCreditRef"],
+) -> list[Citation]:
+    """Convert structured SourceCreditRef objects to Citation objects.
+
+    This is the preferred method for getting citations when XML structure
+    is available, as it avoids regex parsing pitfalls.
+
+    Args:
+        refs: List of SourceCreditRef from parser.
+
+    Returns:
+        List of Citation objects with order field set.
+    """
+    citations: list[Citation] = []
+    for i, ref in enumerate(refs):
+        citation = Citation(
+            congress=ref.congress,
+            law_number=ref.law_number,
+            title=ref.title,
+            section=ref.section,
+            date=ref.date,
+            stat_volume=ref.stat_volume,
+            stat_page=ref.stat_page,
+            raw_text=ref.raw_text,
+            order=i,
+        )
+        citations.append(citation)
     return citations
 
 
@@ -937,7 +968,11 @@ def _parse_references_in_text(text: str) -> list[str]:
     return references
 
 
-def _parse_notes_structure(raw_notes: str, notes: SectionNotes) -> None:
+def _parse_notes_structure(
+    raw_notes: str,
+    notes: SectionNotes,
+    citations: list[Citation] | None = None,
+) -> None:
     """Parse all structured fields from raw notes text.
 
     Extracts both structured fields (citations, amendments, effective_dates,
@@ -946,9 +981,14 @@ def _parse_notes_structure(raw_notes: str, notes: SectionNotes) -> None:
     Args:
         raw_notes: The raw notes text.
         notes: SectionNotes object to populate.
+        citations: Pre-parsed citations from XML structure. If provided,
+            these are used instead of regex-parsing the notes text.
     """
-    # Citations (structured)
-    notes.citations = parse_citations(raw_notes)
+    # Citations: use pre-parsed if available, otherwise fall back to regex
+    if citations is not None:
+        notes.citations = citations
+    else:
+        notes.citations = parse_citations(raw_notes)
 
     # Check for section status
     if re.search(r"\bTransferred\b", raw_notes[:100], re.IGNORECASE):
@@ -1570,11 +1610,16 @@ def normalize_parsed_section(
     ]
     normalized_text = "\n".join(normalized_lines)
 
-    # Parse notes/citations from the notes text
+    # Parse notes/citations
+    # Prefer structured refs from XML when available (avoids regex pitfalls)
     notes = SectionNotes()
+    citations: list[Citation] | None = None
+    if parsed_section.source_credit_refs:
+        citations = citations_from_source_credit_refs(parsed_section.source_credit_refs)
+
     if parsed_section.notes:
         notes.raw_notes = parsed_section.notes
-        _parse_notes_structure(parsed_section.notes, notes)
+        _parse_notes_structure(parsed_section.notes, notes, citations=citations)
 
     return NormalizedSection(
         lines=lines,
