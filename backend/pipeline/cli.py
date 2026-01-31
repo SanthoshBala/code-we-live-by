@@ -585,7 +585,7 @@ def normalize_text_command(
             if line.is_header:
                 parts.append("header")
             if not parts:
-                parts.append("prose")
+                parts.append("blank" if line.content == "" else "prose")
             line_info = ", ".join(parts)
             print(
                 f"    L{line.line_number}: indent={line.indent_level}, "
