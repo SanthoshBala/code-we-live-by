@@ -578,10 +578,18 @@ def normalize_text_command(
         print("LINE METADATA:")
         print("-" * 70)
         for line in result.lines:
-            marker_info = f"marker='{line.marker}'" if line.marker else "prose"
+            # Build line type description
+            parts = []
+            if line.marker:
+                parts.append(f"marker='{line.marker}'")
+            if line.is_header:
+                parts.append("header")
+            if not parts:
+                parts.append("prose")
+            line_info = ", ".join(parts)
             print(
                 f"    L{line.line_number}: indent={line.indent_level}, "
-                f"{marker_info}, chars=[{line.start_char}:{line.end_char}]"
+                f"{line_info}, chars=[{line.start_char}:{line.end_char}]"
             )
 
     # Show citations (like imports at the top of a file)
@@ -661,16 +669,6 @@ def normalize_text_command(
                 print(f"        [{amend.year}] {desc}...")
             if len(result.notes.amendments) > 5:
                 print(f"        ... and {len(result.notes.amendments) - 5} more")
-
-        # Effective Dates (use consistent [YEAR] format)
-        if result.notes.effective_dates:
-            print(f"\n    Effective Dates ({len(result.notes.effective_dates)}):")
-            for ed in result.notes.effective_dates[:3]:
-                year_str = f"[{ed.amendment_year}] " if ed.amendment_year else ""
-                desc = ed.description[:70].replace("\n", " ")
-                print(f"        {year_str}{desc}...")
-            if len(result.notes.effective_dates) > 3:
-                print(f"        ... and {len(result.notes.effective_dates) - 3} more")
 
         # Short Titles
         if result.notes.short_titles:

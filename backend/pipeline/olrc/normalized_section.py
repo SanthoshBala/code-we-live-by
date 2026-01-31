@@ -202,6 +202,7 @@ class NormalizedLine:
         content: The text content of this line (without leading indentation).
         indent_level: Nesting depth (0 = top level, 1 = (a), 2 = (1), etc.).
         marker: The list item marker if this is a list item, e.g., "(a)".
+        is_header: Whether this line is a header (should be rendered bold).
         start_char: Character position in original text where this line starts.
         end_char: Character position in original text where this line ends.
     """
@@ -210,6 +211,7 @@ class NormalizedLine:
     content: str
     indent_level: int
     marker: str | None
+    is_header: bool
     start_char: int
     end_char: int
 
@@ -406,21 +408,6 @@ class Amendment:
 
 
 @dataclass
-class EffectiveDate:
-    """An effective date provision.
-
-    Note: We store the full description text rather than trying to extract
-    specific dates, because effective dates often involve complex calculations
-    (e.g., "3 months after Nov. 1, 1995") or conditional logic that requires
-    human interpretation.
-    """
-
-    description: str  # The full text describing when the provision takes effect
-    public_law: str | None = None  # Related Pub. L. if specified
-    amendment_year: int | None = None  # Year of the amendment this applies to
-
-
-@dataclass
 class ShortTitle:
     """A short title (common name) for an act."""
 
@@ -498,12 +485,6 @@ class SectionNotes:
     # Each entry identifies the Public Law and describes what was changed.
     # Example: 17 USC 106 - lists 5 amendments from 1990-2002
     amendments: list[Amendment] = field(default_factory=list)
-
-    # Effective Dates (~20-30% of sections)
-    # When amendments or the original section took/take effect.
-    # Often includes complex conditions (e.g., "effective 3 months after enactment").
-    # Example: 17 USC 106 - effective dates for 1990 and 1995 amendments
-    effective_dates: list[EffectiveDate] = field(default_factory=list)
 
     # Short Titles (<10% of sections)
     # Popular names for acts (e.g., "USA PATRIOT Act", "Clean Air Act").
@@ -875,51 +856,6 @@ def _parse_amendments(text: str) -> list[Amendment]:
     return amendments
 
 
-def _parse_effective_dates(text: str) -> list[EffectiveDate]:
-    """Parse effective date entries from the Statutory Notes.
-
-    We capture the full description text rather than trying to extract
-    specific dates, since effective dates often involve complex calculations
-    or conditional logic.
-
-    Args:
-        text: The statutory notes text.
-
-    Returns:
-        List of EffectiveDate objects.
-    """
-    effective_dates = []
-
-    # Look for "Effective Date" sections, including "Effective Date of YYYY Amendment"
-    eff_pattern = re.compile(
-        r"Effective Date(?: of (\d{4}) Amendment)?\s+"
-        r"(.*?)"
-        r"(?=Effective Date|Short Title|Change of Name|Transfer of Functions|Regulations|$)",
-        re.DOTALL | re.IGNORECASE,
-    )
-
-    for match in eff_pattern.finditer(text):
-        amendment_year = int(match.group(1)) if match.group(1) else None
-        description = match.group(2).strip()
-        if not description:
-            continue
-
-        # Clean up description - normalize whitespace
-        description = " ".join(description.split())
-
-        # Try to extract Pub. L.
-        pub_l_match = re.search(r"Pub\.\s*L\.\s*\d+[—–-]\d+", description)
-        public_law = pub_l_match.group(0) if pub_l_match else None
-
-        effective_dates.append(EffectiveDate(
-            description=description[:500],  # Limit length
-            public_law=public_law,
-            amendment_year=amendment_year,
-        ))
-
-    return effective_dates
-
-
 def _parse_short_titles(text: str) -> list[ShortTitle]:
     """Parse short title entries from the Statutory Notes.
 
@@ -1160,31 +1096,22 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     if not statutory_text:
         return
 
-    # Parse structured fields first
-    notes.effective_dates = _parse_effective_dates(statutory_text)
+    # Parse structured fields
+    # Note: Effective dates are not parsed structurally - they're captured as
+    # SectionNote objects because their content is free-form prose with complex
+    # cross-references that don't lend themselves to structured extraction.
     notes.short_titles = _parse_short_titles(statutory_text)
 
-    # Known statutory note header patterns
-    # These are the common headers we want to capture
-    known_header_bases = [
-        "Effective Date",
-        "Short Title",
-        "Regulations",
-        "Change Of Name",
-        "Transfer Of Functions",
-        "Definitions",
-        "Construction",
-        "Savings Provision",
-    ]
-
-    # Also capture law-specific headers that appear in title case
+    # Capture law-specific headers that appear in title case
     # Pattern: Title Case Words (at least 2 words, capitalized)
     # Include "YYYY Amendment" suffix for "Effective Date Of YYYY Amendment" patterns
+    # The lookahead matches: newline, end, "Pub.", "Amendment by", or a capital letter
+    # starting prose content (like "Effective Date Section applicable...")
     all_header_pattern = re.compile(
         r"(?:^|\n)\s*"
         r"([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|[Oo]f|[Aa]nd|[Tt]he|[Ff]or))+"
         r"(?:\s+\d{4}\s+Amendment)?)"  # Include "YYYY Amendment" suffix (no leading "of")
-        r"\s*(?=\n|$|Pub\.|Amendment\s+by\s)",  # Lookahead: newline, end, Pub., or body text
+        r"\s*(?=\n|$|Pub\.|Amendment\s+by\s|[A-Z][a-z])",  # Lookahead includes prose start
         re.MULTILINE,
     )
 
@@ -1354,6 +1281,7 @@ def normalize_section(
                         content=f"{marker_text} {header}",
                         indent_level=indent_level,
                         marker=marker_text,
+                        is_header=True,
                         start_char=pos,
                         end_char=marker_end + len(header),
                     )
@@ -1367,6 +1295,7 @@ def normalize_section(
                         content=remaining_content,
                         indent_level=indent_level + 1,  # Indent under header
                         marker=None,
+                        is_header=False,
                         start_char=marker_end + len(header),
                         end_char=item_end,
                     )
@@ -1381,6 +1310,7 @@ def normalize_section(
                         content=full_content,
                         indent_level=indent_level,
                         marker=marker_text,
+                        is_header=False,
                         start_char=pos,
                         end_char=item_end,
                     )
@@ -1422,6 +1352,7 @@ def normalize_section(
                             content=sentence_text.strip(),
                             indent_level=current_indent,
                             marker=None,
+                            is_header=False,
                             start_char=start_char,
                             end_char=end_char,
                         )
@@ -1499,6 +1430,7 @@ def _add_blank_line(
             content="",
             indent_level=0,
             marker=None,
+            is_header=False,
             start_char=start_pos,
             end_char=char_pos[0],
         )
@@ -1537,6 +1469,7 @@ def _normalize_subsection_recursive(
                 content=header_content,
                 indent_level=base_indent,
                 marker=subsection.marker,
+                is_header=True,
                 start_char=start_pos,
                 end_char=char_pos[0],
             )
@@ -1553,6 +1486,7 @@ def _normalize_subsection_recursive(
                     content=subsection.content,
                     indent_level=base_indent + 1,  # Indent under header
                     marker=None,
+                    is_header=False,
                     start_char=start_pos,
                     end_char=char_pos[0],
                 )
@@ -1573,6 +1507,7 @@ def _normalize_subsection_recursive(
                     content=content,
                     indent_level=base_indent,
                     marker=subsection.marker if subsection.marker else None,
+                    is_header=False,
                     start_char=start_pos,
                     end_char=char_pos[0],
                 )
@@ -1588,6 +1523,7 @@ def _normalize_subsection_recursive(
                     content=subsection.marker,
                     indent_level=base_indent,
                     marker=subsection.marker,
+                    is_header=False,
                     start_char=start_pos,
                     end_char=char_pos[0],
                 )

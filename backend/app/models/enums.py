@@ -53,14 +53,6 @@ class ChangeType(str, enum.Enum):
     TRANSFER = "Transfer"
 
 
-class LineType(str, enum.Enum):
-    """Type of line in a section."""
-
-    HEADING = "Heading"
-    PROSE = "Prose"
-    LIST_ITEM = "ListItem"
-
-
 class Chamber(str, enum.Enum):
     """Congressional chamber."""
 
