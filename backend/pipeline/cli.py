@@ -561,35 +561,35 @@ def normalize_text_command(
         print("-" * 70)
 
     print()
-    print("NORMALIZED OUTPUT:")
+    print("PROVISIONS:")
     print("-" * 70)
-    for line in result.lines:
-        prefix = f"L{line.line_number:3d} │"
+    for provision in result.provisions:
+        prefix = f"L{provision.line_number:3d} │"
         # Always use spaces for CLI display (tabs don't align well with prefix)
-        display = line.to_display(use_tabs=False, indent_width=indent_width)
+        display = provision.to_display(use_tabs=False, indent_width=indent_width)
         print(f"{prefix} {display}")
 
     print("-" * 70)
-    print(f"Total lines: {result.line_count}")
+    print(f"Total provisions: {result.provision_count}")
     print(f"Law text: {len(result.law_text):,} chars")
 
     if show_metadata:
         print()
-        print("LINE METADATA:")
+        print("PROVISION METADATA:")
         print("-" * 70)
-        for line in result.lines:
-            # Build line type description
+        for provision in result.provisions:
+            # Build provision type description
             parts = []
-            if line.marker:
-                parts.append(f"marker='{line.marker}'")
-            if line.is_header:
+            if provision.marker:
+                parts.append(f"marker='{provision.marker}'")
+            if provision.is_header:
                 parts.append("header")
             if not parts:
-                parts.append("blank" if line.content == "" else "prose")
-            line_info = ", ".join(parts)
+                parts.append("blank" if provision.content == "" else "prose")
+            provision_info = ", ".join(parts)
             print(
-                f"    L{line.line_number}: indent={line.indent_level}, "
-                f"{line_info}, chars=[{line.start_char}:{line.end_char}]"
+                f"    L{provision.line_number}: indent={provision.indent_level}, "
+                f"{provision_info}, chars=[{provision.start_char}:{provision.end_char}]"
             )
 
     # Show citations (like imports at the top of a file)

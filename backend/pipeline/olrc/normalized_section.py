@@ -599,42 +599,42 @@ class SectionNotes:
 
 @dataclass
 class NormalizedSection:
-    """A section of legal text normalized into lines.
+    """A section of legal text normalized into provisions.
 
     Attributes:
-        lines: List of normalized lines (the actual law text).
+        provisions: List of statutory provisions (the actual law text).
         original_text: The original unnormalized text (including notes).
         normalized_text: The law text with line breaks and indentation.
         law_text: Just the law text portion (excluding notes).
         notes: Extracted notes/metadata (like README/docstrings).
     """
 
-    lines: list[NormalizedLine]
+    provisions: list[NormalizedLine]
     original_text: str
     normalized_text: str
     law_text: str = ""
     notes: SectionNotes = field(default_factory=SectionNotes)
 
     @property
-    def line_count(self) -> int:
-        """Return the total number of lines."""
-        return len(self.lines)
+    def provision_count(self) -> int:
+        """Return the total number of provisions."""
+        return len(self.provisions)
 
-    def get_line(self, line_number: int) -> NormalizedLine | None:
-        """Get a line by its 1-indexed line number."""
-        if 1 <= line_number <= len(self.lines):
-            return self.lines[line_number - 1]
+    def get_provision(self, line_number: int) -> NormalizedLine | None:
+        """Get a provision by its 1-indexed line number."""
+        if 1 <= line_number <= len(self.provisions):
+            return self.provisions[line_number - 1]
         return None
 
-    def get_lines(self, start: int, end: int) -> list[NormalizedLine]:
-        """Get lines in a range (1-indexed, inclusive)."""
-        return self.lines[max(0, start - 1) : end]
+    def get_provisions(self, start: int, end: int) -> list[NormalizedLine]:
+        """Get provisions in a range (1-indexed, inclusive)."""
+        return self.provisions[max(0, start - 1) : end]
 
     def char_to_line(self, char_pos: int) -> int | None:
         """Convert a character position to a line number."""
-        for line in self.lines:
-            if line.start_char <= char_pos < line.end_char:
-                return line.line_number
+        for provision in self.provisions:
+            if provision.start_char <= char_pos < provision.end_char:
+                return provision.line_number
         return None
 
 
@@ -1416,7 +1416,7 @@ def normalize_section(
     normalized_text = "\n".join(normalized_lines)
 
     return NormalizedSection(
-        lines=lines,
+        provisions=lines,
         original_text=text,
         normalized_text=normalized_text,
         law_text=law_text,
@@ -1443,7 +1443,7 @@ def char_span_to_line_span(
     start_line = None
     end_line = None
 
-    for line in normalized.lines:
+    for line in normalized.provisions:
         # Check if this line overlaps with the character span
         if line.end_char > start_char and line.start_char < end_char:
             if start_line is None:
@@ -1656,7 +1656,7 @@ def normalize_parsed_section(
         _parse_notes_structure(parsed_section.notes, notes, citations=citations)
 
     return NormalizedSection(
-        lines=lines,
+        provisions=lines,
         original_text=parsed_section.text_content,
         normalized_text=normalized_text,
         law_text=parsed_section.text_content,

@@ -104,47 +104,47 @@ class TestNormalizeSectionBasic:
         text = "This is the first sentence. This is the second sentence."
         result = normalize_section(text)
 
-        assert result.line_count == 2
-        assert result.lines[0].content == "This is the first sentence."
-        assert result.lines[1].content == "This is the second sentence."
+        assert result.provision_count == 2
+        assert result.provisions[0].content == "This is the first sentence."
+        assert result.provisions[1].content == "This is the second sentence."
 
     def test_single_list_item(self) -> None:
         """Test a single list item."""
         text = "(a) This is subsection a."
         result = normalize_section(text)
 
-        assert result.line_count == 1
-        assert result.lines[0].marker == "(a)"
-        assert result.lines[0].indent_level == 1
-        assert "(a)" in result.lines[0].content
+        assert result.provision_count == 1
+        assert result.provisions[0].marker == "(a)"
+        assert result.provisions[0].indent_level == 1
+        assert "(a)" in result.provisions[0].content
 
     def test_multiple_list_items(self) -> None:
         """Test multiple list items at same level."""
         text = "(a) First item. (b) Second item. (c) Third item."
         result = normalize_section(text)
 
-        assert result.line_count == 3
-        assert result.lines[0].marker == "(a)"
-        assert result.lines[1].marker == "(b)"
-        assert result.lines[2].marker == "(c)"
+        assert result.provision_count == 3
+        assert result.provisions[0].marker == "(a)"
+        assert result.provisions[1].marker == "(b)"
+        assert result.provisions[2].marker == "(c)"
 
     def test_nested_list_items(self) -> None:
         """Test nested list items with different levels."""
         text = "(a) Main item. (1) Sub-item one. (2) Sub-item two."
         result = normalize_section(text)
 
-        assert result.line_count == 3
-        assert result.lines[0].indent_level == 1  # (a)
-        assert result.lines[1].indent_level == 2  # (1)
-        assert result.lines[2].indent_level == 2  # (2)
+        assert result.provision_count == 3
+        assert result.provisions[0].indent_level == 1  # (a)
+        assert result.provisions[1].indent_level == 2  # (1)
+        assert result.provisions[2].indent_level == 2  # (2)
 
     def test_line_numbers_are_one_indexed(self) -> None:
         """Line numbers should start at 1."""
         text = "(a) First. (b) Second."
         result = normalize_section(text)
 
-        assert result.lines[0].line_number == 1
-        assert result.lines[1].line_number == 2
+        assert result.provisions[0].line_number == 1
+        assert result.provisions[1].line_number == 2
 
 
 class TestNormalizeSectionIndentation:
@@ -180,7 +180,7 @@ class TestNormalizeSectionIndentation:
         text = "(a) Item."
         result = normalize_section(text, use_tabs=False, indent_width=2)
 
-        line = result.lines[0]
+        line = result.provisions[0]
         display = line.to_display(use_tabs=False, indent_width=2)
         assert display.startswith("  ")  # 2 spaces for level 1
 
@@ -189,7 +189,7 @@ class TestNormalizeSectionIndentation:
         text = "(a) Item."
         result = normalize_section(text)
 
-        line = result.lines[0]
+        line = result.provisions[0]
         display = line.to_display(use_tabs=True)
         assert display.startswith("\t")
         assert display == "\t(a) Item."
@@ -205,14 +205,14 @@ class TestNormalizeSectionRealExamples:
         result = normalize_section(text)
 
         # Should have the intro sentence plus 3 list items
-        assert result.line_count >= 4
+        assert result.provision_count >= 4
 
         # First line should be the intro (no marker)
-        assert result.lines[0].marker is None
-        assert "exclusive rights" in result.lines[0].content
+        assert result.provisions[0].marker is None
+        assert "exclusive rights" in result.provisions[0].content
 
         # Subsequent lines should be numbered items
-        numbered_items = [line for line in result.lines if line.marker is not None]
+        numbered_items = [line for line in result.provisions if line.marker is not None]
         assert len(numbered_items) == 3
 
     def test_nested_structure(self) -> None:
@@ -222,7 +222,7 @@ class TestNormalizeSectionRealExamples:
         result = normalize_section(text)
 
         # Check we have the expected structure
-        markers = [line.marker for line in result.lines if line.marker]
+        markers = [line.marker for line in result.provisions if line.marker]
         assert "(a)" in markers
         assert "(1)" in markers
         assert "(A)" in markers
@@ -238,7 +238,7 @@ class TestNormalizeSectionRealExamples:
 
         # Should be one line (or two if there's a sentence after)
         # The key is that "U.S.C." doesn't split the sentence
-        full_text = " ".join(line.content for line in result.lines)
+        full_text = " ".join(line.content for line in result.provisions)
         assert "U.S.C." in full_text
 
 
@@ -290,29 +290,29 @@ class TestCharacterToLineMapping:
 class TestNormalizedSectionMethods:
     """Tests for NormalizedSection helper methods."""
 
-    def test_get_line(self) -> None:
-        """Test getting a specific line by number."""
+    def test_get_provision(self) -> None:
+        """Test getting a specific provision by line number."""
         text = "(a) First. (b) Second."
         result = normalize_section(text)
 
-        line1 = result.get_line(1)
+        line1 = result.get_provision(1)
         assert line1 is not None
         assert line1.marker == "(a)"
 
-        line2 = result.get_line(2)
+        line2 = result.get_provision(2)
         assert line2 is not None
         assert line2.marker == "(b)"
 
         # Out of range
-        assert result.get_line(0) is None
-        assert result.get_line(100) is None
+        assert result.get_provision(0) is None
+        assert result.get_provision(100) is None
 
-    def test_get_lines_range(self) -> None:
-        """Test getting a range of lines."""
+    def test_get_provisions_range(self) -> None:
+        """Test getting a range of provisions."""
         text = "(a) First. (b) Second. (c) Third."
         result = normalize_section(text)
 
-        lines = result.get_lines(1, 2)
+        lines = result.get_provisions(1, 2)
         assert len(lines) == 2
         assert lines[0].marker == "(a)"
         assert lines[1].marker == "(b)"
@@ -324,21 +324,21 @@ class TestEdgeCases:
     def test_empty_text(self) -> None:
         """Test with empty text."""
         result = normalize_section("")
-        assert result.line_count == 0
+        assert result.provision_count == 0
         assert result.normalized_text == ""
 
     def test_whitespace_only(self) -> None:
         """Test with whitespace-only text."""
         result = normalize_section("   \n\t  ")
-        assert result.line_count == 0
+        assert result.provision_count == 0
 
     def test_no_markers_no_sentences(self) -> None:
         """Test text with no markers and no sentence-ending periods."""
         text = "Just a fragment without punctuation"
         result = normalize_section(text)
 
-        assert result.line_count == 1
-        assert result.lines[0].content == text
+        assert result.provision_count == 1
+        assert result.provisions[0].content == text
 
     def test_consecutive_markers(self) -> None:
         """Test markers without content between them."""
@@ -347,7 +347,7 @@ class TestEdgeCases:
 
         # The (a) might be empty or combined with (1)
         # Main thing is we don't crash
-        assert result.line_count >= 1
+        assert result.provision_count >= 1
 
     def test_quoted_text_with_periods(self) -> None:
         """Test that periods inside quotes don't always split."""
@@ -356,7 +356,7 @@ class TestEdgeCases:
 
         # This is tricky - we might split or not depending on implementation
         # The key is we handle it gracefully
-        assert result.line_count >= 1
+        assert result.provision_count >= 1
 
 
 class TestCitationParsing:
@@ -528,22 +528,22 @@ class TestNormalizeParsedSection:
         result = normalize_parsed_section(section)
 
         # 5 lines: header + content + blank + header + content
-        assert result.line_count == 5
+        assert result.provision_count == 5
         # First header at indent 0 (top-level, like a function)
-        assert result.lines[0].content == "(a) First Item"
-        assert result.lines[0].marker == "(a)"
-        assert result.lines[0].indent_level == 0
+        assert result.provisions[0].content == "(a) First Item"
+        assert result.provisions[0].marker == "(a)"
+        assert result.provisions[0].indent_level == 0
         # First content (indented under header)
-        assert result.lines[1].content == "This is the content."
-        assert result.lines[1].marker is None
-        assert result.lines[1].indent_level == 1
+        assert result.provisions[1].content == "This is the content."
+        assert result.provisions[1].marker is None
+        assert result.provisions[1].indent_level == 1
         # Blank line before second header
-        assert result.lines[2].content == ""
-        assert result.lines[2].indent_level == 0
+        assert result.provisions[2].content == ""
+        assert result.provisions[2].indent_level == 0
         # Second header
-        assert result.lines[3].content == "(b) Second Item"
+        assert result.provisions[3].content == "(b) Second Item"
         # Second content
-        assert result.lines[4].content == "More content here."
+        assert result.provisions[4].content == "More content here."
 
     def test_normalize_without_headings(self) -> None:
         """Subsections without headings create single lines at base indent."""
@@ -573,10 +573,10 @@ class TestNormalizeParsedSection:
 
         result = normalize_parsed_section(section)
 
-        assert result.line_count == 2
-        assert result.lines[0].content == "(1) Item without heading."
-        assert result.lines[0].indent_level == 0  # top-level, like a function
-        assert result.lines[1].content == "(2) Another item."
+        assert result.provision_count == 2
+        assert result.provisions[0].content == "(1) Item without heading."
+        assert result.provisions[0].indent_level == 0  # top-level, like a function
+        assert result.provisions[1].content == "(2) Another item."
 
     def test_normalize_with_nested_children(self) -> None:
         """Nested subsections are properly indented relative to parent."""
@@ -608,16 +608,16 @@ class TestNormalizeParsedSection:
 
         result = normalize_parsed_section(section)
 
-        assert result.line_count == 3
+        assert result.provision_count == 3
         # Parent header at indent 0 (top-level)
-        assert result.lines[0].content == "(a) Parent"
-        assert result.lines[0].indent_level == 0
+        assert result.provisions[0].content == "(a) Parent"
+        assert result.provisions[0].indent_level == 0
         # Parent content at indent 1
-        assert result.lines[1].content == "Parent content."
-        assert result.lines[1].indent_level == 1
+        assert result.provisions[1].content == "Parent content."
+        assert result.provisions[1].indent_level == 1
         # Child at indent 2 (parent base + 2 because parent has heading)
-        assert result.lines[2].content == "(1) Child item."
-        assert result.lines[2].indent_level == 2
+        assert result.provisions[2].content == "(1) Child item."
+        assert result.provisions[2].indent_level == 2
 
     def test_empty_subsections(self) -> None:
         """Section with no subsections returns empty lines."""
@@ -634,8 +634,8 @@ class TestNormalizeParsedSection:
 
         result = normalize_parsed_section(section)
 
-        assert result.line_count == 0
-        assert result.lines == []
+        assert result.provision_count == 0
+        assert result.provisions == []
 
     def test_no_blank_line_between_consecutive_headers(self) -> None:
         """No blank line between a header-only parent and its child header.
@@ -691,17 +691,17 @@ class TestNormalizeParsedSection:
 
         # Expected: (a) header, (1) header, (1) content, blank, (2) header, (2) content
         # NO blank line between (a) and (1) since (a) has no content
-        assert result.line_count == 6
-        assert result.lines[0].content == "(a) Appropriation"
-        assert result.lines[0].is_header is True
+        assert result.provision_count == 6
+        assert result.provisions[0].content == "(a) Appropriation"
+        assert result.provisions[0].is_header is True
         # (1) immediately follows (a) - no blank line
-        assert result.lines[1].content == "(1) In general"
-        assert result.lines[1].is_header is True
-        assert result.lines[2].content == "Content here."
+        assert result.provisions[1].content == "(1) In general"
+        assert result.provisions[1].is_header is True
+        assert result.provisions[2].content == "Content here."
         # Blank line before (2) because there's content before it
-        assert result.lines[3].content == ""
-        assert result.lines[4].content == "(2) Reservation"
-        assert result.lines[5].content == "More content."
+        assert result.provisions[3].content == ""
+        assert result.provisions[4].content == "(2) Reservation"
+        assert result.provisions[5].content == "More content."
 
     def test_blank_line_after_content_before_header(self) -> None:
         """Blank line IS added between content and the next header.
@@ -736,13 +736,13 @@ class TestNormalizeParsedSection:
         result = normalize_parsed_section(section)
 
         # Expected: (a) header, (a) content, blank, (b) header, (b) content
-        assert result.line_count == 5
-        assert result.lines[0].content == "(a) First"
-        assert result.lines[1].content == "First content."
+        assert result.provision_count == 5
+        assert result.provisions[0].content == "(a) First"
+        assert result.provisions[1].content == "First content."
         # Blank line after content, before next header
-        assert result.lines[2].content == ""
-        assert result.lines[3].content == "(b) Second"
-        assert result.lines[4].content == "Second content."
+        assert result.provisions[2].content == ""
+        assert result.provisions[3].content == "(b) Second"
+        assert result.provisions[4].content == "Second content."
 
     def test_no_blank_line_when_header_subordinate_to_prose(self) -> None:
         """No blank line when a header is subordinate to introductory prose.
@@ -804,17 +804,17 @@ class TestNormalizeParsedSection:
         # L5: blank - separates sibling definitions
         # L6: (2) Second term (header, level 2)
         # L7: Another definition. (content, level 3)
-        assert result.line_count == 7
-        assert result.lines[0].content == "(g) Definitions"
-        assert result.lines[0].indent_level == 0
-        assert result.lines[1].content == "In this section:"
-        assert result.lines[1].indent_level == 1
+        assert result.provision_count == 7
+        assert result.provisions[0].content == "(g) Definitions"
+        assert result.provisions[0].indent_level == 0
+        assert result.provisions[1].content == "In this section:"
+        assert result.provisions[1].indent_level == 1
         # (1) immediately follows introductory prose - no blank line
-        assert result.lines[2].content == "(1) First term"
-        assert result.lines[2].indent_level == 2
-        assert result.lines[3].content == "The definition."
-        assert result.lines[3].indent_level == 3
+        assert result.provisions[2].content == "(1) First term"
+        assert result.provisions[2].indent_level == 2
+        assert result.provisions[3].content == "The definition."
+        assert result.provisions[3].indent_level == 3
         # Blank line before sibling (2)
-        assert result.lines[4].content == ""
-        assert result.lines[5].content == "(2) Second term"
-        assert result.lines[6].content == "Another definition."
+        assert result.provisions[4].content == ""
+        assert result.provisions[5].content == "(2) Second term"
+        assert result.provisions[6].content == "Another definition."
