@@ -40,6 +40,81 @@ Statutory notes—such as effective dates, transfer of functions, and cross-refe
 
 ---
 
+## Source Laws
+
+Source laws identify the Public Laws that enacted or amended a section. These appear as metadata at the top of a section, similar to a changelog or git blame view.
+
+**Syntax:**
+```
+# Source Laws
+PL 94-553      1976.10.19    enacted
+PL 101-318     1990.07.03    amended § 3(d)
+PL 101-650     1990.12.01    amended § 704(b)(2)
+```
+
+**Rationale:**
+
+1. **Changelog familiarity**: The columnar format mirrors version control logs (`git log --oneline`) and changelogs, making provenance immediately scannable.
+
+2. **Non-programmer accessibility**: Unlike `import` or `use` statements, this format reads as plain metadata without requiring programming knowledge.
+
+3. **Date format**: Uses `YYYY.MM.DD` for chronological sorting and international clarity, consistent with project conventions.
+
+4. **Concise identifiers**: `PL 94-553` is the normalized Public Law identifier, balancing brevity with recognizability.
+
+**Alternatives considered:**
+
+| Style | Example | Reason not chosen |
+|-------|---------|-------------------|
+| `from PL import` | `from PL 94-553 import § 101` | Too code-like for metadata |
+| Prose format | `Enacted by Pub. L. 94-553...` | Verbose; harder to scan |
+| Legal citation | `Pub. L. 94–553, title I, § 101` | Unfamiliar to non-lawyers |
+
+---
+
+## In-Line References
+
+In-line references are cross-references within statutory text to other sections of the US Code. These use a structured syntax inspired by programming language import statements.
+
+**Syntax:**
+```
+from title 17 use § 106
+from title 26 use § 501(a)
+from this title use §§ 107-122
+use subsection (a)(1)
+```
+
+**Rationale:**
+
+1. **`use` keyword**: Draws from Rust (`use crate::module`), PHP (`use Namespace\Class`), and Pascal/Delphi. Implies "this code depends on" without the "importing code" connotation.
+
+2. **`from ... use ...` order**: Places the source (title) first, then the specific provision. This reads naturally: "from the tax code, use section 501."
+
+3. **Omitting `from` for local references**: When referencing within the same title, `use subsection (a)(1)` suffices—similar to relative imports in Python.
+
+**Language inspirations:**
+
+| Language | Syntax | What we borrowed |
+|----------|--------|------------------|
+| **Rust** | `use crate::module::item;` | The `use` keyword |
+| **Python** | `from module import symbol` | The `from X ... Y` pattern |
+| **PHP** | `use Namespace\Class;` | `use` for dependencies |
+| **Haskell** | `import Module (symbol)` | Parenthetical specificity |
+| **Go** | `import "pkg/path"` | Path-like hierarchy |
+
+**Examples in context:**
+
+Original statutory text:
+> "Subject to sections 107 through 122, the owner of copyright..."
+
+Rendered with structured reference:
+> "Subject to `from this title use §§ 107-122`, the owner of copyright..."
+
+Or in a hover/tooltip:
+> "Subject to sections 107 through 122 [`→ 17 U.S.C. §§ 107-122`], the owner..."
+
+---
+
 ## Future Sections
 
 *To be documented as decisions are made:*
@@ -47,6 +122,4 @@ Statutory notes—such as effective dates, transfer of functions, and cross-refe
 - Line numbering conventions
 - Diff rendering (additions, deletions, modifications)
 - Section hierarchy and indentation
-- Amendment markers
-- Cross-reference linking style
 - Blame view attribution format
