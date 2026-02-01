@@ -17,8 +17,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from app.models.enums import LawLevel
+from app.models.enums import LawLevel, SourceRelationship
 from app.schemas import (
+    ActSchema,
     AmendmentSchema,
     CodeLineSchema,
     CodeReferenceSchema,
@@ -32,7 +33,7 @@ from app.schemas import (
 )
 
 if TYPE_CHECKING:
-    from pipeline.olrc.parser import ParsedSection, ParsedSubsection, SourceCreditRef
+    from pipeline.olrc.parser import ActRef, ParsedSection, ParsedSubsection, SourceCreditRef
 
 # Common legal abbreviations that contain periods but aren't sentence endings
 LEGAL_ABBREVIATIONS = {
@@ -390,19 +391,45 @@ def parse_citations(text: str) -> list[SourceLaw]:
 
 def citations_from_source_credit_refs(
     refs: list[SourceCreditRef],
+    act_refs: list[ActRef] | None = None,
 ) -> list[SourceLaw]:
-    """Convert structured SourceCreditRef objects to SourceLaw objects.
+    """Convert structured SourceCreditRef and ActRef objects to SourceLaw objects.
 
     This is the preferred method for getting citations when XML structure
     is available, as it avoids regex parsing pitfalls.
 
     Args:
-        refs: List of SourceCreditRef from parser.
+        refs: List of SourceCreditRef from parser (Public Laws, post-1957).
+        act_refs: List of ActRef from parser (Acts, pre-1957).
 
     Returns:
         List of SourceLaw objects with order field set.
+        Framework (Act) references come first, then Enactment, then Amendments.
     """
     citations: list[SourceLaw] = []
+    order = 0
+
+    # First, add any Act references as Framework
+    if act_refs:
+        for act_ref in act_refs:
+            act = ActSchema(
+                date=act_ref.date,
+                chapter=act_ref.chapter,
+                title=act_ref.short_title,
+                stat_volume=act_ref.stat_volume,
+                stat_page=act_ref.stat_page,
+            )
+            citation = SourceLaw(
+                act=act,
+                path=_build_law_path(title=act_ref.title, section=act_ref.section),
+                relationship=SourceRelationship.FRAMEWORK,
+                raw_text=act_ref.raw_text,
+                order=order,
+            )
+            citations.append(citation)
+            order += 1
+
+    # Then add Public Law references
     for i, ref in enumerate(refs):
         law = ParsedPublicLaw(
             congress=ref.congress,
@@ -411,15 +438,22 @@ def citations_from_source_credit_refs(
             stat_volume=ref.stat_volume,
             stat_page=ref.stat_page,
         )
+        # First PL is Enactment, rest are Amendments
+        relationship = (
+            SourceRelationship.ENACTMENT if i == 0 else SourceRelationship.AMENDMENT
+        )
         citation = SourceLaw(
             law=law,
             path=_build_law_path(
                 division=ref.division, title=ref.title, section=ref.section
             ),
+            relationship=relationship,
             raw_text=ref.raw_text,
-            order=i,
+            order=order,
         )
         citations.append(citation)
+        order += 1
+
     return citations
 
 
@@ -1490,8 +1524,11 @@ def normalize_parsed_section(
     # Prefer structured refs from XML when available (avoids regex pitfalls)
     notes = SectionNotes()
     citations: list[SourceLaw] | None = None
-    if parsed_section.source_credit_refs:
-        citations = citations_from_source_credit_refs(parsed_section.source_credit_refs)
+    if parsed_section.source_credit_refs or parsed_section.act_refs:
+        citations = citations_from_source_credit_refs(
+            parsed_section.source_credit_refs,
+            act_refs=parsed_section.act_refs,
+        )
 
     if parsed_section.notes:
         notes.raw_notes = parsed_section.notes

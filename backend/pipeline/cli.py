@@ -557,11 +557,23 @@ def normalize_text_command(
             from pipeline.olrc.normalized_section import (
                 SectionNotes,
                 _parse_notes_structure,
+                citations_from_source_credit_refs,
             )
 
             result.section_notes = SectionNotes()
             result.section_notes.raw_notes = parsed_section.notes
-            _parse_notes_structure(parsed_section.notes, result.section_notes)
+
+            # Use structured citation refs from XML if available
+            citations = None
+            if parsed_section.source_credit_refs or parsed_section.act_refs:
+                citations = citations_from_source_credit_refs(
+                    parsed_section.source_credit_refs,
+                    act_refs=parsed_section.act_refs,
+                )
+
+            _parse_notes_structure(
+                parsed_section.notes, result.section_notes, citations=citations
+            )
 
     # Display results
     print()
@@ -620,9 +632,22 @@ def normalize_text_command(
         print("-" * 70)
 
         def parse_date_to_ymd(date_str: str | None) -> str:
-            """Convert 'Oct. 19, 1976' or 'July 3, 1990' to '1976.10.19' format."""
+            """Convert various date formats to 'YYYY.MM.DD' format.
+
+            Handles:
+            - 'Oct. 19, 1976' or 'July 3, 1990' (prose format)
+            - '1935-08-14' (ISO format from Act hrefs)
+            """
             if not date_str:
                 return "          "  # 10 chars placeholder
+
+            import re
+
+            # Check for ISO format first (YYYY-MM-DD)
+            iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str)
+            if iso_match:
+                return f"{iso_match.group(1)}.{iso_match.group(2)}.{iso_match.group(3)}"
+
             # Map both full and abbreviated month names
             month_map = {
                 "Jan": "01",
@@ -650,9 +675,8 @@ def normalize_text_command(
                 "Dec": "12",
                 "December": "12",
             }
-            import re
 
-            # Match both "Oct. 19, 1976" and "July 3, 1990" formats
+            # Match "Oct. 19, 1976" or "July 3, 1990" formats
             match = re.match(r"([A-Z][a-z]+)\.?\s+(\d{1,2})\s*,\s+(\d{4})", date_str)
             if match:
                 month = month_map.get(match.group(1), "??")
@@ -661,19 +685,27 @@ def normalize_text_command(
                 return f"{year}.{month}.{day}"
             return "          "  # 10 chars placeholder
 
-        def format_source_law(citation, is_enactment: bool) -> str:
+        def format_source_law(citation) -> str:
             """Format a source law in changelog style.
 
-            Format: # {date} {Enactment/Amendment} {law} {path}
+            Format: # {date} {relationship} {law_id} {path} [(title)]
             """
             date = parse_date_to_ymd(citation.date)
-            action = "Enactment" if is_enactment else "Amendment"
-            pl_id = citation.public_law_id
+            relationship = citation.relationship.value  # Framework, Enactment, Amendment
+            law_id = citation.law_id  # Works for both PL and Act
             path = citation.path_display
-            return f"# {date}    {action.ljust(10)} {pl_id.ljust(12)} {path}"
+
+            # Build the base line
+            line = f"# {date}    {relationship.ljust(10)} {law_id.ljust(14)} {path}"
+
+            # Add law title if available
+            if citation.law_title:
+                line += f" ({citation.law_title})"
+
+            return line
 
         for citation in result.section_notes.citations:
-            print(format_source_law(citation, citation.is_original))
+            print(format_source_law(citation))
 
     # Show notes summary if present
     if result.section_notes and result.section_notes.has_notes:

@@ -70,6 +70,17 @@ class LawLevel(str, enum.Enum):
     SECTION = "section"  # §101, §102
 
 
+class SourceRelationship(str, enum.Enum):
+    """Relationship between a source law and a US Code section.
+
+    Describes how a law relates to a section's content and classification.
+    """
+
+    FRAMEWORK = "Framework"  # Pre-1957 Act providing structural context (where it's classified)
+    ENACTMENT = "Enactment"  # The law that created/added the section content
+    AMENDMENT = "Amendment"  # A law that modified the section
+
+
 class Chamber(str, enum.Enum):
     """Congressional chamber."""
 

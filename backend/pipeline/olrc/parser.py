@@ -88,6 +88,25 @@ class SourceCreditRef:
     stat_volume: int | None = None  # e.g., 134
     stat_page: int | None = None  # e.g., 501
     raw_text: str = ""  # The display text from the ref element
+    is_framework: bool = False  # True if this is the "as added" parent reference
+
+
+@dataclass
+class ActRef:
+    """A pre-1957 Act reference from the sourceCredit element.
+
+    Extracted from <ref href="/us/act/1935-08-14/ch531/..."> elements in USLM XML.
+    Before 1957, laws were cited by date + chapter number.
+    """
+
+    date: str  # e.g., "1935-08-14" or "Aug. 14, 1935"
+    chapter: int  # e.g., 531
+    section: str | None = None  # e.g., "601"
+    title: str | None = None  # e.g., "VI"
+    stat_volume: int | None = None
+    stat_page: int | None = None
+    raw_text: str = ""  # The display text from the ref element
+    short_title: str | None = None  # e.g., "Social Security Act"
 
 
 @dataclass
@@ -114,7 +133,10 @@ class ParsedSection:
     )  # Structured content
     source_credit_refs: list[SourceCreditRef] = field(
         default_factory=list
-    )  # Structured citations
+    )  # Structured PL citations (post-1957)
+    act_refs: list[ActRef] = field(
+        default_factory=list
+    )  # Structured Act citations (pre-1957)
 
     # ParsedLine fields (populated after normalization)
     provisions: list[ParsedLine] = field(default_factory=list)
@@ -530,7 +552,7 @@ class USLMParser:
         notes = self._extract_notes(section_elem)
 
         # Extract structured citation refs from sourceCredit
-        source_credit_refs = self._extract_source_credit_refs(section_elem)
+        source_credit_refs, act_refs = self._extract_source_credit_refs(section_elem)
 
         return ParsedSection(
             section_number=section_number,
@@ -543,6 +565,7 @@ class USLMParser:
             sort_order=self._section_order,
             subsections=subsections,
             source_credit_refs=source_credit_refs,
+            act_refs=act_refs,
         )
 
     def _get_level_type(self, elem: etree._Element) -> str | None:
@@ -772,41 +795,44 @@ class USLMParser:
 
     def _extract_source_credit_refs(
         self, section_elem: etree._Element
-    ) -> list[SourceCreditRef]:
+    ) -> tuple[list[SourceCreditRef], list[ActRef]]:
         """Extract structured citation refs from sourceCredit element.
 
-        Parses <ref href="/us/pl/116/136/..."> elements to get reliable
-        citation data without regex parsing.
+        Parses <ref href="/us/pl/116/136/..."> elements for Public Laws (post-1957)
+        and <ref href="/us/act/1935-08-14/ch531/..."> elements for Acts (pre-1957).
 
         Returns:
-            List of SourceCreditRef objects in document order.
+            Tuple of (SourceCreditRef list, ActRef list) in document order.
         """
-        refs: list[SourceCreditRef] = []
+        pl_refs: list[SourceCreditRef] = []
+        act_refs: list[ActRef] = []
 
         source_credit = section_elem.find(".//{*}sourceCredit")
         if source_credit is None:
             source_credit = section_elem.find(".//sourceCredit")
         if source_credit is None:
-            return refs
+            return pl_refs, act_refs
 
         # Find all ref elements within sourceCredit
         ref_elems = source_credit.findall(".//{*}ref")
         if not ref_elems:
             ref_elems = source_credit.findall(".//ref")
 
-        # Track current stat volume/page for associating with PL refs
+        # Track current stat volume/page for associating with refs
         current_stat_volume: int | None = None
         current_stat_page: int | None = None
+        # Track the most recent ref (either PL or Act) for stat association
+        last_ref_type: str | None = None
 
         for ref_elem in ref_elems:
             href = ref_elem.get("href", "")
             text = "".join(ref_elem.itertext()).strip()
 
-            # Parse /us/pl/CONGRESS/LAW/... hrefs
+            # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
             if "/us/pl/" in href:
                 match = re.match(
                     r"/us/pl/(\d+)/(\d+)"  # Congress and law number
-                    r"(?:/d([A-Z]))?"  # Optional division
+                    r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
                     r"(?:/t([IVXLCDM]+))?"  # Optional title
                     r"(?:/s([\w()]+))?",  # Optional section
                     href,
@@ -820,7 +846,27 @@ class USLMParser:
                         section=match.group(5),
                         raw_text=text,
                     )
-                    refs.append(ref)
+                    pl_refs.append(ref)
+                    last_ref_type = "pl"
+
+            # Parse /us/act/YYYY-MM-DD/chNNN/... hrefs (Acts, pre-1957)
+            elif "/us/act/" in href:
+                match = re.match(
+                    r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
+                    r"(?:/t([IVXLCDM]+))?"  # Optional title
+                    r"(?:/s([\w()]+))?",  # Optional section
+                    href,
+                )
+                if match:
+                    ref = ActRef(
+                        date=match.group(1),  # e.g., "1935-08-14"
+                        chapter=int(match.group(2)),
+                        title=match.group(3),
+                        section=match.group(4),
+                        raw_text=text,
+                    )
+                    act_refs.append(ref)
+                    last_ref_type = "act"
 
             # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
             elif "/us/stat/" in href:
@@ -829,23 +875,26 @@ class USLMParser:
                     current_stat_volume = int(match.group(1))
                     current_stat_page = int(match.group(2))
                     # Apply to the most recent ref
-                    if refs:
-                        refs[-1].stat_volume = current_stat_volume
-                        refs[-1].stat_page = current_stat_page
+                    if last_ref_type == "pl" and pl_refs:
+                        pl_refs[-1].stat_volume = current_stat_volume
+                        pl_refs[-1].stat_page = current_stat_page
+                    elif last_ref_type == "act" and act_refs:
+                        act_refs[-1].stat_volume = current_stat_volume
+                        act_refs[-1].stat_page = current_stat_page
 
-        # Extract dates from <date> elements and associate with refs
+        # Extract dates from <date> elements and associate with PL refs
+        # Act refs already have dates in the href, so all <date> elements belong to PL refs
         date_elems = source_credit.findall(".//{*}date")
         if not date_elems:
             date_elems = source_credit.findall(".//date")
 
-        # Simple heuristic: dates appear after their associated PL ref
-        # We'll match them by position in the text
+        # Simple heuristic: dates appear after their associated PL ref, in order
         for i, date_elem in enumerate(date_elems):
             date_text = "".join(date_elem.itertext()).strip()
-            if i < len(refs):
-                refs[i].date = date_text
+            if i < len(pl_refs):
+                pl_refs[i].date = date_text
 
-        return refs
+        return pl_refs, act_refs
 
 
 def compute_text_hash(text: str) -> str:
