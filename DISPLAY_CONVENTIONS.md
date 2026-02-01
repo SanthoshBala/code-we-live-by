@@ -48,9 +48,9 @@ Source laws identify the Public Laws that enacted or amended a section. These ap
 ```
 SOURCE LAWS:
 ----------------------------------------------------------------------
-# PL 94-553    title I, § 101       1976.10.19    Enactment
+# PL 94-553    I, § 101             1976.10.19    Enactment
 # PL 101-318   § 3(d)               1990.07.03    Amendment
-# PL 101-650   title VII, § 704(b)(2) 1990.12.01    Amendment
+# PL 101-650   VII, § 704(b)(2)     1990.12.01    Amendment
 ```
 
 **Column order:** `{law} {title/section} {date} {Enactment/Amendment}`
@@ -61,7 +61,7 @@ SOURCE LAWS:
 
 2. **Comment prefix**: Each line uses the `#` comment style, visually distinguishing metadata from code.
 
-3. **Title/section reference**: Shows which part of the Public Law applies to this section (e.g., "title I, § 101").
+3. **Title/section reference**: Shows which part of the Public Law applies to this section. Title is shown as just the roman numeral (e.g., "I" not "title I") for brevity.
 
 4. **Date format**: Uses `YYYY.MM.DD` for chronological sorting and international clarity, consistent with project conventions.
 

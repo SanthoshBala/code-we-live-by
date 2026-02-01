@@ -591,12 +591,13 @@ def normalize_text_command(
         print(f"{prefix} {display}")
 
     print("-" * 70)
-    print(f"Total provisions: {result.provision_count}")
-    print(f"Law text: {len(result.text_content):,} chars")
 
     if show_metadata:
+        # Count headers and total lines
+        num_headers = sum(1 for p in result.provisions if p.is_header)
+        num_lines = result.provision_count
         print()
-        print("PROVISION METADATA:")
+        print(f"PROVISION METADATA ({num_headers} headers, {num_lines} lines):")
         print("-" * 70)
         for provision in result.provisions:
             # Build provision type description
@@ -609,8 +610,7 @@ def normalize_text_command(
                 parts.append("blank" if provision.content == "" else "prose")
             provision_info = ", ".join(parts)
             print(
-                f"    L{provision.line_number}: indent={provision.indent_level}, "
-                f"{provision_info}, chars=[{provision.start_char}:{provision.end_char}]"
+                f"L{provision.line_number}: indent={provision.indent_level}, {provision_info}"
             )
 
     # Show source laws in changelog format
@@ -662,10 +662,12 @@ def normalize_text_command(
             return "          "  # 10 chars placeholder
 
         def format_title_section(citation) -> str:
-            """Format title/section reference (e.g., 'title I, § 101')."""
+            """Format title/section reference (e.g., 'I, § 101')."""
             parts = []
             if citation.title:
-                parts.append(f"title {citation.title}")
+                parts.append(
+                    citation.title
+                )  # Just the roman numeral, no "title" prefix
             if citation.section:
                 parts.append(f"§ {citation.section}")
             return ", ".join(parts) if parts else ""
