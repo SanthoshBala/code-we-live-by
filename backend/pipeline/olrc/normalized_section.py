@@ -1532,8 +1532,10 @@ def _normalize_subsection_recursive(
                 )
             )
 
-        # Children are indented under the content (base + 2)
-        child_indent = base_indent + 2
+        # Children are indented under the content
+        # If there's content, children go at base + 2 (content is at base + 1)
+        # If there's no content, children go at base + 1 (directly under header)
+        child_indent = base_indent + 2 if subsection.content else base_indent + 1
     else:
         # No heading - marker and content on one line
         if subsection.content:
