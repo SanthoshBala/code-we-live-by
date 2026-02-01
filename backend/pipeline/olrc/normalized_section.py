@@ -274,6 +274,7 @@ CITATION_PARSE_PATTERN = re.compile(
 
 def _build_law_path(
     division: str | None = None,
+    chapter: str | None = None,
     title: str | None = None,
     section: str | None = None,
 ) -> list[LawPathComponent]:
@@ -281,6 +282,7 @@ def _build_law_path(
 
     Args:
         division: Division identifier (e.g., "C")
+        chapter: Chapter identifier (e.g., "531") - used for pre-1957 Acts
         title: Title identifier (e.g., "III")
         section: Section identifier (e.g., "101", "13210(4)(A)")
 
@@ -290,6 +292,8 @@ def _build_law_path(
     path: list[LawPathComponent] = []
     if division:
         path.append(LawPathComponent(level=LawLevel.DIVISION, value=division))
+    if chapter:
+        path.append(LawPathComponent(level=LawLevel.CHAPTER, value=chapter))
     if title:
         path.append(LawPathComponent(level=LawLevel.TITLE, value=title))
     if section:
@@ -421,7 +425,11 @@ def citations_from_source_credit_refs(
             )
             citation = SourceLaw(
                 act=act,
-                path=_build_law_path(title=act_ref.title, section=act_ref.section),
+                path=_build_law_path(
+                    chapter=str(act_ref.chapter),
+                    title=act_ref.title,
+                    section=act_ref.section,
+                ),
                 relationship=SourceRelationship.FRAMEWORK,
                 raw_text=act_ref.raw_text,
                 order=order,

@@ -63,8 +63,12 @@ class ActSchema(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def act_id(self) -> str:
-        """Return the Act identifier (e.g., 'Act ch. 531')."""
-        return f"Act ch. {self.chapter}"
+        """Return the Act identifier.
+
+        Returns just 'Act' since the date is shown separately and chapter
+        is part of the path (like division/title for Public Laws).
+        """
+        return "Act"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
