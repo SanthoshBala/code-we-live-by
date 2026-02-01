@@ -695,19 +695,24 @@ def normalize_text_command(
 
             Format: # {date}  {relationship} {law_id} {path} {title}
             Uses fixed-width columns for alignment.
+
+            For Acts, the date column is omitted since date is part of the
+            identifier (e.g., "Act of Aug. 14, 1935").
             """
-            date = parse_date_to_ymd(citation.date)
             relationship = citation.relationship.value  # Framework, Enactment, Amendment
             law_id = citation.law_id  # Works for both PL and Act
             path = citation.path_display
             title = citation.law_title or ""
 
+            date_col = parse_date_to_ymd(citation.date)
+
             # Build the line with fixed-width columns
+            # law_id column is 22 chars to fit "Act of Aug. 14, 1935"
             # Path column is 26 chars to accommodate "div. LL, tit. X, §5001(a)"
             line = (
-                f"# {date}  "
+                f"# {date_col}  "
                 f"{relationship.ljust(10)} "
-                f"{law_id.ljust(14)} "
+                f"{law_id.ljust(22)} "
                 f"{path.ljust(26)} "
                 f"{title}"
             )

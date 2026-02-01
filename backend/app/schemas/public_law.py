@@ -88,12 +88,41 @@ class ActSchema(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def act_id(self) -> str:
-        """Return the Act identifier.
+        """Return the Act identifier following OLRC convention.
 
-        Returns just 'Act' since the date is shown separately and chapter
-        is part of the path (like division/title for Public Laws).
+        Returns 'Act of {date}' format, e.g., 'Act of Aug. 14, 1935'.
         """
-        return "Act"
+        return f"Act of {self.display_date}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def display_date(self) -> str:
+        """Return the date in display format (e.g., 'Aug. 14, 1935').
+
+        Converts ISO format (1935-08-14) to prose format if needed.
+        """
+        import re
+
+        # Check if already in prose format (e.g., "Aug. 14, 1935")
+        if re.match(r"[A-Z][a-z]+\.?\s+\d{1,2},\s+\d{4}", self.date):
+            return self.date
+
+        # Convert ISO format (YYYY-MM-DD) to prose format
+        iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", self.date)
+        if iso_match:
+            year, month, day = iso_match.groups()
+            month_names = {
+                "01": "Jan.", "02": "Feb.", "03": "Mar.", "04": "Apr.",
+                "05": "May", "06": "June", "07": "July", "08": "Aug.",
+                "09": "Sept.", "10": "Oct.", "11": "Nov.", "12": "Dec.",
+            }
+            month_name = month_names.get(month, month)
+            # Remove leading zero from day
+            day_num = str(int(day))
+            return f"{month_name} {day_num}, {year}"
+
+        # Fallback: return as-is
+        return self.date
 
     @computed_field  # type: ignore[prop-decorator]
     @property
