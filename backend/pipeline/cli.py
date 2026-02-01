@@ -462,6 +462,7 @@ def normalize_text_command(
     indent_width: int = 4,
     show_metadata: bool = False,
     show_raw: bool = False,
+    show_section: str | None = None,
 ) -> int:
     """Normalize legal text into lines and display the result.
 
@@ -474,6 +475,9 @@ def normalize_text_command(
         indent_width: Spaces per indent level (only used if use_tabs=False).
         show_metadata: Show line metadata (positions, markers).
         show_raw: Show raw text before normalization.
+        show_section: Show only one section with full content. Values:
+            provisions/p, source-laws/s, historical/h, editorial/e,
+            statutory/st, amendments/a.
 
     Returns:
         0 on success, 1 on failure.
@@ -576,6 +580,18 @@ def normalize_text_command(
             )
 
     # Display results
+    # Normalize shorthand section names
+    section_map = {
+        "p": "provisions",
+        "s": "source-laws",
+        "h": "historical",
+        "e": "editorial",
+        "st": "statutory",
+        "a": "amendments",
+    }
+    if show_section:
+        show_section = section_map.get(show_section, show_section)
+
     print()
     print("=" * 70)
     print(f"SOURCE: {source_info}")
@@ -593,18 +609,19 @@ def normalize_text_command(
             print(content)
         print("-" * 70)
 
-    print()
-    print("PROVISIONS:")
-    print("-" * 70)
-    for provision in result.provisions:
-        prefix = f"L{provision.line_number:3d} │"
-        # Always use spaces for CLI display (tabs don't align well with prefix)
-        display = provision.to_display(use_tabs=False, indent_width=indent_width)
-        print(f"{prefix} {display}")
+    if show_section is None or show_section == "provisions":
+        print()
+        print("PROVISIONS:")
+        print("-" * 70)
+        for provision in result.provisions:
+            prefix = f"L{provision.line_number:3d} │"
+            # Always use spaces for CLI display (tabs don't align well with prefix)
+            display = provision.to_display(use_tabs=False, indent_width=indent_width)
+            print(f"{prefix} {display}")
 
-    print("-" * 70)
+        print("-" * 70)
 
-    if show_metadata:
+    if show_metadata and (show_section is None or show_section == "provisions"):
         # Count headers and total lines
         num_headers = sum(1 for p in result.provisions if p.is_header)
         num_lines = result.provision_count
@@ -626,7 +643,7 @@ def normalize_text_command(
             )
 
     # Show source laws in changelog format
-    if result.section_notes and result.section_notes.has_citations:
+    if (show_section is None or show_section == "source-laws") and result.section_notes and result.section_notes.has_citations:
         # Enrich citations with titles from GovInfo API / hardcoded table
         from pipeline.olrc.title_lookup import enrich_citations_with_titles
 
@@ -719,74 +736,145 @@ def normalize_text_command(
 
             return line.rstrip()  # Remove trailing spaces if no title
 
-        for citation in result.section_notes.citations:
-            print(format_source_law(citation))
+        for i, citation in enumerate(result.section_notes.citations, start=1):
+            formatted = format_source_law(citation)
+            if show_section:
+                print(f"L{i:3d} │ {formatted}")
+            else:
+                print(formatted)
 
     # Show notes if present
     if result.section_notes and result.section_notes.has_notes:
-        # Section status
-        if result.section_notes.is_transferred:
-            print()
-            print(f"** TRANSFERRED to {result.section_notes.transferred_to}")
-        if result.section_notes.is_omitted:
-            print()
-            print("** OMITTED")
+        # Section status (always show if applicable)
+        if show_section is None:
+            if result.section_notes.is_transferred:
+                print()
+                print(f"** TRANSFERRED to {result.section_notes.transferred_to}")
+            if result.section_notes.is_omitted:
+                print()
+                print("** OMITTED")
 
         # Display notes by category using the new file-based structure
         historical = result.section_notes.historical_notes
         editorial = result.section_notes.editorial_notes
         statutory = result.section_notes.statutory_notes
 
-        def format_note_lines(note, max_lines: int = 5) -> list[str]:
-            """Format note lines for display."""
+        def format_note_lines(
+            note,
+            max_lines: int | None = 5,
+            max_width: int | None = 70,
+            with_line_numbers: bool = False,
+            start_line: int = 1,
+        ) -> tuple[list[str], int]:
+            """Format note lines for display.
+
+            Args:
+                note: The note to format.
+                max_lines: Maximum lines to show (None for unlimited).
+                max_width: Maximum content width before truncation (None for unlimited).
+                with_line_numbers: If True, prefix each line with line numbers.
+                start_line: Starting line number (for continuous numbering across notes).
+
+            Returns:
+                Tuple of (formatted lines, next line number).
+            """
             output = []
+            line_num = start_line
             if note.lines:
                 for i, line in enumerate(note.lines):
-                    if i >= max_lines:
+                    if max_lines is not None and i >= max_lines:
                         output.append(f"        ... and {len(note.lines) - max_lines} more lines")
                         break
                     indent = "    " * line.indent_level
                     # Clean up content (remove extra whitespace/newlines)
                     content = " ".join(line.content.split())
-                    if len(content) > 70:
-                        content = content[:67] + "..."
-                    output.append(f"    {indent}{content}")
-            return output
+                    if max_width is not None and len(content) > max_width:
+                        content = content[:max_width - 3] + "..."
+                    if with_line_numbers:
+                        output.append(f"L{line_num:3d} │ {indent}{content}")
+                    else:
+                        output.append(f"    {indent}{content}")
+                    line_num += 1
+            return output, line_num
 
-        if historical:
+        # When showing a specific section, remove truncation and add line numbers
+        note_max_lines = None if show_section else 5
+        note_max_width = None if show_section else 70
+        use_line_numbers = show_section is not None
+
+        if (show_section is None or show_section == "historical") and historical:
             print()
             print("HISTORICAL_NOTES:")
             print("-" * 70)
+            line_num = 1
             for note in historical:
-                print(f"# {note.header}")
-                for line in format_note_lines(note):
+                if use_line_numbers:
+                    print(f"L{line_num:3d} │ # {note.header}")
+                    line_num += 1
+                else:
+                    print(f"# {note.header}")
+                lines, line_num = format_note_lines(
+                    note,
+                    max_lines=note_max_lines,
+                    max_width=note_max_width,
+                    with_line_numbers=use_line_numbers,
+                    start_line=line_num,
+                )
+                for line in lines:
                     print(line)
-                print()
+                if not use_line_numbers:
+                    print()
 
         # Filter out "Amendments" from editorial since we have a dedicated section
         editorial_filtered = [n for n in editorial if n.header != "Amendments"]
-        if editorial_filtered:
+        if (show_section is None or show_section == "editorial") and editorial_filtered:
             print()
             print("EDITORIAL_NOTES:")
             print("-" * 70)
+            line_num = 1
             for note in editorial_filtered:
-                print(f"# {note.header}")
-                for line in format_note_lines(note):
+                if use_line_numbers:
+                    print(f"L{line_num:3d} │ # {note.header}")
+                    line_num += 1
+                else:
+                    print(f"# {note.header}")
+                lines, line_num = format_note_lines(
+                    note,
+                    max_lines=note_max_lines,
+                    max_width=note_max_width,
+                    with_line_numbers=use_line_numbers,
+                    start_line=line_num,
+                )
+                for line in lines:
                     print(line)
-                print()
+                if not use_line_numbers:
+                    print()
 
-        if statutory:
+        if (show_section is None or show_section == "statutory") and statutory:
             print()
             print("STATUTORY_NOTES:")
             print("-" * 70)
+            line_num = 1
             for note in statutory:
-                print(f"# {note.header}")
-                for line in format_note_lines(note):
+                if use_line_numbers:
+                    print(f"L{line_num:3d} │ # {note.header}")
+                    line_num += 1
+                else:
+                    print(f"# {note.header}")
+                lines, line_num = format_note_lines(
+                    note,
+                    max_lines=note_max_lines,
+                    max_width=note_max_width,
+                    with_line_numbers=use_line_numbers,
+                    start_line=line_num,
+                )
+                for line in lines:
                     print(line)
-                print()
+                if not use_line_numbers:
+                    print()
 
         # Structured amendments display (CHANGELOG style)
-        if result.section_notes.has_amendments:
+        if (show_section is None or show_section == "amendments") and result.section_notes.has_amendments:
             print()
             print("AMENDMENTS:")
             print("-" * 70)
@@ -798,16 +886,28 @@ def normalize_text_command(
                 amendments_by_year[amend.year].append(amend)
 
             # Display in reverse chronological order
+            line_num = 1
             for year in sorted(amendments_by_year.keys(), reverse=True):
-                print(f"# {year}")
+                if use_line_numbers:
+                    print(f"L{line_num:3d} │ # {year}")
+                    line_num += 1
+                else:
+                    print(f"# {year}")
                 for amend in amendments_by_year[year]:
                     desc = " ".join(amend.description.split())
-                    if len(desc) > 60:
+                    # Truncate description only if not showing full section
+                    if show_section is None and len(desc) > 60:
                         desc = desc[:57] + "..."
-                    print(f"    {amend.public_law_id.ljust(12)} {desc}")
-                print()
+                    if use_line_numbers:
+                        print(f"L{line_num:3d} │     {amend.public_law_id.ljust(12)} {desc}")
+                        line_num += 1
+                    else:
+                        print(f"    {amend.public_law_id.ljust(12)} {desc}")
+                if not use_line_numbers:
+                    print()
 
-        print("-" * 70)
+        if show_section is None:
+            print("-" * 70)
 
     return 0
 
@@ -1590,6 +1690,13 @@ Examples:
         action="store_true",
         help="Show raw text before normalization",
     )
+    normalize_parser.add_argument(
+        "--show",
+        type=str,
+        choices=["provisions", "p", "source-laws", "s", "historical", "h",
+                 "editorial", "e", "statutory", "st", "amendments", "a"],
+        help="Show only one section with full content (no truncation)",
+    )
 
     # =========================================================================
     # Legal Parser commands (Task 1.11)
@@ -1837,6 +1944,7 @@ Examples:
             indent_width=args.indent_width,
             show_metadata=args.metadata,
             show_raw=args.raw,
+            show_section=args.show,
         )
 
     # =========================================================================
