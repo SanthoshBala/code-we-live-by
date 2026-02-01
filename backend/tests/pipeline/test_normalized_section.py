@@ -743,3 +743,78 @@ class TestNormalizeParsedSection:
         assert result.lines[2].content == ""
         assert result.lines[3].content == "(b) Second"
         assert result.lines[4].content == "Second content."
+
+    def test_no_blank_line_when_header_subordinate_to_prose(self) -> None:
+        """No blank line when a header is subordinate to introductory prose.
+
+        When prose introduces a list (e.g., "In this section:"), the child
+        headers should follow immediately without a blank line since they
+        are subordinate to the prose, not siblings.
+
+        Example - WRONG (awkward spacing):
+            L1 │ (g) Definitions
+            L2 │     In this section:
+            L3 │
+            L4 │         (1) Term
+
+        Example - RIGHT (natural spacing):
+            L1 │ (g) Definitions
+            L2 │     In this section:
+            L3 │         (1) Term
+        """
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+
+        section = ParsedSection(
+            section_number="801",
+            heading="Test Section",
+            full_citation="42 U.S.C. § 801",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(g)",
+                    heading="Definitions",
+                    content="In this section:",  # Introductory prose
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading="First term",
+                            content="The definition.",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(2)",
+                            heading="Second term",
+                            content="Another definition.",
+                            level="paragraph",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Expected structure:
+        # L1: (g) Definitions (header, level 0)
+        # L2: In this section: (content, level 1)
+        # L3: (1) First term (header, level 2) - NO blank before, subordinate to L2
+        # L4: The definition. (content, level 3)
+        # L5: blank - separates sibling definitions
+        # L6: (2) Second term (header, level 2)
+        # L7: Another definition. (content, level 3)
+        assert result.line_count == 7
+        assert result.lines[0].content == "(g) Definitions"
+        assert result.lines[0].indent_level == 0
+        assert result.lines[1].content == "In this section:"
+        assert result.lines[1].indent_level == 1
+        # (1) immediately follows introductory prose - no blank line
+        assert result.lines[2].content == "(1) First term"
+        assert result.lines[2].indent_level == 2
+        assert result.lines[3].content == "The definition."
+        assert result.lines[3].indent_level == 3
+        # Blank line before sibling (2)
+        assert result.lines[4].content == ""
+        assert result.lines[5].content == "(2) Second term"
+        assert result.lines[6].content == "Another definition."
