@@ -19,13 +19,13 @@ class PublicLawSchema(BaseModel):
     stat_volume: int | None = Field(None, description="Statutes at Large volume")
     stat_page: int | None = Field(None, description="Statutes at Large page")
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def public_law_id(self) -> str:
         """Return the Public Law identifier (e.g., 'PL 94-553')."""
         return f"PL {self.congress}-{self.law_number}"
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def stat_reference(self) -> str | None:
         """Return the Statutes at Large reference (e.g., '90 Stat. 2546')."""
@@ -64,7 +64,7 @@ class SourceLawSchema(BaseModel):
         0, description="Position in source list (0 = original/creating law)"
     )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def public_law_id(self) -> str:
         """Return the Public Law identifier (e.g., 'PL 94-553')."""
@@ -100,7 +100,7 @@ class SourceLawSchema(BaseModel):
         """Return the Statutes at Large page."""
         return self.law.stat_page
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_original(self) -> bool:
         """Return True if this is the original/creating law (first source)."""

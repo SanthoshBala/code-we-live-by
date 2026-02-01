@@ -61,7 +61,7 @@ class CodeReferenceSchema(BaseModel):
     subsection: str | None = Field(None, description="Subsection path (e.g., '(a)(1)')")
     raw_text: str = Field("", description="The original reference text")
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def full_citation(self) -> str:
         """Return the full citation string."""
@@ -92,7 +92,7 @@ class AmendmentSchema(BaseModel):
     year: int = Field(..., description="Year of the amendment")
     description: str = Field(..., description="Description of what changed")
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def public_law_id(self) -> str:
         """Return normalized PL identifier."""
@@ -226,31 +226,31 @@ class SectionNotesSchema(BaseModel):
 
     raw_notes: str = Field("", description="Full raw text of all notes (fallback)")
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def has_notes(self) -> bool:
         """Return True if any notes were extracted."""
         return bool(self.raw_notes.strip()) or len(self.notes) > 0
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def has_citations(self) -> bool:
         """Return True if any citations were parsed."""
         return len(self.citations) > 0
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def has_amendments(self) -> bool:
         """Return True if any amendments were parsed."""
         return len(self.amendments) > 0
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_transferred(self) -> bool:
         """Return True if section was transferred to another location."""
         return self.transferred_to is not None
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_omitted(self) -> bool:
         """Return True if section was omitted."""
