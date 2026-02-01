@@ -2,7 +2,8 @@
 
 
 from pipeline.olrc.normalized_section import (
-    Citation,
+    ParsedPublicLaw,
+    SourceLaw,
     _detect_marker_level,
     _is_sentence_boundary,
     char_span_to_line_span,
@@ -443,18 +444,21 @@ class TestCitationParsing:
 
     def test_citation_public_law_id_property(self) -> None:
         """Test the public_law_id property format."""
-        citation = Citation(congress=118, law_number=60)
+        law = ParsedPublicLaw(congress=118, law_number=60)
+        citation = SourceLaw(law=law)
         assert citation.public_law_id == "PL 118-60"
 
     def test_citation_stat_reference_property(self) -> None:
         """Test the stat_reference property."""
-        citation = Citation(
+        law = ParsedPublicLaw(
             congress=94, law_number=553, stat_volume=90, stat_page=2546
         )
+        citation = SourceLaw(law=law)
         assert citation.stat_reference == "90 Stat. 2546"
 
         # Without stat info, should return None
-        citation_no_stat = Citation(congress=94, law_number=553)
+        law_no_stat = ParsedPublicLaw(congress=94, law_number=553)
+        citation_no_stat = SourceLaw(law=law_no_stat)
         assert citation_no_stat.stat_reference is None
 
     def test_citation_order_and_is_original(self) -> None:
@@ -481,9 +485,9 @@ class TestCitationParsing:
     def test_citation_sort_key(self) -> None:
         """Test that sort_key provides chronological ordering."""
         # Create citations out of order
-        c1 = Citation(congress=106, law_number=44)
-        c2 = Citation(congress=94, law_number=553)
-        c3 = Citation(congress=101, law_number=650)
+        c1 = SourceLaw(law=ParsedPublicLaw(congress=106, law_number=44))
+        c2 = SourceLaw(law=ParsedPublicLaw(congress=94, law_number=553))
+        c3 = SourceLaw(law=ParsedPublicLaw(congress=101, law_number=650))
 
         # Sort by sort_key should give chronological order
         citations = sorted([c1, c2, c3], key=lambda c: c.sort_key)

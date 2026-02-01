@@ -233,26 +233,17 @@ class ParsedLine:
 
 
 @dataclass
-class Citation:
-    """A citation to a Public Law that affected this section.
+class ParsedPublicLaw:
+    """In-memory representation of a Public Law.
 
-    Like an import statement, this links the section to the law that
-    created or modified it. Citations are ordered chronologically:
-    - First citation (order=0) = the law that created/enacted the section
-    - Subsequent citations = amendments in historical order
-
-    Example: "Pub. L. 94–553, title I, § 101, Oct. 19, 1976, 90 Stat. 2546"
+    For the database model, see PublicLaw in app/models/public_law.py.
     """
 
     congress: int  # e.g., 94
     law_number: int  # e.g., 553
-    title: str | None = None  # Title within the law, e.g., "I"
-    section: str | None = None  # Section within the law, e.g., "101"
     date: str | None = None  # Enactment date, e.g., "Oct. 19, 1976"
     stat_volume: int | None = None  # Statutes at Large volume, e.g., 90
     stat_page: int | None = None  # Statutes at Large page, e.g., 2546
-    raw_text: str = ""  # The original citation text
-    order: int = 0  # Position in citation list (0 = original/creating law)
 
     @property
     def public_law_id(self) -> str:
@@ -267,11 +258,6 @@ class Citation:
         return None
 
     @property
-    def is_original(self) -> bool:
-        """Return True if this is the original/creating law (first citation)."""
-        return self.order == 0
-
-    @property
     def sort_key(self) -> tuple[int, int]:
         """Return a sort key for chronological ordering.
 
@@ -281,7 +267,109 @@ class Citation:
         return (self.congress, self.law_number)
 
     def __repr__(self) -> str:
-        return f"<Citation({self.public_law_id})>"
+        return f"<ParsedPublicLaw({self.public_law_id})>"
+
+
+@dataclass
+class SourceLaw:
+    """A reference to a Public Law that enacted or amended this section.
+
+    Like an import statement, this links the section to the law that
+    created or modified it. Source laws are ordered chronologically:
+    - First source law (order=0) = the law that created/enacted the section
+    - Subsequent source laws = amendments in historical order
+
+    Example: "Pub. L. 94–553, title I, § 101, Oct. 19, 1976, 90 Stat. 2546"
+    """
+
+    law: ParsedPublicLaw
+    title: str | None = None  # Title within the law, e.g., "I"
+    section: str | None = None  # Section within the law, e.g., "101"
+    raw_text: str = ""  # The original citation text
+    order: int = 0  # Position in source law list (0 = original/creating law)
+
+    @property
+    def public_law_id(self) -> str:
+        """Return the Public Law identifier (e.g., 'PL 94-553')."""
+        return self.law.public_law_id
+
+    @property
+    def congress(self) -> int:
+        """Return the congress number."""
+        return self.law.congress
+
+    @property
+    def law_number(self) -> int:
+        """Return the law number."""
+        return self.law.law_number
+
+    @property
+    def date(self) -> str | None:
+        """Return the enactment date."""
+        return self.law.date
+
+    @property
+    def stat_reference(self) -> str | None:
+        """Return the Statutes at Large reference."""
+        return self.law.stat_reference
+
+    @property
+    def stat_volume(self) -> int | None:
+        """Return the Statutes at Large volume."""
+        return self.law.stat_volume
+
+    @property
+    def stat_page(self) -> int | None:
+        """Return the Statutes at Large page."""
+        return self.law.stat_page
+
+    @property
+    def is_original(self) -> bool:
+        """Return True if this is the original/creating law (first source)."""
+        return self.order == 0
+
+    @property
+    def sort_key(self) -> tuple[int, int]:
+        """Return a sort key for chronological ordering."""
+        return self.law.sort_key
+
+    def __repr__(self) -> str:
+        return f"<SourceLaw({self.public_law_id})>"
+
+
+@dataclass
+class CodeReference:
+    """An in-text reference to another section of the US Code.
+
+    Captures references like "section 106 of title 17" or "subsection (a)(1)"
+    found within statutory text.
+    """
+
+    title: int | None = None  # Title number, e.g., 17
+    section: str | None = None  # Section number, e.g., "106"
+    subsection: str | None = None  # Subsection path, e.g., "(a)(1)"
+    raw_text: str = ""  # The original reference text
+
+    @property
+    def full_citation(self) -> str:
+        """Return the full citation string."""
+        if self.title and self.section:
+            base = f"{self.title} U.S.C. § {self.section}"
+            if self.subsection:
+                return f"{base}{self.subsection}"
+            return base
+        elif self.section:
+            if self.subsection:
+                return f"section {self.section}{self.subsection}"
+            return f"section {self.section}"
+        elif self.subsection:
+            return f"subsection {self.subsection}"
+        return self.raw_text
+
+    def __repr__(self) -> str:
+        return f"<CodeReference({self.full_citation})>"
+
+
 
 
 # Pattern to parse individual citation components
@@ -300,14 +388,14 @@ CITATION_PARSE_PATTERN = re.compile(
 )
 
 
-def parse_citation(text: str) -> Citation | None:
-    """Parse a citation string into a Citation object.
+def parse_citation(text: str) -> SourceLaw | None:
+    """Parse a citation string into a SourceLaw object.
 
     Args:
         text: Raw citation text like "Pub. L. 94–553, title I, § 101, Oct. 19, 1976, 90 Stat. 2546"
 
     Returns:
-        Citation object or None if parsing fails.
+        SourceLaw object or None if parsing fails.
     """
     match = CITATION_PARSE_PATTERN.search(text)
     if not match:
@@ -321,19 +409,23 @@ def parse_citation(text: str) -> Citation | None:
     stat_volume = int(match.group(6)) if match.group(6) else None
     stat_page = int(match.group(7)) if match.group(7) else None
 
-    return Citation(
+    law = ParsedPublicLaw(
         congress=congress,
         law_number=law_number,
-        title=title,
-        section=section,
         date=date,
         stat_volume=stat_volume,
         stat_page=stat_page,
+    )
+
+    return SourceLaw(
+        law=law,
+        title=title,
+        section=section,
         raw_text=text.strip(),
     )
 
 
-def parse_citations(text: str) -> list[Citation]:
+def parse_citations(text: str) -> list[SourceLaw]:
     """Parse all citations from a text block.
 
     Citations are separated by semicolons within the parenthetical block.
@@ -344,9 +436,9 @@ def parse_citations(text: str) -> list[Citation]:
         text: Text containing one or more citations.
 
     Returns:
-        List of parsed Citation objects with order field set.
+        List of parsed SourceLaw objects with order field set.
     """
-    citations: list[Citation] = []
+    citations: list[SourceLaw] = []
 
     # Find the citation block - it starts with "( Pub. L." and ends with "Stat. NNNN .)"
     # We need to handle nested parentheses in section refs like § 3(d) or § 704(b)(2)
@@ -390,8 +482,8 @@ def parse_citations(text: str) -> list[Citation]:
 
 def citations_from_source_credit_refs(
     refs: list[SourceCreditRef],
-) -> list[Citation]:
-    """Convert structured SourceCreditRef objects to Citation objects.
+) -> list[SourceLaw]:
+    """Convert structured SourceCreditRef objects to SourceLaw objects.
 
     This is the preferred method for getting citations when XML structure
     is available, as it avoids regex parsing pitfalls.
@@ -400,18 +492,21 @@ def citations_from_source_credit_refs(
         refs: List of SourceCreditRef from parser.
 
     Returns:
-        List of Citation objects with order field set.
+        List of SourceLaw objects with order field set.
     """
-    citations: list[Citation] = []
+    citations: list[SourceLaw] = []
     for i, ref in enumerate(refs):
-        citation = Citation(
+        law = ParsedPublicLaw(
             congress=ref.congress,
             law_number=ref.law_number,
-            title=ref.title,
-            section=ref.section,
             date=ref.date,
             stat_volume=ref.stat_volume,
             stat_page=ref.stat_page,
+        )
+        citation = SourceLaw(
+            law=law,
+            title=ref.title,
+            section=ref.section,
             raw_text=ref.raw_text,
             order=i,
         )
@@ -427,18 +522,24 @@ class Amendment:
     like a commit in version control.
     """
 
+    law: ParsedPublicLaw
     year: int
-    public_law: str  # e.g., "Pub. L. 103-322"
     description: str  # What changed
-    congress: int | None = None
-    law_number: int | None = None
 
     @property
     def public_law_id(self) -> str:
         """Return normalized PL identifier."""
-        if self.congress and self.law_number:
-            return f"PL {self.congress}-{self.law_number}"
-        return self.public_law
+        return self.law.public_law_id
+
+    @property
+    def congress(self) -> int:
+        """Return the congress number."""
+        return self.law.congress
+
+    @property
+    def law_number(self) -> int:
+        """Return the law number."""
+        return self.law.law_number
 
 
 @dataclass
@@ -512,7 +613,7 @@ class SectionNotes:
     # Citations (>90% of sections)
     # Structured references to Public Laws that enacted/amended this section.
     # Example: 17 USC 106 cites "Pub. L. 94-553" as the enacting law
-    citations: list[Citation] = field(default_factory=list)
+    citations: list[SourceLaw] = field(default_factory=list)
 
     # Amendments (~70-80% of sections) - Most common note type
     # Chronological list of changes made to this section by subsequent laws.
@@ -814,12 +915,11 @@ def _parse_amendments(text: str) -> list[Amendment]:
             # Clean up description - remove trailing whitespace and normalize
             description = " ".join(description.split())
 
+            law = ParsedPublicLaw(congress=congress, law_number=law_number)
             amendments.append(Amendment(
+                law=law,
                 year=year,
-                public_law=f"Pub. L. {congress}-{law_number}",
                 description=description,
-                congress=congress,
-                law_number=law_number,
             ))
 
         # If no Pub. L. found in the block, still record the year with the description
@@ -829,19 +929,14 @@ def _parse_amendments(text: str) -> list[Amendment]:
             if simple_pub_match:
                 congress = int(simple_pub_match.group(1))
                 law_number = int(simple_pub_match.group(2))
-                public_law = f"Pub. L. {congress}-{law_number}"
-            else:
-                congress = None
-                law_number = None
-                public_law = ""
-
-            amendments.append(Amendment(
-                year=year,
-                public_law=public_law,
-                description=" ".join(year_block.split()),
-                congress=congress,
-                law_number=law_number,
-            ))
+                law = ParsedPublicLaw(congress=congress, law_number=law_number)
+                amendments.append(Amendment(
+                    law=law,
+                    year=year,
+                    description=" ".join(year_block.split()),
+                ))
+            # Skip amendments where we can't extract congress/law_number
+            # since we need valid law references
 
     return amendments
 
@@ -930,7 +1025,7 @@ def _parse_references_in_text(text: str) -> list[str]:
 def _parse_notes_structure(
     raw_notes: str,
     notes: SectionNotes,
-    citations: list[Citation] | None = None,
+    citations: list[SourceLaw] | None = None,
 ) -> None:
     """Parse all structured fields from raw notes text.
 
@@ -1611,7 +1706,7 @@ def normalize_parsed_section(
     # Parse notes/citations
     # Prefer structured refs from XML when available (avoids regex pitfalls)
     notes = SectionNotes()
-    citations: list[Citation] | None = None
+    citations: list[SourceLaw] | None = None
     if parsed_section.source_credit_refs:
         citations = citations_from_source_credit_refs(parsed_section.source_credit_refs)
 
