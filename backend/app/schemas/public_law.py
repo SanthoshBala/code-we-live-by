@@ -6,6 +6,8 @@ the pipeline and application layers.
 
 from pydantic import BaseModel, Field, computed_field
 
+from app.models.enums import LawLevel
+
 
 class PublicLawSchema(BaseModel):
     """In-memory representation of a Public Law.
@@ -43,6 +45,40 @@ class PublicLawSchema(BaseModel):
         return (self.congress, self.law_number)
 
 
+class LawPathComponent(BaseModel):
+    """A single component in a hierarchical path within a Public Law.
+
+    Represents one level in the structure, e.g., "div. C" or "§13210(4)(A)".
+    """
+
+    level: LawLevel = Field(..., description="The hierarchical level type")
+    value: str = Field(
+        ..., description="The identifier at this level (e.g., 'C', 'III')"
+    )
+
+    # Bluebook standard abbreviations for each level
+    _ABBREVIATIONS: dict[LawLevel, str] = {
+        LawLevel.DIVISION: "div.",
+        LawLevel.TITLE: "tit.",
+        LawLevel.SUBTITLE: "subtit.",
+        LawLevel.CHAPTER: "ch.",
+        LawLevel.SUBCHAPTER: "subch.",
+        LawLevel.PART: "pt.",
+        LawLevel.SUBPART: "subpt.",
+        LawLevel.SECTION: "§",
+    }
+
+    def to_display(self) -> str:
+        """Return abbreviated display like 'div. C' or '§13210(4)(A)'.
+
+        Section is special-cased to omit the space after §.
+        """
+        abbrev = self._ABBREVIATIONS[self.level]
+        if self.level == LawLevel.SECTION:
+            return f"{abbrev}{self.value}"  # No space: §101
+        return f"{abbrev} {self.value}"  # With space: div. C
+
+
 class SourceLawSchema(BaseModel):
     """A reference to a Public Law that enacted or amended a section.
 
@@ -55,9 +91,9 @@ class SourceLawSchema(BaseModel):
     """
 
     law: PublicLawSchema = Field(..., description="The referenced Public Law")
-    title: str | None = Field(None, description="Title within the law (e.g., 'I')")
-    section: str | None = Field(
-        None, description="Section within the law (e.g., '101')"
+    path: list[LawPathComponent] = Field(
+        default_factory=list,
+        description="Hierarchical path within the law (e.g., [div. C, tit. III, §101])",
     )
     raw_text: str = Field("", description="The original citation text")
     order: int = Field(
@@ -106,7 +142,37 @@ class SourceLawSchema(BaseModel):
         """Return True if this is the original/creating law (first source)."""
         return self.order == 0
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def path_display(self) -> str:
+        """Return the full path as a display string (e.g., 'div. C, tit. III, §101')."""
+        if not self.path:
+            return ""
+        return ", ".join(comp.to_display() for comp in self.path)
+
     @property
     def sort_key(self) -> tuple[int, int]:
         """Return a sort key for chronological ordering."""
         return self.law.sort_key
+
+    def get_component(self, level: LawLevel) -> str | None:
+        """Get the value for a specific level in the path, or None if not present."""
+        for comp in self.path:
+            if comp.level == level:
+                return comp.value
+        return None
+
+    @property
+    def division(self) -> str | None:
+        """Return the division identifier if present (e.g., 'C')."""
+        return self.get_component(LawLevel.DIVISION)
+
+    @property
+    def title(self) -> str | None:
+        """Return the title identifier if present (e.g., 'I', 'III')."""
+        return self.get_component(LawLevel.TITLE)
+
+    @property
+    def section(self) -> str | None:
+        """Return the section identifier if present (e.g., '101', '13210(4)(A)')."""
+        return self.get_component(LawLevel.SECTION)

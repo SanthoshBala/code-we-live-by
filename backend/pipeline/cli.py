@@ -661,27 +661,16 @@ def normalize_text_command(
                 return f"{year}.{month}.{day}"
             return "          "  # 10 chars placeholder
 
-        def format_title_section(citation) -> str:
-            """Format title/section reference (e.g., 'I, § 101')."""
-            parts = []
-            if citation.title:
-                parts.append(
-                    citation.title
-                )  # Just the roman numeral, no "title" prefix
-            if citation.section:
-                parts.append(f"§ {citation.section}")
-            return ", ".join(parts) if parts else ""
-
         def format_source_law(citation, is_enactment: bool) -> str:
             """Format a source law in changelog style.
 
-            Format: # {law} {title/section} {date} {Enactment/Amendment}
+            Format: # {date} {Enactment/Amendment} {law} {path}
             """
-            pl_id = citation.public_law_id.ljust(12)
-            title_section = format_title_section(citation).ljust(20)
             date = parse_date_to_ymd(citation.date)
             action = "Enactment" if is_enactment else "Amendment"
-            return f"# {pl_id} {title_section} {date}    {action}"
+            pl_id = citation.public_law_id
+            path = citation.path_display
+            return f"# {date}    {action.ljust(10)} {pl_id.ljust(12)} {path}"
 
         for citation in result.section_notes.citations:
             print(format_source_law(citation, citation.is_original))

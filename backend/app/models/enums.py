@@ -53,6 +53,23 @@ class ChangeType(str, enum.Enum):
     TRANSFER = "Transfer"
 
 
+class LawLevel(str, enum.Enum):
+    """Hierarchical levels within a Public Law or US Code title.
+
+    Based on OLRC conventions. Listed from largest to smallest unit.
+    See: https://uscode.house.gov/detailed_guide.xhtml
+    """
+
+    DIVISION = "division"  # div. A, div. B (omnibus bills)
+    TITLE = "title"  # tit. I, tit. II
+    SUBTITLE = "subtitle"  # subtit. A, subtit. B
+    CHAPTER = "chapter"  # ch. 1, ch. 2
+    SUBCHAPTER = "subchapter"  # subch. I, subch. II
+    PART = "part"  # pt. A, pt. B
+    SUBPART = "subpart"  # subpt. 1, subpt. 2
+    SECTION = "section"  # §101, §102
+
+
 class Chamber(str, enum.Enum):
     """Congressional chamber."""
 

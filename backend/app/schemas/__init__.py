@@ -10,7 +10,8 @@ Naming convention:
 - Code* prefix for US Code entities
 """
 
-from app.schemas.public_law import PublicLawSchema, SourceLawSchema
+from app.models.enums import LawLevel
+from app.schemas.public_law import LawPathComponent, PublicLawSchema, SourceLawSchema
 from app.schemas.us_code import (
     AmendmentSchema,
     CodeLineSchema,
@@ -25,6 +26,8 @@ __all__ = [
     # Public Law schemas
     "PublicLawSchema",
     "SourceLawSchema",
+    "LawPathComponent",
+    "LawLevel",
     # US Code schemas
     "CodeLineSchema",
     "CodeReferenceSchema",

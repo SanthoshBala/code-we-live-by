@@ -48,24 +48,42 @@ Source laws identify the Public Laws that enacted or amended a section. These ap
 ```
 SOURCE LAWS:
 ----------------------------------------------------------------------
-# PL 94-553    I, § 101             1976.10.19    Enactment
-# PL 101-318   § 3(d)               1990.07.03    Amendment
-# PL 101-650   VII, § 704(b)(2)     1990.12.01    Amendment
+# 1976.10.19    Enactment  PL 94-553    tit. I, §101
+# 1990.07.03    Amendment  PL 101-318   §3(d)
+# 2002.11.02    Amendment  PL 107-273   div. C, tit. III, §13210(4)(A)
 ```
 
-**Column order:** `{law} {title/section} {date} {Enactment/Amendment}`
+**Column order:** `{date} {Enactment/Amendment} {law} {path}`
+
+**Path format:** Uses standard Bluebook abbreviations for hierarchical levels:
+- `div.` — Division (e.g., `div. C`)
+- `tit.` — Title (e.g., `tit. III`)
+- `§` — Section, no space after symbol (e.g., `§101`, `§13210(4)(A)`)
 
 **Rationale:**
 
-1. **Changelog familiarity**: The columnar format mirrors version control logs (`git log --oneline`) and changelogs, making provenance immediately scannable.
+1. **Changelog familiarity**: The columnar format mirrors version control logs (`git log --oneline`) and changelogs, making provenance immediately scannable. Date-first ordering emphasizes chronology.
 
 2. **Comment prefix**: Each line uses the `#` comment style, visually distinguishing metadata from code.
 
-3. **Title/section reference**: Shows which part of the Public Law applies to this section. Title is shown as just the roman numeral (e.g., "I" not "title I") for brevity.
+3. **Hierarchical path**: Public Laws can have complex structures (divisions, titles, subtitles, chapters, parts, sections). The path captures the full location within the law using standard legal abbreviations from the Bluebook.
 
 4. **Date format**: Uses `YYYY.MM.DD` for chronological sorting and international clarity, consistent with project conventions.
 
 5. **Enactment vs Amendment**: Clear terminology—"Enactment" for the original law, "Amendment" for subsequent modifications.
+
+**Supported path levels** (from OLRC conventions):
+
+| Level | Abbreviation | Example |
+|-------|--------------|---------|
+| Division | `div.` | `div. C` |
+| Title | `tit.` | `tit. III` |
+| Subtitle | `subtit.` | `subtit. A` |
+| Chapter | `ch.` | `ch. 1` |
+| Subchapter | `subch.` | `subch. II` |
+| Part | `pt.` | `pt. A` |
+| Subpart | `subpt.` | `subpt. 1` |
+| Section | `§` | `§101` |
 
 **Alternatives considered:**
 
@@ -73,8 +91,9 @@ SOURCE LAWS:
 |-------|---------|-------------------|
 | `from PL import` | `from PL 94-553 import § 101` | Too code-like for metadata |
 | Prose format | `Enacted by Pub. L. 94-553...` | Verbose; harder to scan |
-| Legal citation | `Pub. L. 94–553, title I, § 101` | Unfamiliar to non-lawyers |
+| Full legal citation | `Pub. L. 94–553, title I, § 101` | More verbose; unfamiliar to non-lawyers |
 | `enacted`/`amended` | lowercase action | Ambiguous—could mean the law was amended |
+| No abbreviations | `division C, title III` | Too verbose for columnar display |
 
 ---
 

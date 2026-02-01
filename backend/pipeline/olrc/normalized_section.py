@@ -17,10 +17,12 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from app.models.enums import LawLevel
 from app.schemas import (
     AmendmentSchema,
     CodeLineSchema,
     CodeReferenceSchema,
+    LawPathComponent,
     NoteCategoryEnum,
     PublicLawSchema,
     SectionNoteSchema,
@@ -260,13 +262,38 @@ SectionNotes = SectionNotesSchema
 # Note: Source text may have extra whitespace around commas (e.g., " ,  ")
 CITATION_PARSE_PATTERN = re.compile(
     r"Pub\.\s*L\.\s*(\d+)[–-](\d+)"  # Congress and law number
-    r"(?:\s*,\s*div\.\s*[A-Z])?"  # Optional division (e.g., "div. C")
+    r"(?:\s*,\s*div\.\s*([A-Z]))?"  # Optional division (e.g., "div. C") - capture letter
     r"(?:\s*,\s*title\s+([IVXLCDM]+))?"  # Optional title (roman numeral)
     r"(?:\s*,\s*§+\s*([\d\w]+(?:\([a-z0-9]+\))*))?"  # Optional section
     r"(?:\s*,\s*([A-Z][a-z]{2,3}\.?\s+\d{1,2}\s*,\s+\d{4}))?"  # Optional date
     r"(?:\s*,\s*(\d+)\s+Stat\.\s+(\d+))?",  # Optional Stat reference
     re.IGNORECASE,
 )
+
+
+def _build_law_path(
+    division: str | None = None,
+    title: str | None = None,
+    section: str | None = None,
+) -> list[LawPathComponent]:
+    """Build a hierarchical path from citation components.
+
+    Args:
+        division: Division identifier (e.g., "C")
+        title: Title identifier (e.g., "III")
+        section: Section identifier (e.g., "101", "13210(4)(A)")
+
+    Returns:
+        List of LawPathComponent in hierarchical order.
+    """
+    path: list[LawPathComponent] = []
+    if division:
+        path.append(LawPathComponent(level=LawLevel.DIVISION, value=division))
+    if title:
+        path.append(LawPathComponent(level=LawLevel.TITLE, value=title))
+    if section:
+        path.append(LawPathComponent(level=LawLevel.SECTION, value=section))
+    return path
 
 
 def parse_citation(text: str) -> SourceLaw | None:
@@ -284,11 +311,12 @@ def parse_citation(text: str) -> SourceLaw | None:
 
     congress = int(match.group(1))
     law_number = int(match.group(2))
-    title = match.group(3)  # May be None
-    section = match.group(4)  # May be None
-    date = match.group(5)  # May be None
-    stat_volume = int(match.group(6)) if match.group(6) else None
-    stat_page = int(match.group(7)) if match.group(7) else None
+    division = match.group(3)  # May be None
+    title = match.group(4)  # May be None
+    section = match.group(5)  # May be None
+    date = match.group(6)  # May be None
+    stat_volume = int(match.group(7)) if match.group(7) else None
+    stat_page = int(match.group(8)) if match.group(8) else None
 
     law = ParsedPublicLaw(
         congress=congress,
@@ -300,8 +328,7 @@ def parse_citation(text: str) -> SourceLaw | None:
 
     return SourceLaw(
         law=law,
-        title=title,
-        section=section,
+        path=_build_law_path(division=division, title=title, section=section),
         raw_text=text.strip(),
     )
 
@@ -386,8 +413,9 @@ def citations_from_source_credit_refs(
         )
         citation = SourceLaw(
             law=law,
-            title=ref.title,
-            section=ref.section,
+            path=_build_law_path(
+                division=ref.division, title=ref.title, section=ref.section
+            ),
             raw_text=ref.raw_text,
             order=i,
         )
