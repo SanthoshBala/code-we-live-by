@@ -616,29 +616,44 @@ def normalize_text_command(
     # Show source laws in changelog format
     if result.section_notes and result.section_notes.has_citations:
         print()
-        print("# Source Laws")
+        print("SOURCE LAWS:")
+        print("-" * 70)
 
         def parse_date_to_ymd(date_str: str | None) -> str:
-            """Convert 'Oct. 19, 1976' to '1976.10.19' format."""
+            """Convert 'Oct. 19, 1976' or 'July 3, 1990' to '1976.10.19' format."""
             if not date_str:
                 return "          "  # 10 chars placeholder
+            # Map both full and abbreviated month names
             month_map = {
                 "Jan": "01",
+                "January": "01",
                 "Feb": "02",
+                "February": "02",
                 "Mar": "03",
+                "March": "03",
                 "Apr": "04",
+                "April": "04",
                 "May": "05",
                 "Jun": "06",
+                "June": "06",
                 "Jul": "07",
+                "July": "07",
                 "Aug": "08",
+                "August": "08",
                 "Sep": "09",
+                "Sept": "09",
+                "September": "09",
                 "Oct": "10",
+                "October": "10",
                 "Nov": "11",
+                "November": "11",
                 "Dec": "12",
+                "December": "12",
             }
             import re
 
-            match = re.match(r"([A-Z][a-z]{2})\.?\s+(\d{1,2})\s*,\s+(\d{4})", date_str)
+            # Match both "Oct. 19, 1976" and "July 3, 1990" formats
+            match = re.match(r"([A-Z][a-z]+)\.?\s+(\d{1,2})\s*,\s+(\d{4})", date_str)
             if match:
                 month = month_map.get(match.group(1), "??")
                 day = match.group(2).zfill(2)
@@ -646,19 +661,25 @@ def normalize_text_command(
                 return f"{year}.{month}.{day}"
             return "          "  # 10 chars placeholder
 
+        def format_title_section(citation) -> str:
+            """Format title/section reference (e.g., 'title I, § 101')."""
+            parts = []
+            if citation.title:
+                parts.append(f"title {citation.title}")
+            if citation.section:
+                parts.append(f"§ {citation.section}")
+            return ", ".join(parts) if parts else ""
+
         def format_source_law(citation, is_enactment: bool) -> str:
-            """Format a source law in changelog style."""
+            """Format a source law in changelog style.
+
+            Format: # {law} {title/section} {date} {Enactment/Amendment}
+            """
             pl_id = citation.public_law_id.ljust(12)
+            title_section = format_title_section(citation).ljust(20)
             date = parse_date_to_ymd(citation.date)
-            if is_enactment:
-                action = "enacted"
-            else:
-                # Include section reference if available
-                if citation.section:
-                    action = f"amended § {citation.section}"
-                else:
-                    action = "amended"
-            return f"{pl_id} {date}    {action}"
+            action = "Enactment" if is_enactment else "Amendment"
+            return f"# {pl_id} {title_section} {date}    {action}"
 
         for citation in result.section_notes.citations:
             print(format_source_law(citation, citation.is_original))

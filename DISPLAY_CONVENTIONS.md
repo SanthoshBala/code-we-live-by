@@ -46,21 +46,26 @@ Source laws identify the Public Laws that enacted or amended a section. These ap
 
 **Syntax:**
 ```
-# Source Laws
-PL 94-553      1976.10.19    enacted
-PL 101-318     1990.07.03    amended § 3(d)
-PL 101-650     1990.12.01    amended § 704(b)(2)
+SOURCE LAWS:
+----------------------------------------------------------------------
+# PL 94-553    title I, § 101       1976.10.19    Enactment
+# PL 101-318   § 3(d)               1990.07.03    Amendment
+# PL 101-650   title VII, § 704(b)(2) 1990.12.01    Amendment
 ```
+
+**Column order:** `{law} {title/section} {date} {Enactment/Amendment}`
 
 **Rationale:**
 
 1. **Changelog familiarity**: The columnar format mirrors version control logs (`git log --oneline`) and changelogs, making provenance immediately scannable.
 
-2. **Non-programmer accessibility**: Unlike `import` or `use` statements, this format reads as plain metadata without requiring programming knowledge.
+2. **Comment prefix**: Each line uses the `#` comment style, visually distinguishing metadata from code.
 
-3. **Date format**: Uses `YYYY.MM.DD` for chronological sorting and international clarity, consistent with project conventions.
+3. **Title/section reference**: Shows which part of the Public Law applies to this section (e.g., "title I, § 101").
 
-4. **Concise identifiers**: `PL 94-553` is the normalized Public Law identifier, balancing brevity with recognizability.
+4. **Date format**: Uses `YYYY.MM.DD` for chronological sorting and international clarity, consistent with project conventions.
+
+5. **Enactment vs Amendment**: Clear terminology—"Enactment" for the original law, "Amendment" for subsequent modifications.
 
 **Alternatives considered:**
 
@@ -69,6 +74,7 @@ PL 101-650     1990.12.01    amended § 704(b)(2)
 | `from PL import` | `from PL 94-553 import § 101` | Too code-like for metadata |
 | Prose format | `Enacted by Pub. L. 94-553...` | Verbose; harder to scan |
 | Legal citation | `Pub. L. 94–553, title I, § 101` | Unfamiliar to non-lawyers |
+| `enacted`/`amended` | lowercase action | Ambiguous—could mean the law was amended |
 
 ---
 
