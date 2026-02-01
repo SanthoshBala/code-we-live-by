@@ -1,6 +1,5 @@
 """Tests for legal text line normalization."""
 
-
 from pipeline.olrc.normalized_section import (
     ParsedPublicLaw,
     SourceLaw,

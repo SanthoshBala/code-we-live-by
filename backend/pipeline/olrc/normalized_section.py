@@ -100,11 +100,16 @@ LIST_ITEM_PATTERN = re.compile(
 # Words that indicate a reference to a subsection, not a list item marker
 # These are specific legal terms that precede parenthesized references
 REFERENCE_WORDS = {
-    "subsection", "subsections",
-    "paragraph", "paragraphs",
-    "subparagraph", "subparagraphs",
-    "clause", "clauses",
-    "subclause", "subclauses",
+    "subsection",
+    "subsections",
+    "paragraph",
+    "paragraphs",
+    "subparagraph",
+    "subparagraphs",
+    "clause",
+    "clauses",
+    "subclause",
+    "subclauses",
 }
 
 # Pattern to detect the nesting level from a marker
@@ -112,10 +117,38 @@ MARKER_PATTERN = re.compile(r"\(([a-zA-Z0-9]+)\)")
 
 # Words that commonly start sentences in legal text (after a subsection header)
 SENTENCE_STARTERS = {
-    "a", "an", "the", "no", "any", "each", "if", "for", "in", "on", "to",
-    "as", "by", "under", "subject", "notwithstanding", "unless", "except",
-    "upon", "after", "before", "when", "where", "this", "that", "such",
-    "nothing", "whoever", "whenever", "every", "all", "there",
+    "a",
+    "an",
+    "the",
+    "no",
+    "any",
+    "each",
+    "if",
+    "for",
+    "in",
+    "on",
+    "to",
+    "as",
+    "by",
+    "under",
+    "subject",
+    "notwithstanding",
+    "unless",
+    "except",
+    "upon",
+    "after",
+    "before",
+    "when",
+    "where",
+    "this",
+    "that",
+    "such",
+    "nothing",
+    "whoever",
+    "whenever",
+    "every",
+    "all",
+    "there",
 }
 
 # Pattern to detect subsection headers like "Registration requirements" or "Definitions"
@@ -157,17 +190,20 @@ def _extract_subsection_header(content: str) -> tuple[str | None, str]:
     match = SUBSECTION_HEADER_PATTERN.match(content)
     if match:
         header = match.group(2).strip()
-        remaining = content[match.end(2):].strip()
+        remaining = content[match.end(2) :].strip()
 
         # Validate: header should be 1-6 words, remaining should start with sentence starter
         words = header.split()
         if 1 <= len(words) <= 6:
             # Check if remaining starts with a sentence starter
             first_word = remaining.split()[0].lower() if remaining.split() else ""
-            if first_word.rstrip(".,;") in SENTENCE_STARTERS or remaining.startswith("—"):
+            if first_word.rstrip(".,;") in SENTENCE_STARTERS or remaining.startswith(
+                "—"
+            ):
                 return header, remaining
 
     return None, content
+
 
 # Patterns that indicate the start of notes/metadata sections (not law text)
 # These appear after the actual law text in US Code sections
@@ -370,8 +406,6 @@ class CodeReference:
         return f"<CodeReference({self.full_citation})>"
 
 
-
-
 # Pattern to parse individual citation components
 # Matches: "Pub. L. 94–553, title I, § 101, Oct. 19, 1976, 90 Stat. 2546"
 # Also handles: "Pub. L. 107–273, div. C, title III, § 13210(4)(A), Nov. 2, 2002"
@@ -382,8 +416,7 @@ CITATION_PARSE_PATTERN = re.compile(
     r"(?:\s*,\s*title\s+([IVXLCDM]+))?"  # Optional title (roman numeral)
     r"(?:\s*,\s*§+\s*([\d\w]+(?:\([a-z0-9]+\))*))?"  # Optional section
     r"(?:\s*,\s*([A-Z][a-z]{2,3}\.?\s+\d{1,2}\s*,\s+\d{4}))?"  # Optional date
-    r"(?:\s*,\s*(\d+)\s+Stat\.\s+(\d+))?"  # Optional Stat reference
-    ,
+    r"(?:\s*,\s*(\d+)\s+Stat\.\s+(\d+))?",  # Optional Stat reference
     re.IGNORECASE,
 )
 
@@ -739,7 +772,9 @@ def _is_roman_numeral(s: str) -> bool:
         # Validate it's a proper roman numeral pattern (not just random letters)
         # Common patterns: i, ii, iii, iv, v, vi, vii, viii, ix, x, xi, xii, etc.
         lower = s.lower()
-        if re.match(r"^(i{1,3}|iv|v|vi{0,3}|ix|x{1,3}|xi{1,3}|xiv|xv|xvi{0,3}|xix|xx)$", lower):
+        if re.match(
+            r"^(i{1,3}|iv|v|vi{0,3}|ix|x{1,3}|xi{1,3}|xiv|xv|xvi{0,3}|xix|xx)$", lower
+        ):
             return True
     return False
 
@@ -821,7 +856,11 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
 
     # Also check for single-letter abbreviations followed by period
     # e.g., "U." in "U.S.C."
-    if pos >= 1 and text[pos - 1].isupper() and (pos < 2 or not text[pos - 2].isalnum()):
+    if (
+        pos >= 1
+        and text[pos - 1].isupper()
+        and (pos < 2 or not text[pos - 2].isalnum())
+    ):
         # Single uppercase letter followed by period - likely abbreviation
         # unless it's the end of a sentence like "Plan B."
         pass  # Allow this for now, common abbreviations are in the list
@@ -829,7 +868,9 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
     return True
 
 
-def _split_into_sentences(text: str, start_offset: int = 0) -> list[tuple[str, int, int]]:
+def _split_into_sentences(
+    text: str, start_offset: int = 0
+) -> list[tuple[str, int, int]]:
     """Split text into sentences, returning (content, start_char, end_char) tuples.
 
     The start_char and end_char are relative to the original text using start_offset.
@@ -857,7 +898,9 @@ def _split_into_sentences(text: str, start_offset: int = 0) -> list[tuple[str, i
     # Don't forget the last segment if it doesn't end with a period
     remaining = text[current_start:].strip()
     if remaining:
-        sentences.append((remaining, start_offset + current_start, start_offset + len(text)))
+        sentences.append(
+            (remaining, start_offset + current_start, start_offset + len(text))
+        )
 
     return sentences
 
@@ -916,11 +959,13 @@ def _parse_amendments(text: str) -> list[Amendment]:
             description = " ".join(description.split())
 
             law = ParsedPublicLaw(congress=congress, law_number=law_number)
-            amendments.append(Amendment(
-                law=law,
-                year=year,
-                description=description,
-            ))
+            amendments.append(
+                Amendment(
+                    law=law,
+                    year=year,
+                    description=description,
+                )
+            )
 
         # If no Pub. L. found in the block, still record the year with the description
         if not list(pub_l_pattern.finditer(year_block)) and year_block:
@@ -930,11 +975,13 @@ def _parse_amendments(text: str) -> list[Amendment]:
                 congress = int(simple_pub_match.group(1))
                 law_number = int(simple_pub_match.group(2))
                 law = ParsedPublicLaw(congress=congress, law_number=law_number)
-                amendments.append(Amendment(
-                    law=law,
-                    year=year,
-                    description=" ".join(year_block.split()),
-                ))
+                amendments.append(
+                    Amendment(
+                        law=law,
+                        year=year,
+                        description=" ".join(year_block.split()),
+                    )
+                )
             # Skip amendments where we can't extract congress/law_number
             # since we need valid law references
 
@@ -971,7 +1018,11 @@ def _parse_short_titles(text: str) -> list[ShortTitle]:
             title = name_match.group(1)
         else:
             # Try without quotes
-            name_match = re.search(r"(?:cited as|known as)(?: the)?\s+['\"]?([^'\"]+(?:Act|Law)[^'\"]*)", description, re.IGNORECASE)
+            name_match = re.search(
+                r"(?:cited as|known as)(?: the)?\s+['\"]?([^'\"]+(?:Act|Law)[^'\"]*)",
+                description,
+                re.IGNORECASE,
+            )
             title = name_match.group(1).strip() if name_match else description[:100]
 
         # Extract year
@@ -982,11 +1033,13 @@ def _parse_short_titles(text: str) -> list[ShortTitle]:
         pub_l_match = re.search(r"Pub\.\s*L\.\s*\d+[—–-]\d+", description)
         public_law = pub_l_match.group(0) if pub_l_match else None
 
-        short_titles.append(ShortTitle(
-            title=title,
-            year=year,
-            public_law=public_law,
-        ))
+        short_titles.append(
+            ShortTitle(
+                title=title,
+                year=year,
+                public_law=public_law,
+            )
+        )
 
     return short_titles
 
@@ -1052,7 +1105,9 @@ def _parse_notes_structure(
             re.IGNORECASE,
         )
         if transfer_match:
-            notes.transferred_to = f"{transfer_match.group(2)} U.S.C. § {transfer_match.group(1)}"
+            notes.transferred_to = (
+                f"{transfer_match.group(2)} U.S.C. § {transfer_match.group(1)}"
+            )
         else:
             notes.transferred_to = "another location"
 
@@ -1089,11 +1144,13 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     matches = list(report_pattern.finditer(hist_text))
     if not matches:
         # No sub-headers, treat the whole section as one note
-        notes.notes.append(SectionNote(
-            header="Historical and Revision Notes",
-            content=hist_text,
-            category=NoteCategory.HISTORICAL,
-        ))
+        notes.notes.append(
+            SectionNote(
+                header="Historical and Revision Notes",
+                content=hist_text,
+                category=NoteCategory.HISTORICAL,
+            )
+        )
         return
 
     # Extract unique report sections
@@ -1110,11 +1167,13 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
         content = hist_text[content_start:content_end].strip()
 
         if content:
-            notes.notes.append(SectionNote(
-                header=header,
-                content=content,
-                category=NoteCategory.HISTORICAL,
-            ))
+            notes.notes.append(
+                SectionNote(
+                    header=header,
+                    content=content,
+                    category=NoteCategory.HISTORICAL,
+                )
+            )
 
 
 def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
@@ -1132,7 +1191,12 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
         return
 
     # Known editorial note headers in order they typically appear
-    editorial_headers = ["Codification", "References in Text", "Amendments", "Prior ParsedLines"]
+    editorial_headers = [
+        "Codification",
+        "References in Text",
+        "Amendments",
+        "Prior ParsedLines",
+    ]
 
     # Find positions of each header
     header_positions: list[tuple[int, str]] = []
@@ -1154,7 +1218,9 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
 
         # Content starts after header, ends at next header or end
         # Find where header text ends
-        header_match = re.search(rf"\b{re.escape(header)}\b", editorial_text[pos:], re.IGNORECASE)
+        header_match = re.search(
+            rf"\b{re.escape(header)}\b", editorial_text[pos:], re.IGNORECASE
+        )
         start = pos + header_match.end() if header_match else pos + len(header)
 
         # End at next header or end of text
@@ -1169,11 +1235,13 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
             if header == "Amendments":
                 notes.amendments = _parse_amendments(content)
 
-            notes.notes.append(SectionNote(
-                header=header,
-                content=content,
-                category=NoteCategory.EDITORIAL,
-            ))
+            notes.notes.append(
+                SectionNote(
+                    header=header,
+                    content=content,
+                    category=NoteCategory.EDITORIAL,
+                )
+            )
 
 
 def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
@@ -1217,7 +1285,17 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
         if len(header.split()) < 2:
             continue
         # Skip common false positives
-        skip_words = {"The", "And", "For", "With", "From", "That", "This", "Which", "Where"}
+        skip_words = {
+            "The",
+            "And",
+            "For",
+            "With",
+            "From",
+            "That",
+            "This",
+            "Which",
+            "Where",
+        }
         if header.split()[0] in skip_words:
             continue
         header_positions.append((match.start(), match.end(), header.title()))
@@ -1230,15 +1308,21 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
         seen_headers.add(header)
 
         # Content runs to next header or end
-        content_end = header_positions[i + 1][0] if i + 1 < len(header_positions) else len(statutory_text)
+        content_end = (
+            header_positions[i + 1][0]
+            if i + 1 < len(header_positions)
+            else len(statutory_text)
+        )
         content = statutory_text[end:content_end].strip()
 
         if content and len(content) > 30:
-            notes.notes.append(SectionNote(
-                header=header,
-                content=content,
-                category=NoteCategory.STATUTORY,
-            ))
+            notes.notes.append(
+                SectionNote(
+                    header=header,
+                    content=content,
+                    category=NoteCategory.STATUTORY,
+                )
+            )
 
 
 def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
@@ -1271,7 +1355,7 @@ def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
     if citation_match and citation_match.start() < earliest_notes_pos:
         # Only use citation as split point if it's near the end of the content
         # (not a citation reference in the middle of the text)
-        text_before_citation = text[:citation_match.start()].strip()
+        text_before_citation = text[: citation_match.start()].strip()
         # Check if the text before citation looks complete (ends with period or list item)
         if text_before_citation and (
             text_before_citation.endswith(".")
@@ -1313,6 +1397,7 @@ def normalize_section(
         ParsedSection with provision fields populated (other fields are empty/default).
     """
     from pipeline.olrc.parser import ParsedSection
+
     # Separate notes from law text if requested
     if strip_notes:
         law_text, notes = _separate_notes_from_text(text)
@@ -1398,7 +1483,9 @@ def normalize_section(
                 )
             else:
                 # No header detected - keep as single line
-                full_content = f"{marker_text} {item_content}" if item_content else marker_text
+                full_content = (
+                    f"{marker_text} {item_content}" if item_content else marker_text
+                )
                 line_number += 1
                 lines.append(
                     ParsedLine(
@@ -1465,7 +1552,9 @@ def normalize_section(
                 line.indent_level -= shift
 
     # Build the normalized text with proper indentation
-    normalized_lines = [line.to_display(use_tabs=use_tabs, indent_width=indent_width) for line in lines]
+    normalized_lines = [
+        line.to_display(use_tabs=use_tabs, indent_width=indent_width) for line in lines
+    ]
     normalized_text = "\n".join(normalized_lines)
 
     return ParsedSection(
@@ -1630,7 +1719,11 @@ def _normalize_subsection_recursive(
         # No heading - marker and content on one line
         if subsection.content:
             line_counter[0] += 1
-            content = f"{subsection.marker} {subsection.content}" if subsection.marker else subsection.content
+            content = (
+                f"{subsection.marker} {subsection.content}"
+                if subsection.marker
+                else subsection.content
+            )
             start_pos = char_pos[0]
             char_pos[0] += len(content) + 1
             lines.append(
@@ -1666,7 +1759,9 @@ def _normalize_subsection_recursive(
 
     # Process children recursively with increased indent
     for child in subsection.children:
-        _normalize_subsection_recursive(child, lines, line_counter, char_pos, child_indent)
+        _normalize_subsection_recursive(
+            child, lines, line_counter, char_pos, child_indent
+        )
 
 
 def normalize_parsed_section(
@@ -1698,8 +1793,7 @@ def normalize_parsed_section(
 
     # Build normalized text
     normalized_lines = [
-        line.to_display(use_tabs=use_tabs, indent_width=indent_width)
-        for line in lines
+        line.to_display(use_tabs=use_tabs, indent_width=indent_width) for line in lines
     ]
     normalized_text = "\n".join(normalized_lines)
 
