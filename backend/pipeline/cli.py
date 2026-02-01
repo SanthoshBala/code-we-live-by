@@ -1,14 +1,20 @@
 """CLI for running data ingestion pipelines."""
 
+from __future__ import annotations
+
 import argparse
 import asyncio
 import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
 from pipeline.olrc.parser import USLMParser
+
+if TYPE_CHECKING:
+    from pipeline.olrc.parser import ParsedSection
 
 # Configure logging
 logging.basicConfig(
@@ -418,7 +424,7 @@ def _normalize_section_number(section_num: str) -> str:
 
 def _fetch_section_from_xml(
     title_num: int, section_num: str, data_dir: Path
-) -> tuple[str | None, "ParsedSection | None"]:
+) -> tuple[str | None, ParsedSection | None]:
     """Fetch section text from OLRC XML files.
 
     Returns:
@@ -426,7 +432,7 @@ def _fetch_section_from_xml(
         ParsedSection is returned if structured subsections are available.
     """
     from pipeline.olrc.downloader import OLRCDownloader
-    from pipeline.olrc.parser import ParsedSection, USLMParser
+    from pipeline.olrc.parser import USLMParser
 
     downloader = OLRCDownloader(download_dir=data_dir)
     xml_path = downloader.get_xml_path(title_num)
@@ -472,7 +478,10 @@ def normalize_text_command(
     Returns:
         0 on success, 1 on failure.
     """
-    from pipeline.olrc.normalized_section import normalize_parsed_section, normalize_section
+    from pipeline.olrc.normalized_section import (
+        normalize_parsed_section,
+        normalize_section,
+    )
 
     content = None
     source_info = None
@@ -537,7 +546,10 @@ def normalize_text_command(
         result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
         # If we have XML-parsed notes, use those instead (they're cleaner than heuristic extraction)
         if parsed_section and parsed_section.notes:
-            from pipeline.olrc.normalized_section import _parse_notes_structure, SectionNotes
+            from pipeline.olrc.normalized_section import (
+                SectionNotes,
+                _parse_notes_structure,
+            )
             result.notes = SectionNotes()
             result.notes.raw_notes = parsed_section.notes
             _parse_notes_structure(parsed_section.notes, result.notes)

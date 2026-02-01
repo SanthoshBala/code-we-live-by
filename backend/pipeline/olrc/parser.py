@@ -739,8 +739,7 @@ class USLMParser:
         if not ref_elems:
             ref_elems = source_credit.findall(".//ref")
 
-        # Track current date and stat for associating with PL refs
-        current_date: str | None = None
+        # Track current stat volume/page for associating with PL refs
         current_stat_volume: int | None = None
         current_stat_page: int | None = None
 

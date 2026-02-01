@@ -1,17 +1,14 @@
 """Tests for legal text line normalization."""
 
-import pytest
 
 from pipeline.olrc.normalized_section import (
     Citation,
-    NormalizedLine,
-    NormalizedSection,
-    normalize_section,
-    char_span_to_line_span,
-    parse_citation,
-    parse_citations,
     _detect_marker_level,
     _is_sentence_boundary,
+    char_span_to_line_span,
+    normalize_section,
+    parse_citation,
+    parse_citations,
 )
 
 
@@ -501,8 +498,8 @@ class TestNormalizeParsedSection:
 
     def test_normalize_with_headings(self) -> None:
         """Subsections with headings create header + content lines with blank line separators."""
-        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
         from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
         section = ParsedSection(
             section_number="101",
@@ -547,8 +544,8 @@ class TestNormalizeParsedSection:
 
     def test_normalize_without_headings(self) -> None:
         """Subsections without headings create single lines at base indent."""
-        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
         from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
         section = ParsedSection(
             section_number="102",
@@ -580,8 +577,8 @@ class TestNormalizeParsedSection:
 
     def test_normalize_with_nested_children(self) -> None:
         """Nested subsections are properly indented relative to parent."""
-        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
         from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
         section = ParsedSection(
             section_number="103",
@@ -621,8 +618,8 @@ class TestNormalizeParsedSection:
 
     def test_empty_subsections(self) -> None:
         """Section with no subsections returns empty lines."""
-        from pipeline.olrc.parser import ParsedSection
         from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection
 
         section = ParsedSection(
             section_number="104",
@@ -655,8 +652,8 @@ class TestNormalizeParsedSection:
             L2 │     (1) In general
             L3 │         Content here...
         """
-        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
         from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
         section = ParsedSection(
             section_number="801",
@@ -709,8 +706,8 @@ class TestNormalizeParsedSection:
         When a subsection has content, a blank line should appear before
         the next sibling header to visually separate the logical blocks.
         """
-        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
         from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
         section = ParsedSection(
             section_number="102",
@@ -762,8 +759,8 @@ class TestNormalizeParsedSection:
             L2 │     In this section:
             L3 │         (1) Term
         """
-        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
         from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
         section = ParsedSection(
             section_number="801",

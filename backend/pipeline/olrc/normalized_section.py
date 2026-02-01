@@ -386,7 +386,7 @@ def parse_citations(text: str) -> list[Citation]:
 
 
 def citations_from_source_credit_refs(
-    refs: list["SourceCreditRef"],
+    refs: list[SourceCreditRef],
 ) -> list[Citation]:
     """Convert structured SourceCreditRef objects to Citation objects.
 
@@ -830,10 +830,7 @@ def _parse_amendments(text: str) -> list[Amendment]:
         start = year_match.end()
 
         # End is either next year marker or end of text
-        if i + 1 < len(year_matches):
-            end = year_matches[i + 1].start()
-        else:
-            end = len(text)
+        end = year_matches[i + 1].start() if i + 1 < len(year_matches) else len(text)
 
         year_block = text[start:end].strip()
 
@@ -1170,7 +1167,7 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
 
     # Deduplicate and extract content
     seen_headers: set[str] = set()
-    for i, (start, end, header) in enumerate(header_positions):
+    for i, (_start, end, header) in enumerate(header_positions):
         if header in seen_headers:
             continue
         seen_headers.add(header)
@@ -1296,10 +1293,7 @@ def normalize_section(
                     break
                 search_pos = candidate.end()
 
-            if next_marker:
-                item_end = next_marker.start()
-            else:
-                item_end = len(law_text)
+            item_end = next_marker.start() if next_marker else len(law_text)
 
             # Get the content of this list item
             item_content = law_text[marker_end:item_end].strip()
@@ -1373,10 +1367,7 @@ def normalize_section(
                     break
                 search_pos = candidate.end()
 
-            if next_marker:
-                segment_end = next_marker.start()
-            else:
-                segment_end = len(law_text)
+            segment_end = next_marker.start() if next_marker else len(law_text)
 
             segment = law_text[pos:segment_end]
 
@@ -1527,9 +1518,12 @@ def _normalize_subsection_recursive(
             # Add blank line only if:
             # - Previous content was not a header, AND
             # - This header is at same or shallower level (sibling or moving up)
-            if last_content_line and not last_content_line.is_header:
-                if base_indent <= last_content_line.indent_level:
-                    _add_blank_line(lines, line_counter, char_pos)
+            if (
+                last_content_line
+                and not last_content_line.is_header
+                and base_indent <= last_content_line.indent_level
+            ):
+                _add_blank_line(lines, line_counter, char_pos)
 
         line_counter[0] += 1
         header_content = f"{subsection.marker} {subsection.heading}"
