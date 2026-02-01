@@ -15,6 +15,7 @@ Using familiar version control metaphors (commits, pull requests, diffs, blame v
 - [Full Specification](THE_CODE_WE_LIVE_BY_SPEC.md) - Complete product specification
 - [Tasks](TASKS.md) - Implementation backlog (Phase 0-3)
 - [Research](research/) - Completed research and design documents
+- [Display Conventions](DISPLAY_CONVENTIONS.md) - How CWLB renders the US Code
 
 ## Setup
 
