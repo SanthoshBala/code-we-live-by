@@ -52,13 +52,12 @@ class PublicLawSchema(BaseModel):
         """Return the best title for display purposes.
 
         Prefers shorter/common names since the PL ID is shown separately.
-        Priority: alias > short_title > official_title
+        Priority: alias > short_title. Does NOT fall back to official_title
+        since "An act to..." titles are too verbose for inline display.
         """
         if self.short_title_aliases:
             return self.short_title_aliases[0]
-        if self.short_title:
-            return self.short_title
-        return self.official_title
+        return self.short_title
 
     @property
     def sort_key(self) -> tuple[int, int]:

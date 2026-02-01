@@ -627,6 +627,11 @@ def normalize_text_command(
 
     # Show source laws in changelog format
     if result.section_notes and result.section_notes.has_citations:
+        # Enrich citations with titles from GovInfo API / hardcoded table
+        from pipeline.olrc.title_lookup import enrich_citations_with_titles
+
+        asyncio.run(enrich_citations_with_titles(result.section_notes.citations))
+
         print()
         print("SOURCE LAWS:")
         print("-" * 70)
