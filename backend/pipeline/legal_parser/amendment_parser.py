@@ -4,10 +4,13 @@ This module provides the main parser class for identifying and extracting
 structured amendment information from the text of Public Laws.
 """
 
+from __future__ import annotations
+
 import contextlib
 import logging
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from app.models.enums import ChangeType
 from pipeline.legal_parser.patterns import (
@@ -15,6 +18,9 @@ from pipeline.legal_parser.patterns import (
     AmendmentPattern,
     PatternType,
 )
+
+if TYPE_CHECKING:
+    from app.models.public_law import PublicLaw
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +61,71 @@ class SectionReference:
             title=title,
             section=section.strip(),
             subsection_path=subsection_path.strip() if subsection_path else None,
+        )
+
+
+@dataclass
+class Citation:
+    """A citation to a US Code section from within a Public Law.
+
+    This class represents a reference/citation found in a Public Law that
+    points to a specific section of the US Code. Instead of embedding
+    public law fields (congress, law_number), it maintains a reference
+    to the PublicLaw model.
+
+    Attributes:
+        section_ref: Reference to the US Code section being cited.
+        public_law: Reference to the PublicLaw containing this citation.
+        citation_text: The original text of the citation as it appears in the law.
+        context: Surrounding text providing context for the citation.
+        start_pos: Start position of the citation in the source text.
+        end_pos: End position of the citation in the source text.
+    """
+
+    section_ref: SectionReference
+    public_law: PublicLaw | None = None
+    citation_text: str = ""
+    context: str = ""
+    start_pos: int = 0
+    end_pos: int = 0
+
+    def __str__(self) -> str:
+        """Return formatted citation string."""
+        section_str = str(self.section_ref)
+        if self.public_law:
+            return f"{section_str} (cited in PL {self.public_law.congress}-{self.public_law.law_number})"
+        return section_str
+
+    @classmethod
+    def from_section_ref(
+        cls,
+        section_ref: SectionReference,
+        public_law: PublicLaw | None = None,
+        citation_text: str = "",
+        context: str = "",
+        start_pos: int = 0,
+        end_pos: int = 0,
+    ) -> "Citation":
+        """Create a Citation from a SectionReference and PublicLaw.
+
+        Args:
+            section_ref: The US Code section being cited.
+            public_law: The PublicLaw containing this citation.
+            citation_text: The original citation text.
+            context: Surrounding text for context.
+            start_pos: Start position in source text.
+            end_pos: End position in source text.
+
+        Returns:
+            A new Citation instance.
+        """
+        return cls(
+            section_ref=section_ref,
+            public_law=public_law,
+            citation_text=citation_text,
+            context=context,
+            start_pos=start_pos,
+            end_pos=end_pos,
         )
 
 
