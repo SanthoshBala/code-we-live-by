@@ -109,6 +109,22 @@ This document translates the CWLB specification into an actionable backlog of im
   - Error handling and data validation approach
   - **Completed**: See [research/TASK-0.14-Data-Pipeline-Architecture.md](research/TASK-0.14-Data-Pipeline-Architecture.md)
 
+- [ ] **Task 0.15**: Research congressional committee jurisdiction mapping
+  - Map House/Senate committees to US Code titles and chapters
+  - Determine appropriate granularity for OWNERS files (Title vs Chapter level)
+  - Document data sources: House Rule X, Senate Rule XXV, Congress.gov
+  - Create committee-to-code mapping table for Phase 1 titles
+  - **Context**: For the "code as legislation" metaphor, committees are like CODEOWNERS
+  - **Key questions**:
+    - Is jurisdiction at Title level (e.g., Judiciary → Title 17) or Chapter level?
+    - How to handle overlapping jurisdiction (multiple committees)?
+    - What metadata to include (committee name, subcommittee, chair)?
+  - **Sources to consult**:
+    - [House.gov Committees](https://www.house.gov/committees)
+    - [Congress.gov Committees](https://www.congress.gov/committees)
+    - [House Rule X (GovInfo)](https://www.govinfo.gov/content/pkg/HMAN-104/pdf/HMAN-104-pg365.pdf)
+    - [National Archives Guide to House Records](https://www.archives.gov/legislative/guide/house/chapter-14.html)
+
 ---
 
 ## Phase 1: MVP (6-9 months)
@@ -224,6 +240,13 @@ This document translates the CWLB specification into an actionable backlog of im
   - Calculate SHA-256 hash of text_content for each line
   - Use hashes to detect unchanged lines across versions
   - Optimize storage by avoiding duplicate text
+
+- [ ] **Task 1.17b**: Extract hyperlinks from section notes
+  - Parse `<ref href="/us/pl/...">` elements in notes XML
+  - Store links to Public Laws, Acts, and other sections
+  - Add `references` field to SectionNoteSchema
+  - Enable linking from notes to referenced laws/sections
+  - **Context**: Notes contain hyperlinked citations (e.g., "Pub. L. 115-264") that link to `/us/pl/115/264`
 
 ### Data Pipeline - Historical Depth
 - [ ] **Task 1.18**: Ingest historical Public Laws (last 20 years as MVP scope)

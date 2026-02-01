@@ -4,16 +4,22 @@ This module provides title information for laws referenced in US Code sections.
 It uses a hybrid approach:
 1. Hardcoded table for major historical laws (pre-GovInfo era)
 2. GovInfo API lookup for modern laws (105th Congress onwards)
-3. In-memory caching to avoid repeated API calls
+3. File-based caching to persist lookups across CLI runs
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Cache file location (in data/cache/ directory)
+_CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
+_CACHE_FILE = _CACHE_DIR / "law_titles.json"
 
 
 @dataclass
@@ -97,8 +103,59 @@ HARDCODED_TITLES: dict[tuple[int, int] | str, LawTitleInfo] = {
     ),
 }
 
-# In-memory cache for GovInfo lookups
+# In-memory cache for GovInfo lookups (loaded from file on first access)
 _title_cache: dict[tuple[int, int], LawTitleInfo | None] = {}
+_cache_loaded = False
+
+
+def _load_cache() -> None:
+    """Load the title cache from disk."""
+    global _title_cache, _cache_loaded
+    if _cache_loaded:
+        return
+
+    _cache_loaded = True
+    if not _CACHE_FILE.exists():
+        return
+
+    try:
+        with open(_CACHE_FILE) as f:
+            data = json.load(f)
+        for key_str, value in data.items():
+            # Parse key from "congress,law_number" format
+            congress, law_number = map(int, key_str.split(","))
+            if value is None:
+                _title_cache[(congress, law_number)] = None
+            else:
+                _title_cache[(congress, law_number)] = LawTitleInfo(
+                    official_title=value.get("official_title"),
+                    short_title=value.get("short_title"),
+                    short_title_aliases=value.get("short_title_aliases"),
+                )
+        logger.debug(f"Loaded {len(_title_cache)} cached law titles")
+    except Exception as e:
+        logger.warning(f"Failed to load title cache: {e}")
+
+
+def _save_cache() -> None:
+    """Save the title cache to disk."""
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        data = {}
+        for (congress, law_number), info in _title_cache.items():
+            key_str = f"{congress},{law_number}"
+            if info is None:
+                data[key_str] = None
+            else:
+                data[key_str] = {
+                    "official_title": info.official_title,
+                    "short_title": info.short_title,
+                    "short_title_aliases": info.short_title_aliases,
+                }
+        with open(_CACHE_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to save title cache: {e}")
 
 
 def _parse_govinfo_short_titles(short_title_data: list[dict]) -> LawTitleInfo:
@@ -164,6 +221,10 @@ async def lookup_public_law_title(
     if key in HARDCODED_TITLES:
         return HARDCODED_TITLES[key]
 
+    # Load file-based cache if not already loaded
+    if use_cache:
+        _load_cache()
+
     # Check cache
     if use_cache and key in _title_cache:
         return _title_cache[key]
@@ -193,11 +254,13 @@ async def lookup_public_law_title(
 
                     if use_cache:
                         _title_cache[key] = info
+                        _save_cache()
                     return info
                 elif response.status_code == 404:
                     logger.debug(f"Law PL {congress}-{law_number} not found in GovInfo")
                     if use_cache:
                         _title_cache[key] = None
+                        _save_cache()
                     return None
                 else:
                     logger.warning(
@@ -223,9 +286,21 @@ def lookup_act_title(chapter: int) -> LawTitleInfo | None:
     return HARDCODED_TITLES.get(key)
 
 
-def clear_cache() -> None:
-    """Clear the in-memory title cache."""
+def clear_cache(clear_file: bool = False) -> None:
+    """Clear the in-memory title cache.
+
+    Args:
+        clear_file: If True, also delete the cache file on disk.
+    """
+    global _cache_loaded
     _title_cache.clear()
+    _cache_loaded = False
+    if clear_file and _CACHE_FILE.exists():
+        try:
+            _CACHE_FILE.unlink()
+            logger.debug("Deleted title cache file")
+        except Exception as e:
+            logger.warning(f"Failed to delete cache file: {e}")
 
 
 async def enrich_citations_with_titles(

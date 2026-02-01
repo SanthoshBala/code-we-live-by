@@ -765,14 +765,24 @@ class USLMParser:
         return None
 
     def _get_notes_text_content(self, elem: etree._Element) -> str:
-        """Get text content from notes, applying title case to smallCaps headings.
+        """Get text content from notes, preserving header formatting.
 
-        In USLM XML, headings like "house report no. 94-1476" are stored lowercase
-        but have class="smallCaps" to indicate they should be rendered in small caps.
-        We apply title case to these headings for better readability.
+        In USLM XML:
+        - Headings with class="smallCaps" are section headers (stored lowercase)
+        - <b> tags indicate inline headers (e.g., "General Scope of Copyright.")
+        - <i> tags followed by ".—" indicate sub-headers (e.g., "Reproduction.—")
+
+        We insert markers to preserve this structure:
+        - [H1] prefix for bold headers
+        - [H2] prefix for italic sub-headers
+
+        These markers are processed by normalize_note_content() to create
+        properly indented ParsedLine structures.
         """
         parts = []
-        for el in elem.iter():
+
+        def process_element(el, in_bold=False, in_italic=False):
+            """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
 
             # Check if this is a heading with smallCaps class
@@ -783,14 +793,35 @@ class USLMParser:
                     text = "".join(el.itertext()).strip()
                     if text:
                         parts.append(text.title())
-                    continue
+                    return  # Don't process children
 
-            # For non-heading elements, just get direct text (not children's text)
+            # Track bold/italic state
+            new_in_bold = in_bold or tag == "b"
+            new_in_italic = in_italic or tag == "i"
+
+            # Add text before children
             if el.text:
-                parts.append(el.text)
+                text = el.text
+                if tag == "b":
+                    # Bold text is a header - strip trailing period
+                    header_text = text.rstrip(".")
+                    parts.append(f"[H1]{header_text}[/H1]")
+                elif tag == "i":
+                    # Italic text might be a sub-header if followed by ".—"
+                    # We'll mark it and let the normalizer handle it
+                    parts.append(f"[H2]{text}[/H2]")
+                else:
+                    parts.append(text)
+
+            # Process children
+            for child in el:
+                process_element(child, new_in_bold, new_in_italic)
+
+            # Add tail text (text after closing tag)
             if el.tail:
                 parts.append(el.tail)
 
+        process_element(elem)
         return " ".join(parts).strip()
 
     def _extract_source_credit_refs(

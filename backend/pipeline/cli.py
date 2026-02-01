@@ -722,60 +722,90 @@ def normalize_text_command(
         for citation in result.section_notes.citations:
             print(format_source_law(citation))
 
-    # Show notes summary if present
+    # Show notes if present
     if result.section_notes and result.section_notes.has_notes:
-        print()
-        print("NOTES:")
-        print("-" * 70)
-
         # Section status
         if result.section_notes.is_transferred:
-            print(f"    ** TRANSFERRED to {result.section_notes.transferred_to}")
+            print()
+            print(f"** TRANSFERRED to {result.section_notes.transferred_to}")
         if result.section_notes.is_omitted:
-            print("    ** OMITTED")
+            print()
+            print("** OMITTED")
 
-        # Display notes by category, showing headers within each
+        # Display notes by category using the new file-based structure
         historical = result.section_notes.historical_notes
         editorial = result.section_notes.editorial_notes
         statutory = result.section_notes.statutory_notes
 
-        if historical:
-            print(f"\n    Historical and Revision Notes ({len(historical)}):")
-            for note in historical:
-                print(f"        - {note.header}")
+        def format_note_lines(note, max_lines: int = 5) -> list[str]:
+            """Format note lines for display."""
+            output = []
+            if note.lines:
+                for i, line in enumerate(note.lines):
+                    if i >= max_lines:
+                        output.append(f"        ... and {len(note.lines) - max_lines} more lines")
+                        break
+                    indent = "    " * line.indent_level
+                    # Clean up content (remove extra whitespace/newlines)
+                    content = " ".join(line.content.split())
+                    if len(content) > 70:
+                        content = content[:67] + "..."
+                    output.append(f"    {indent}{content}")
+            return output
 
-        if editorial:
-            print(f"\n    Editorial Notes ({len(editorial)}):")
-            for note in editorial:
-                print(f"        - {note.header}")
+        if historical:
+            print()
+            print("HISTORICAL_NOTES:")
+            print("-" * 70)
+            for note in historical:
+                print(f"# {note.header}")
+                for line in format_note_lines(note):
+                    print(line)
+                print()
+
+        # Filter out "Amendments" from editorial since we have a dedicated section
+        editorial_filtered = [n for n in editorial if n.header != "Amendments"]
+        if editorial_filtered:
+            print()
+            print("EDITORIAL_NOTES:")
+            print("-" * 70)
+            for note in editorial_filtered:
+                print(f"# {note.header}")
+                for line in format_note_lines(note):
+                    print(line)
+                print()
 
         if statutory:
-            print(f"\n    Statutory Notes ({len(statutory)}):")
+            print()
+            print("STATUTORY_NOTES:")
+            print("-" * 70)
             for note in statutory:
-                print(f"        - {note.header}")
+                print(f"# {note.header}")
+                for line in format_note_lines(note):
+                    print(line)
+                print()
 
-        # Structured fields with detailed display
-        # Amendments (use consistent [YEAR] format)
+        # Structured amendments display (CHANGELOG style)
         if result.section_notes.has_amendments:
-            print(f"\n    Amendments ({len(result.section_notes.amendments)}):")
-            for amend in result.section_notes.amendments[:5]:
-                desc = amend.description[:60].replace("\n", " ")
-                print(f"        [{amend.year}] {desc}...")
-            if len(result.section_notes.amendments) > 5:
-                print(
-                    f"        ... and {len(result.section_notes.amendments) - 5} more"
-                )
+            print()
+            print("AMENDMENTS:")
+            print("-" * 70)
+            # Group by year
+            amendments_by_year: dict[int, list] = {}
+            for amend in result.section_notes.amendments:
+                if amend.year not in amendments_by_year:
+                    amendments_by_year[amend.year] = []
+                amendments_by_year[amend.year].append(amend)
 
-        # Short Titles
-        if result.section_notes.short_titles:
-            print(f"\n    Short Titles ({len(result.section_notes.short_titles)}):")
-            for st in result.section_notes.short_titles[:3]:
-                year_str = f" ({st.year})" if st.year else ""
-                print(f"        {st.title[:60]}{year_str}")
-            if len(result.section_notes.short_titles) > 3:
-                print(
-                    f"        ... and {len(result.section_notes.short_titles) - 3} more"
-                )
+            # Display in reverse chronological order
+            for year in sorted(amendments_by_year.keys(), reverse=True):
+                print(f"# {year}")
+                for amend in amendments_by_year[year]:
+                    desc = " ".join(amend.description.split())
+                    if len(desc) > 60:
+                        desc = desc[:57] + "..."
+                    print(f"    {amend.public_law_id.ljust(12)} {desc}")
+                print()
 
         print("-" * 70)
 

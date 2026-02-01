@@ -636,6 +636,136 @@ def _split_into_sentences(
     return sentences
 
 
+def normalize_note_content(text: str) -> list[ParsedLine]:
+    """Normalize note content into ParsedLine structures.
+
+    Converts note text with header markers into structured lines suitable for
+    the "law-flavored plain text" format.
+
+    Header markers (inserted by parser):
+    - [H1]...[/H1]: Bold headers (section-level)
+    - [H2]...[/H2]: Italic sub-headers
+
+    Args:
+        text: The note content text with optional header markers.
+
+    Returns:
+        List of ParsedLine objects representing the normalized content.
+    """
+    lines: list[ParsedLine] = []
+    line_number = 0
+
+    # Clean up the text
+    text = text.strip()
+    if not text:
+        return lines
+
+    # Pattern to split text into header and non-header segments
+    # Matches [H1]...[/H1] or [H2]...[/H2] or regular text between them
+    header_pattern = re.compile(
+        r"\[H1\](.*?)\[/H1\]|\[H2\](.*?)\[/H2\]",
+        re.DOTALL,
+    )
+
+    # Track current indent level (increases after headers)
+    current_indent = 1  # Base indent for notes content
+
+    # Process the text, extracting headers and content
+    last_end = 0
+    for match in header_pattern.finditer(text):
+        # Process any text before this header
+        before_text = text[last_end : match.start()].strip()
+        if before_text:
+            # Split into sentences
+            sentences = _split_into_sentences(before_text, start_offset=last_end)
+            for sentence_text, start_char, end_char in sentences:
+                sentence_text = sentence_text.strip()
+                # Skip ".—" artifacts and clean up sub-header separators
+                if sentence_text:
+                    # Strip leading ".—" or "—" from content following sub-headers
+                    sentence_text = re.sub(r"^\.?—\s*", "", sentence_text)
+                if sentence_text and sentence_text not in (".—", "—", ".", ""):
+                    line_number += 1
+                    lines.append(
+                        ParsedLine(
+                            line_number=line_number,
+                            content=sentence_text,
+                            indent_level=current_indent,
+                            marker=None,
+                            is_header=False,
+                            start_char=start_char,
+                            end_char=end_char,
+                        )
+                    )
+
+        # Process the header
+        h1_text = match.group(1)
+        h2_text = match.group(2)
+
+        if h1_text:
+            # H1 is a bold header (section-level)
+            header_text = h1_text.strip().rstrip(".")
+            if header_text:
+                line_number += 1
+                lines.append(
+                    ParsedLine(
+                        line_number=line_number,
+                        content=header_text,
+                        indent_level=1,  # H1 headers at indent 1
+                        marker=None,
+                        is_header=True,
+                        start_char=match.start(),
+                        end_char=match.end(),
+                    )
+                )
+                current_indent = 2  # Content after H1 is indented
+
+        elif h2_text:
+            # H2 is an italic sub-header
+            header_text = h2_text.strip().rstrip(".")
+            if header_text:
+                line_number += 1
+                lines.append(
+                    ParsedLine(
+                        line_number=line_number,
+                        content=header_text,
+                        indent_level=2,  # H2 headers at indent 2
+                        marker=None,
+                        is_header=True,
+                        start_char=match.start(),
+                        end_char=match.end(),
+                    )
+                )
+                current_indent = 3  # Content after H2 is indented further
+
+        last_end = match.end()
+
+    # Process any remaining text after the last header
+    remaining_text = text[last_end:].strip()
+    if remaining_text:
+        sentences = _split_into_sentences(remaining_text, start_offset=last_end)
+        for sentence_text, start_char, end_char in sentences:
+            sentence_text = sentence_text.strip()
+            # Skip ".—" artifacts and clean up sub-header separators
+            if sentence_text:
+                sentence_text = re.sub(r"^\.?—\s*", "", sentence_text)
+            if sentence_text and sentence_text not in (".—", "—", ".", ""):
+                line_number += 1
+                lines.append(
+                    ParsedLine(
+                        line_number=line_number,
+                        content=sentence_text,
+                        indent_level=current_indent,
+                        marker=None,
+                        is_header=False,
+                        start_char=start_char,
+                        end_char=end_char,
+                    )
+                )
+
+    return lines
+
+
 def _parse_amendments(text: str) -> list[Amendment]:
     """Parse amendment entries from the Amendments subsection.
 
@@ -879,6 +1009,7 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
             SectionNote(
                 header="Historical and Revision Notes",
                 content=hist_text,
+                lines=normalize_note_content(hist_text),
                 category=NoteCategory.HISTORICAL,
             )
         )
@@ -902,6 +1033,7 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
                 SectionNote(
                     header=header,
                     content=content,
+                    lines=normalize_note_content(content),
                     category=NoteCategory.HISTORICAL,
                 )
             )
@@ -970,6 +1102,7 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
                 SectionNote(
                     header=header,
                     content=content,
+                    lines=normalize_note_content(content),
                     category=NoteCategory.EDITORIAL,
                 )
             )
@@ -1051,6 +1184,7 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
                 SectionNote(
                     header=header,
                     content=content,
+                    lines=normalize_note_content(content),
                     category=NoteCategory.STATUTORY,
                 )
             )
