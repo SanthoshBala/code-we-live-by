@@ -613,41 +613,55 @@ def normalize_text_command(
                 f"{provision_info}, chars=[{provision.start_char}:{provision.end_char}]"
             )
 
-    # Show source laws (like imports at the top of a file)
+    # Show source laws in changelog format
     if result.section_notes and result.section_notes.has_citations:
         print()
-        print("SOURCE LAWS:")
-        print("-" * 70)
+        print("# Source Laws")
 
-        # Group citations: first is enactment, rest are amendments
-        enactment = [c for c in result.section_notes.citations if c.is_original]
-        amendments = [c for c in result.section_notes.citations if not c.is_original]
+        def parse_date_to_ymd(date_str: str | None) -> str:
+            """Convert 'Oct. 19, 1976' to '1976.10.19' format."""
+            if not date_str:
+                return "          "  # 10 chars placeholder
+            month_map = {
+                "Jan": "01",
+                "Feb": "02",
+                "Mar": "03",
+                "Apr": "04",
+                "May": "05",
+                "Jun": "06",
+                "Jul": "07",
+                "Aug": "08",
+                "Sep": "09",
+                "Oct": "10",
+                "Nov": "11",
+                "Dec": "12",
+            }
+            import re
 
-        def format_citation(citation):
-            parts = [citation.public_law_id]
-            if citation.title:
-                parts.append(f"title {citation.title}")
-            if citation.section:
-                parts.append(f"§ {citation.section}")
-            if citation.date:
-                parts.append(citation.date)
-            if citation.stat_reference:
-                parts.append(citation.stat_reference)
-            return ", ".join(parts)
+            match = re.match(r"([A-Z][a-z]{2})\.?\s+(\d{1,2})\s*,\s+(\d{4})", date_str)
+            if match:
+                month = month_map.get(match.group(1), "??")
+                day = match.group(2).zfill(2)
+                year = match.group(3)
+                return f"{year}.{month}.{day}"
+            return "          "  # 10 chars placeholder
 
-        if enactment:
-            print("    # Enactment")
-            for citation in enactment:
-                print(f"    {format_citation(citation)}")
+        def format_source_law(citation, is_enactment: bool) -> str:
+            """Format a source law in changelog style."""
+            pl_id = citation.public_law_id.ljust(12)
+            date = parse_date_to_ymd(citation.date)
+            if is_enactment:
+                action = "enacted"
+            else:
+                # Include section reference if available
+                if citation.section:
+                    action = f"amended § {citation.section}"
+                else:
+                    action = "amended"
+            return f"{pl_id} {date}    {action}"
 
-        if amendments:
-            if enactment:
-                print()  # Blank line between sections
-            print("    # Amendments")
-            for citation in amendments:
-                print(f"    {format_citation(citation)}")
-
-        print("-" * 70)
+        for citation in result.section_notes.citations:
+            print(format_source_law(citation, citation.is_original))
 
     # Show notes summary if present
     if result.section_notes and result.section_notes.has_notes:
