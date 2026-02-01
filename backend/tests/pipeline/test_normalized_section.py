@@ -636,3 +636,110 @@ class TestNormalizeParsedSection:
 
         assert result.line_count == 0
         assert result.lines == []
+
+    def test_no_blank_line_between_consecutive_headers(self) -> None:
+        """No blank line between a header-only parent and its child header.
+
+        When a parent header has no content, its child header should follow
+        immediately without a blank line. Blank lines are only added to
+        separate content blocks, not to separate "container" headers.
+
+        Example - WRONG (awkward spacing):
+            L1 │ (a) Appropriation
+            L2 │
+            L3 │     (1) In general
+            L4 │         Content here...
+
+        Example - RIGHT (natural spacing):
+            L1 │ (a) Appropriation
+            L2 │     (1) In general
+            L3 │         Content here...
+        """
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+
+        section = ParsedSection(
+            section_number="801",
+            heading="Test Section",
+            full_citation="42 U.S.C. § 801",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading="Appropriation",  # Header only, no content
+                    content=None,
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading="In general",
+                            content="Content here.",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(2)",
+                            heading="Reservation",
+                            content="More content.",
+                            level="paragraph",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Expected: (a) header, (1) header, (1) content, blank, (2) header, (2) content
+        # NO blank line between (a) and (1) since (a) has no content
+        assert result.line_count == 6
+        assert result.lines[0].content == "(a) Appropriation"
+        assert result.lines[0].is_header is True
+        # (1) immediately follows (a) - no blank line
+        assert result.lines[1].content == "(1) In general"
+        assert result.lines[1].is_header is True
+        assert result.lines[2].content == "Content here."
+        # Blank line before (2) because there's content before it
+        assert result.lines[3].content == ""
+        assert result.lines[4].content == "(2) Reservation"
+        assert result.lines[5].content == "More content."
+
+    def test_blank_line_after_content_before_header(self) -> None:
+        """Blank line IS added between content and the next header.
+
+        When a subsection has content, a blank line should appear before
+        the next sibling header to visually separate the logical blocks.
+        """
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+
+        section = ParsedSection(
+            section_number="102",
+            heading="Test Section",
+            full_citation="17 U.S.C. § 102",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading="First",
+                    content="First content.",  # Has content
+                    level="subsection",
+                ),
+                ParsedSubsection(
+                    marker="(b)",
+                    heading="Second",
+                    content="Second content.",
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Expected: (a) header, (a) content, blank, (b) header, (b) content
+        assert result.line_count == 5
+        assert result.lines[0].content == "(a) First"
+        assert result.lines[1].content == "First content."
+        # Blank line after content, before next header
+        assert result.lines[2].content == ""
+        assert result.lines[3].content == "(b) Second"
+        assert result.lines[4].content == "Second content."

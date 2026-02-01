@@ -1495,9 +1495,33 @@ def _normalize_subsection_recursive(
     """
     # If there's a heading, create a separate header line
     if subsection.heading:
-        # Add blank line before headers (for readability), except for the first line
+        # Add blank line before headers to separate logical blocks, but only when
+        # there's content between headers. Don't add blank lines between consecutive
+        # headers (e.g., a parent header followed immediately by a child header).
+        #
+        # Example - WITHOUT this rule (awkward):
+        #     L1 │ (a) Appropriation
+        #     L2 │
+        #     L3 │     (1) In general
+        #     L4 │         Content here...
+        #
+        # Example - WITH this rule (natural):
+        #     L1 │ (a) Appropriation
+        #     L2 │     (1) In general
+        #     L3 │         Content here...
+        #
+        # The blank line is only useful when separating content blocks, not when
+        # a header is just a "container" introducing nested structure.
         if lines:
-            _add_blank_line(lines, line_counter, char_pos)
+            # Find the last non-blank line to check if it's a header
+            last_content_line = None
+            for line in reversed(lines):
+                if line.content:  # Skip blank lines
+                    last_content_line = line
+                    break
+            # Only add blank line if the previous content was not a header
+            if last_content_line and not last_content_line.is_header:
+                _add_blank_line(lines, line_counter, char_pos)
 
         line_counter[0] += 1
         header_content = f"{subsection.marker} {subsection.heading}"
