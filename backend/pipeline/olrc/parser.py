@@ -1,5 +1,7 @@
 """Parse USLM (United States Legislative Markup) XML files."""
 
+from __future__ import annotations
+
 import contextlib
 import hashlib
 import logging
@@ -7,8 +9,12 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from lxml import etree
+
+if TYPE_CHECKING:
+    from pipeline.olrc.normalized_section import NormalizedLine, SectionNotes
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +67,7 @@ class ParsedSubsection:
     marker: str  # e.g., "(a)", "(1)", "(A)"
     heading: str | None  # e.g., "Registration requirements"
     content: str  # The text content (may include chapeau for list intros)
-    children: list["ParsedSubsection"] = field(default_factory=list)
+    children: list[ParsedSubsection] = field(default_factory=list)
     level: str = "subsection"  # subsection, paragraph, subparagraph, clause, subclause
 
 
@@ -86,7 +92,14 @@ class SourceCreditRef:
 
 @dataclass
 class ParsedSection:
-    """Parsed US Code Section data."""
+    """Parsed US Code Section data.
+
+    This class represents a section of the US Code, containing both the
+    raw parsed data from XML and the normalized provisions for display.
+
+    The provisions, normalized_text, and section_notes fields are populated
+    by calling normalize() after parsing.
+    """
 
     section_number: str
     heading: str
@@ -94,10 +107,42 @@ class ParsedSection:
     text_content: str  # Flattened text (for backwards compatibility)
     chapter_number: str | None = None
     subchapter_number: str | None = None
-    notes: str | None = None
+    notes: str | None = None  # Raw notes from XML
     sort_order: int = 0
     subsections: list[ParsedSubsection] = field(default_factory=list)  # Structured content
     source_credit_refs: list[SourceCreditRef] = field(default_factory=list)  # Structured citations
+
+    # Provision fields (populated after normalization)
+    provisions: list[NormalizedLine] = field(default_factory=list)
+    normalized_text: str = ""  # Display-ready text with indentation
+    section_notes: SectionNotes | None = None  # Parsed notes with citations, amendments, etc.
+
+    @property
+    def provision_count(self) -> int:
+        """Return the total number of provisions."""
+        return len(self.provisions)
+
+    @property
+    def is_normalized(self) -> bool:
+        """Return True if this section has been normalized."""
+        return len(self.provisions) > 0
+
+    def get_provision(self, line_number: int) -> NormalizedLine | None:
+        """Get a provision by its 1-indexed line number."""
+        if 1 <= line_number <= len(self.provisions):
+            return self.provisions[line_number - 1]
+        return None
+
+    def get_provisions(self, start: int, end: int) -> list[NormalizedLine]:
+        """Get provisions in a range (1-indexed, inclusive)."""
+        return self.provisions[max(0, start - 1) : end]
+
+    def char_to_line(self, char_pos: int) -> int | None:
+        """Convert a character position to a line number."""
+        for provision in self.provisions:
+            if provision.start_char <= char_pos < provision.end_char:
+                return provision.line_number
+        return None
 
 
 @dataclass

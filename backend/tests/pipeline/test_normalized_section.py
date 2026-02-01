@@ -436,10 +436,10 @@ class TestCitationParsing:
 
         result = normalize_section(text)
 
-        assert result.notes.has_citations
-        assert len(result.notes.citations) == 1
-        assert result.notes.citations[0].congress == 94
-        assert result.notes.citations[0].public_law_id == "PL 94-553"
+        assert result.section_notes.has_citations
+        assert len(result.section_notes.citations) == 1
+        assert result.section_notes.citations[0].congress == 94
+        assert result.section_notes.citations[0].public_law_id == "PL 94-553"
 
     def test_citation_public_law_id_property(self) -> None:
         """Test the public_law_id property format."""

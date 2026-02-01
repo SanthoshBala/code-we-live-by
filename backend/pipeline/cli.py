@@ -550,9 +550,9 @@ def normalize_text_command(
                 SectionNotes,
                 _parse_notes_structure,
             )
-            result.notes = SectionNotes()
-            result.notes.raw_notes = parsed_section.notes
-            _parse_notes_structure(parsed_section.notes, result.notes)
+            result.section_notes = SectionNotes()
+            result.section_notes.raw_notes = parsed_section.notes
+            _parse_notes_structure(parsed_section.notes, result.section_notes)
 
     # Display results
     print()
@@ -583,7 +583,7 @@ def normalize_text_command(
 
     print("-" * 70)
     print(f"Total provisions: {result.provision_count}")
-    print(f"Law text: {len(result.law_text):,} chars")
+    print(f"Law text: {len(result.text_content):,} chars")
 
     if show_metadata:
         print()
@@ -605,14 +605,14 @@ def normalize_text_command(
             )
 
     # Show citations (like imports at the top of a file)
-    if result.notes.has_citations:
+    if result.section_notes and result.section_notes.has_citations:
         print()
         print("CITATIONS:")
         print("-" * 70)
 
         # Group citations: first is enactment, rest are amendments
-        enactment = [c for c in result.notes.citations if c.is_original]
-        amendments = [c for c in result.notes.citations if not c.is_original]
+        enactment = [c for c in result.section_notes.citations if c.is_original]
+        amendments = [c for c in result.section_notes.citations if not c.is_original]
 
         def format_citation(citation):
             parts = [citation.public_law_id]
@@ -641,21 +641,21 @@ def normalize_text_command(
         print("-" * 70)
 
     # Show notes summary if present
-    if result.notes.has_notes:
+    if result.section_notes and result.section_notes.has_notes:
         print()
         print("NOTES:")
         print("-" * 70)
 
         # Section status
-        if result.notes.is_transferred:
-            print(f"    ** TRANSFERRED to {result.notes.transferred_to}")
-        if result.notes.is_omitted:
+        if result.section_notes.is_transferred:
+            print(f"    ** TRANSFERRED to {result.section_notes.transferred_to}")
+        if result.section_notes.is_omitted:
             print("    ** OMITTED")
 
         # Display notes by category, showing headers within each
-        historical = result.notes.historical_notes
-        editorial = result.notes.editorial_notes
-        statutory = result.notes.statutory_notes
+        historical = result.section_notes.historical_notes
+        editorial = result.section_notes.editorial_notes
+        statutory = result.section_notes.statutory_notes
 
         if historical:
             print(f"\n    Historical and Revision Notes ({len(historical)}):")
@@ -674,22 +674,22 @@ def normalize_text_command(
 
         # Structured fields with detailed display
         # Amendments (use consistent [YEAR] format)
-        if result.notes.has_amendments:
-            print(f"\n    Amendments ({len(result.notes.amendments)}):")
-            for amend in result.notes.amendments[:5]:
+        if result.section_notes.has_amendments:
+            print(f"\n    Amendments ({len(result.section_notes.amendments)}):")
+            for amend in result.section_notes.amendments[:5]:
                 desc = amend.description[:60].replace("\n", " ")
                 print(f"        [{amend.year}] {desc}...")
-            if len(result.notes.amendments) > 5:
-                print(f"        ... and {len(result.notes.amendments) - 5} more")
+            if len(result.section_notes.amendments) > 5:
+                print(f"        ... and {len(result.section_notes.amendments) - 5} more")
 
         # Short Titles
-        if result.notes.short_titles:
-            print(f"\n    Short Titles ({len(result.notes.short_titles)}):")
-            for st in result.notes.short_titles[:3]:
+        if result.section_notes.short_titles:
+            print(f"\n    Short Titles ({len(result.section_notes.short_titles)}):")
+            for st in result.section_notes.short_titles[:3]:
                 year_str = f" ({st.year})" if st.year else ""
                 print(f"        {st.title[:60]}{year_str}")
-            if len(result.notes.short_titles) > 3:
-                print(f"        ... and {len(result.notes.short_titles) - 3} more")
+            if len(result.section_notes.short_titles) > 3:
+                print(f"        ... and {len(result.section_notes.short_titles) - 3} more")
 
         print("-" * 70)
 
