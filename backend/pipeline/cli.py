@@ -613,10 +613,10 @@ def normalize_text_command(
                 f"{provision_info}, chars=[{provision.start_char}:{provision.end_char}]"
             )
 
-    # Show citations (like imports at the top of a file)
+    # Show source laws (like imports at the top of a file)
     if result.section_notes and result.section_notes.has_citations:
         print()
-        print("CITATIONS:")
+        print("SOURCE LAWS:")
         print("-" * 70)
 
         # Group citations: first is enactment, rest are amendments
