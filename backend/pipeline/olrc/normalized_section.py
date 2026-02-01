@@ -15,9 +15,19 @@ from the law text and returned as metadata (like README/docstrings).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import TYPE_CHECKING
+
+from app.schemas import (
+    AmendmentSchema,
+    CodeLineSchema,
+    CodeReferenceSchema,
+    NoteCategoryEnum,
+    PublicLawSchema,
+    SectionNoteSchema,
+    SectionNotesSchema,
+    ShortTitleSchema,
+    SourceLawSchema,
+)
 
 if TYPE_CHECKING:
     from pipeline.olrc.parser import ParsedSection, ParsedSubsection, SourceCreditRef
@@ -229,181 +239,19 @@ CITATION_BLOCK_PATTERN = re.compile(
 )
 
 
-@dataclass
-class ParsedLine:
-    """A single line of statutory text (in-memory representation).
-
-    This is the in-memory representation of a line, used during parsing
-    and display. For the database model, see USCodeLine.
-
-    Attributes:
-        line_number: 1-indexed line number in the normalized output.
-        content: The text content of this line (without leading indentation).
-        indent_level: Nesting depth (0 = top level, 1 = (a), 2 = (1), etc.).
-        marker: The list item marker if this is a list item, e.g., "(a)".
-        is_header: Whether this line is a header (should be rendered bold).
-        start_char: Character position in original text where this line starts.
-        end_char: Character position in original text where this line ends.
-    """
-
-    line_number: int
-    content: str
-    indent_level: int
-    marker: str | None
-    is_header: bool
-    start_char: int
-    end_char: int
-
-    def to_display(self, use_tabs: bool = True, indent_width: int = 4) -> str:
-        """Return the line with proper indentation for display.
-
-        Args:
-            use_tabs: If True, use tab characters. If False, use spaces.
-            indent_width: Number of spaces per indent level (only used if use_tabs=False).
-        """
-        if use_tabs:
-            indent = "\t" * self.indent_level
-        else:
-            indent = " " * (self.indent_level * indent_width)
-        return f"{indent}{self.content}"
-
-
-@dataclass
-class ParsedPublicLaw:
-    """In-memory representation of a Public Law.
-
-    For the database model, see PublicLaw in app/models/public_law.py.
-    """
-
-    congress: int  # e.g., 94
-    law_number: int  # e.g., 553
-    date: str | None = None  # Enactment date, e.g., "Oct. 19, 1976"
-    stat_volume: int | None = None  # Statutes at Large volume, e.g., 90
-    stat_page: int | None = None  # Statutes at Large page, e.g., 2546
-
-    @property
-    def public_law_id(self) -> str:
-        """Return the Public Law identifier (e.g., 'PL 94-553')."""
-        return f"PL {self.congress}-{self.law_number}"
-
-    @property
-    def stat_reference(self) -> str | None:
-        """Return the Statutes at Large reference (e.g., '90 Stat. 2546')."""
-        if self.stat_volume and self.stat_page:
-            return f"{self.stat_volume} Stat. {self.stat_page}"
-        return None
-
-    @property
-    def sort_key(self) -> tuple[int, int]:
-        """Return a sort key for chronological ordering.
-
-        Uses (congress, law_number) which gives chronological order
-        since congress numbers increase over time.
-        """
-        return (self.congress, self.law_number)
-
-    def __repr__(self) -> str:
-        return f"<ParsedPublicLaw({self.public_law_id})>"
-
-
-@dataclass
-class SourceLaw:
-    """A reference to a Public Law that enacted or amended this section.
-
-    Like an import statement, this links the section to the law that
-    created or modified it. Source laws are ordered chronologically:
-    - First source law (order=0) = the law that created/enacted the section
-    - Subsequent source laws = amendments in historical order
-
-    Example: "Pub. L. 94–553, title I, § 101, Oct. 19, 1976, 90 Stat. 2546"
-    """
-
-    law: ParsedPublicLaw
-    title: str | None = None  # Title within the law, e.g., "I"
-    section: str | None = None  # Section within the law, e.g., "101"
-    raw_text: str = ""  # The original citation text
-    order: int = 0  # Position in source law list (0 = original/creating law)
-
-    @property
-    def public_law_id(self) -> str:
-        """Return the Public Law identifier (e.g., 'PL 94-553')."""
-        return self.law.public_law_id
-
-    @property
-    def congress(self) -> int:
-        """Return the congress number."""
-        return self.law.congress
-
-    @property
-    def law_number(self) -> int:
-        """Return the law number."""
-        return self.law.law_number
-
-    @property
-    def date(self) -> str | None:
-        """Return the enactment date."""
-        return self.law.date
-
-    @property
-    def stat_reference(self) -> str | None:
-        """Return the Statutes at Large reference."""
-        return self.law.stat_reference
-
-    @property
-    def stat_volume(self) -> int | None:
-        """Return the Statutes at Large volume."""
-        return self.law.stat_volume
-
-    @property
-    def stat_page(self) -> int | None:
-        """Return the Statutes at Large page."""
-        return self.law.stat_page
-
-    @property
-    def is_original(self) -> bool:
-        """Return True if this is the original/creating law (first source)."""
-        return self.order == 0
-
-    @property
-    def sort_key(self) -> tuple[int, int]:
-        """Return a sort key for chronological ordering."""
-        return self.law.sort_key
-
-    def __repr__(self) -> str:
-        return f"<SourceLaw({self.public_law_id})>"
-
-
-@dataclass
-class CodeReference:
-    """An in-text reference to another section of the US Code.
-
-    Captures references like "section 106 of title 17" or "subsection (a)(1)"
-    found within statutory text.
-    """
-
-    title: int | None = None  # Title number, e.g., 17
-    section: str | None = None  # Section number, e.g., "106"
-    subsection: str | None = None  # Subsection path, e.g., "(a)(1)"
-    raw_text: str = ""  # The original reference text
-
-    @property
-    def full_citation(self) -> str:
-        """Return the full citation string."""
-        if self.title and self.section:
-            base = f"{self.title} U.S.C. § {self.section}"
-            if self.subsection:
-                return f"{base}{self.subsection}"
-            return base
-        elif self.section:
-            if self.subsection:
-                return f"section {self.section}{self.subsection}"
-            return f"section {self.section}"
-        elif self.subsection:
-            return f"subsection {self.subsection}"
-        return self.raw_text
-
-    def __repr__(self) -> str:
-        return f"<CodeReference({self.full_citation})>"
+# =============================================================================
+# Type aliases for backwards compatibility
+# These map old names to new Pydantic schema names
+# =============================================================================
+ParsedLine = CodeLineSchema
+ParsedPublicLaw = PublicLawSchema
+SourceLaw = SourceLawSchema
+CodeReference = CodeReferenceSchema
+Amendment = AmendmentSchema
+ShortTitle = ShortTitleSchema
+NoteCategory = NoteCategoryEnum
+SectionNote = SectionNoteSchema
+SectionNotes = SectionNotesSchema
 
 
 # Pattern to parse individual citation components
@@ -545,193 +393,6 @@ def citations_from_source_credit_refs(
         )
         citations.append(citation)
     return citations
-
-
-@dataclass
-class Amendment:
-    """A single amendment to a section.
-
-    Represents one change made to a section by a Public Law,
-    like a commit in version control.
-    """
-
-    law: ParsedPublicLaw
-    year: int
-    description: str  # What changed
-
-    @property
-    def public_law_id(self) -> str:
-        """Return normalized PL identifier."""
-        return self.law.public_law_id
-
-    @property
-    def congress(self) -> int:
-        """Return the congress number."""
-        return self.law.congress
-
-    @property
-    def law_number(self) -> int:
-        """Return the law number."""
-        return self.law.law_number
-
-
-@dataclass
-class ShortTitle:
-    """A short title (common name) for an act."""
-
-    title: str  # e.g., "Philanthropy Protection Act of 1995"
-    year: int | None = None
-    public_law: str | None = None
-
-
-class NoteCategory(Enum):
-    """Category of a section note in the US Code.
-
-    The OLRC organizes notes into three main categories:
-    - HISTORICAL: Legislative history from original codification
-    - EDITORIAL: OLRC editorial annotations added for clarity
-    - STATUTORY: ParsedLines from enacting laws not part of Code text
-    """
-
-    HISTORICAL = "historical"
-    EDITORIAL = "editorial"
-    STATUTORY = "statutory"
-
-
-@dataclass
-class SectionNote:
-    """A single note within a US Code section.
-
-    Notes are organized by the OLRC under headers like "Codification",
-    "Effective Date of 1995 Amendment", "Performing Rights Society
-    Consent Decrees", etc. This class captures both the header and
-    content, allowing dynamic storage of any note type.
-
-    Example headers by category:
-    - HISTORICAL: "House Report No. 94-1476", "Senate Report No. 99-541"
-    - EDITORIAL: "Codification", "References in Text", "Amendments", "Prior ParsedLines"
-    - STATUTORY: "Effective Date of 1995 Amendment", "Short Title",
-                 "Performing Rights Society Consent Decrees", "Regulations"
-    """
-
-    header: str  # e.g., "Performing Rights Society Consent Decrees"
-    content: str  # The note body text
-    category: NoteCategory  # Which section this note belongs to
-
-
-@dataclass
-class SectionNotes:
-    """Metadata notes extracted from a US Code section.
-
-    These are separated from the law text and treated like documentation.
-    The OLRC organizes notes into three main categories:
-
-    1. Historical and Revision Notes - Legislative history from codification
-    2. Editorial Notes - OLRC editorial annotations (codification, references, amendments)
-    3. Statutory Notes - ParsedLines from enacting laws that aren't part of the Code itself
-
-    This class uses a hybrid approach:
-    - Structured fields for high-value, consistently formatted data (citations,
-      amendments, effective_dates, short_titles)
-    - Dynamic SectionNote list for all other notes, preserving their headers
-      and content for flexible rendering
-
-    Example section: 17 USC 106
-    """
-
-    # =========================================================================
-    # STRUCTURED FIELDS - Specially parsed for rich data
-    # =========================================================================
-
-    # Citations (>90% of sections)
-    # Structured references to Public Laws that enacted/amended this section.
-    # Example: 17 USC 106 cites "Pub. L. 94-553" as the enacting law
-    citations: list[SourceLaw] = field(default_factory=list)
-
-    # Amendments (~70-80% of sections) - Most common note type
-    # Chronological list of changes made to this section by subsequent laws.
-    # Each entry identifies the Public Law and describes what was changed.
-    # Example: 17 USC 106 - lists 5 amendments from 1990-2002
-    amendments: list[Amendment] = field(default_factory=list)
-
-    # Short Titles (<10% of sections)
-    # Popular names for acts (e.g., "USA PATRIOT Act", "Clean Air Act").
-    # Example: 18 USC 3591 - "Federal Death Penalty Act of 1994"
-    short_titles: list[ShortTitle] = field(default_factory=list)
-
-    # =========================================================================
-    # DYNAMIC NOTES - All other notes with header/content preserved
-    # =========================================================================
-
-    # All notes organized by header, preserving the OLRC's structure.
-    # Each SectionNote has a header, content, and category.
-    # Example headers: "House Report No. 94-1476", "Codification",
-    #                  "Performing Rights Society Consent Decrees"
-    notes: list[SectionNote] = field(default_factory=list)
-
-    # =========================================================================
-    # SECTION STATUS - Metadata about the section's current state
-    # =========================================================================
-
-    # Section was moved to another location in the Code
-    transferred_to: str | None = None
-
-    # Section was omitted from the Code (not repealed, just not carried forward)
-    omitted: bool = False
-
-    # Section was renumbered from a previous section number
-    renumbered_from: str | None = None
-
-    # =========================================================================
-    # RAW/UNPARSED CONTENT
-    # =========================================================================
-
-    # Full raw text of all notes (fallback for anything not parsed)
-    raw_notes: str = ""
-
-    @property
-    def has_notes(self) -> bool:
-        """Return True if any notes were extracted."""
-        return bool(self.raw_notes.strip()) or len(self.notes) > 0
-
-    @property
-    def has_citations(self) -> bool:
-        """Return True if any citations were parsed."""
-        return len(self.citations) > 0
-
-    @property
-    def has_amendments(self) -> bool:
-        """Return True if any amendments were parsed."""
-        return len(self.amendments) > 0
-
-    @property
-    def is_transferred(self) -> bool:
-        """Return True if section was transferred to another location."""
-        return self.transferred_to is not None
-
-    @property
-    def is_omitted(self) -> bool:
-        """Return True if section was omitted."""
-        return self.omitted
-
-    def notes_by_category(self, category: NoteCategory) -> list[SectionNote]:
-        """Get all notes in a specific category."""
-        return [n for n in self.notes if n.category == category]
-
-    @property
-    def historical_notes(self) -> list[SectionNote]:
-        """Get all historical and revision notes."""
-        return self.notes_by_category(NoteCategory.HISTORICAL)
-
-    @property
-    def editorial_notes(self) -> list[SectionNote]:
-        """Get all editorial notes."""
-        return self.notes_by_category(NoteCategory.EDITORIAL)
-
-    @property
-    def statutory_notes(self) -> list[SectionNote]:
-        """Get all statutory notes."""
-        return self.notes_by_category(NoteCategory.STATUTORY)
 
 
 def _is_reference_not_marker(text: str, match_start: int) -> bool:
