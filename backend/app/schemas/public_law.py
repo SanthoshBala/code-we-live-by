@@ -18,7 +18,17 @@ class PublicLawSchema(BaseModel):
     congress: int = Field(..., description="Congress number (e.g., 94)")
     law_number: int = Field(..., description="Law number within congress (e.g., 553)")
     date: str | None = Field(None, description="Enactment date (e.g., 'Oct. 19, 1976')")
-    title: str | None = Field(None, description="Short title (e.g., 'CARES Act')")
+    official_title: str | None = Field(
+        None, description="Formal title (e.g., 'An act to amend...')"
+    )
+    short_title: str | None = Field(
+        None,
+        description="Primary short title (e.g., 'Coronavirus Aid, Relief, and Economic Security Act')",
+    )
+    short_title_aliases: list[str] = Field(
+        default_factory=list,
+        description="Alternative short titles (e.g., ['CARES Act'])",
+    )
     stat_volume: int | None = Field(None, description="Statutes at Large volume")
     stat_page: int | None = Field(None, description="Statutes at Large page")
 
@@ -35,6 +45,20 @@ class PublicLawSchema(BaseModel):
         if self.stat_volume and self.stat_page:
             return f"{self.stat_volume} Stat. {self.stat_page}"
         return None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def display_title(self) -> str | None:
+        """Return the best title for display purposes.
+
+        Prefers shorter/common names since the PL ID is shown separately.
+        Priority: alias > short_title > official_title
+        """
+        if self.short_title_aliases:
+            return self.short_title_aliases[0]
+        if self.short_title:
+            return self.short_title
+        return self.official_title
 
     @property
     def sort_key(self) -> tuple[int, int]:
@@ -56,7 +80,9 @@ class ActSchema(BaseModel):
 
     date: str = Field(..., description="Enactment date (e.g., 'Aug. 14, 1935')")
     chapter: int = Field(..., description="Chapter number in Statutes at Large")
-    title: str | None = Field(None, description="Short title (e.g., 'Social Security Act')")
+    short_title: str | None = Field(
+        None, description="Short title (e.g., 'Social Security Act')"
+    )
     stat_volume: int | None = Field(None, description="Statutes at Large volume")
     stat_page: int | None = Field(None, description="Statutes at Large page")
 
@@ -77,6 +103,12 @@ class ActSchema(BaseModel):
         if self.stat_volume and self.stat_page:
             return f"{self.stat_volume} Stat. {self.stat_page}"
         return None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def display_title(self) -> str | None:
+        """Return the title for display purposes."""
+        return self.short_title
 
     @property
     def sort_key(self) -> tuple[str, int]:
@@ -166,11 +198,11 @@ class SourceLawSchema(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def law_title(self) -> str | None:
-        """Return the law's short title if available."""
+        """Return the law's display title (prefers short/common names)."""
         if self.law:
-            return self.law.title
+            return self.law.display_title
         elif self.act:
-            return self.act.title
+            return self.act.display_title
         return None
 
     # Keep public_law_id for backwards compatibility

@@ -419,7 +419,7 @@ def citations_from_source_credit_refs(
             act = ActSchema(
                 date=act_ref.date,
                 chapter=act_ref.chapter,
-                title=act_ref.short_title,
+                short_title=act_ref.short_title,
                 stat_volume=act_ref.stat_volume,
                 stat_page=act_ref.stat_page,
             )
