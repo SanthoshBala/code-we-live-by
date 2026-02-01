@@ -177,12 +177,12 @@ NOTES_SECTION_HEADERS = [
     r"Statutory Notes and Related Subsidiaries",
     r"References in Text",
     r"Codification",
-    r"Prior Provisions",
+    r"Prior ParsedLines",
     r"Effective Date",
     r"Short Title",
     r"Regulations",
     r"Transfer of Functions",
-    r"Savings Provision",
+    r"Savings ParsedLine",
 ]
 
 # Pattern to detect the citation block that often appears at the end of law text
@@ -194,8 +194,11 @@ CITATION_BLOCK_PATTERN = re.compile(
 
 
 @dataclass
-class NormalizedLine:
-    """A single normalized line of legal text.
+class ParsedLine:
+    """A single line of statutory text (in-memory representation).
+
+    This is the in-memory representation of a line, used during parsing
+    and display. For the database model, see USCodeLine.
 
     Attributes:
         line_number: 1-indexed line number in the normalized output.
@@ -453,7 +456,7 @@ class NoteCategory(Enum):
     The OLRC organizes notes into three main categories:
     - HISTORICAL: Legislative history from original codification
     - EDITORIAL: OLRC editorial annotations added for clarity
-    - STATUTORY: Provisions from enacting laws not part of Code text
+    - STATUTORY: ParsedLines from enacting laws not part of Code text
     """
 
     HISTORICAL = "historical"
@@ -472,7 +475,7 @@ class SectionNote:
 
     Example headers by category:
     - HISTORICAL: "House Report No. 94-1476", "Senate Report No. 99-541"
-    - EDITORIAL: "Codification", "References in Text", "Amendments", "Prior Provisions"
+    - EDITORIAL: "Codification", "References in Text", "Amendments", "Prior ParsedLines"
     - STATUTORY: "Effective Date of 1995 Amendment", "Short Title",
                  "Performing Rights Society Consent Decrees", "Regulations"
     """
@@ -491,7 +494,7 @@ class SectionNotes:
 
     1. Historical and Revision Notes - Legislative history from codification
     2. Editorial Notes - OLRC editorial annotations (codification, references, amendments)
-    3. Statutory Notes - Provisions from enacting laws that aren't part of the Code itself
+    3. Statutory Notes - ParsedLines from enacting laws that aren't part of the Code itself
 
     This class uses a hybrid approach:
     - Structured fields for high-value, consistently formatted data (citations,
@@ -906,7 +909,7 @@ def _parse_references_in_text(text: str) -> list[str]:
 
     # Look for "References in Text" section
     ref_match = re.search(
-        r"References in Text\s+(.*?)(?=Codification|Amendments|Prior Provisions|$)",
+        r"References in Text\s+(.*?)(?=Codification|Amendments|Prior ParsedLines|$)",
         text,
         re.DOTALL | re.IGNORECASE,
     )
@@ -1034,7 +1037,7 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
         return
 
     # Known editorial note headers in order they typically appear
-    editorial_headers = ["Codification", "References in Text", "Amendments", "Prior Provisions"]
+    editorial_headers = ["Codification", "References in Text", "Amendments", "Prior ParsedLines"]
 
     # Find positions of each header
     header_positions: list[tuple[int, str]] = []
@@ -1222,7 +1225,7 @@ def normalize_section(
         law_text = text
         notes = SectionNotes()
 
-    lines: list[NormalizedLine] = []
+    lines: list[ParsedLine] = []
     line_number = 0
 
     # Process the law text (not the notes)
@@ -1274,7 +1277,7 @@ def normalize_section(
                 # Header line: marker + header
                 line_number += 1
                 lines.append(
-                    NormalizedLine(
+                    ParsedLine(
                         line_number=line_number,
                         content=f"{marker_text} {header}",
                         indent_level=indent_level,
@@ -1288,7 +1291,7 @@ def normalize_section(
                 # Content line: indented under the header
                 line_number += 1
                 lines.append(
-                    NormalizedLine(
+                    ParsedLine(
                         line_number=line_number,
                         content=remaining_content,
                         indent_level=indent_level + 1,  # Indent under header
@@ -1303,7 +1306,7 @@ def normalize_section(
                 full_content = f"{marker_text} {item_content}" if item_content else marker_text
                 line_number += 1
                 lines.append(
-                    NormalizedLine(
+                    ParsedLine(
                         line_number=line_number,
                         content=full_content,
                         indent_level=indent_level,
@@ -1342,7 +1345,7 @@ def normalize_section(
                 if sentence_text.strip():
                     line_number += 1
                     lines.append(
-                        NormalizedLine(
+                        ParsedLine(
                             line_number=line_number,
                             content=sentence_text.strip(),
                             indent_level=current_indent,
@@ -1413,7 +1416,7 @@ def char_span_to_line_span(
 
 
 def _add_blank_line(
-    lines: list[NormalizedLine],
+    lines: list[ParsedLine],
     line_counter: list[int],
     char_pos: list[int],
 ) -> None:
@@ -1422,7 +1425,7 @@ def _add_blank_line(
     start_pos = char_pos[0]
     char_pos[0] += 1  # Just the newline
     lines.append(
-        NormalizedLine(
+        ParsedLine(
             line_number=line_counter[0],
             content="",
             indent_level=0,
@@ -1436,7 +1439,7 @@ def _add_blank_line(
 
 def _normalize_subsection_recursive(
     subsection: ParsedSubsection,
-    lines: list[NormalizedLine],
+    lines: list[ParsedLine],
     line_counter: list[int],  # Mutable counter passed by reference
     char_pos: list[int],  # Mutable position tracker
     base_indent: int = 0,  # Starting indent level for this subsection
@@ -1496,7 +1499,7 @@ def _normalize_subsection_recursive(
         start_pos = char_pos[0]
         char_pos[0] += len(header_content) + 1  # +1 for newline
         lines.append(
-            NormalizedLine(
+            ParsedLine(
                 line_number=line_counter[0],
                 content=header_content,
                 indent_level=base_indent,
@@ -1513,7 +1516,7 @@ def _normalize_subsection_recursive(
             start_pos = char_pos[0]
             char_pos[0] += len(subsection.content) + 1
             lines.append(
-                NormalizedLine(
+                ParsedLine(
                     line_number=line_counter[0],
                     content=subsection.content,
                     indent_level=base_indent + 1,  # Indent under header
@@ -1536,7 +1539,7 @@ def _normalize_subsection_recursive(
             start_pos = char_pos[0]
             char_pos[0] += len(content) + 1
             lines.append(
-                NormalizedLine(
+                ParsedLine(
                     line_number=line_counter[0],
                     content=content,
                     indent_level=base_indent,
@@ -1552,7 +1555,7 @@ def _normalize_subsection_recursive(
             start_pos = char_pos[0]
             char_pos[0] += len(subsection.marker) + 1
             lines.append(
-                NormalizedLine(
+                ParsedLine(
                     line_number=line_counter[0],
                     content=subsection.marker,
                     indent_level=base_indent,
@@ -1590,7 +1593,7 @@ def normalize_parsed_section(
     Returns:
         The same ParsedSection with provision fields populated.
     """
-    lines: list[NormalizedLine] = []
+    lines: list[ParsedLine] = []
     line_counter = [0]  # Mutable counter
     char_pos = [0]  # Mutable position tracker
 

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from lxml import etree
 
 if TYPE_CHECKING:
-    from pipeline.olrc.normalized_section import NormalizedLine, SectionNotes
+    from pipeline.olrc.normalized_section import ParsedLine, SectionNotes
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +112,8 @@ class ParsedSection:
     subsections: list[ParsedSubsection] = field(default_factory=list)  # Structured content
     source_credit_refs: list[SourceCreditRef] = field(default_factory=list)  # Structured citations
 
-    # Provision fields (populated after normalization)
-    provisions: list[NormalizedLine] = field(default_factory=list)
+    # ParsedLine fields (populated after normalization)
+    provisions: list[ParsedLine] = field(default_factory=list)
     normalized_text: str = ""  # Display-ready text with indentation
     section_notes: SectionNotes | None = None  # Parsed notes with citations, amendments, etc.
 
@@ -127,13 +127,13 @@ class ParsedSection:
         """Return True if this section has been normalized."""
         return len(self.provisions) > 0
 
-    def get_provision(self, line_number: int) -> NormalizedLine | None:
+    def get_provision(self, line_number: int) -> ParsedLine | None:
         """Get a provision by its 1-indexed line number."""
         if 1 <= line_number <= len(self.provisions):
             return self.provisions[line_number - 1]
         return None
 
-    def get_provisions(self, start: int, end: int) -> list[NormalizedLine]:
+    def get_provisions(self, start: int, end: int) -> list[ParsedLine]:
         """Get provisions in a range (1-indexed, inclusive)."""
         return self.provisions[max(0, start - 1) : end]
 
