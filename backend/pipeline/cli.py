@@ -693,21 +693,26 @@ def normalize_text_command(
         def format_source_law(citation) -> str:
             """Format a source law in changelog style.
 
-            Format: # {date} {relationship} {law_id} {path} [(title)]
+            Format: # {date}  {relationship} {law_id} {path} {title}
+            Uses fixed-width columns for alignment.
             """
             date = parse_date_to_ymd(citation.date)
             relationship = citation.relationship.value  # Framework, Enactment, Amendment
             law_id = citation.law_id  # Works for both PL and Act
             path = citation.path_display
+            title = citation.law_title or ""
 
-            # Build the base line
-            line = f"# {date}    {relationship.ljust(10)} {law_id.ljust(14)} {path}"
+            # Build the line with fixed-width columns
+            # Path column is 26 chars to accommodate "div. LL, tit. X, §5001(a)"
+            line = (
+                f"# {date}  "
+                f"{relationship.ljust(10)} "
+                f"{law_id.ljust(14)} "
+                f"{path.ljust(26)} "
+                f"{title}"
+            )
 
-            # Add law title if available
-            if citation.law_title:
-                line += f" ({citation.law_title})"
-
-            return line
+            return line.rstrip()  # Remove trailing spaces if no title
 
         for citation in result.section_notes.citations:
             print(format_source_law(citation))
