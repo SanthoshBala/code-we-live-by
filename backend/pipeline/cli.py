@@ -504,7 +504,9 @@ def normalize_text_command(
             source_info += " (from database)"
         else:
             # Try XML files - get structured section if available
-            content, parsed_section = _fetch_section_from_xml(title_num, section_num, data_dir)
+            content, parsed_section = _fetch_section_from_xml(
+                title_num, section_num, data_dir
+            )
             if content:
                 source_info += f" (from XML: {data_dir})"
 
@@ -512,7 +514,9 @@ def normalize_text_command(
             print(f"Error: Section {title_num} U.S.C. § {section_num} not found")
             print("  - Not in database")
             print(f"  - XML file not found in {data_dir}")
-            print(f"\nTry downloading first: uv run python -m pipeline.cli download --titles {title_num}")
+            print(
+                f"\nTry downloading first: uv run python -m pipeline.cli download --titles {title_num}"
+            )
             return 1
 
     elif file:
@@ -539,17 +543,22 @@ def normalize_text_command(
     # Normalize the text - use structured data if available
     if parsed_section and parsed_section.subsections:
         # Use structured subsections from XML (explicit headings, no heuristics)
-        result = normalize_parsed_section(parsed_section, use_tabs=use_tabs, indent_width=indent_width)
+        result = normalize_parsed_section(
+            parsed_section, use_tabs=use_tabs, indent_width=indent_width
+        )
         source_info += " [structured]"
     else:
         # Fall back to heuristic-based normalization
-        result = normalize_section(content, use_tabs=use_tabs, indent_width=indent_width)
+        result = normalize_section(
+            content, use_tabs=use_tabs, indent_width=indent_width
+        )
         # If we have XML-parsed notes, use those instead (they're cleaner than heuristic extraction)
         if parsed_section and parsed_section.notes:
             from pipeline.olrc.normalized_section import (
                 SectionNotes,
                 _parse_notes_structure,
             )
+
             result.section_notes = SectionNotes()
             result.section_notes.raw_notes = parsed_section.notes
             _parse_notes_structure(parsed_section.notes, result.section_notes)
@@ -680,7 +689,9 @@ def normalize_text_command(
                 desc = amend.description[:60].replace("\n", " ")
                 print(f"        [{amend.year}] {desc}...")
             if len(result.section_notes.amendments) > 5:
-                print(f"        ... and {len(result.section_notes.amendments) - 5} more")
+                print(
+                    f"        ... and {len(result.section_notes.amendments) - 5} more"
+                )
 
         # Short Titles
         if result.section_notes.short_titles:
@@ -689,7 +700,9 @@ def normalize_text_command(
                 year_str = f" ({st.year})" if st.year else ""
                 print(f"        {st.title[:60]}{year_str}")
             if len(result.section_notes.short_titles) > 3:
-                print(f"        ... and {len(result.section_notes.short_titles) - 3} more")
+                print(
+                    f"        ... and {len(result.section_notes.short_titles) - 3} more"
+                )
 
         print("-" * 70)
 

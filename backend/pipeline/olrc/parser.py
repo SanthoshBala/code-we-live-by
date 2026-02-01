@@ -109,13 +109,19 @@ class ParsedSection:
     subchapter_number: str | None = None
     notes: str | None = None  # Raw notes from XML
     sort_order: int = 0
-    subsections: list[ParsedSubsection] = field(default_factory=list)  # Structured content
-    source_credit_refs: list[SourceCreditRef] = field(default_factory=list)  # Structured citations
+    subsections: list[ParsedSubsection] = field(
+        default_factory=list
+    )  # Structured content
+    source_credit_refs: list[SourceCreditRef] = field(
+        default_factory=list
+    )  # Structured citations
 
     # ParsedLine fields (populated after normalization)
     provisions: list[ParsedLine] = field(default_factory=list)
     normalized_text: str = ""  # Display-ready text with indentation
-    section_notes: SectionNotes | None = None  # Parsed notes with citations, amendments, etc.
+    section_notes: SectionNotes | None = (
+        None  # Parsed notes with citations, amendments, etc.
+    )
 
     @property
     def provision_count(self) -> int:
@@ -645,7 +651,9 @@ class USLMParser:
         heading_elem = elem.find("{*}heading")
         if heading_elem is None:
             heading_elem = elem.find("heading")
-        heading = self._get_text_content(heading_elem) if heading_elem is not None else None
+        heading = (
+            self._get_text_content(heading_elem) if heading_elem is not None else None
+        )
 
         # Get content (may be in <content> or <chapeau> or directly in element)
         content_elem = elem.find("{*}content")
@@ -675,7 +683,9 @@ class USLMParser:
 
         if level in child_levels:
             child_tag, child_level = child_levels[level]
-            for child_elem in elem.findall(f"{{*}}{child_tag}") or elem.findall(child_tag):
+            for child_elem in elem.findall(f"{{*}}{child_tag}") or elem.findall(
+                child_tag
+            ):
                 children.append(self._parse_subsection(child_elem, child_level))
 
         return ParsedSubsection(
