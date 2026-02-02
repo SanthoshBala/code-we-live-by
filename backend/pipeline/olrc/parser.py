@@ -785,6 +785,11 @@ class USLMParser:
             """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
 
+            # Preserve paragraph boundaries with newlines
+            if tag == "p" and parts and not parts[-1].endswith("\n"):
+                # Add paragraph break before this <p> element
+                parts.append("\n")
+
             # Check if this is a heading with smallCaps class
             if tag == "heading":
                 css_class = el.get("class", "")
