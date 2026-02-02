@@ -76,7 +76,9 @@ class SourceRelationship(str, enum.Enum):
     Describes how a law relates to a section's content and classification.
     """
 
-    FRAMEWORK = "Framework"  # Pre-1957 Act providing structural context (where it's classified)
+    FRAMEWORK = (
+        "Framework"  # Pre-1957 Act providing structural context (where it's classified)
+    )
     ENACTMENT = "Enactment"  # The law that created/added the section content
     AMENDMENT = "Amendment"  # A law that modified the section
 

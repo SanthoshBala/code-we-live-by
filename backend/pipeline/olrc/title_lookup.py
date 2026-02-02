@@ -268,7 +268,9 @@ async def lookup_public_law_title(
                         f"HTTP {response.status_code}"
                     )
         except Exception as e:
-            logger.warning(f"Failed to lookup title for PL {congress}-{law_number}: {e}")
+            logger.warning(
+                f"Failed to lookup title for PL {congress}-{law_number}: {e}"
+            )
 
     return None
 

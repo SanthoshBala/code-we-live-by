@@ -702,7 +702,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
         marker_match = re.match(r'^("[(\[]\w+[)\]]"?)\s*', content)
         if marker_match:
             marker = marker_match.group(1)
-            rest = content[marker_match.end():].strip()
+            rest = content[marker_match.end() :].strip()
             return marker, rest
         return None, content
 
@@ -716,7 +716,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
 
         for qc_match in qc_matches:
             # Add text before this QC block
-            before = text[last_qc_end:qc_match.start()]
+            before = text[last_qc_end : qc_match.start()]
             if before.strip():
                 new_text_parts.append(before)
 

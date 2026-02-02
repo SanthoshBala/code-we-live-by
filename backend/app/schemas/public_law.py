@@ -112,9 +112,18 @@ class ActSchema(BaseModel):
         if iso_match:
             year, month, day = iso_match.groups()
             month_names = {
-                "01": "Jan.", "02": "Feb.", "03": "Mar.", "04": "Apr.",
-                "05": "May", "06": "June", "07": "July", "08": "Aug.",
-                "09": "Sept.", "10": "Oct.", "11": "Nov.", "12": "Dec.",
+                "01": "Jan.",
+                "02": "Feb.",
+                "03": "Mar.",
+                "04": "Apr.",
+                "05": "May",
+                "06": "June",
+                "07": "July",
+                "08": "Aug.",
+                "09": "Sept.",
+                "10": "Oct.",
+                "11": "Nov.",
+                "12": "Dec.",
             }
             month_name = month_names.get(month, month)
             # Remove leading zero from day

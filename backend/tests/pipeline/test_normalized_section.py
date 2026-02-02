@@ -950,7 +950,9 @@ class TestParserNotesContent:
         parser = USLMParser()
 
         # Create a mock element with italic case citation
-        xml = '<notes><p>contrary to <i>Smith v. Jones</i>, the rule applies.</p></notes>'
+        xml = (
+            "<notes><p>contrary to <i>Smith v. Jones</i>, the rule applies.</p></notes>"
+        )
         elem = etree.fromstring(xml)
 
         content = parser._get_notes_text_content(elem)
@@ -967,7 +969,7 @@ class TestParserNotesContent:
 
         parser = USLMParser()
 
-        xml = '<notes><p><i>Reproduction</i>.—The right to reproduce.</p></notes>'
+        xml = "<notes><p><i>Reproduction</i>.—The right to reproduce.</p></notes>"
         elem = etree.fromstring(xml)
 
         content = parser._get_notes_text_content(elem)
@@ -983,7 +985,7 @@ class TestParserNotesContent:
 
         parser = USLMParser()
 
-        xml = '<notes><p>First paragraph.</p><p>Second paragraph.</p></notes>'
+        xml = "<notes><p>First paragraph.</p><p>Second paragraph.</p></notes>"
         elem = etree.fromstring(xml)
 
         content = parser._get_notes_text_content(elem)
@@ -999,7 +1001,7 @@ class TestParserNotesContent:
 
         parser = USLMParser()
 
-        xml = '''<notes>
+        xml = """<notes>
             <p>Provided that:</p>
             <quotedContent>
                 <subsection>
@@ -1013,7 +1015,7 @@ class TestParserNotesContent:
                     <content>This applies to cases.</content>
                 </subsection>
             </quotedContent>
-        </notes>'''
+        </notes>"""
         elem = etree.fromstring(xml)
 
         content = parser._get_notes_text_content(elem)
@@ -1032,7 +1034,7 @@ class TestParserNotesContent:
 
         parser = USLMParser()
 
-        xml = '''<notes>
+        xml = """<notes>
             <quotedContent>
                 <subsection>
                     <num value="a">"(a)"</num>
@@ -1043,7 +1045,7 @@ class TestParserNotesContent:
                     </paragraph>
                 </subsection>
             </quotedContent>
-        </notes>'''
+        </notes>"""
         elem = etree.fromstring(xml)
 
         content = parser._get_notes_text_content(elem)

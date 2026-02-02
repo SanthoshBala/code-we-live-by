@@ -643,7 +643,11 @@ def normalize_text_command(
             )
 
     # Show source laws in changelog format
-    if (show_section is None or show_section == "source-laws") and result.section_notes and result.section_notes.has_citations:
+    if (
+        (show_section is None or show_section == "source-laws")
+        and result.section_notes
+        and result.section_notes.has_citations
+    ):
         # Enrich citations with titles from GovInfo API / hardcoded table
         from pipeline.olrc.title_lookup import enrich_citations_with_titles
 
@@ -716,7 +720,9 @@ def normalize_text_command(
             For Acts, the date column is omitted since date is part of the
             identifier (e.g., "Act of Aug. 14, 1935").
             """
-            relationship = citation.relationship.value  # Framework, Enactment, Amendment
+            relationship = (
+                citation.relationship.value
+            )  # Framework, Enactment, Amendment
             law_id = citation.law_id  # Works for both PL and Act
             path = citation.path_display
             title = citation.law_title or ""
@@ -783,7 +789,9 @@ def normalize_text_command(
             if note.lines:
                 for i, line in enumerate(note.lines):
                     if max_lines is not None and i >= max_lines:
-                        output.append(f"        ... and {len(note.lines) - max_lines} more lines")
+                        output.append(
+                            f"        ... and {len(note.lines) - max_lines} more lines"
+                        )
                         break
                     # Add blank line before headers (H1 at indent_level=1, H2 at indent_level=2)
                     # but not for the first line
@@ -797,7 +805,7 @@ def normalize_text_command(
                     # Clean up content (remove extra whitespace/newlines)
                     content = " ".join(line.content.split())
                     if max_width is not None and len(content) > max_width:
-                        content = content[:max_width - 3] + "..."
+                        content = content[: max_width - 3] + "..."
                     if with_line_numbers:
                         output.append(f"L{line_num:3d} │ {indent}{content}")
                     else:
@@ -903,7 +911,9 @@ def normalize_text_command(
                     print()
 
         # Structured amendments display (CHANGELOG style)
-        if (show_section is None or show_section == "amendments") and result.section_notes.has_amendments:
+        if (
+            show_section is None or show_section == "amendments"
+        ) and result.section_notes.has_amendments:
             print()
             print("AMENDMENTS:")
             print("-" * 70)
@@ -928,7 +938,9 @@ def normalize_text_command(
                     if show_section is None and len(desc) > 60:
                         desc = desc[:57] + "..."
                     if use_line_numbers:
-                        print(f"L{line_num:3d} │     {amend.public_law_id.ljust(12)} {desc}")
+                        print(
+                            f"L{line_num:3d} │     {amend.public_law_id.ljust(12)} {desc}"
+                        )
                         line_num += 1
                     else:
                         print(f"    {amend.public_law_id.ljust(12)} {desc}")
@@ -1722,8 +1734,20 @@ Examples:
     normalize_parser.add_argument(
         "--show",
         type=str,
-        choices=["provisions", "p", "source-laws", "s", "historical", "h",
-                 "editorial", "e", "statutory", "st", "amendments", "a"],
+        choices=[
+            "provisions",
+            "p",
+            "source-laws",
+            "s",
+            "historical",
+            "h",
+            "editorial",
+            "e",
+            "statutory",
+            "st",
+            "amendments",
+            "a",
+        ],
         help="Show only one section with full content (no truncation)",
     )
 
