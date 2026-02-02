@@ -40,6 +40,106 @@ Statutory notes—such as effective dates, transfer of functions, and cross-refe
 
 ---
 
+## Source Laws
+
+Source laws identify the Public Laws that enacted or amended a section. These appear as metadata at the top of a section, similar to a changelog or git blame view.
+
+**Syntax:**
+```
+SOURCE LAWS:
+----------------------------------------------------------------------
+# 1976.10.19    Enactment  PL 94-553    tit. I, §101
+# 1990.07.03    Amendment  PL 101-318   §3(d)
+# 2002.11.02    Amendment  PL 107-273   div. C, tit. III, §13210(4)(A)
+```
+
+**Column order:** `{date} {Enactment/Amendment} {law} {path}`
+
+**Path format:** Uses standard Bluebook abbreviations for hierarchical levels:
+- `div.` — Division (e.g., `div. C`)
+- `tit.` — Title (e.g., `tit. III`)
+- `§` — Section, no space after symbol (e.g., `§101`, `§13210(4)(A)`)
+
+**Rationale:**
+
+1. **Changelog familiarity**: The columnar format mirrors version control logs (`git log --oneline`) and changelogs, making provenance immediately scannable. Date-first ordering emphasizes chronology.
+
+2. **Comment prefix**: Each line uses the `#` comment style, visually distinguishing metadata from code.
+
+3. **Hierarchical path**: Public Laws can have complex structures (divisions, titles, subtitles, chapters, parts, sections). The path captures the full location within the law using standard legal abbreviations from the Bluebook.
+
+4. **Date format**: Uses `YYYY.MM.DD` for chronological sorting and international clarity, consistent with project conventions.
+
+5. **Enactment vs Amendment**: Clear terminology—"Enactment" for the original law, "Amendment" for subsequent modifications.
+
+**Supported path levels** (from OLRC conventions):
+
+| Level | Abbreviation | Example |
+|-------|--------------|---------|
+| Division | `div.` | `div. C` |
+| Title | `tit.` | `tit. III` |
+| Subtitle | `subtit.` | `subtit. A` |
+| Chapter | `ch.` | `ch. 1` |
+| Subchapter | `subch.` | `subch. II` |
+| Part | `pt.` | `pt. A` |
+| Subpart | `subpt.` | `subpt. 1` |
+| Section | `§` | `§101` |
+
+**Alternatives considered:**
+
+| Style | Example | Reason not chosen |
+|-------|---------|-------------------|
+| `from PL import` | `from PL 94-553 import § 101` | Too code-like for metadata |
+| Prose format | `Enacted by Pub. L. 94-553...` | Verbose; harder to scan |
+| Full legal citation | `Pub. L. 94–553, title I, § 101` | More verbose; unfamiliar to non-lawyers |
+| `enacted`/`amended` | lowercase action | Ambiguous—could mean the law was amended |
+| No abbreviations | `division C, title III` | Too verbose for columnar display |
+
+---
+
+## In-Line References
+
+In-line references are cross-references within statutory text to other sections of the US Code. These use a structured syntax inspired by programming language import statements.
+
+**Syntax:**
+```
+from title 17 use § 106
+from title 26 use § 501(a)
+from this title use §§ 107-122
+use subsection (a)(1)
+```
+
+**Rationale:**
+
+1. **`use` keyword**: Draws from Rust (`use crate::module`), PHP (`use Namespace\Class`), and Pascal/Delphi. Implies "this code depends on" without the "importing code" connotation.
+
+2. **`from ... use ...` order**: Places the source (title) first, then the specific provision. This reads naturally: "from the tax code, use section 501."
+
+3. **Omitting `from` for local references**: When referencing within the same title, `use subsection (a)(1)` suffices—similar to relative imports in Python.
+
+**Language inspirations:**
+
+| Language | Syntax | What we borrowed |
+|----------|--------|------------------|
+| **Rust** | `use crate::module::item;` | The `use` keyword |
+| **Python** | `from module import symbol` | The `from X ... Y` pattern |
+| **PHP** | `use Namespace\Class;` | `use` for dependencies |
+| **Haskell** | `import Module (symbol)` | Parenthetical specificity |
+| **Go** | `import "pkg/path"` | Path-like hierarchy |
+
+**Examples in context:**
+
+Original statutory text:
+> "Subject to sections 107 through 122, the owner of copyright..."
+
+Rendered with structured reference:
+> "Subject to `from this title use §§ 107-122`, the owner of copyright..."
+
+Or in a hover/tooltip:
+> "Subject to sections 107 through 122 [`→ 17 U.S.C. §§ 107-122`], the owner..."
+
+---
+
 ## Future Sections
 
 *To be documented as decisions are made:*
@@ -47,6 +147,4 @@ Statutory notes—such as effective dates, transfer of functions, and cross-refe
 - Line numbering conventions
 - Diff rendering (additions, deletions, modifications)
 - Section hierarchy and indentation
-- Amendment markers
-- Cross-reference linking style
 - Blame view attribution format

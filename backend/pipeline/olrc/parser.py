@@ -1,5 +1,7 @@
 """Parse USLM (United States Legislative Markup) XML files."""
 
+from __future__ import annotations
+
 import contextlib
 import hashlib
 import logging
@@ -7,8 +9,12 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from lxml import etree
+
+if TYPE_CHECKING:
+    from pipeline.olrc.normalized_section import ParsedLine, SectionNotes
 
 logger = logging.getLogger(__name__)
 
@@ -52,17 +58,119 @@ class ParsedSubchapter:
 
 
 @dataclass
+class ParsedSubsection:
+    """A subsection, paragraph, or other subdivision within a section.
+
+    Subsections can be nested (paragraphs within subsections, etc.).
+    """
+
+    marker: str  # e.g., "(a)", "(1)", "(A)"
+    heading: str | None  # e.g., "Registration requirements"
+    content: str  # The text content (may include chapeau for list intros)
+    children: list[ParsedSubsection] = field(default_factory=list)
+    level: str = "subsection"  # subsection, paragraph, subparagraph, clause, subclause
+
+
+@dataclass
+class SourceCreditRef:
+    """A structured reference from the sourceCredit element.
+
+    Extracted from <ref href="/us/pl/116/136/..."> elements in USLM XML.
+    This provides reliable citation data without regex parsing.
+    """
+
+    congress: int  # e.g., 116
+    law_number: int  # e.g., 136
+    section: str | None = None  # e.g., "5001(a)"
+    division: str | None = None  # e.g., "A"
+    title: str | None = None  # e.g., "V"
+    date: str | None = None  # e.g., "Mar. 27, 2020"
+    stat_volume: int | None = None  # e.g., 134
+    stat_page: int | None = None  # e.g., 501
+    raw_text: str = ""  # The display text from the ref element
+    is_framework: bool = False  # True if this is the "as added" parent reference
+
+
+@dataclass
+class ActRef:
+    """A pre-1957 Act reference from the sourceCredit element.
+
+    Extracted from <ref href="/us/act/1935-08-14/ch531/..."> elements in USLM XML.
+    Before 1957, laws were cited by date + chapter number.
+    """
+
+    date: str  # e.g., "1935-08-14" or "Aug. 14, 1935"
+    chapter: int  # e.g., 531
+    section: str | None = None  # e.g., "601"
+    title: str | None = None  # e.g., "VI"
+    stat_volume: int | None = None
+    stat_page: int | None = None
+    raw_text: str = ""  # The display text from the ref element
+    short_title: str | None = None  # e.g., "Social Security Act"
+
+
+@dataclass
 class ParsedSection:
-    """Parsed US Code Section data."""
+    """Parsed US Code Section data.
+
+    This class represents a section of the US Code, containing both the
+    raw parsed data from XML and the normalized provisions for display.
+
+    The provisions, normalized_text, and section_notes fields are populated
+    by calling normalize() after parsing.
+    """
 
     section_number: str
     heading: str
     full_citation: str
-    text_content: str
+    text_content: str  # Flattened text (for backwards compatibility)
     chapter_number: str | None = None
     subchapter_number: str | None = None
-    notes: str | None = None
+    notes: str | None = None  # Raw notes from XML
     sort_order: int = 0
+    subsections: list[ParsedSubsection] = field(
+        default_factory=list
+    )  # Structured content
+    source_credit_refs: list[SourceCreditRef] = field(
+        default_factory=list
+    )  # Structured PL citations (post-1957)
+    act_refs: list[ActRef] = field(
+        default_factory=list
+    )  # Structured Act citations (pre-1957)
+
+    # ParsedLine fields (populated after normalization)
+    provisions: list[ParsedLine] = field(default_factory=list)
+    normalized_text: str = ""  # Display-ready text with indentation
+    section_notes: SectionNotes | None = (
+        None  # Parsed notes with citations, amendments, etc.
+    )
+
+    @property
+    def provision_count(self) -> int:
+        """Return the total number of provisions."""
+        return len(self.provisions)
+
+    @property
+    def is_normalized(self) -> bool:
+        """Return True if this section has been normalized."""
+        return len(self.provisions) > 0
+
+    def get_provision(self, line_number: int) -> ParsedLine | None:
+        """Get a provision by its 1-indexed line number."""
+        if 1 <= line_number <= len(self.provisions):
+            return self.provisions[line_number - 1]
+        return None
+
+    def get_provisions(self, start: int, end: int) -> list[ParsedLine]:
+        """Get provisions in a range (1-indexed, inclusive)."""
+        return self.provisions[max(0, start - 1) : end]
+
+    def char_to_line(self, char_pos: int) -> int | None:
+        """Convert a character position to a line number."""
+        for provision in self.provisions:
+            if provision.start_char <= char_pos < provision.end_char:
+                return provision.line_number
+        return None
 
 
 @dataclass
@@ -434,11 +542,17 @@ class USLMParser:
         # Build full citation
         full_citation = f"{title_number} U.S.C. § {section_number}"
 
-        # Extract text content
+        # Extract text content (flattened for backwards compatibility)
         text_content = self._extract_section_text(section_elem)
+
+        # Extract structured subsections from XML
+        subsections = self._extract_subsections(section_elem)
 
         # Extract notes if present
         notes = self._extract_notes(section_elem)
+
+        # Extract structured citation refs from sourceCredit
+        source_credit_refs, act_refs = self._extract_source_credit_refs(section_elem)
 
         return ParsedSection(
             section_number=section_number,
@@ -449,6 +563,9 @@ class USLMParser:
             subchapter_number=self._current_subchapter,
             notes=notes,
             sort_order=self._section_order,
+            subsections=subsections,
+            source_credit_refs=source_credit_refs,
+            act_refs=act_refs,
         )
 
     def _get_level_type(self, elem: etree._Element) -> str | None:
@@ -543,19 +660,383 @@ class USLMParser:
 
         return " ".join(parts).strip()
 
+    def _parse_subsection(
+        self, elem: etree._Element, level: str = "subsection"
+    ) -> ParsedSubsection:
+        """Parse a subsection/paragraph/etc. element into structured data."""
+        # Get marker (num)
+        num_elem = elem.find("{*}num")
+        if num_elem is None:
+            num_elem = elem.find("num")
+        marker = self._get_text_content(num_elem) if num_elem is not None else ""
+
+        # Get heading
+        heading_elem = elem.find("{*}heading")
+        if heading_elem is None:
+            heading_elem = elem.find("heading")
+        heading = (
+            self._get_text_content(heading_elem) if heading_elem is not None else None
+        )
+
+        # Get content (may be in <content> or <chapeau> or directly in element)
+        content_elem = elem.find("{*}content")
+        if content_elem is None:
+            content_elem = elem.find("content")
+        chapeau_elem = elem.find("{*}chapeau")
+        if chapeau_elem is None:
+            chapeau_elem = elem.find("chapeau")
+
+        content_parts = []
+        if chapeau_elem is not None:
+            content_parts.append(self._get_text_content(chapeau_elem))
+        if content_elem is not None:
+            content_parts.append(self._get_text_content(content_elem))
+
+        content = " ".join(content_parts).strip()
+
+        # Parse nested children
+        children = []
+        child_levels = {
+            "subsection": ("paragraph", "paragraph"),
+            "paragraph": ("subparagraph", "subparagraph"),
+            "subparagraph": ("clause", "clause"),
+            "clause": ("subclause", "subclause"),
+            "subclause": ("item", "item"),
+        }
+
+        if level in child_levels:
+            child_tag, child_level = child_levels[level]
+            for child_elem in elem.findall(f"{{*}}{child_tag}") or elem.findall(
+                child_tag
+            ):
+                children.append(self._parse_subsection(child_elem, child_level))
+
+        return ParsedSubsection(
+            marker=marker,
+            heading=heading,
+            content=content,
+            children=children,
+            level=level,
+        )
+
+    def _extract_subsections(
+        self, section_elem: etree._Element
+    ) -> list[ParsedSubsection]:
+        """Extract structured subsections from a section element."""
+        subsections = []
+
+        # Try namespaced first, then non-namespaced
+        subsec_elems = section_elem.findall("{*}subsection")
+        if not subsec_elems:
+            subsec_elems = section_elem.findall("subsection")
+
+        for subsec_elem in subsec_elems:
+            subsections.append(self._parse_subsection(subsec_elem, "subsection"))
+
+        return subsections
+
     def _extract_notes(self, section_elem: etree._Element) -> str | None:
-        """Extract notes/annotations from a section."""
-        # Try various paths for notes elements
+        """Extract notes/annotations from a section.
+
+        USLM XML has two relevant elements:
+        - <sourceCredit>: Contains the citation block (Pub. L. references)
+        - <notes>: Contains Historical/Editorial/Statutory notes
+
+        We extract both and combine them so citation parsing works correctly.
+        """
+        parts = []
+
+        # Extract sourceCredit (citation block) first
+        source_credit = section_elem.find(".//{*}sourceCredit")
+        if source_credit is None:
+            source_credit = section_elem.find(".//sourceCredit")
+        if source_credit is not None:
+            parts.append(self._get_text_content(source_credit))
+
+        # Extract notes (Historical/Editorial/Statutory)
         notes_elem = section_elem.find(".//{*}notes")
         if notes_elem is None:
             notes_elem = section_elem.find(".//notes")
-        if notes_elem is None:
-            notes_elem = section_elem.find(".//{*}sourceCredit")
-        if notes_elem is None:
-            notes_elem = section_elem.find(".//sourceCredit")
         if notes_elem is not None:
-            return self._get_text_content(notes_elem)
+            parts.append(self._get_notes_text_content(notes_elem))
+
+        if parts:
+            return " ".join(parts)
         return None
+
+    def _format_quoted_content(self, elem: etree._Element) -> str:
+        """Format quotedContent element with proper structure markers.
+
+        Parses the structured subsections, paragraphs, etc. within quoted content
+        and formats them with markers that the normalizer can use to create
+        properly indented lines.
+
+        Markers: [QC:level:marker]content where level is indent depth (1-5).
+        """
+        parts = []
+
+        def format_item(item_elem: etree._Element, level: int) -> None:
+            """Format a subsection/paragraph/clause/etc. element."""
+            # Get marker (num)
+            num_elem = item_elem.find("{*}num")
+            if num_elem is None:
+                num_elem = item_elem.find("num")
+            marker = self._get_text_content(num_elem) if num_elem is not None else ""
+
+            # Get heading
+            heading_elem = item_elem.find("{*}heading")
+            if heading_elem is None:
+                heading_elem = item_elem.find("heading")
+            heading = ""
+            if heading_elem is not None:
+                heading = self._get_text_content(heading_elem).strip()
+
+            # Get content
+            content_elem = item_elem.find("{*}content")
+            if content_elem is None:
+                content_elem = item_elem.find("content")
+            chapeau_elem = item_elem.find("{*}chapeau")
+            if chapeau_elem is None:
+                chapeau_elem = item_elem.find("chapeau")
+
+            content = ""
+            if chapeau_elem is not None:
+                content = self._get_text_content(chapeau_elem).strip()
+            elif content_elem is not None:
+                content = self._get_text_content(content_elem).strip()
+
+            # Build the formatted line
+            line_parts = []
+            if marker:
+                line_parts.append(marker)
+            if heading:
+                line_parts.append(heading)
+            if content:
+                line_parts.append(content)
+
+            if line_parts:
+                text = " ".join(line_parts)
+                parts.append(f"[QC:{level}]{text}[/QC]")
+
+            # Process nested children
+            child_tags = ["paragraph", "subparagraph", "clause", "subclause", "item"]
+            for child_tag in child_tags:
+                for child in item_elem.findall(f"{{*}}{child_tag}"):
+                    format_item(child, level + 1)
+                for child in item_elem.findall(child_tag):
+                    format_item(child, level + 1)
+
+        # Process top-level subsections in quoted content
+        for subsection in elem.findall("{*}subsection"):
+            format_item(subsection, 1)
+        for subsection in elem.findall("subsection"):
+            format_item(subsection, 1)
+
+        # If no structured content, extract plain text (for inline quotedContent)
+        if not parts:
+            text = self._get_text_content(elem).strip()
+            if text:
+                # Inline quoted content at level 1
+                parts.append(f"[QC:1]{text}[/QC]")
+
+        return "\n".join(parts)
+
+    def _get_notes_text_content(self, elem: etree._Element) -> str:
+        """Get text content from notes, preserving header formatting.
+
+        In USLM XML:
+        - Headings with class="smallCaps" are section headers (stored lowercase)
+        - <b> tags indicate inline headers (e.g., "General Scope of Copyright.")
+        - <i> tags followed by ".—" indicate sub-headers (e.g., "Reproduction.—")
+        - <quotedContent> contains structured law text with subsections
+
+        We insert markers to preserve this structure:
+        - [H1] prefix for bold headers
+        - [H2] prefix for italic sub-headers
+        - [QC:level]...[/QC] for quoted content items
+
+        These markers are processed by normalize_note_content() to create
+        properly indented ParsedLine structures.
+        """
+        parts = []
+
+        def process_element(el, in_bold=False, in_italic=False):
+            """Recursively process element and its children."""
+            tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+
+            # Handle quotedContent specially - parse its structure
+            if tag == "quotedContent":
+                quoted_text = self._format_quoted_content(el)
+                if quoted_text:
+                    parts.append("\n" + quoted_text)
+                # Add tail text and return - don't process children normally
+                if el.tail:
+                    parts.append(el.tail)
+                return
+
+            # Preserve paragraph boundaries with a special marker
+            # We use [PARA] marker instead of \n\n because tail text often contains \n
+            if tag == "p" and parts:
+                # Add paragraph break marker before this <p> element
+                parts.append("[PARA]")
+
+            # Check if this is a heading with smallCaps class
+            if tag == "heading":
+                css_class = el.get("class", "")
+                if "smallCaps" in css_class:
+                    # Apply title case to smallCaps headings
+                    text = "".join(el.itertext()).strip()
+                    if text:
+                        parts.append(text.title())
+                    return  # Don't process children
+
+            # Track bold/italic state
+            new_in_bold = in_bold or tag == "b"
+            new_in_italic = in_italic or tag == "i"
+
+            # Add text before children
+            if el.text:
+                text = el.text
+                if tag == "b":
+                    # Bold text is a header - strip trailing period
+                    header_text = text.rstrip(".")
+                    parts.append(f"[H1]{header_text}[/H1]")
+                elif tag == "i":
+                    # Italic text might be a sub-header if followed by ".—"
+                    # But NOT if it's a case citation (contains " v. ")
+                    # or other inline emphasis (Latin terms, etc.)
+                    if " v. " in text:
+                        # Case citation - keep as inline italic text
+                        parts.append(text)
+                    else:
+                        # Mark as potential sub-header for normalizer
+                        parts.append(f"[H2]{text}[/H2]")
+                else:
+                    parts.append(text)
+
+            # Process children
+            for child in el:
+                process_element(child, new_in_bold, new_in_italic)
+
+            # Add tail text (text after closing tag)
+            if el.tail:
+                parts.append(el.tail)
+
+        process_element(elem)
+        # Join parts, converting [PARA] markers to double newlines
+        result = []
+        for part in parts:
+            if part == "[PARA]":
+                # Convert to double newline for paragraph break
+                result.append("\n\n")
+            elif result and result[-1] != "\n\n":
+                result.append(" " + part)
+            else:
+                result.append(part)
+        return "".join(result).strip()
+
+    def _extract_source_credit_refs(
+        self, section_elem: etree._Element
+    ) -> tuple[list[SourceCreditRef], list[ActRef]]:
+        """Extract structured citation refs from sourceCredit element.
+
+        Parses <ref href="/us/pl/116/136/..."> elements for Public Laws (post-1957)
+        and <ref href="/us/act/1935-08-14/ch531/..."> elements for Acts (pre-1957).
+
+        Returns:
+            Tuple of (SourceCreditRef list, ActRef list) in document order.
+        """
+        pl_refs: list[SourceCreditRef] = []
+        act_refs: list[ActRef] = []
+
+        source_credit = section_elem.find(".//{*}sourceCredit")
+        if source_credit is None:
+            source_credit = section_elem.find(".//sourceCredit")
+        if source_credit is None:
+            return pl_refs, act_refs
+
+        # Find all ref elements within sourceCredit
+        ref_elems = source_credit.findall(".//{*}ref")
+        if not ref_elems:
+            ref_elems = source_credit.findall(".//ref")
+
+        # Track current stat volume/page for associating with refs
+        current_stat_volume: int | None = None
+        current_stat_page: int | None = None
+        # Track the most recent ref (either PL or Act) for stat association
+        last_ref_type: str | None = None
+
+        for ref_elem in ref_elems:
+            href = ref_elem.get("href", "")
+            text = "".join(ref_elem.itertext()).strip()
+
+            # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
+            if "/us/pl/" in href:
+                match = re.match(
+                    r"/us/pl/(\d+)/(\d+)"  # Congress and law number
+                    r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
+                    r"(?:/t([IVXLCDM]+))?"  # Optional title
+                    r"(?:/s([\w()]+))?",  # Optional section
+                    href,
+                )
+                if match:
+                    ref = SourceCreditRef(
+                        congress=int(match.group(1)),
+                        law_number=int(match.group(2)),
+                        division=match.group(3),
+                        title=match.group(4),
+                        section=match.group(5),
+                        raw_text=text,
+                    )
+                    pl_refs.append(ref)
+                    last_ref_type = "pl"
+
+            # Parse /us/act/YYYY-MM-DD/chNNN/... hrefs (Acts, pre-1957)
+            elif "/us/act/" in href:
+                match = re.match(
+                    r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
+                    r"(?:/t([IVXLCDM]+))?"  # Optional title
+                    r"(?:/s([\w()]+))?",  # Optional section
+                    href,
+                )
+                if match:
+                    ref = ActRef(
+                        date=match.group(1),  # e.g., "1935-08-14"
+                        chapter=int(match.group(2)),
+                        title=match.group(3),
+                        section=match.group(4),
+                        raw_text=text,
+                    )
+                    act_refs.append(ref)
+                    last_ref_type = "act"
+
+            # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
+            elif "/us/stat/" in href:
+                match = re.match(r"/us/stat/(\d+)/(\d+)", href)
+                if match:
+                    current_stat_volume = int(match.group(1))
+                    current_stat_page = int(match.group(2))
+                    # Apply to the most recent ref
+                    if last_ref_type == "pl" and pl_refs:
+                        pl_refs[-1].stat_volume = current_stat_volume
+                        pl_refs[-1].stat_page = current_stat_page
+                    elif last_ref_type == "act" and act_refs:
+                        act_refs[-1].stat_volume = current_stat_volume
+                        act_refs[-1].stat_page = current_stat_page
+
+        # Extract dates from <date> elements and associate with PL refs
+        # Act refs already have dates in the href, so all <date> elements belong to PL refs
+        date_elems = source_credit.findall(".//{*}date")
+        if not date_elems:
+            date_elems = source_credit.findall(".//date")
+
+        # Simple heuristic: dates appear after their associated PL ref, in order
+        for i, date_elem in enumerate(date_elems):
+            date_text = "".join(date_elem.itertext()).strip()
+            if i < len(pl_refs):
+                pl_refs[i].date = date_text
+
+        return pl_refs, act_refs
 
 
 def compute_text_hash(text: str) -> str:

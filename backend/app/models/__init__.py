@@ -2,15 +2,21 @@
 
 from app.models.base import Base, TimestampMixin, async_session_maker, get_async_session
 from app.models.enums import (
+    AmendmentReviewStatus,
     BillStatus,
     BillType,
     Chamber,
     ChangeType,
     LawType,
-    LineType,
+    ParsingMode,
+    ParsingSessionStatus,
+    PatternDiscoveryStatus,
     PoliticalParty,
     ReferenceType,
+    SpanType,
     SponsorshipRole,
+    VerificationMethod,
+    VerificationResult,
     VoteType,
 )
 from app.models.history import LineHistory, SectionHistory
@@ -37,6 +43,14 @@ from app.models.us_code import (
     USCodeSubchapter,
     USCodeTitle,
 )
+from app.models.validation import (
+    IngestionReport,
+    ParsedAmendmentRecord,
+    ParsingSession,
+    ParsingVerification,
+    PatternDiscovery,
+    TextSpan,
+)
 
 __all__ = [
     # Base
@@ -45,14 +59,18 @@ __all__ = [
     "async_session_maker",
     "get_async_session",
     # Enums
+    "AmendmentReviewStatus",
     "BillStatus",
     "BillType",
     "Chamber",
     "ChangeType",
     "LawType",
-    "LineType",
+    "ParsingMode",
+    "ParsingSessionStatus",
+    "PatternDiscoveryStatus",
     "PoliticalParty",
     "ReferenceType",
+    "SpanType",
     "SponsorshipRole",
     "VoteType",
     # US Code
@@ -82,4 +100,13 @@ __all__ = [
     "Amendment",
     "DataIngestionLog",
     "DataCorrection",
+    # Validation (Task 1.11)
+    "ParsingSession",
+    "ParsingVerification",
+    "TextSpan",
+    "ParsedAmendmentRecord",
+    "IngestionReport",
+    "PatternDiscovery",
+    "VerificationMethod",
+    "VerificationResult",
 ]

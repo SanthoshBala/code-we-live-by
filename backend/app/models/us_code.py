@@ -7,7 +7,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
-    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -18,7 +17,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import LineType
 
 if TYPE_CHECKING:
     from app.models.history import LineHistory, SectionHistory
@@ -209,9 +207,7 @@ class USCodeLine(Base):
         ForeignKey("us_code_line.line_id", ondelete="SET NULL"), nullable=True
     )
     line_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    line_type: Mapped[LineType] = mapped_column(
-        Enum(LineType, name="line_type"), nullable=False
-    )
+    is_header: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     text_content: Mapped[str] = mapped_column(Text, nullable=False)
     subsection_path: Mapped[str | None] = mapped_column(String(100), nullable=True)
     depth_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

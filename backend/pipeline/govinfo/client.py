@@ -3,7 +3,8 @@
 import asyncio
 import contextlib
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -38,6 +39,83 @@ COLLECTION_USCODE = "USCODE"  # US Code
 # Source: https://github.com/usgpo/api (see collections endpoint docs)
 # Maximum allowed is 1000. Using 100 for reasonable response sizes.
 DEFAULT_PAGE_SIZE = 100
+
+
+@dataclass
+class PLAWAmendmentMetadata:
+    """Metadata about amendments in a Public Law extracted from XML structure.
+
+    This provides an estimated count of amendments based on the law's structure,
+    useful for validating parser output.
+    """
+
+    # Section counts from XML structure
+    total_sections: int = 0
+    amendment_sections: int = 0  # Sections that appear to amend existing law
+
+    # Keywords found that indicate amendments
+    amendment_keyword_count: int = 0
+    titles_amended: list[int] = field(default_factory=list)
+
+    # Confidence in the estimate (lower if structure is unusual)
+    confidence: float = 1.0
+    notes: str | None = None
+
+    @classmethod
+    def from_xml(cls, xml_content: str) -> "PLAWAmendmentMetadata":
+        """Extract amendment metadata from PLAW XML content.
+
+        This is a heuristic-based extraction that looks for:
+        - Section elements in the XML
+        - Amendment keywords in section headings
+        - References to USC titles being amended
+        """
+        metadata = cls()
+
+        # Count sections
+        section_pattern = r"<section[^>]*>"
+        sections = re.findall(section_pattern, xml_content, re.IGNORECASE)
+        metadata.total_sections = len(sections)
+
+        # Count amendment-related keywords in the text
+        # Use centralized keywords from legal_parser module
+        from pipeline.legal_parser import AMENDMENT_KEYWORDS
+
+        for keyword in AMENDMENT_KEYWORDS:
+            pattern = rf"\b{re.escape(keyword)}\b"
+            matches = re.findall(pattern, xml_content, re.IGNORECASE)
+            metadata.amendment_keyword_count += len(matches)
+
+        # Find USC titles being amended
+        # Pattern: "title X, United States Code" or "title X of the United States Code"
+        title_pattern = (
+            r"title\s+(\d+)(?:\s+of)?\s*,?\s*(?:the\s+)?United\s+States\s+Code"
+        )
+        title_matches = re.findall(title_pattern, xml_content, re.IGNORECASE)
+        metadata.titles_amended = sorted({int(t) for t in title_matches})
+
+        # Estimate amendment sections
+        # Look for sections with amendment-related headings
+        section_with_amend = (
+            r"<section[^>]*>.*?(?:amend|striking|inserting).*?</section>"
+        )
+        amendment_sections = re.findall(
+            section_with_amend, xml_content, re.IGNORECASE | re.DOTALL
+        )
+        # This is a rough estimate; the actual structure varies
+        metadata.amendment_sections = min(
+            len(amendment_sections), metadata.amendment_keyword_count // 2
+        )
+
+        # Adjust confidence based on structure
+        if metadata.total_sections == 0:
+            metadata.confidence = 0.3
+            metadata.notes = "No section elements found in XML"
+        elif metadata.amendment_keyword_count == 0:
+            metadata.confidence = 0.5
+            metadata.notes = "No amendment keywords found"
+
+        return metadata
 
 
 @dataclass
@@ -431,3 +509,101 @@ class GovInfoClient:
         """
         type_code = "publ" if law_type == "public" else "pvt"
         return f"PLAW-{congress}{type_code}{law_number}"
+
+    async def get_public_law(
+        self,
+        congress: int,
+        law_number: int,
+        law_type: str = "public",
+    ) -> PLAWPackageDetail | None:
+        """Fetch a specific Public Law by congress and law number.
+
+        Args:
+            congress: Congress number (e.g., 118).
+            law_number: Law number (e.g., 60 for PL 118-60).
+            law_type: "public" or "private".
+
+        Returns:
+            PLAWPackageDetail or None if not found.
+        """
+        package_id = self.build_package_id(congress, law_number, law_type)
+        try:
+            return await self.get_public_law_detail(package_id)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Law not found: PL {congress}-{law_number}")
+                return None
+            raise
+
+    async def get_law_text(
+        self,
+        congress: int,
+        law_number: int,
+        law_type: str = "public",
+        format: str = "htm",
+    ) -> str | None:
+        """Fetch the text content of a Public Law.
+
+        Args:
+            congress: Congress number.
+            law_number: Law number.
+            law_type: "public" or "private".
+            format: "htm" for HTML text, "xml" for structured XML.
+
+        Returns:
+            Law text as string, or None if not available.
+        """
+        detail = await self.get_public_law(congress, law_number, law_type)
+        if not detail:
+            return None
+
+        url = detail.htm_url if format == "htm" else detail.xml_url
+        if not url:
+            logger.warning(f"No {format.upper()} URL for PL {congress}-{law_number}")
+            return None
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            logger.info(f"Downloading {format.upper()} for PL {congress}-{law_number}")
+            try:
+                response = await self._request_with_retry(client, "GET", url)
+                return response.text
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Failed to download law text: {e}")
+                return None
+
+    async def get_law_xml(
+        self,
+        congress: int,
+        law_number: int,
+        law_type: str = "public",
+    ) -> str | None:
+        """Fetch the XML content of a Public Law.
+
+        Convenience method that calls get_law_text with format="xml".
+        """
+        return await self.get_law_text(congress, law_number, law_type, format="xml")
+
+    async def get_amendment_metadata(
+        self,
+        congress: int,
+        law_number: int,
+        law_type: str = "public",
+    ) -> PLAWAmendmentMetadata | None:
+        """Extract amendment metadata from a Public Law's XML.
+
+        This provides estimates of amendment counts that can be used
+        to validate parser output.
+
+        Args:
+            congress: Congress number.
+            law_number: Law number.
+            law_type: "public" or "private".
+
+        Returns:
+            PLAWAmendmentMetadata or None if XML not available.
+        """
+        xml_content = await self.get_law_xml(congress, law_number, law_type)
+        if not xml_content:
+            return None
+
+        return PLAWAmendmentMetadata.from_xml(xml_content)

@@ -5,9 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Conventions
 
 - **Date format**: Use `YYYY.MM.DD` or `MM.DD` if the year is obvious from context
+- **Indentation**: Always use 4 spaces for indentation in code and CLI output (no tabs, no 2-space indentation)
 - **Atomic commits**: Make commits as atomic as possible (separate commits for separate features/tasks, separate commits for independently testable units)
 - **Commit messages**: Use the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) standard for semantic commit messages (e.g., `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`). Include the task reference at the end of the subject line: `feat: add feature X (Task 1.10)`
 - **Branching**: Always start new tasks in a fresh branch and create a pull request back into main when done
+- **LLM-agnostic code**: Keep comments, variable names, and logic generic to allow for different LLM providers in the future. Use "LLM" instead of specific model names (e.g., "Claude") in code comments and documentation
+- **Directory READMEs**: Every directory should include a README.md explaining the architecture of that sub-directory—what modules exist, how they relate to each other, and the data flow between them
+- **Test-driven parsing fixes**: When user feedback identifies parsing or rendering issues with US Code sections or Public Laws, always add test cases that cover the edge case before or alongside the fix. This ensures the test suite incrementally handles more complex edge cases discovered during manual validation.
 
 ## Project Overview
 
@@ -20,20 +24,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 cd backend
 
-# Install dependencies
-pip install -e ".[dev]"
+# Install dependencies (uses uv for package management)
+uv sync
 
 # Run development server
-uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
 
 # Linting and formatting
-ruff check .              # Lint
-black .                   # Format
-mypy app                  # Type check
+uv run ruff check .       # Lint
+uv run black .            # Format
+uv run mypy app           # Type check
 
 # Testing
-pytest                    # Run tests
-pytest --cov=app          # With coverage
+uv run pytest             # Run tests
+uv run pytest --cov=app   # With coverage
 ```
 
 ### Frontend (Next.js)
