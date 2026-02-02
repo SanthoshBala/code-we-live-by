@@ -1,11 +1,14 @@
 """Tests for legal text line normalization."""
 
 from pipeline.olrc.normalized_section import (
+    PARAGRAPH_BREAK_MARKER,
     ParsedPublicLaw,
     SourceLaw,
     _detect_marker_level,
     _is_sentence_boundary,
+    _split_into_sentences,
     char_span_to_line_span,
+    normalize_note_content,
     normalize_section,
     parse_citation,
     parse_citations,
@@ -818,3 +821,262 @@ class TestNormalizeParsedSection:
         assert result.provisions[4].content == ""
         assert result.provisions[5].content == "(2) Second term"
         assert result.provisions[6].content == "Another definition."
+
+
+class TestNormalizeNoteContent:
+    """Tests for normalize_note_content function (notes parsing)."""
+
+    def test_simple_text(self) -> None:
+        """Test normalizing simple text without markers."""
+        from pipeline.olrc.normalized_section import normalize_note_content
+
+        text = "This is a simple note. It has two sentences."
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 2
+        assert lines[0].content == "This is a simple note."
+        assert lines[1].content == "It has two sentences."
+
+    def test_h1_header_markers(self) -> None:
+        """Test that [H1]...[/H1] markers create header lines."""
+        from pipeline.olrc.normalized_section import normalize_note_content
+
+        text = "[H1]General Scope[/H1] The five fundamental rights."
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 2
+        assert lines[0].content == "General Scope"
+        assert lines[0].is_header is True
+        assert lines[0].indent_level == 1  # H1 at indent 1
+        assert lines[1].content == "The five fundamental rights."
+        assert lines[1].is_header is False
+        assert lines[1].indent_level == 2  # Content after H1 at indent 2
+
+    def test_h2_header_markers(self) -> None:
+        """Test that [H2]...[/H2] markers create sub-header lines."""
+        from pipeline.olrc.normalized_section import normalize_note_content
+
+        text = "[H2]Reproduction[/H2] The right to reproduce."
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 2
+        assert lines[0].content == "Reproduction"
+        assert lines[0].is_header is True
+        assert lines[0].indent_level == 2  # H2 at indent 2
+        assert lines[1].content == "The right to reproduce."
+        assert lines[1].indent_level == 3  # Content after H2 at indent 3
+
+    def test_paragraph_breaks(self) -> None:
+        """Test that double newlines create blank lines."""
+        from pipeline.olrc.normalized_section import normalize_note_content
+
+        text = "First paragraph.\n\nSecond paragraph."
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 3
+        assert lines[0].content == "First paragraph."
+        assert lines[1].content == ""  # Blank line
+        assert lines[2].content == "Second paragraph."
+
+    def test_quoted_content_markers(self) -> None:
+        """Test that [QC:level]...[/QC] markers create indented lines."""
+        from pipeline.olrc.normalized_section import normalize_note_content
+
+        text = 'Provided that:\n[QC:1]"(a)" Definition.— The term means.[/QC]\n[QC:2]"(1)" In general.— More detail.[/QC]'
+        lines = normalize_note_content(text)
+
+        # Should have intro line, then two QC lines
+        assert len(lines) >= 3
+        # Find the QC lines
+        qc_lines = [l for l in lines if l.marker is not None]
+        assert len(qc_lines) == 2
+        assert qc_lines[0].marker == '"(a)"'
+        assert qc_lines[1].marker == '"(1)"'
+        # QC level 2 should be more indented than level 1
+        assert qc_lines[1].indent_level > qc_lines[0].indent_level
+
+    def test_nested_headers_and_content(self) -> None:
+        """Test complex structure with H1, H2, and content."""
+        from pipeline.olrc.normalized_section import normalize_note_content
+
+        text = "[H1]Rights of Performance[/H1] The right of public performance. [H2]Performing Rights[/H2] The exclusive right."
+        lines = normalize_note_content(text)
+
+        # H1 header
+        assert lines[0].content == "Rights of Performance"
+        assert lines[0].is_header is True
+        assert lines[0].indent_level == 1
+        # Content after H1
+        assert lines[1].content == "The right of public performance."
+        assert lines[1].indent_level == 2
+        # H2 header
+        assert lines[2].content == "Performing Rights"
+        assert lines[2].is_header is True
+        assert lines[2].indent_level == 2
+        # Content after H2
+        assert lines[3].content == "The exclusive right."
+        assert lines[3].indent_level == 3
+
+
+class TestSentenceSplittingWithParagraphs:
+    """Tests for sentence splitting with paragraph break detection."""
+
+    def test_paragraph_break_marker_emitted(self) -> None:
+        """Test that PARAGRAPH_BREAK_MARKER is emitted for double newlines."""
+        from pipeline.olrc.normalized_section import (
+            PARAGRAPH_BREAK_MARKER,
+            _split_into_sentences,
+        )
+
+        text = "First sentence.\n\nSecond sentence."
+        sentences = _split_into_sentences(text)
+
+        # Should have: sentence, marker, sentence
+        assert len(sentences) == 3
+        assert sentences[0][0] == "First sentence."
+        assert sentences[1][0] == PARAGRAPH_BREAK_MARKER
+        assert sentences[2][0] == "Second sentence."
+
+    def test_paragraph_break_after_whitespace(self) -> None:
+        """Test paragraph break detection with trailing whitespace."""
+        from pipeline.olrc.normalized_section import (
+            PARAGRAPH_BREAK_MARKER,
+            _split_into_sentences,
+        )
+
+        # Simulates XML tail text: sentence, space, newline, newline, newline
+        text = "First sentence. \n\n\nSecond sentence."
+        sentences = _split_into_sentences(text)
+
+        markers = [s for s in sentences if s[0] == PARAGRAPH_BREAK_MARKER]
+        assert len(markers) == 1
+
+    def test_no_paragraph_break_for_single_newline(self) -> None:
+        """Test that single newlines don't create paragraph breaks."""
+        from pipeline.olrc.normalized_section import (
+            PARAGRAPH_BREAK_MARKER,
+            _split_into_sentences,
+        )
+
+        text = "First sentence.\nSecond sentence."
+        sentences = _split_into_sentences(text)
+
+        markers = [s for s in sentences if s[0] == PARAGRAPH_BREAK_MARKER]
+        assert len(markers) == 0
+
+
+class TestParserNotesContent:
+    """Tests for parser's notes content extraction."""
+
+    def test_case_citation_not_marked_as_header(self) -> None:
+        """Test that case citations with ' v. ' are not marked as H2 headers."""
+        from unittest.mock import MagicMock
+
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Create a mock element with italic case citation
+        xml = '<notes><p>contrary to <i>Smith v. Jones</i>, the rule applies.</p></notes>'
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Should NOT contain [H2] marker for case citation
+        assert "[H2]" not in content
+        assert "Smith v. Jones" in content
+
+    def test_italic_subheader_marked_as_h2(self) -> None:
+        """Test that italic sub-headers ARE marked as H2."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = '<notes><p><i>Reproduction</i>.—The right to reproduce.</p></notes>'
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Should contain [H2] marker for sub-header
+        assert "[H2]Reproduction" in content
+
+    def test_paragraph_markers_inserted(self) -> None:
+        """Test that [PARA] markers are inserted between <p> elements."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = '<notes><p>First paragraph.</p><p>Second paragraph.</p></notes>'
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Should have double newline (converted from [PARA])
+        assert "\n\n" in content
+
+    def test_quoted_content_parsing(self) -> None:
+        """Test that quotedContent elements are properly parsed."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = '''<notes>
+            <p>Provided that:</p>
+            <quotedContent>
+                <subsection>
+                    <num value="a">"(a)"</num>
+                    <heading>Definition</heading>
+                    <content>The term means something.</content>
+                </subsection>
+                <subsection>
+                    <num value="b">"(b)"</num>
+                    <heading>Application</heading>
+                    <content>This applies to cases.</content>
+                </subsection>
+            </quotedContent>
+        </notes>'''
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Should contain QC markers for structured content
+        assert "[QC:1]" in content
+        assert '"(a)"' in content
+        assert "Definition" in content
+        assert '"(b)"' in content
+
+    def test_nested_quoted_content_levels(self) -> None:
+        """Test that nested quoted content has increasing indent levels."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = '''<notes>
+            <quotedContent>
+                <subsection>
+                    <num value="a">"(a)"</num>
+                    <content>Main section.</content>
+                    <paragraph>
+                        <num value="1">"(1)"</num>
+                        <content>Sub-item.</content>
+                    </paragraph>
+                </subsection>
+            </quotedContent>
+        </notes>'''
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Should have level 1 for subsection, level 2 for paragraph
+        assert "[QC:1]" in content
+        assert "[QC:2]" in content
