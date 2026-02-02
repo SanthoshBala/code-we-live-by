@@ -814,7 +814,13 @@ def normalize_text_command(
             print("HISTORICAL_NOTES:")
             print("-" * 70)
             line_num = 1
-            for note in historical:
+            for i, note in enumerate(historical):
+                # Add blank line before each note header after the first
+                if i > 0:
+                    if use_line_numbers:
+                        print("      │")
+                    else:
+                        print()
                 if use_line_numbers:
                     print(f"L{line_num:3d} │ # {note.header}")
                     line_num += 1
@@ -839,7 +845,13 @@ def normalize_text_command(
             print("EDITORIAL_NOTES:")
             print("-" * 70)
             line_num = 1
-            for note in editorial_filtered:
+            for i, note in enumerate(editorial_filtered):
+                # Add blank line before each note header after the first
+                if i > 0:
+                    if use_line_numbers:
+                        print("      │")
+                    else:
+                        print()
                 if use_line_numbers:
                     print(f"L{line_num:3d} │ # {note.header}")
                     line_num += 1
@@ -862,7 +874,13 @@ def normalize_text_command(
             print("STATUTORY_NOTES:")
             print("-" * 70)
             line_num = 1
-            for note in statutory:
+            for i, note in enumerate(statutory):
+                # Add blank line before each note header after the first
+                if i > 0:
+                    if use_line_numbers:
+                        print("      │")
+                    else:
+                        print()
                 if use_line_numbers:
                     print(f"L{line_num:3d} │ # {note.header}")
                     line_num += 1
