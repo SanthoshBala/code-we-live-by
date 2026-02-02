@@ -764,6 +764,76 @@ class USLMParser:
             return " ".join(parts)
         return None
 
+    def _format_quoted_content(self, elem: etree._Element) -> str:
+        """Format quotedContent element with proper structure markers.
+
+        Parses the structured subsections, paragraphs, etc. within quoted content
+        and formats them with markers that the normalizer can use to create
+        properly indented lines.
+
+        Markers: [QC:level:marker]content where level is indent depth (1-5).
+        """
+        parts = []
+
+        def format_item(item_elem: etree._Element, level: int) -> None:
+            """Format a subsection/paragraph/clause/etc. element."""
+            # Get marker (num)
+            num_elem = item_elem.find("{*}num")
+            if num_elem is None:
+                num_elem = item_elem.find("num")
+            marker = self._get_text_content(num_elem) if num_elem is not None else ""
+
+            # Get heading
+            heading_elem = item_elem.find("{*}heading")
+            if heading_elem is None:
+                heading_elem = item_elem.find("heading")
+            heading = ""
+            if heading_elem is not None:
+                heading = self._get_text_content(heading_elem).strip()
+
+            # Get content
+            content_elem = item_elem.find("{*}content")
+            if content_elem is None:
+                content_elem = item_elem.find("content")
+            chapeau_elem = item_elem.find("{*}chapeau")
+            if chapeau_elem is None:
+                chapeau_elem = item_elem.find("chapeau")
+
+            content = ""
+            if chapeau_elem is not None:
+                content = self._get_text_content(chapeau_elem).strip()
+            elif content_elem is not None:
+                content = self._get_text_content(content_elem).strip()
+
+            # Build the formatted line
+            line_parts = []
+            if marker:
+                line_parts.append(marker)
+            if heading:
+                line_parts.append(heading)
+            if content:
+                line_parts.append(content)
+
+            if line_parts:
+                text = " ".join(line_parts)
+                parts.append(f"[QC:{level}]{text}[/QC]")
+
+            # Process nested children
+            child_tags = ["paragraph", "subparagraph", "clause", "subclause", "item"]
+            for child_tag in child_tags:
+                for child in item_elem.findall(f"{{*}}{child_tag}"):
+                    format_item(child, level + 1)
+                for child in item_elem.findall(child_tag):
+                    format_item(child, level + 1)
+
+        # Process top-level subsections in quoted content
+        for subsection in elem.findall("{*}subsection"):
+            format_item(subsection, 1)
+        for subsection in elem.findall("subsection"):
+            format_item(subsection, 1)
+
+        return "\n".join(parts)
+
     def _get_notes_text_content(self, elem: etree._Element) -> str:
         """Get text content from notes, preserving header formatting.
 
@@ -771,10 +841,12 @@ class USLMParser:
         - Headings with class="smallCaps" are section headers (stored lowercase)
         - <b> tags indicate inline headers (e.g., "General Scope of Copyright.")
         - <i> tags followed by ".—" indicate sub-headers (e.g., "Reproduction.—")
+        - <quotedContent> contains structured law text with subsections
 
         We insert markers to preserve this structure:
         - [H1] prefix for bold headers
         - [H2] prefix for italic sub-headers
+        - [QC:level]...[/QC] for quoted content items
 
         These markers are processed by normalize_note_content() to create
         properly indented ParsedLine structures.
@@ -784,6 +856,16 @@ class USLMParser:
         def process_element(el, in_bold=False, in_italic=False):
             """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+
+            # Handle quotedContent specially - parse its structure
+            if tag == "quotedContent":
+                quoted_text = self._format_quoted_content(el)
+                if quoted_text:
+                    parts.append("\n" + quoted_text)
+                # Add tail text and return - don't process children normally
+                if el.tail:
+                    parts.append(el.tail)
+                return
 
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n

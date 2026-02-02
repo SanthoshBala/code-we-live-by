@@ -677,6 +677,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
     Header markers (inserted by parser):
     - [H1]...[/H1]: Bold headers (section-level)
     - [H2]...[/H2]: Italic sub-headers
+    - [QC:level]...[/QC]: Quoted content items with indent level
 
     Args:
         text: The note content text with optional header markers.
@@ -692,10 +693,56 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
     if not text:
         return lines
 
+    # First, process any quoted content markers [QC:level]...[/QC]
+    # These should be converted to properly indented lines
+    qc_pattern = re.compile(r"\[QC:(\d+)\](.*?)\[/QC\]", re.DOTALL)
+
+    def extract_marker(content: str) -> tuple[str | None, str]:
+        """Extract marker like '(a)' or '(1)' from start of content."""
+        marker_match = re.match(r'^("[(\[]\w+[)\]]"?)\s*', content)
+        if marker_match:
+            marker = marker_match.group(1)
+            rest = content[marker_match.end():].strip()
+            return marker, rest
+        return None, content
+
+    # Replace QC markers with structured lines
+    # Process QC markers in order, building lines
+    qc_matches = list(qc_pattern.finditer(text))
+    if qc_matches:
+        # Split text into parts: before first QC, QC blocks, and between/after
+        new_text_parts = []
+        last_qc_end = 0
+
+        for qc_match in qc_matches:
+            # Add text before this QC block
+            before = text[last_qc_end:qc_match.start()]
+            if before.strip():
+                new_text_parts.append(before)
+
+            # Process the QC content
+            level = int(qc_match.group(1))
+            content = qc_match.group(2).strip()
+            marker, rest = extract_marker(content)
+
+            # Add as a special marker that will be processed later
+            # Format: [QCLINE:level:marker]content
+            marker_str = marker if marker else ""
+            new_text_parts.append(f"[QCLINE:{level}:{marker_str}]{rest}[/QCLINE]")
+
+            last_qc_end = qc_match.end()
+
+        # Add any remaining text after last QC
+        after = text[last_qc_end:]
+        if after.strip():
+            new_text_parts.append(after)
+
+        text = "\n".join(new_text_parts)
+
     # Pattern to split text into header and non-header segments
-    # Matches [H1]...[/H1] or [H2]...[/H2] or regular text between them
+    # Matches [H1]...[/H1] or [H2]...[/H2] or [QCLINE:...] or regular text
     header_pattern = re.compile(
-        r"\[H1\](.*?)\[/H1\]|\[H2\](.*?)\[/H2\]",
+        r"\[H1\](.*?)\[/H1\]|\[H2\](.*?)\[/H2\]|\[QCLINE:(\d+):([^\]]*)\](.*?)\[/QCLINE\]",
         re.DOTALL,
     )
 
@@ -785,6 +832,34 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
                     )
                 )
                 current_indent = 3  # Content after H2 is indented further
+
+        else:
+            # QCLINE - quoted content item with indent level and optional marker
+            qc_level = match.group(3)
+            qc_marker = match.group(4)
+            qc_content = match.group(5)
+
+            if qc_level is not None:
+                level = int(qc_level)
+                marker = qc_marker.strip() if qc_marker else None
+                content = qc_content.strip() if qc_content else ""
+
+                if content or marker:
+                    line_number += 1
+                    # Indent level: base (current_indent) + level from QC
+                    # QC level 1 = subsection, 2 = paragraph, etc.
+                    indent = current_indent + level - 1
+                    lines.append(
+                        ParsedLine(
+                            line_number=line_number,
+                            content=content,
+                            indent_level=indent,
+                            marker=marker,
+                            is_header=False,
+                            start_char=match.start(),
+                            end_char=match.end(),
+                        )
+                    )
 
         last_end = match.end()
 
