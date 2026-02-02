@@ -221,3 +221,19 @@ class RevisionStatus(enum.StrEnum):
     INGESTING = "Ingesting"  # Currently being processed
     INGESTED = "Ingested"  # Successfully ingested
     FAILED = "Failed"  # Ingestion failed
+
+
+class NoteRefType(str, enum.Enum):
+    """Type of hyperlink reference found in section notes.
+
+    These correspond to different href patterns in USLM XML <ref> elements:
+    - PUBLIC_LAW: /us/pl/CONGRESS/LAW_NUMBER/... (post-1957 laws)
+    - ACT: /us/act/DATE/ch/CHAPTER/... (pre-1957 laws)
+    - USC_SECTION: /us/usc/tTITLE/sSECTION (US Code cross-references)
+    - STATUTE: /us/stat/VOLUME/PAGE (Statutes at Large citations)
+    """
+
+    PUBLIC_LAW = "public_law"  # /us/pl/... (e.g., Pub. L. 115-264)
+    ACT = "act"  # /us/act/... (e.g., Act of Aug. 14, 1935)
+    USC_SECTION = "usc_section"  # /us/usc/... (e.g., 17 U.S.C. § 106)
+    STATUTE = "statute"  # /us/stat/... (e.g., 134 Stat. 501)
