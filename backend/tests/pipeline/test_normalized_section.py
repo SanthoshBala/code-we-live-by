@@ -828,8 +828,6 @@ class TestNormalizeNoteContent:
 
     def test_simple_text(self) -> None:
         """Test normalizing simple text without markers."""
-        from pipeline.olrc.normalized_section import normalize_note_content
-
         text = "This is a simple note. It has two sentences."
         lines = normalize_note_content(text)
 
@@ -839,8 +837,6 @@ class TestNormalizeNoteContent:
 
     def test_h1_header_markers(self) -> None:
         """Test that [H1]...[/H1] markers create header lines."""
-        from pipeline.olrc.normalized_section import normalize_note_content
-
         text = "[H1]General Scope[/H1] The five fundamental rights."
         lines = normalize_note_content(text)
 
@@ -854,8 +850,6 @@ class TestNormalizeNoteContent:
 
     def test_h2_header_markers(self) -> None:
         """Test that [H2]...[/H2] markers create sub-header lines."""
-        from pipeline.olrc.normalized_section import normalize_note_content
-
         text = "[H2]Reproduction[/H2] The right to reproduce."
         lines = normalize_note_content(text)
 
@@ -868,8 +862,6 @@ class TestNormalizeNoteContent:
 
     def test_paragraph_breaks(self) -> None:
         """Test that double newlines create blank lines."""
-        from pipeline.olrc.normalized_section import normalize_note_content
-
         text = "First paragraph.\n\nSecond paragraph."
         lines = normalize_note_content(text)
 
@@ -880,15 +872,13 @@ class TestNormalizeNoteContent:
 
     def test_quoted_content_markers(self) -> None:
         """Test that [QC:level]...[/QC] markers create indented lines."""
-        from pipeline.olrc.normalized_section import normalize_note_content
-
         text = 'Provided that:\n[QC:1]"(a)" Definition.— The term means.[/QC]\n[QC:2]"(1)" In general.— More detail.[/QC]'
         lines = normalize_note_content(text)
 
         # Should have intro line, then two QC lines
         assert len(lines) >= 3
         # Find the QC lines
-        qc_lines = [l for l in lines if l.marker is not None]
+        qc_lines = [line for line in lines if line.marker is not None]
         assert len(qc_lines) == 2
         assert qc_lines[0].marker == '"(a)"'
         assert qc_lines[1].marker == '"(1)"'
@@ -897,8 +887,6 @@ class TestNormalizeNoteContent:
 
     def test_nested_headers_and_content(self) -> None:
         """Test complex structure with H1, H2, and content."""
-        from pipeline.olrc.normalized_section import normalize_note_content
-
         text = "[H1]Rights of Performance[/H1] The right of public performance. [H2]Performing Rights[/H2] The exclusive right."
         lines = normalize_note_content(text)
 
@@ -923,11 +911,6 @@ class TestSentenceSplittingWithParagraphs:
 
     def test_paragraph_break_marker_emitted(self) -> None:
         """Test that PARAGRAPH_BREAK_MARKER is emitted for double newlines."""
-        from pipeline.olrc.normalized_section import (
-            PARAGRAPH_BREAK_MARKER,
-            _split_into_sentences,
-        )
-
         text = "First sentence.\n\nSecond sentence."
         sentences = _split_into_sentences(text)
 
@@ -939,11 +922,6 @@ class TestSentenceSplittingWithParagraphs:
 
     def test_paragraph_break_after_whitespace(self) -> None:
         """Test paragraph break detection with trailing whitespace."""
-        from pipeline.olrc.normalized_section import (
-            PARAGRAPH_BREAK_MARKER,
-            _split_into_sentences,
-        )
-
         # Simulates XML tail text: sentence, space, newline, newline, newline
         text = "First sentence. \n\n\nSecond sentence."
         sentences = _split_into_sentences(text)
@@ -953,11 +931,6 @@ class TestSentenceSplittingWithParagraphs:
 
     def test_no_paragraph_break_for_single_newline(self) -> None:
         """Test that single newlines don't create paragraph breaks."""
-        from pipeline.olrc.normalized_section import (
-            PARAGRAPH_BREAK_MARKER,
-            _split_into_sentences,
-        )
-
         text = "First sentence.\nSecond sentence."
         sentences = _split_into_sentences(text)
 
@@ -970,8 +943,6 @@ class TestParserNotesContent:
 
     def test_case_citation_not_marked_as_header(self) -> None:
         """Test that case citations with ' v. ' are not marked as H2 headers."""
-        from unittest.mock import MagicMock
-
         from lxml import etree
 
         from pipeline.olrc.parser import USLMParser
