@@ -785,10 +785,11 @@ class USLMParser:
             """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
 
-            # Preserve paragraph boundaries with newlines
-            if tag == "p" and parts and not parts[-1].endswith("\n"):
-                # Add paragraph break before this <p> element
-                parts.append("\n")
+            # Preserve paragraph boundaries with a special marker
+            # We use [PARA] marker instead of \n\n because tail text often contains \n
+            if tag == "p" and parts:
+                # Add paragraph break marker before this <p> element
+                parts.append("[PARA]")
 
             # Check if this is a heading with smallCaps class
             if tag == "heading":
@@ -833,7 +834,17 @@ class USLMParser:
                 parts.append(el.tail)
 
         process_element(elem)
-        return " ".join(parts).strip()
+        # Join parts, converting [PARA] markers to double newlines
+        result = []
+        for part in parts:
+            if part == "[PARA]":
+                # Convert to double newline for paragraph break
+                result.append("\n\n")
+            elif result and result[-1] != "\n\n":
+                result.append(" " + part)
+            else:
+                result.append(part)
+        return "".join(result).strip()
 
     def _extract_source_credit_refs(
         self, section_elem: etree._Element

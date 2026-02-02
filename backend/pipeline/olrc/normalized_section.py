@@ -604,19 +604,38 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
     return True
 
 
+PARAGRAPH_BREAK_MARKER = "[__PARA_BREAK__]"
+
+
 def _split_into_sentences(
     text: str, start_offset: int = 0
 ) -> list[tuple[str, int, int]]:
     """Split text into sentences, returning (content, start_char, end_char) tuples.
 
     The start_char and end_char are relative to the original text using start_offset.
+    A tuple with PARAGRAPH_BREAK_MARKER as content indicates a paragraph break.
     """
     sentences = []
     current_start = 0
     i = 0
 
     while i < len(text):
-        if text[i] == "." and _is_sentence_boundary(text, i):
+        # Check for paragraph break (double newline)
+        if text[i : i + 2] == "\n\n":
+            # Emit any pending sentence before the paragraph break
+            sentence = text[current_start:i].strip()
+            if sentence:
+                sentences.append(
+                    (sentence, start_offset + current_start, start_offset + i)
+                )
+            # Add paragraph break marker
+            sentences.append((PARAGRAPH_BREAK_MARKER, 0, 0))
+            # Skip the double newline and any additional whitespace
+            i += 2
+            while i < len(text) and text[i] in " \t\n":
+                i += 1
+            current_start = i
+        elif text[i] == "." and _is_sentence_boundary(text, i):
             # Found sentence boundary
             sentence = text[current_start : i + 1].strip()
             if sentence:
@@ -624,8 +643,16 @@ def _split_into_sentences(
                     (sentence, start_offset + current_start, start_offset + i + 1)
                 )
             current_start = i + 1
-            # Skip whitespace after sentence
+            # Skip whitespace after sentence, but detect paragraph breaks
             while current_start < len(text) and text[current_start] in " \t\n":
+                # Check for paragraph break while skipping whitespace
+                if text[current_start : current_start + 2] == "\n\n":
+                    sentences.append((PARAGRAPH_BREAK_MARKER, 0, 0))
+                    current_start += 2
+                    # Continue skipping any remaining whitespace
+                    while current_start < len(text) and text[current_start] in " \t\n":
+                        current_start += 1
+                    break
                 current_start += 1
             i = current_start
         else:
@@ -684,6 +711,22 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
             # Split into sentences
             sentences = _split_into_sentences(before_text, start_offset=last_end)
             for sentence_text, start_char, end_char in sentences:
+                # Check for paragraph break marker
+                if sentence_text == PARAGRAPH_BREAK_MARKER:
+                    # Insert blank line for paragraph break
+                    line_number += 1
+                    lines.append(
+                        ParsedLine(
+                            line_number=line_number,
+                            content="",
+                            indent_level=0,
+                            marker=None,
+                            is_header=False,
+                            start_char=0,
+                            end_char=0,
+                        )
+                    )
+                    continue
                 sentence_text = sentence_text.strip()
                 # Skip ".—" artifacts and clean up sub-header separators
                 if sentence_text:
@@ -750,6 +793,22 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
     if remaining_text:
         sentences = _split_into_sentences(remaining_text, start_offset=last_end)
         for sentence_text, start_char, end_char in sentences:
+            # Check for paragraph break marker
+            if sentence_text == PARAGRAPH_BREAK_MARKER:
+                # Insert blank line for paragraph break
+                line_number += 1
+                lines.append(
+                    ParsedLine(
+                        line_number=line_number,
+                        content="",
+                        indent_level=0,
+                        marker=None,
+                        is_header=False,
+                        start_char=0,
+                        end_char=0,
+                    )
+                )
+                continue
             sentence_text = sentence_text.strip()
             # Skip ".—" artifacts and clean up sub-header separators
             if sentence_text:
