@@ -847,8 +847,8 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
                 if content or marker:
                     line_number += 1
                     # Indent level: base (current_indent) + level from QC
-                    # QC level 1 = subsection, 2 = paragraph, etc.
-                    indent = current_indent + level - 1
+                    # Quoted content is always indented relative to intro text
+                    indent = current_indent + level
                     lines.append(
                         ParsedLine(
                             line_number=line_number,

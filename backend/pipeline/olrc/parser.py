@@ -832,6 +832,13 @@ class USLMParser:
         for subsection in elem.findall("subsection"):
             format_item(subsection, 1)
 
+        # If no structured content, extract plain text (for inline quotedContent)
+        if not parts:
+            text = self._get_text_content(elem).strip()
+            if text:
+                # Inline quoted content at level 1
+                parts.append(f"[QC:1]{text}[/QC]")
+
         return "\n".join(parts)
 
     def _get_notes_text_content(self, elem: etree._Element) -> str:
