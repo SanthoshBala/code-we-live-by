@@ -789,7 +789,8 @@ def normalize_text_command(
                     # but not for the first line
                     if i > 0 and line.is_header and line.indent_level in (1, 2):
                         if with_line_numbers:
-                            output.append("      │")
+                            output.append(f"L{line_num:3d} │")
+                            line_num += 1
                         else:
                             output.append("")
                     indent = "    " * line.indent_level
@@ -818,7 +819,8 @@ def normalize_text_command(
                 # Add blank line before each note header after the first
                 if i > 0:
                     if use_line_numbers:
-                        print("      │")
+                        print(f"L{line_num:3d} │")
+                        line_num += 1
                     else:
                         print()
                 if use_line_numbers:
@@ -849,7 +851,8 @@ def normalize_text_command(
                 # Add blank line before each note header after the first
                 if i > 0:
                     if use_line_numbers:
-                        print("      │")
+                        print(f"L{line_num:3d} │")
+                        line_num += 1
                     else:
                         print()
                 if use_line_numbers:
@@ -878,7 +881,8 @@ def normalize_text_command(
                 # Add blank line before each note header after the first
                 if i > 0:
                     if use_line_numbers:
-                        print("      │")
+                        print(f"L{line_num:3d} │")
+                        line_num += 1
                     else:
                         print()
                 if use_line_numbers:
