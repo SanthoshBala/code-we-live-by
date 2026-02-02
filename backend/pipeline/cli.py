@@ -785,6 +785,13 @@ def normalize_text_command(
                     if max_lines is not None and i >= max_lines:
                         output.append(f"        ... and {len(note.lines) - max_lines} more lines")
                         break
+                    # Add blank line before H1 headers (indent_level=1, is_header=True)
+                    # but not for the first line
+                    if i > 0 and line.is_header and line.indent_level == 1:
+                        if with_line_numbers:
+                            output.append("      │")
+                        else:
+                            output.append("")
                     indent = "    " * line.indent_level
                     # Clean up content (remove extra whitespace/newlines)
                     content = " ".join(line.content.split())
