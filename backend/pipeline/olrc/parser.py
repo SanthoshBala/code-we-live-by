@@ -808,8 +808,14 @@ class USLMParser:
                     parts.append(f"[H1]{header_text}[/H1]")
                 elif tag == "i":
                     # Italic text might be a sub-header if followed by ".—"
-                    # We'll mark it and let the normalizer handle it
-                    parts.append(f"[H2]{text}[/H2]")
+                    # But NOT if it's a case citation (contains " v. ")
+                    # or other inline emphasis (Latin terms, etc.)
+                    if " v. " in text:
+                        # Case citation - keep as inline italic text
+                        parts.append(text)
+                    else:
+                        # Mark as potential sub-header for normalizer
+                        parts.append(f"[H2]{text}[/H2]")
                 else:
                     parts.append(text)
 

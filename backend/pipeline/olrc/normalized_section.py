@@ -33,7 +33,12 @@ from app.schemas import (
 )
 
 if TYPE_CHECKING:
-    from pipeline.olrc.parser import ActRef, ParsedSection, ParsedSubsection, SourceCreditRef
+    from pipeline.olrc.parser import (
+        ActRef,
+        ParsedSection,
+        ParsedSubsection,
+        SourceCreditRef,
+    )
 
 # Common legal abbreviations that contain periods but aren't sentence endings
 LEGAL_ABBREVIATIONS = {
@@ -983,8 +988,9 @@ def _parse_notes_structure(
 
 def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Historical and Revision Notes section."""
+    # Match until next major section (with optional [H1] prefix)
     hist_match = re.search(
-        r"Historical and Revision Notes\s*(.*?)(?=Editorial Notes|Statutory Notes|$)",
+        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
@@ -1041,8 +1047,9 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
 
 def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Editorial Notes section."""
+    # Match "Editorial Notes" and capture until "Statutory Notes" (with optional [H1] prefix)
     edit_match = re.search(
-        r"Editorial Notes\s*(.*?)(?=Statutory Notes|$)",
+        r"Editorial Notes\s*(.*?)(?=\[H1\]Statutory Notes|\[H1\]Editorial Notes|Statutory Notes|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
