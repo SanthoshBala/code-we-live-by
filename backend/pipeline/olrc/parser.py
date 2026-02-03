@@ -885,9 +885,11 @@ class USLMParser:
                 css_class = el.get("class", "")
                 if "smallCaps" in css_class:
                     # Apply title case to smallCaps headings
+                    # Mark with [NH] (Note Header) so downstream parsing can distinguish
+                    # from regular content
                     text = "".join(el.itertext()).strip()
                     if text:
-                        parts.append(text.title())
+                        parts.append(f"[NH]{text.title()}[/NH]")
                     return  # Don't process children
 
             # Track bold/italic state
