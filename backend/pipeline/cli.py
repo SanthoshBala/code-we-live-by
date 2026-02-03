@@ -78,6 +78,52 @@ def parse_title(xml_path: Path) -> None:
             print(f"    § {sec.section_number}: {sec.heading}")
 
 
+async def ingest_title(
+    title_number: int,
+    download_dir: Path = Path("data/olrc"),
+    force_download: bool = False,
+    force_parse: bool = False,
+) -> int:
+    """Ingest a US Code title into the database.
+
+    Args:
+        title_number: Title number to ingest.
+        download_dir: Directory for OLRC XML files.
+        force_download: If True, re-download even if file exists.
+        force_parse: If True, re-parse and update existing records.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.olrc.ingestion import USCodeIngestionService
+
+    async with async_session_maker() as session:
+        service = USCodeIngestionService(session, download_dir=download_dir)
+        log = await service.ingest_title(
+            title_number,
+            force_download=force_download,
+            force_parse=force_parse,
+        )
+
+        if log.status == "completed":
+            logger.info(
+                f"Ingested Title {title_number}: "
+                f"{log.records_processed} records, "
+                f"{log.records_created} created, "
+                f"{log.records_updated} updated"
+            )
+            if log.details:
+                logger.info(f"  {log.details}")
+            return 0
+        elif log.status == "skipped":
+            logger.info(f"Title {title_number}: {log.details}")
+            return 0
+        else:
+            logger.error(f"Failed to ingest Title {title_number}: {log.error_message}")
+            return 1
+
+
 # =============================================================================
 # GovInfo Public Law functions
 # =============================================================================
@@ -1440,6 +1486,32 @@ def main() -> int:
         help="Download directory (default: data/olrc)",
     )
 
+    # Ingest-title command
+    ingest_title_parser = subparsers.add_parser(
+        "ingest-title", help="Ingest a US Code title into the database"
+    )
+    ingest_title_parser.add_argument(
+        "title",
+        type=int,
+        help="Title number to ingest",
+    )
+    ingest_title_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+    ingest_title_parser.add_argument(
+        "--force-download",
+        action="store_true",
+        help="Re-download XML even if file exists",
+    )
+    ingest_title_parser.add_argument(
+        "--force-parse",
+        action="store_true",
+        help="Re-parse and update existing records",
+    )
+
     # =========================================================================
     # GovInfo Public Law commands
     # =========================================================================
@@ -1872,6 +1944,16 @@ Examples:
         else:
             print("No titles downloaded yet.")
         return 0
+
+    elif args.command == "ingest-title":
+        return asyncio.run(
+            ingest_title(
+                title_number=args.title,
+                download_dir=args.dir,
+                force_download=args.force_download,
+                force_parse=args.force_parse,
+            )
+        )
 
     # =========================================================================
     # GovInfo command handlers
