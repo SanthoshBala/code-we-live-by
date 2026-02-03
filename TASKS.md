@@ -184,7 +184,7 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Note**: Senate votes require XML parsing (deferred to future task)
   - **Completed**: House vote API client, ingestion service, CLI commands
 
-### Data Pipeline - Law Change Parsing
+### Data Pipeline - Section Parsing (In Progress)
 - [x] **Task 1.10**: Build legal language parser for common amendment patterns ✅
   - "Section X is amended by striking Y and inserting Z"
   - "Section X is amended by adding at the end the following"
@@ -192,7 +192,77 @@ This document translates the CWLB specification into an actionable backlog of im
   - Document supported patterns and limitations
   - **Completed**: 23 amendment patterns, confidence scoring, section reference parsing
 
-- [ ] **Task 1.11**: Build ingestion validation and graduated trust system
+- [ ] **Task 1.11**: Iterate on US Code section parsing
+  - Manual validation of parser output for sample sections across titles
+  - Fix edge cases discovered during validation (test-driven)
+  - Track validation progress in `pipeline/PARSER_TESTING.md`
+  - **In Progress**: 17 USC 106 ✅, 10 USC 494 ✅
+
+---
+
+### Milestone 1A: US Code Viewer (Tip of Trunk)
+
+**Goal**: Enable end-to-end visualization of parsed US Code sections to iterate on parser design choices with real UI feedback. This milestone focuses on viewing the *current* state of the code ("tip of trunk") before tackling historical versioning and law diffs.
+
+#### Database Integration
+- [ ] **Task 1A.1**: Write parsed sections to database
+  - Implement ingestion service to populate `USCodeSection` table from parsed OLRC XML
+  - Store section metadata (title, chapter, heading, provisions text)
+  - Store normalized notes (statutory, editorial, historical) in appropriate tables
+  - Store source laws and amendments metadata
+  - Handle incremental updates (upsert logic)
+
+- [ ] **Task 1A.2**: Populate US Code structure tables
+  - Write `Title` records with metadata (name, positive law status)
+  - Write `Chapter` and `Subchapter` records with hierarchy
+  - Ensure proper foreign key relationships
+
+#### Minimal Backend API
+- [ ] **Task 1A.3**: Implement tree navigation API
+  - `GET /api/titles` - List all titles with metadata
+  - `GET /api/titles/:title/structure` - Get chapters/subchapters/sections tree
+  - Return hierarchical structure for UI navigation
+
+- [ ] **Task 1A.4**: Implement section viewer API
+  - `GET /api/sections/:title/:section` - Get full section content
+  - Return provisions, notes, source laws, amendments in structured format
+  - Match the `NormalizedSection` schema from parser
+
+#### Minimal Frontend UI
+- [ ] **Task 1A.5**: Set up Next.js project with basic layout
+  - Initialize Next.js with TypeScript and Tailwind CSS
+  - Create header with navigation
+  - Create responsive layout shell
+
+- [ ] **Task 1A.6**: Build US Code tree navigator
+  - Collapsible tree view showing Title → Chapter → Section hierarchy
+  - Click to navigate to section viewer
+  - Show section numbers and headings
+
+- [ ] **Task 1A.7**: Build section viewer page
+  - Display section heading and provisions with proper indentation
+  - Display notes sections (statutory, editorial, historical)
+  - Display source laws and amendments
+  - Display references (inline citations)
+  - Clean, readable formatting matching `DISPLAY_CONVENTIONS.md`
+
+- [ ] **Task 1A.8**: Add URL routing for deep linking
+  - Routes like `/title/17/section/106` or `/17/106`
+  - Breadcrumb navigation showing current location
+
+**Success Criteria**:
+- [ ] Can browse US Code structure in tree view
+- [ ] Can view any section with provisions and notes
+- [ ] Parser output is accurately reflected in UI
+- [ ] Can iterate on parser fixes and see results in UI
+
+---
+
+### Data Pipeline - Law Change Parsing (Deferred)
+
+*Note: These tasks are deferred until Milestone 1A is complete and section parsing has been validated through the UI.*
+
+- [ ] **Task 1.12**: Build ingestion validation and graduated trust system
   - **Text accounting**: Track which spans of bill text are "claimed" by parsed amendments
     - Calculate coverage percentage
     - Flag unclaimed text containing amendment keywords ("amended", "striking", etc.)
@@ -208,7 +278,7 @@ This document translates the CWLB specification into an actionable backlog of im
   - **Golden test corpus**: First ~10 Interactive laws become regression test suite
   - **Fallback escalation**: Suspicious RegEx reports auto-escalate to LLM review
 
-- [ ] **Task 1.12**: Implement diff generation for law changes
+- [ ] **Task 1.13**: Implement diff generation for law changes
   - Compare old text vs new text for modified sections
   - Calculate line-by-line diffs
   - Store in LawChange table
@@ -847,11 +917,14 @@ This document translates the CWLB specification into an actionable backlog of im
 ## Priority & Sequencing Notes
 
 ### Critical Path (Must complete for MVP)
-1. Tasks 0.1-0.14 (Phase 0 foundation)
-2. Tasks 1.1-1.19 (Infrastructure and data pipeline)
-3. Tasks 1.20-1.24 (Core APIs)
-4. Tasks 1.25-1.35 (Core UI)
-5. Tasks 1.46-1.49 (Deployment)
+1. Tasks 0.1-0.14 (Phase 0 foundation) ✅
+2. Tasks 1.1-1.2, 1.6-1.9 (Infrastructure and core ingestion) ✅
+3. Tasks 1.10-1.11 (Section parsing iteration) ← **Current**
+4. **Milestone 1A** (US Code Viewer - tip of trunk) ← **Next**
+5. Tasks 1.12-1.20 (Law change parsing and historical depth)
+6. Tasks 1.21-1.25 (Full APIs including blame/time travel)
+7. Tasks 1.26-1.36 (Full UI)
+8. Tasks 1.47-1.50 (Deployment)
 
 ### High Priority (MVP-adjacent)
 - Task 1.36-1.37 (Search)
@@ -870,9 +943,12 @@ This document translates the CWLB specification into an actionable backlog of im
 - Tasks 3.28-3.32 (Advanced features)
 
 ### Dependencies
-- Line-level parsing (Task 1.13-1.16) is prerequisite for blame view (Task 1.29-1.30)
-- Historical data (Task 1.17-1.19) is prerequisite for time travel (Task 1.23, 1.31)
-- Core APIs (Task 1.20-1.24) must be complete before frontend work (Task 1.25+)
+- **Milestone 1A** requires Task 1.11 (section parsing) to be stable
+- Milestone 1A (US Code Viewer) enables iteration on parser before law diff parsing
+- Law change parsing (Task 1.12-1.13) deferred until Milestone 1A validates section parsing
+- Line-level parsing (Task 1.14-1.17) is prerequisite for blame view (Task 1.30-1.31)
+- Historical data (Task 1.18-1.20) is prerequisite for time travel (Task 1.24, 1.32)
+- Full APIs (Task 1.21-1.25) must be complete before full frontend work (Task 1.26+)
 - Analytics queries (Task 2.7, 2.9, 2.11, 2.13) must be complete before visualizations (Task 2.8, 2.10, 2.12, 2.14)
 
 ---
@@ -884,6 +960,14 @@ This document translates the CWLB specification into an actionable backlog of im
 - [ ] Working prototype parser for at least 2 Public Laws
 - [ ] Validated technical architecture with stakeholders
 - [ ] User research completed with key findings documented
+
+### Milestone 1A (US Code Viewer) Success
+- [ ] 8 Phase 1 titles parsed and written to database
+- [ ] Tree navigation UI functional (browse Title → Chapter → Section)
+- [ ] Section viewer displays provisions with correct indentation
+- [ ] Section viewer displays all note types (statutory, editorial, historical)
+- [ ] Source laws and amendments displayed for each section
+- [ ] Parser issues identifiable and fixable through visual inspection
 
 ### Phase 1 (MVP) Success
 - [ ] 5-10 titles ingested with 20 years of history

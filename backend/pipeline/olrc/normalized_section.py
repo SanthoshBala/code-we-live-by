@@ -183,6 +183,25 @@ SUBSECTION_HEADER_PATTERN = re.compile(
 )
 
 
+def _clean_heading(heading: str) -> str:
+    """Strip trailing '.—' or ' .—' from heading text.
+
+    US Code uses '.—' (period + em-dash) as a stylistic heading terminator.
+    This is antiquated and clutters the display, so we strip it.
+
+    Examples:
+        "Implementation of New START Treaty.—" -> "Implementation of New START Treaty"
+        "Sense of congress .—" -> "Sense of congress"
+    """
+    if not heading:
+        return heading
+    # Strip trailing .— or . — (with optional space before period)
+    heading = re.sub(r"\s*\.—\s*$", "", heading)
+    # Also normalize any remaining extra whitespace
+    heading = " ".join(heading.split())
+    return heading
+
+
 def _extract_subsection_header(content: str) -> tuple[str | None, str]:
     """Extract a subsection header from content if present.
 
@@ -942,21 +961,44 @@ def _parse_amendments(text: str) -> list[Amendment]:
 
         # Now find all Pub. L. references within this year block
         # Each Pub. L. reference is a separate amendment
+        # Capture optional subsection prefix (e.g., "Subsec. (c)(1), (2)(A). ")
+        # Subsection markers can be compound like (c)(1) and comma-separated
         pub_l_pattern = re.compile(
+            r"((?:Subsec\.?\s*"  # "Subsec." or "Subsec"
+            r"(?:\([^)]+\))+"  # One or more parenthesized markers like (c)(1)
+            r"(?:\s*,\s*(?:\([^)]+\))+)*"  # Optional comma-separated markers like , (2)(A)
+            r"\.?\s*)?)"  # Optional trailing period and whitespace
             r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
-            r"(.*?)"  # Description
-            r"(?=Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Pub. L. or end
+            r"(.*?)"  # Description (including any text after)
+            r"(?=Subsec\.?\s*(?:\([^)]+\))+|Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Subsec. or Pub. L. or end
             re.DOTALL,
         )
 
         for pub_match in pub_l_pattern.finditer(year_block):
-            public_law_text = pub_match.group(1)
-            congress = int(pub_match.group(2))
-            law_number = int(pub_match.group(3))
-            description = (public_law_text + pub_match.group(4)).strip()
+            subsec_prefix = (pub_match.group(1) or "").strip()
+            public_law_text = pub_match.group(2)
+            congress = int(pub_match.group(3))
+            law_number = int(pub_match.group(4))
+            after_text = pub_match.group(5)
 
-            # Clean up description - remove trailing whitespace and normalize
+            # Build description: subsec prefix + Pub. L. + rest
+            if subsec_prefix:
+                description = f"{subsec_prefix} {public_law_text}{after_text}"
+            else:
+                description = f"{public_law_text}{after_text}"
+
+            # Clean up description - normalize whitespace (handles multiple spaces)
             description = " ".join(description.split())
+
+            # Fix whitespace inside quotes (from XML date element spacing)
+            # e.g., '" December 31, 2021 "' -> '"December 31, 2021"'
+            # Match quoted content and strip leading/trailing spaces inside quotes
+            # Handle both straight quotes (") and curly quotes (" ")
+            description = re.sub(r'"(\s*)(.*?)(\s*)"', r'"\2"', description)
+            # Curly quotes: " (U+201C left) and " (U+201D right)
+            description = re.sub(
+                r"\u201c(\s*)(.*?)(\s*)\u201d", "\u201c\\2\u201d", description
+            )
 
             law = ParsedPublicLaw(congress=congress, law_number=law_number)
             amendments.append(
@@ -1120,6 +1162,21 @@ def _parse_notes_structure(
     _parse_statutory_notes(raw_notes, notes)
 
 
+def _strip_note_markers(text: str) -> str:
+    """Strip note markers from text.
+
+    Removes:
+    - [NH]...[/NH] note header markers
+    - [H1]...[/H1] bold header markers (cross-headings)
+    - Orphaned [/NH] and [/H1] closing markers
+    """
+    text = re.sub(r"\[NH\].*?\[/NH\]", "", text, flags=re.DOTALL)
+    text = re.sub(r"\[H1\].*?\[/H1\]", "", text, flags=re.DOTALL)
+    text = re.sub(r"\[/NH\]", "", text)
+    text = re.sub(r"\[/H1\]", "", text)
+    return text.strip()
+
+
 def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Historical and Revision Notes section."""
     # Match until next major section (with optional [H1] prefix)
@@ -1145,11 +1202,12 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     matches = list(report_pattern.finditer(hist_text))
     if not matches:
         # No sub-headers, treat the whole section as one note
+        cleaned_hist = _strip_note_markers(hist_text)
         notes.notes.append(
             SectionNote(
                 header="Historical and Revision Notes",
-                content=hist_text,
-                lines=normalize_note_content(hist_text),
+                content=cleaned_hist,
+                lines=normalize_note_content(cleaned_hist),
                 category=NoteCategory.HISTORICAL,
             )
         )
@@ -1166,7 +1224,7 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
         # Content runs from end of this header to start of next header (or end)
         content_start = match.end()
         content_end = matches[i + 1].start() if i + 1 < len(matches) else len(hist_text)
-        content = hist_text[content_start:content_end].strip()
+        content = _strip_note_markers(hist_text[content_start:content_end])
 
         if content:
             notes.notes.append(
@@ -1183,7 +1241,7 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Editorial Notes section."""
     # Match "Editorial Notes" and capture until "Statutory Notes" (with optional [H1] prefix)
     edit_match = re.search(
-        r"Editorial Notes\s*(.*?)(?=\[H1\]Statutory Notes|\[H1\]Editorial Notes|Statutory Notes|$)",
+        r"Editorial Notes\s*(.*?)(?=\[H1\]Statutory Notes|\[NH\]Statutory Notes|Statutory Notes|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
@@ -1194,46 +1252,33 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
     if not editorial_text:
         return
 
-    # Known editorial note headers in order they typically appear
-    editorial_headers = [
-        "Codification",
-        "References in Text",
-        "Amendments",
-        "Prior ParsedLines",
-    ]
+    # Find note headers using [NH]...[/NH] markers from XML parser
+    header_pattern = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
 
-    # Find positions of each header
-    header_positions: list[tuple[int, str]] = []
-    for header in editorial_headers:
-        pattern = re.compile(rf"\b{re.escape(header)}\b", re.IGNORECASE)
-        match = pattern.search(editorial_text)
-        if match:
-            header_positions.append((match.start(), header))
+    # Find all headers and their positions
+    header_positions: list[tuple[int, int, str]] = []
+    for match in header_pattern.finditer(editorial_text):
+        header = match.group(1).strip()
+        # Skip if too short
+        if len(header.split()) < 1:
+            continue
+        header_positions.append((match.start(), match.end(), header))
 
-    # Sort by position
-    header_positions.sort(key=lambda x: x[0])
-
-    # Extract content for each header
+    # Deduplicate and extract content
     seen_headers: set[str] = set()
-    for i, (pos, header) in enumerate(header_positions):
+    for i, (_start, end, header) in enumerate(header_positions):
         if header in seen_headers:
             continue
         seen_headers.add(header)
 
-        # Content starts after header, ends at next header or end
-        # Find where header text ends
-        header_match = re.search(
-            rf"\b{re.escape(header)}\b", editorial_text[pos:], re.IGNORECASE
+        # Content runs to next header or end
+        content_end = (
+            header_positions[i + 1][0]
+            if i + 1 < len(header_positions)
+            else len(editorial_text)
         )
-        start = pos + header_match.end() if header_match else pos + len(header)
+        content = _strip_note_markers(editorial_text[end:content_end])
 
-        # End at next header or end of text
-        if i + 1 < len(header_positions):
-            end = header_positions[i + 1][0]
-        else:
-            end = len(editorial_text)
-
-        content = editorial_text[start:end].strip()
         if content:
             # Special handling for Amendments - also populate structured field
             if header == "Amendments":
@@ -1269,41 +1314,26 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     # cross-references that don't lend themselves to structured extraction.
     notes.short_titles = _parse_short_titles(statutory_text)
 
-    # Capture law-specific headers that appear in title case
-    # Pattern: Title Case Words (at least 2 words, capitalized)
-    # Include "YYYY Amendment" suffix for "Effective Date Of YYYY Amendment" patterns
-    # The lookahead matches: newline, end, "Pub.", "Amendment by", or a capital letter
-    # starting prose content (like "Effective Date Section applicable...")
-    all_header_pattern = re.compile(
-        r"(?:^|\n)\s*"
-        r"([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|[Oo]f|[Aa]nd|[Tt]he|[Ff]or))+"
-        r"(?:\s+\d{4}\s+Amendment)?)"  # Include "YYYY Amendment" suffix (no leading "of")
-        r"\s*(?=\n|$|Pub\.|Amendment\s+by\s|[A-Z][a-z])",  # Lookahead includes prose start
-        re.MULTILINE,
-    )
+    # Find note headers using [NH]...[/NH] markers from XML parser
+    # These markers are added for <heading class="smallCaps"> elements
+    header_pattern = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
 
     # Find all headers and their positions
     header_positions: list[tuple[int, int, str]] = []
-    for match in all_header_pattern.finditer(statutory_text):
+    for match in header_pattern.finditer(statutory_text):
         header = match.group(1).strip()
         # Skip if too short or a fragment
         if len(header.split()) < 2:
             continue
-        # Skip common false positives
-        skip_words = {
-            "The",
-            "And",
-            "For",
-            "With",
-            "From",
-            "That",
-            "This",
-            "Which",
-            "Where",
+        # Skip cross-heading markers (Editorial Notes, Statutory Notes, Executive Documents)
+        skip_headers = {
+            "Editorial Notes",
+            "Statutory Notes And Related Subsidiaries",
+            "Executive Documents",
         }
-        if header.split()[0] in skip_words:
+        if header in skip_headers:
             continue
-        header_positions.append((match.start(), match.end(), header.title()))
+        header_positions.append((match.start(), match.end(), header))
 
     # Deduplicate and extract content
     seen_headers: set[str] = set()
@@ -1318,7 +1348,7 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
             if i + 1 < len(header_positions)
             else len(statutory_text)
         )
-        content = statutory_text[end:content_end].strip()
+        content = _strip_note_markers(statutory_text[end:content_end])
 
         if content and len(content) > 30:
             notes.notes.append(
@@ -1685,7 +1715,8 @@ def _normalize_subsection_recursive(
                 _add_blank_line(lines, line_counter, char_pos)
 
         line_counter[0] += 1
-        header_content = f"{subsection.marker} {subsection.heading}"
+        clean_heading = _clean_heading(subsection.heading)
+        header_content = f"{subsection.marker} {clean_heading}"
         start_pos = char_pos[0]
         char_pos[0] += len(header_content) + 1  # +1 for newline
         lines.append(

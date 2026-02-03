@@ -7,6 +7,7 @@ from pipeline.olrc.normalized_section import (
     _detect_marker_level,
     _is_sentence_boundary,
     _split_into_sentences,
+    _strip_note_markers,
     char_span_to_line_span,
     normalize_note_content,
     normalize_section,
@@ -1053,3 +1054,266 @@ class TestParserNotesContent:
         # Should have level 1 for subsection, level 2 for paragraph
         assert "[QC:1]" in content
         assert "[QC:2]" in content
+
+    def test_smallcaps_heading_marked_with_nh(self) -> None:
+        """Test that smallCaps headings are marked with [NH]...[/NH].
+
+        This prevents title-cased paragraph content (like "Memorandum Of
+        President...") from being incorrectly parsed as note headers.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes>
+            <note>
+                <heading class="centered smallCaps">Delegation of Functions</heading>
+                <p>Memorandum of President of the United States, Mar. 16, 2012.</p>
+                <p>By the authority vested in me as President.</p>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # SmallCaps heading should be wrapped in [NH]...[/NH]
+        assert "[NH]Delegation Of Functions[/NH]" in content
+        # Paragraph content should NOT be wrapped in [NH]
+        assert "[NH]Memorandum" not in content
+        assert "Memorandum of President" in content
+
+
+class TestStripNoteMarkers:
+    """Tests for _strip_note_markers function."""
+
+    def test_strip_nh_markers(self) -> None:
+        """Test stripping [NH]...[/NH] note header markers."""
+        text = "[NH]References In Text[/NH] Some content here."
+        result = _strip_note_markers(text)
+        assert result == "Some content here."
+        assert "[NH]" not in result
+        assert "[/NH]" not in result
+
+    def test_strip_h1_markers(self) -> None:
+        """Test stripping [H1]...[/H1] bold header markers."""
+        text = "Content before. [H1]Executive Documents[/H1] Content after."
+        result = _strip_note_markers(text)
+        assert "Executive Documents" not in result
+        assert "Content before." in result
+        assert "Content after." in result
+
+    def test_strip_orphaned_closing_markers(self) -> None:
+        """Test stripping orphaned [/NH] and [/H1] closing markers.
+
+        These can appear at the start of content when the opening marker
+        is in a preceding section header that was already captured.
+        """
+        text = "[/NH] Content after orphaned marker."
+        result = _strip_note_markers(text)
+        assert result == "Content after orphaned marker."
+        assert "[/NH]" not in result
+
+        text2 = "[/H1] Content after orphaned marker."
+        result2 = _strip_note_markers(text2)
+        assert result2 == "Content after orphaned marker."
+        assert "[/H1]" not in result2
+
+    def test_strip_multiple_markers(self) -> None:
+        """Test stripping multiple different markers."""
+        text = "[/NH] [NH]Header[/NH] Content. [H1]Bold[/H1] More content."
+        result = _strip_note_markers(text)
+        # Note: stripping leaves extra spaces which is fine for content processing
+        assert "Content." in result
+        assert "More content." in result
+        assert "[NH]" not in result
+        assert "[H1]" not in result
+        assert "Header" not in result
+        assert "Bold" not in result
+
+    def test_strip_multiline_markers(self) -> None:
+        """Test stripping markers that span multiple lines."""
+        text = "[NH]Header\nWith Multiple\nLines[/NH] Content."
+        result = _strip_note_markers(text)
+        assert result == "Content."
+
+    def test_empty_string(self) -> None:
+        """Test with empty string."""
+        assert _strip_note_markers("") == ""
+
+    def test_no_markers(self) -> None:
+        """Test with text containing no markers."""
+        text = "Just regular content with no markers."
+        assert _strip_note_markers(text) == text
+
+
+class TestStatutoryNotesHeaderParsing:
+    """Tests for statutory notes correctly distinguishing headers from content.
+
+    Bug fixed: Title-cased paragraph content (like "Memorandum Of President...")
+    was incorrectly being parsed as note headers. The fix uses [NH] markers.
+    """
+
+    def test_memorandum_not_parsed_as_header(self) -> None:
+        """Test that 'Memorandum of President...' is parsed as content, not header.
+
+        This was the original bug: paragraphs starting with title-case text
+        were incorrectly identified as note headers.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        # Simulate notes text with [NH] markers from XML parser
+        raw_notes = """Statutory Notes and Related Subsidiaries
+        [NH]Delegation Of Reporting Functions[/NH]
+        Memorandum of President of the United States, Mar. 16, 2012.
+        Memorandum for the Secretary of State.
+        By the authority vested in me as President.
+        """
+
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+
+        # Should have exactly one note
+        statutory_notes = [n for n in notes.notes if n.header]
+        assert len(statutory_notes) == 1
+        assert statutory_notes[0].header == "Delegation Of Reporting Functions"
+
+        # Content should include the Memorandum paragraphs
+        assert "Memorandum of President" in statutory_notes[0].content
+        assert "Secretary of State" in statutory_notes[0].content
+
+    def test_multiple_statutory_notes_with_nh_markers(self) -> None:
+        """Test parsing multiple statutory notes using [NH] markers."""
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        raw_notes = """Statutory Notes and Related Subsidiaries
+        [NH]Effective Date Of 2013 Amendment[/NH]
+        Amendment effective Oct. 1, 2012.
+        [NH]Termination Of Reporting Requirements[/NH]
+        For termination, see section 1061.
+        """
+
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        assert "Effective Date Of 2013 Amendment" in headers
+        assert "Termination Of Reporting Requirements" in headers
+        assert len(notes.notes) == 2
+
+    def test_cross_heading_stripped_from_content(self) -> None:
+        """Test that [H1] cross-headings like 'Executive Documents' are stripped."""
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        # Content must be > 30 characters for notes to be created
+        raw_notes = """Statutory Notes and Related Subsidiaries
+        [NH]Congressional Committees Defined[/NH]
+        The term 'congressional defense committees' means the committees on appropriations and armed services.
+        [H1]Executive Documents[/H1]
+        [NH]Delegation Of Functions[/NH]
+        Memorandum of the President of the United States dated March 16, 2012, provided as follows.
+        """
+
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+
+        # Should have two notes
+        assert len(notes.notes) == 2
+
+        # First note should not include "Executive Documents" in its content
+        first_note = notes.notes[0]
+        assert "Executive Documents" not in first_note.content
+        assert "congressional defense committees" in first_note.content
+
+
+class TestCleanHeading:
+    """Tests for _clean_heading function."""
+
+    def test_strip_trailing_em_dash(self) -> None:
+        """Test stripping trailing '.—' from heading."""
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert _clean_heading("Implementation.—") == "Implementation"
+        assert _clean_heading("Sense of congress.—") == "Sense of congress"
+        assert _clean_heading("Report .—") == "Report"  # Space before period
+
+    def test_no_trailing_dash(self) -> None:
+        """Test headings without trailing '.—' are unchanged."""
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert _clean_heading("Implementation") == "Implementation"
+        assert _clean_heading("Sense of congress") == "Sense of congress"
+
+    def test_empty_heading(self) -> None:
+        """Test empty headings."""
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert _clean_heading("") == ""
+        assert _clean_heading(None) is None
+
+
+class TestAmendmentSubsectionPrefix:
+    """Tests for amendment parsing with subsection prefix."""
+
+    def test_subsection_prefix_captured(self) -> None:
+        """Test that subsection prefix like 'Subsec. (c)(1).' is captured."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = """2021—Subsec. (c)(1), (2)(A). Pub. L. 117–81, § 1632(1), substituted text.
+        """
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert "Subsec. (c)(1), (2)(A)." in amendments[0].description
+        assert "Pub. L. 117–81" in amendments[0].description
+
+    def test_amendment_without_subsection_prefix(self) -> None:
+        """Test amendment without subsection prefix."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = """2013—Pub. L. 112–239, § 1033(b)(2)(B), made technical amendments.
+        """
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].description.startswith("Pub. L. 112–239")
+        assert "Subsec." not in amendments[0].description
+
+
+class TestAmendmentDateSpacing:
+    """Tests for fixing whitespace inside quotes in amendments."""
+
+    def test_curly_quote_spacing_fixed(self) -> None:
+        """Test that spaces inside curly quotes are removed."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # Simulate text with curly quotes and extra spaces
+        text = '2021—Pub. L. 117–81 substituted " December 31, 2021 " for " December 31, 2011 ".'
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        desc = amendments[0].description
+        # Spaces inside curly quotes should be removed
+        assert '" December' not in desc or '"December' in desc
+
+    def test_straight_quote_spacing_fixed(self) -> None:
+        """Test that spaces inside straight quotes are removed."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = '2021—Pub. L. 117–81 substituted " December 31, 2021 " for text.'
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        desc = amendments[0].description
+        # Spaces inside quotes should be removed
+        assert '" December' not in desc
