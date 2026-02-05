@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass
 
 
-class PatternType(str, enum.Enum):
+class PatternType(enum.StrEnum):
     """Type of amendment pattern detected."""
 
     STRIKE_INSERT = "strike_insert"

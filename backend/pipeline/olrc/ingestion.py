@@ -1,7 +1,8 @@
 """Ingest US Code data from OLRC into the database."""
 
 import logging
-from datetime import datetime
+import re
+from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from app.models import (
     USCodeTitle,
 )
 from pipeline.olrc.downloader import OLRCDownloader
+from pipeline.olrc.normalized_section import normalize_parsed_section
 from pipeline.olrc.parser import (
     ParsedChapter,
     ParsedSection,
@@ -25,6 +27,122 @@ from pipeline.olrc.parser import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_citation_date(date_str: str | None) -> date | None:
+    """Parse a date string from a citation into a Python date object.
+
+    Handles two formats:
+    - ISO format from Act hrefs: "1935-08-14" -> date(1935, 8, 14)
+    - Prose format from source credits: "Oct. 19, 1976" -> date(1976, 10, 19)
+
+    Args:
+        date_str: The date string to parse, or None.
+
+    Returns:
+        A date object if parsing succeeds, None otherwise.
+    """
+    if not date_str:
+        return None
+
+    # Try ISO format first (YYYY-MM-DD)
+    iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str)
+    if iso_match:
+        try:
+            return date(
+                int(iso_match.group(1)),
+                int(iso_match.group(2)),
+                int(iso_match.group(3)),
+            )
+        except ValueError:
+            pass
+
+    # Try prose format (e.g., "Oct. 19, 1976" or "July 3, 1990")
+    month_map = {
+        "Jan": 1,
+        "January": 1,
+        "Feb": 2,
+        "February": 2,
+        "Mar": 3,
+        "March": 3,
+        "Apr": 4,
+        "April": 4,
+        "May": 5,
+        "Jun": 6,
+        "June": 6,
+        "Jul": 7,
+        "July": 7,
+        "Aug": 8,
+        "August": 8,
+        "Sep": 9,
+        "Sept": 9,
+        "September": 9,
+        "Oct": 10,
+        "October": 10,
+        "Nov": 11,
+        "November": 11,
+        "Dec": 12,
+        "December": 12,
+    }
+
+    # Match "Oct. 19, 1976" or "July 3, 1990" formats
+    match = re.match(r"([A-Z][a-z]+)\.?\s+(\d{1,2})\s*,\s+(\d{4})", date_str)
+    if match:
+        month_str = match.group(1)
+        month = month_map.get(month_str)
+        if month:
+            try:
+                return date(int(match.group(3)), month, int(match.group(2)))
+            except ValueError:
+                pass
+
+    return None
+
+
+# Fallback positive law enactment dates for titles where XML doesn't provide the date.
+# Source: https://uscode.house.gov/codification/legislation.shtml
+# These dates represent when each title was enacted into positive law.
+POSITIVE_LAW_DATES: dict[int, date] = {
+    1: date(1947, 7, 30),  # General Provisions
+    3: date(1948, 6, 25),  # The President
+    4: date(1947, 7, 30),  # Flag and Seal
+    5: date(1966, 9, 6),  # Government Organization and Employees
+    9: date(1947, 7, 30),  # Arbitration
+    10: date(1956, 8, 10),  # Armed Forces
+    11: date(1978, 11, 6),  # Bankruptcy
+    13: date(1954, 8, 31),  # Census
+    14: date(1949, 8, 4),  # Coast Guard
+    17: date(1947, 7, 30),  # Copyrights
+    18: date(1948, 6, 25),  # Crimes and Criminal Procedure
+    23: date(1958, 7, 7),  # Highways
+    28: date(1948, 6, 25),  # Judiciary and Judicial Procedure
+    31: date(1982, 9, 13),  # Money and Finance
+    32: date(1956, 8, 10),  # National Guard
+    35: date(1952, 7, 19),  # Patents
+    36: date(1998, 8, 12),  # Patriotic and National Observances
+    37: date(1962, 9, 7),  # Pay and Allowances of the Uniformed Services
+    38: date(1958, 9, 2),  # Veterans' Benefits
+    39: date(1970, 8, 12),  # Postal Service
+    40: date(2002, 8, 21),  # Public Buildings, Property, and Works
+    41: date(2011, 1, 4),  # Public Contracts
+    44: date(1968, 6, 19),  # Public Printing and Documents
+    46: date(2006, 10, 6),  # Shipping
+    49: date(1983, 7, 5),  # Transportation
+    51: date(2010, 10, 11),  # National and Commercial Space Programs
+    54: date(2014, 12, 19),  # National Park Service and Related Programs
+}
+
+
+def _get_positive_law_date(title_number: int) -> date | None:
+    """Get the positive law enactment date for a title.
+
+    Args:
+        title_number: The US Code title number.
+
+    Returns:
+        The enactment date if known, None otherwise.
+    """
+    return POSITIVE_LAW_DATES.get(title_number)
 
 
 class USCodeIngestionService:
@@ -203,6 +321,15 @@ class USCodeIngestionService:
         self, parsed: "ParsedTitle", force: bool = False
     ) -> USCodeTitle:
         """Insert or update a title record."""
+        # Parse positive_law_date if provided as string
+        positive_law_date = None
+        if parsed.positive_law_date:
+            positive_law_date = _parse_citation_date(parsed.positive_law_date)
+
+        # If positive law but no date from parser, use fallback dates
+        # These are the enactment dates for positive law titles
+        if parsed.is_positive_law and not positive_law_date:
+            positive_law_date = _get_positive_law_date(parsed.title_number)
 
         result = await self.session.execute(
             select(USCodeTitle).where(USCodeTitle.title_number == parsed.title_number)
@@ -213,12 +340,16 @@ class USCodeIngestionService:
             if force:
                 existing.title_name = parsed.title_name
                 existing.is_positive_law = parsed.is_positive_law
+                existing.positive_law_date = positive_law_date
+                existing.positive_law_citation = parsed.positive_law_citation
             return existing
 
         title = USCodeTitle(
             title_number=parsed.title_number,
             title_name=parsed.title_name,
             is_positive_law=parsed.is_positive_law,
+            positive_law_date=positive_law_date,
+            positive_law_citation=parsed.positive_law_citation,
         )
         self.session.add(title)
         await self.session.flush()
@@ -290,7 +421,53 @@ class USCodeIngestionService:
         subchapter_id: int | None,
         force: bool = False,
     ) -> USCodeSection:
-        """Insert or update a section record."""
+        """Insert or update a section record.
+
+        This method normalizes the parsed section and stores:
+        - normalized_text in text_content (display-ready indented text)
+        - section_notes as JSON in normalized_notes
+        - enacted_date and statutes_at_large_citation from first citation
+        """
+        # Normalize the parsed section to get structured data
+        normalized = normalize_parsed_section(parsed)
+
+        # Extract text content (prefer normalized, fall back to raw)
+        text_content = normalized.normalized_text or parsed.text_content
+
+        # Get normalized notes as JSON
+        normalized_notes = None
+        enacted_date = None
+        statutes_at_large_citation = None
+
+        if normalized.section_notes:
+            normalized_notes = normalized.section_notes.model_dump(mode="json")
+
+            # Extract enacted_date and statutes_at_large_citation from first citation
+            if normalized.section_notes.citations:
+                first_citation = normalized.section_notes.citations[0]
+
+                # Get date from the first citation (either Public Law or Act)
+                if first_citation.law and first_citation.law.date:
+                    enacted_date = _parse_citation_date(first_citation.law.date)
+                elif first_citation.act and first_citation.act.date:
+                    enacted_date = _parse_citation_date(first_citation.act.date)
+
+                # Get Statutes at Large citation
+                if first_citation.law:
+                    if first_citation.law.stat_volume and first_citation.law.stat_page:
+                        statutes_at_large_citation = (
+                            f"{first_citation.law.stat_volume} Stat. "
+                            f"{first_citation.law.stat_page}"
+                        )
+                elif (
+                    first_citation.act
+                    and first_citation.act.stat_volume
+                    and first_citation.act.stat_page
+                ):
+                    statutes_at_large_citation = (
+                        f"{first_citation.act.stat_volume} Stat. "
+                        f"{first_citation.act.stat_page}"
+                    )
 
         result = await self.session.execute(
             select(USCodeSection).where(
@@ -304,10 +481,13 @@ class USCodeIngestionService:
             if force:
                 existing.heading = parsed.heading
                 existing.full_citation = parsed.full_citation
-                existing.text_content = parsed.text_content
+                existing.text_content = text_content
                 existing.chapter_id = chapter_id
                 existing.subchapter_id = subchapter_id
                 existing.notes = parsed.notes
+                existing.normalized_notes = normalized_notes
+                existing.enacted_date = enacted_date
+                existing.statutes_at_large_citation = statutes_at_large_citation
                 existing.sort_order = parsed.sort_order
             return existing
 
@@ -318,8 +498,11 @@ class USCodeIngestionService:
             section_number=parsed.section_number,
             heading=parsed.heading,
             full_citation=parsed.full_citation,
-            text_content=parsed.text_content,
+            text_content=text_content,
             notes=parsed.notes,
+            normalized_notes=normalized_notes,
+            enacted_date=enacted_date,
+            statutes_at_large_citation=statutes_at_large_citation,
             sort_order=parsed.sort_order,
         )
         self.session.add(section)
