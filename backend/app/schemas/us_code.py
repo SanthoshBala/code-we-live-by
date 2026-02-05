@@ -4,7 +4,7 @@ These schemas are used for API responses and data transfer between
 the pipeline and application layers.
 """
 
-from enum import Enum
+import enum
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -119,7 +119,7 @@ class ShortTitleSchema(BaseModel):
     public_law: str | None = Field(None, description="Associated Public Law reference")
 
 
-class NoteCategoryEnum(str, Enum):
+class NoteCategoryEnum(enum.StrEnum):
     """Category of a section note in the US Code.
 
     The OLRC organizes notes into three main categories:

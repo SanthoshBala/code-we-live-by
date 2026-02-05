@@ -3,14 +3,14 @@
 import enum
 
 
-class LawType(str, enum.Enum):
+class LawType(enum.StrEnum):
     """Type of law (Public or Private)."""
 
     PUBLIC = "Public"
     PRIVATE = "Private"
 
 
-class BillType(str, enum.Enum):
+class BillType(enum.StrEnum):
     """Type of congressional bill."""
 
     HR = "HR"  # House Bill
@@ -23,7 +23,7 @@ class BillType(str, enum.Enum):
     SRES = "SRES"  # Senate Simple Resolution
 
 
-class BillStatus(str, enum.Enum):
+class BillStatus(enum.StrEnum):
     """Status of a bill in Congress."""
 
     INTRODUCED = "Introduced"
@@ -42,7 +42,7 @@ class BillStatus(str, enum.Enum):
     WITHDRAWN = "Withdrawn"
 
 
-class ChangeType(str, enum.Enum):
+class ChangeType(enum.StrEnum):
     """Type of change made to a section of law."""
 
     ADD = "Add"
@@ -53,7 +53,7 @@ class ChangeType(str, enum.Enum):
     TRANSFER = "Transfer"
 
 
-class LawLevel(str, enum.Enum):
+class LawLevel(enum.StrEnum):
     """Hierarchical levels within a Public Law or US Code title.
 
     Based on OLRC conventions. Listed from largest to smallest unit.
@@ -70,7 +70,7 @@ class LawLevel(str, enum.Enum):
     SECTION = "section"  # §101, §102
 
 
-class SourceRelationship(str, enum.Enum):
+class SourceRelationship(enum.StrEnum):
     """Relationship between a source law and a US Code section.
 
     Describes how a law relates to a section's content and classification.
@@ -83,14 +83,14 @@ class SourceRelationship(str, enum.Enum):
     AMENDMENT = "Amendment"  # A law that modified the section
 
 
-class Chamber(str, enum.Enum):
+class Chamber(enum.StrEnum):
     """Congressional chamber."""
 
     HOUSE = "House"
     SENATE = "Senate"
 
 
-class VoteType(str, enum.Enum):
+class VoteType(enum.StrEnum):
     """Type of vote cast."""
 
     YEA = "Yea"
@@ -101,14 +101,14 @@ class VoteType(str, enum.Enum):
     PAIRED_NAY = "Paired_Nay"
 
 
-class SponsorshipRole(str, enum.Enum):
+class SponsorshipRole(enum.StrEnum):
     """Role in sponsoring legislation."""
 
     SPONSOR = "Sponsor"
     COSPONSOR = "Cosponsor"
 
 
-class ReferenceType(str, enum.Enum):
+class ReferenceType(enum.StrEnum):
     """Type of cross-reference between sections."""
 
     EXPLICIT_CITATION = "Explicit_Citation"
@@ -119,7 +119,7 @@ class ReferenceType(str, enum.Enum):
     INCORPORATION = "Incorporation"
 
 
-class PoliticalParty(str, enum.Enum):
+class PoliticalParty(enum.StrEnum):
     """Political party affiliation."""
 
     DEMOCRAT = "Democrat"
@@ -135,7 +135,7 @@ class PoliticalParty(str, enum.Enum):
 # =============================================================================
 
 
-class ParsingMode(str, enum.Enum):
+class ParsingMode(enum.StrEnum):
     """Mode of parsing for legal text.
 
     Defines the level of automation and human oversight for parsing operations.
@@ -146,7 +146,7 @@ class ParsingMode(str, enum.Enum):
     REGEX = "RegEx"  # Pure programmatic parsing
 
 
-class ParsingSessionStatus(str, enum.Enum):
+class ParsingSessionStatus(enum.StrEnum):
     """Status of a parsing session."""
 
     IN_PROGRESS = "In_Progress"
@@ -155,7 +155,7 @@ class ParsingSessionStatus(str, enum.Enum):
     ESCALATED = "Escalated"
 
 
-class SpanType(str, enum.Enum):
+class SpanType(enum.StrEnum):
     """Type of text span in coverage tracking."""
 
     CLAIMED = "Claimed"  # Matched by a pattern
@@ -163,7 +163,7 @@ class SpanType(str, enum.Enum):
     UNCLAIMED_IGNORED = "Unclaimed_Ignored"  # Boilerplate, no keywords
 
 
-class AmendmentReviewStatus(str, enum.Enum):
+class AmendmentReviewStatus(enum.StrEnum):
     """Review status for parsed amendments."""
 
     PENDING = "Pending"
@@ -172,7 +172,7 @@ class AmendmentReviewStatus(str, enum.Enum):
     CORRECTED = "Corrected"
 
 
-class PatternDiscoveryStatus(str, enum.Enum):
+class PatternDiscoveryStatus(enum.StrEnum):
     """Status of a discovered pattern in the learning loop."""
 
     NEW = "New"
@@ -181,7 +181,7 @@ class PatternDiscoveryStatus(str, enum.Enum):
     REJECTED = "Rejected"
 
 
-class VerificationResult(str, enum.Enum):
+class VerificationResult(enum.StrEnum):
     """Result of a parsing verification."""
 
     PASSED = "Passed"  # Verification confirmed parsing is correct
@@ -189,7 +189,7 @@ class VerificationResult(str, enum.Enum):
     PASSED_WITH_ISSUES = "Passed_With_Issues"  # Mostly correct, minor issues noted
 
 
-class VerificationMethod(str, enum.Enum):
+class VerificationMethod(enum.StrEnum):
     """Method used for verification."""
 
     MANUAL_REVIEW = "Manual_Review"  # Human reviewed the results
