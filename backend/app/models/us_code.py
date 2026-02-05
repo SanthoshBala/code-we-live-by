@@ -1,7 +1,7 @@
 """US Code models: Title, Chapter, Section, Line."""
 
 from datetime import date
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -152,7 +152,7 @@ class USCodeSection(Base, TimestampMixin):
         ForeignKey("public_law.law_id", ondelete="SET NULL"), nullable=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    normalized_notes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    normalized_notes: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Relationships
