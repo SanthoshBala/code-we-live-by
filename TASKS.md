@@ -205,14 +205,14 @@ This document translates the CWLB specification into an actionable backlog of im
 **Goal**: Enable end-to-end visualization of parsed US Code sections to iterate on parser design choices with real UI feedback. This milestone focuses on viewing the *current* state of the code ("tip of trunk") before tackling historical versioning and law diffs.
 
 #### Database Integration
-- [ ] **Task 1A.1**: Write parsed sections to database
+- [x] **Task 1A.1**: Write parsed sections to database
   - Implement ingestion service to populate `USCodeSection` table from parsed OLRC XML
   - Store section metadata (title, chapter, heading, provisions text)
   - Store normalized notes (statutory, editorial, historical) in appropriate tables
   - Store source laws and amendments metadata
   - Handle incremental updates (upsert logic)
 
-- [ ] **Task 1A.2**: Populate US Code structure tables
+- [x] **Task 1A.2**: Populate US Code structure tables
   - Write `Title` records with metadata (name, positive law status)
   - Write `Chapter` and `Subchapter` records with hierarchy
   - Ensure proper foreign key relationships
