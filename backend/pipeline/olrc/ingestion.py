@@ -262,19 +262,20 @@ class USCodeIngestionService:
         }
 
         # Ingest or update title
-        title_record = await self._upsert_title(result.title, force)
+        title_record, title_created = await self._upsert_title(result.title, force)
+        stats["created" if title_created else "updated"] += 1
 
         # Create chapter lookup
         chapter_lookup: dict[str, USCodeChapter] = {}
 
         # Ingest chapters
         for chapter in result.chapters:
-            chapter_record = await self._upsert_chapter(
+            chapter_record, chapter_created = await self._upsert_chapter(
                 chapter, title_record.title_id, force
             )
             chapter_lookup[chapter.chapter_number] = chapter_record
             stats["chapters"] += 1
-            stats["created" if chapter_record.chapter_id else "updated"] += 1
+            stats["created" if chapter_created else "updated"] += 1
 
         # Create subchapter lookup
         subchapter_lookup: dict[str, USCodeSubchapter] = {}
@@ -283,12 +284,13 @@ class USCodeIngestionService:
         for subchapter in result.subchapters:
             parent_chapter = chapter_lookup.get(subchapter.chapter_number)
             if parent_chapter:
-                subch_record = await self._upsert_subchapter(
+                subch_record, subch_created = await self._upsert_subchapter(
                     subchapter, parent_chapter.chapter_id, force
                 )
                 key = f"{subchapter.chapter_number}/{subchapter.subchapter_number}"
                 subchapter_lookup[key] = subch_record
                 stats["subchapters"] += 1
+                stats["created" if subch_created else "updated"] += 1
 
         # Ingest sections
         for section in result.sections:
@@ -319,8 +321,12 @@ class USCodeIngestionService:
 
     async def _upsert_title(
         self, parsed: "ParsedTitle", force: bool = False
-    ) -> USCodeTitle:
-        """Insert or update a title record."""
+    ) -> tuple[USCodeTitle, bool]:
+        """Insert or update a title record.
+
+        Returns:
+            Tuple of (title record, was_created).
+        """
         # Parse positive_law_date if provided as string
         positive_law_date = None
         if parsed.positive_law_date:
@@ -342,7 +348,7 @@ class USCodeIngestionService:
                 existing.is_positive_law = parsed.is_positive_law
                 existing.positive_law_date = positive_law_date
                 existing.positive_law_citation = parsed.positive_law_citation
-            return existing
+            return existing, False
 
         title = USCodeTitle(
             title_number=parsed.title_number,
@@ -353,12 +359,16 @@ class USCodeIngestionService:
         )
         self.session.add(title)
         await self.session.flush()
-        return title
+        return title, True
 
     async def _upsert_chapter(
         self, parsed: "ParsedChapter", title_id: int, force: bool = False
-    ) -> USCodeChapter:
-        """Insert or update a chapter record."""
+    ) -> tuple[USCodeChapter, bool]:
+        """Insert or update a chapter record.
+
+        Returns:
+            Tuple of (chapter record, was_created).
+        """
 
         result = await self.session.execute(
             select(USCodeChapter).where(
@@ -372,7 +382,7 @@ class USCodeIngestionService:
             if force:
                 existing.chapter_name = parsed.chapter_name
                 existing.sort_order = parsed.sort_order
-            return existing
+            return existing, False
 
         chapter = USCodeChapter(
             title_id=title_id,
@@ -382,12 +392,16 @@ class USCodeIngestionService:
         )
         self.session.add(chapter)
         await self.session.flush()
-        return chapter
+        return chapter, True
 
     async def _upsert_subchapter(
         self, parsed: "ParsedSubchapter", chapter_id: int, force: bool = False
-    ) -> USCodeSubchapter:
-        """Insert or update a subchapter record."""
+    ) -> tuple[USCodeSubchapter, bool]:
+        """Insert or update a subchapter record.
+
+        Returns:
+            Tuple of (subchapter record, was_created).
+        """
 
         result = await self.session.execute(
             select(USCodeSubchapter).where(
@@ -401,7 +415,7 @@ class USCodeIngestionService:
             if force:
                 existing.subchapter_name = parsed.subchapter_name
                 existing.sort_order = parsed.sort_order
-            return existing
+            return existing, False
 
         subchapter = USCodeSubchapter(
             chapter_id=chapter_id,
@@ -411,7 +425,7 @@ class USCodeIngestionService:
         )
         self.session.add(subchapter)
         await self.session.flush()
-        return subchapter
+        return subchapter, True
 
     async def _upsert_section(
         self,
