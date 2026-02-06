@@ -37,6 +37,13 @@ export default function TitleList({ compact }: TitleListProps) {
 
   return (
     <nav aria-label="US Code titles">
+      {!compact && (
+        <div className="mb-1 flex items-center border-b border-gray-200 px-2 pb-1 text-xs font-semibold text-gray-500">
+          <span className="flex-1">Name</span>
+          <span className="w-28 shrink-0 text-right">Last amended by</span>
+          <span className="w-20 shrink-0 text-right">Date amended</span>
+        </div>
+      )}
       <div className="space-y-0.5">
         {titles.map((title) => (
           <TitleNode key={title.title_number} title={title} compact={compact} />
