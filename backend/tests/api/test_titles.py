@@ -89,6 +89,8 @@ def test_get_title_structure_success(mock_get: AsyncMock, client: TestClient) ->
                                 section_number="101",
                                 heading="Definitions",
                                 sort_order=0,
+                                last_amendment_year=2020,
+                                last_amendment_law="PL 116-283",
                             ),
                         ],
                     ),
@@ -122,8 +124,14 @@ def test_get_title_structure_success(mock_get: AsyncMock, client: TestClient) ->
     assert len(subchapter["sections"]) == 1
     assert subchapter["sections"][0]["section_number"] == "101"
 
-    # Direct sections (no subchapter)
+    # Amendment metadata present
+    assert subchapter["sections"][0]["last_amendment_year"] == 2020
+    assert subchapter["sections"][0]["last_amendment_law"] == "PL 116-283"
+
+    # Direct sections (no subchapter) — amendment metadata absent
     assert chapter["sections"][0]["section_number"] == "100"
+    assert chapter["sections"][0]["last_amendment_year"] is None
+    assert chapter["sections"][0]["last_amendment_law"] is None
 
 
 @patch("app.api.v1.titles.get_title_structure", new_callable=AsyncMock)

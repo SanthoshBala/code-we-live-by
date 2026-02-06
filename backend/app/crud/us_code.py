@@ -21,6 +21,29 @@ from app.schemas.us_code import (
 )
 
 
+def _extract_last_amendment(
+    section: USCodeSection,
+) -> tuple[int | None, str | None]:
+    """Extract the most recent amendment year and law from normalized_notes.
+
+    The amendments list is stored newest-first per the parser convention.
+    Returns (year, "PL {congress}-{law_number}") or (None, None).
+    """
+    if not section.normalized_notes:
+        return None, None
+    amendments = section.normalized_notes.get("amendments", [])
+    if not amendments:
+        return None, None
+    latest = amendments[0]
+    year = latest.get("year")
+    law = latest.get("law", {})
+    congress = law.get("congress")
+    law_number = law.get("law_number")
+    if congress is not None and law_number is not None:
+        return year, f"PL {congress}-{law_number}"
+    return year, None
+
+
 async def get_all_titles(session: AsyncSession) -> list[TitleSummarySchema]:
     """Return all titles with chapter and section counts."""
     chapter_count = (
@@ -85,32 +108,43 @@ async def get_title_structure(
     chapters: list[ChapterTreeSchema] = []
     for ch in sorted(title.chapters, key=lambda c: c.sort_order):
         # Sections directly under this chapter (no subchapter)
-        direct_sections = [
-            SectionSummarySchema(
-                section_number=s.section_number,
-                heading=s.heading,
-                sort_order=s.sort_order,
+        direct_sections = []
+        for s in sorted(ch.sections, key=lambda s: s.sort_order):
+            if s.subchapter_id is not None:
+                continue
+            year, law = _extract_last_amendment(s)
+            direct_sections.append(
+                SectionSummarySchema(
+                    section_number=s.section_number,
+                    heading=s.heading,
+                    sort_order=s.sort_order,
+                    last_amendment_year=year,
+                    last_amendment_law=law,
+                )
             )
-            for s in sorted(ch.sections, key=lambda s: s.sort_order)
-            if s.subchapter_id is None
-        ]
 
-        subchapters = [
-            SubchapterTreeSchema(
-                subchapter_number=sc.subchapter_number,
-                subchapter_name=sc.subchapter_name,
-                sort_order=sc.sort_order,
-                sections=[
+        subchapters = []
+        for sc in sorted(ch.subchapters, key=lambda sc: sc.sort_order):
+            sc_sections = []
+            for s in sorted(sc.sections, key=lambda s: s.sort_order):
+                year, law = _extract_last_amendment(s)
+                sc_sections.append(
                     SectionSummarySchema(
                         section_number=s.section_number,
                         heading=s.heading,
                         sort_order=s.sort_order,
+                        last_amendment_year=year,
+                        last_amendment_law=law,
                     )
-                    for s in sorted(sc.sections, key=lambda s: s.sort_order)
-                ],
+                )
+            subchapters.append(
+                SubchapterTreeSchema(
+                    subchapter_number=sc.subchapter_number,
+                    subchapter_name=sc.subchapter_name,
+                    sort_order=sc.sort_order,
+                    sections=sc_sections,
+                )
             )
-            for sc in sorted(ch.subchapters, key=lambda sc: sc.sort_order)
-        ]
 
         chapters.append(
             ChapterTreeSchema(

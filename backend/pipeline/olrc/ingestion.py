@@ -483,6 +483,12 @@ class USCodeIngestionService:
                         f"{first_citation.act.stat_page}"
                     )
 
+        # Derive last_modified_date from the most recent amendment year
+        last_modified_date = None
+        if normalized.section_notes and normalized.section_notes.amendments:
+            max_year = max(a.year for a in normalized.section_notes.amendments)
+            last_modified_date = date(max_year, 1, 1)
+
         result = await self.session.execute(
             select(USCodeSection).where(
                 USCodeSection.title_id == title_id,
@@ -502,6 +508,7 @@ class USCodeIngestionService:
                 existing.normalized_notes = normalized_notes
                 existing.enacted_date = enacted_date
                 existing.statutes_at_large_citation = statutes_at_large_citation
+                existing.last_modified_date = last_modified_date
                 existing.sort_order = parsed.sort_order
             return existing
 
@@ -517,6 +524,7 @@ class USCodeIngestionService:
             normalized_notes=normalized_notes,
             enacted_date=enacted_date,
             statutes_at_large_citation=statutes_at_large_citation,
+            last_modified_date=last_modified_date,
             sort_order=parsed.sort_order,
         )
         self.session.add(section)
