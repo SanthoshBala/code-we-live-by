@@ -26,6 +26,7 @@ from app.schemas.us_code import (
     SectionNoteSchema,
     SectionNotesSchema,
     SectionSummarySchema,
+    SectionViewerSchema,
     ShortTitleSchema,
     SubchapterTreeSchema,
     TitleStructureSchema,
@@ -48,6 +49,8 @@ __all__ = [
     "NoteCategoryEnum",
     "SectionNoteSchema",
     "SectionNotesSchema",
+    # Section viewer schemas
+    "SectionViewerSchema",
     # Tree navigation schemas
     "TitleSummarySchema",
     "SectionSummarySchema",

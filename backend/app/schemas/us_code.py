@@ -310,6 +310,21 @@ class SectionNotesSchema(BaseModel):
 # =========================================================================
 
 
+class SectionViewerSchema(BaseModel):
+    """Full section content for the viewer page."""
+
+    title_number: int
+    section_number: str
+    heading: str
+    full_citation: str
+    text_content: str | None
+    enacted_date: date | None
+    last_modified_date: date | None
+    is_positive_law: bool
+    is_repealed: bool
+    notes: SectionNotesSchema | None
+
+
 class TitleSummarySchema(BaseModel):
     """Summary of a US Code title for list views."""
 
