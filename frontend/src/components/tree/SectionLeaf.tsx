@@ -24,15 +24,12 @@ export default function SectionLeaf({
         &sect;&thinsp;{section.section_number}
       </span>
       <span className="truncate">{section.heading}</span>
-      {(section.last_amendment_year || section.last_amendment_law) && (
-        <span className="ml-auto shrink-0 font-mono text-xs text-gray-400">
-          {section.last_amendment_year}
-          {section.last_amendment_year && section.last_amendment_law && (
-            <>&ensp;</>
-          )}
-          {section.last_amendment_law}
-        </span>
-      )}
+      <span className="ml-auto w-28 shrink-0 text-right font-mono text-xs text-gray-400">
+        {section.last_amendment_law}
+      </span>
+      <span className="w-20 shrink-0 text-right font-mono text-xs text-gray-400">
+        {section.last_amendment_year}
+      </span>
     </Link>
   );
 }
