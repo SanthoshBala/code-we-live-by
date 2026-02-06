@@ -4,7 +4,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.us_code import USCodeChapter, USCodeSection, USCodeSubchapter, USCodeTitle
+from app.models.us_code import (
+    USCodeChapter,
+    USCodeSection,
+    USCodeSubchapter,
+    USCodeTitle,
+)
 from app.schemas.us_code import (
     ChapterTreeSchema,
     SectionSummarySchema,
@@ -31,9 +36,8 @@ async def get_all_titles(session: AsyncSession) -> list[TitleSummarySchema]:
         .label("section_count")
     )
 
-    stmt = (
-        select(USCodeTitle, chapter_count, section_count)
-        .order_by(USCodeTitle.title_number)
+    stmt = select(USCodeTitle, chapter_count, section_count).order_by(
+        USCodeTitle.title_number
     )
     result = await session.execute(stmt)
 
