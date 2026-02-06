@@ -234,10 +234,11 @@ This document translates the CWLB specification into an actionable backlog of im
   - Create header with navigation
   - Create responsive layout shell
 
-- [ ] **Task 1A.6**: Build US Code tree navigator
-  - Collapsible tree view showing Title → Chapter → Section hierarchy
-  - Click to navigate to section viewer
-  - Show section numbers and headings
+- [x] **Task 1A.6**: Build US Code tree navigator ✅
+  - Collapsible tree view showing Title → Chapter → Subchapter → Section hierarchy
+  - Click section to navigate to `/sections/{title}/{section}` viewer
+  - Lazy-loads title structure on expand via React Query
+  - Supports `compact` prop for sidebar mode
 
 - [ ] **Task 1A.7**: Build section viewer page
   - Display section heading and provisions with proper indentation
