@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { ChapterTree } from '@/lib/types';
-import { useTreeDisplay } from '@/contexts/TreeDisplayContext';
 import TreeIndicator from './TreeIndicator';
 import SubchapterNode from './SubchapterNode';
 import SectionLeaf from './SectionLeaf';
@@ -18,7 +17,6 @@ export default function ChapterNode({
   compact,
 }: ChapterNodeProps) {
   const [expanded, setExpanded] = useState(false);
-  const { settings } = useTreeDisplay();
 
   return (
     <div>
@@ -32,14 +30,10 @@ export default function ChapterNode({
         </span>
       </button>
       {expanded && (
-        <div
-          className={`ml-4 ${settings.showTreeLines ? 'border-l border-gray-300 pl-2' : ''}`}
-        >
-          {settings.showBreadcrumb && (
-            <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
-              USC / Title {titleNumber} / Ch. {chapter.chapter_number}
-            </p>
-          )}
+        <div className="ml-4 border-l border-gray-300 pl-2">
+          <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
+            USC / Title {titleNumber} / Ch. {chapter.chapter_number}
+          </p>
           {chapter.subchapters.map((sub) => (
             <SubchapterNode
               key={sub.subchapter_number}

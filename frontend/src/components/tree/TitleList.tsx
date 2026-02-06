@@ -1,9 +1,7 @@
 'use client';
 
 import { useTitles } from '@/hooks/useTitles';
-import { TreeDisplayProvider } from '@/contexts/TreeDisplayContext';
 import TitleNode from './TitleNode';
-import TreeSettingsPanel from './TreeSettingsPanel';
 
 interface TitleListProps {
   compact?: boolean;
@@ -38,19 +36,12 @@ export default function TitleList({ compact }: TitleListProps) {
   }
 
   return (
-    <TreeDisplayProvider>
-      {!compact && <TreeSettingsPanel />}
-      <nav aria-label="US Code titles">
-        <div className="space-y-0.5">
-          {titles.map((title) => (
-            <TitleNode
-              key={title.title_number}
-              title={title}
-              compact={compact}
-            />
-          ))}
-        </div>
-      </nav>
-    </TreeDisplayProvider>
+    <nav aria-label="US Code titles">
+      <div className="space-y-0.5">
+        {titles.map((title) => (
+          <TitleNode key={title.title_number} title={title} compact={compact} />
+        ))}
+      </div>
+    </nav>
   );
 }

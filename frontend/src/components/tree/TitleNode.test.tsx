@@ -2,7 +2,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TreeDisplayProvider } from '@/contexts/TreeDisplayContext';
 import TitleNode from './TitleNode';
 
 vi.mock('next/link', () => ({
@@ -50,11 +49,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return (
-    <QueryClientProvider client={qc}>
-      <TreeDisplayProvider>{children}</TreeDisplayProvider>
-    </QueryClientProvider>
-  );
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
 describe('TitleNode', () => {

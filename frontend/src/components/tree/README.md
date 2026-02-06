@@ -7,7 +7,6 @@ Title > Chapter > Subchapter > Section.
 
 ```
 TitleList.tsx        ('use client') root — fetches all titles via useTitles()
-  ├─ TreeSettingsPanel.tsx  toggle bar for tree lines + breadcrumbs (non-compact only)
   └─ TitleNode.tsx   expandable title row — lazy-loads structure via useTitleStructure()
        └─ ChapterNode.tsx    expandable chapter row
             ├─ SubchapterNode.tsx   expandable subchapter row (receives chapterNumber prop)
@@ -30,19 +29,12 @@ TreeIndicator.tsx    shared folder icon wrapper (expand/collapse)
 
 - `compact?: boolean` — passed through the tree for sidebar mode (smaller text/padding)
 
-## Display Settings (TreeDisplayContext)
-
-`TreeDisplayProvider` (wraps the tree in TitleList) exposes two toggles via `useTreeDisplay()`:
-
-- **showTreeLines** — adds `border-l` connector lines on expanded children containers
-- **showBreadcrumb** — shows monospace path (e.g. `USC / Title 17 / Ch. 1 / Subch. A`) above expanded children
-
-Settings persist to `localStorage` under the key `cwlb-tree-display`.
-
 ## Visual Metaphor
 
-The tree uses code-repository icons to reinforce the "law as code" concept:
+The tree uses code-repository visuals to reinforce the "law as code" concept:
 
 - **FolderIcon** (amber) — expandable nodes (titles, chapters, subchapters)
 - **FileIcon** (gray) — leaf sections, representing individual code files
+- **Connector lines** — `border-l` on expanded children containers
+- **Path breadcrumbs** — monospace path (e.g. `USC / Title 17 / Ch. 1 / Subch. A`) above children
 - **Section metadata** — right-aligned amendment year and law (e.g. `2020  PL 116-283`)

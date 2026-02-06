@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { TitleSummary } from '@/lib/types';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
-import { useTreeDisplay } from '@/contexts/TreeDisplayContext';
 import TreeIndicator from './TreeIndicator';
 import ChapterNode from './ChapterNode';
 
@@ -17,7 +16,6 @@ export default function TitleNode({ title, compact }: TitleNodeProps) {
     title.title_number,
     expanded
   );
-  const { settings } = useTreeDisplay();
 
   return (
     <div>
@@ -36,14 +34,10 @@ export default function TitleNode({ title, compact }: TitleNodeProps) {
         </span>
       </button>
       {expanded && (
-        <div
-          className={`ml-4 ${settings.showTreeLines ? 'border-l border-gray-300 pl-2' : ''}`}
-        >
-          {settings.showBreadcrumb && (
-            <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
-              USC / Title {title.title_number}
-            </p>
-          )}
+        <div className="ml-4 border-l border-gray-300 pl-2">
+          <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
+            USC / Title {title.title_number}
+          </p>
           {isLoading && (
             <p
               className={`px-2 text-gray-400 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
