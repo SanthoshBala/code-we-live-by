@@ -124,6 +124,48 @@ async def ingest_title(
             return 1
 
 
+async def ingest_phase1(
+    download_dir: Path = Path("data/olrc"),
+    force_download: bool = False,
+    force_parse: bool = False,
+) -> int:
+    """Ingest all Phase 1 US Code titles into the database.
+
+    Args:
+        download_dir: Directory for OLRC XML files.
+        force_download: If True, re-download even if files exist.
+        force_parse: If True, re-parse and update existing records.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.olrc.ingestion import USCodeIngestionService
+
+    async with async_session_maker() as session:
+        service = USCodeIngestionService(session, download_dir=download_dir)
+        logs = await service.ingest_phase1_titles(
+            force_download=force_download,
+            force_parse=force_parse,
+        )
+
+        succeeded = sum(1 for log in logs if log.status in ("completed", "skipped"))
+        failed = sum(1 for log in logs if log.status == "failed")
+        total_created = sum(log.records_created or 0 for log in logs)
+        total_updated = sum(log.records_updated or 0 for log in logs)
+
+        logger.info(
+            f"Phase 1 ingestion complete: {succeeded} succeeded, {failed} failed, "
+            f"{total_created} created, {total_updated} updated"
+        )
+
+        for log in logs:
+            if log.status == "failed":
+                logger.error(f"  {log.operation}: {log.error_message}")
+
+        return 1 if failed > 0 else 0
+
+
 # =============================================================================
 # GovInfo Public Law functions
 # =============================================================================
@@ -1512,6 +1554,27 @@ def main() -> int:
         help="Re-parse and update existing records",
     )
 
+    # Ingest-phase1 command
+    ingest_phase1_parser = subparsers.add_parser(
+        "ingest-phase1", help="Ingest all Phase 1 US Code titles into the database"
+    )
+    ingest_phase1_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+    ingest_phase1_parser.add_argument(
+        "--force-download",
+        action="store_true",
+        help="Re-download XML even if files exist",
+    )
+    ingest_phase1_parser.add_argument(
+        "--force-parse",
+        action="store_true",
+        help="Re-parse and update existing records",
+    )
+
     # =========================================================================
     # GovInfo Public Law commands
     # =========================================================================
@@ -1949,6 +2012,15 @@ Examples:
         return asyncio.run(
             ingest_title(
                 title_number=args.title,
+                download_dir=args.dir,
+                force_download=args.force_download,
+                force_parse=args.force_parse,
+            )
+        )
+
+    elif args.command == "ingest-phase1":
+        return asyncio.run(
+            ingest_phase1(
                 download_dir=args.dir,
                 force_download=args.force_download,
                 force_parse=args.force_parse,
