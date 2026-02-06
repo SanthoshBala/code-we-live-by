@@ -32,11 +32,13 @@ PIDS=()
 
 cleanup() {
     log "Shutting down..."
-    for pid in "${PIDS[@]}"; do
-        if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-        fi
-    done
+    if [[ ${#PIDS[@]} -gt 0 ]]; then
+        for pid in "${PIDS[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
     wait 2>/dev/null || true
     log "Done."
 }
@@ -85,7 +87,7 @@ log "Postgres is ready."
 
 log "Running database migrations..."
 cd "$BACKEND_DIR"
-uv run alembic upgrade head
+uv run python -m alembic upgrade head
 
 # ── 3. Optionally seed data ──────────────────────────────────────────────────
 
