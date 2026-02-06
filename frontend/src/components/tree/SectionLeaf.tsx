@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { SectionSummary } from '@/lib/types';
+import FileIcon from './icons/FileIcon';
 
 interface SectionLeafProps {
   section: SectionSummary;
@@ -16,8 +17,9 @@ export default function SectionLeaf({
   return (
     <Link
       href={`/sections/${titleNumber}/${section.section_number}`}
-      className={`block rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
+      className={`flex items-center gap-1.5 rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
     >
+      <FileIcon />
       <span className="font-mono text-gray-500">
         &sect;&thinsp;{section.section_number}
       </span>{' '}
