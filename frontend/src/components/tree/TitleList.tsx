@@ -39,11 +39,7 @@ export default function TitleList({ compact }: TitleListProps) {
     <nav aria-label="US Code titles">
       <div className="space-y-0.5">
         {titles.map((title) => (
-          <TitleNode
-            key={title.title_number}
-            title={title}
-            compact={compact}
-          />
+          <TitleNode key={title.title_number} title={title} compact={compact} />
         ))}
       </div>
     </nav>
