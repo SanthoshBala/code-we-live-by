@@ -218,9 +218,9 @@ This document translates the CWLB specification into an actionable backlog of im
   - Ensure proper foreign key relationships
 
 #### Minimal Backend API
-- [ ] **Task 1A.3**: Implement tree navigation API
-  - `GET /api/titles` - List all titles with metadata
-  - `GET /api/titles/:title/structure` - Get chapters/subchapters/sections tree
+- [x] **Task 1A.3**: Implement tree navigation API
+  - `GET /api/v1/titles/` - List all titles with metadata
+  - `GET /api/v1/titles/{title_number}/structure` - Get chapters/subchapters/sections tree
   - Return hierarchical structure for UI navigation
 
 - [ ] **Task 1A.4**: Implement section viewer API
