@@ -18,6 +18,62 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Minor words that should not be capitalized in title case (unless first/last).
+# Covers articles, coordinating conjunctions, and short prepositions.
+_TITLE_CASE_MINOR_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "and",
+        "but",
+        "or",
+        "nor",
+        "for",
+        "yet",
+        "so",
+        "as",
+        "at",
+        "by",
+        "in",
+        "of",
+        "on",
+        "to",
+        "up",
+    }
+)
+
+
+def to_title_case(text: str) -> str:
+    """Convert an ALL-CAPS or mixed-case string to Title Case.
+
+    Follows standard English title-case rules:
+    - First and last words are always capitalized.
+    - Minor words (articles, conjunctions, short prepositions) are lowercase.
+    - All other words are capitalized.
+
+    Examples:
+        >>> to_title_case("ARMED FORCES")
+        'Armed Forces'
+        >>> to_title_case("CRIMES AND CRIMINAL PROCEDURE")
+        'Crimes and Criminal Procedure'
+        >>> to_title_case("THE PUBLIC HEALTH AND WELFARE")
+        'The Public Health and Welfare'
+    """
+    words = text.lower().split()
+    if not words:
+        return text
+
+    result = []
+    last_idx = len(words) - 1
+    for i, word in enumerate(words):
+        if i == 0 or i == last_idx or word not in _TITLE_CASE_MINOR_WORDS:
+            result.append(word.capitalize())
+        else:
+            result.append(word)
+    return " ".join(result)
+
+
 # USLM XML namespaces
 NAMESPACES = {
     "uslm": "http://xml.house.gov/schemas/uslm/1.0",
@@ -374,10 +430,12 @@ class USLMParser:
         if heading is not None:
             title_name = self._get_text_content(heading)
 
-        # Clean up title name
+        # Clean up title name and convert to Title Case
         title_name = title_name.strip()
         if not title_name:
             title_name = f"Title {title_number}"
+        else:
+            title_name = to_title_case(title_name)
 
         # Check for positive law property in meta (OLRC format)
         for prop in root.findall(".//{*}property"):
