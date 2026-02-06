@@ -17,13 +17,13 @@ export default function SectionLeaf({
   return (
     <Link
       href={`/sections/${titleNumber}/${section.section_number}`}
-      className={`flex items-center gap-1.5 rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
+      className={`flex items-center gap-1.5 overflow-hidden rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
     >
       <FileIcon />
-      <span className="font-mono text-gray-500">
+      <span className="shrink-0 whitespace-nowrap font-mono text-gray-500">
         &sect;&thinsp;{section.section_number}
       </span>
-      <span className="truncate">{section.heading}</span>
+      <span className="min-w-0 truncate">{section.heading}</span>
       {(section.last_amendment_year || section.last_amendment_law) && (
         <span className="ml-auto shrink-0 font-mono text-xs text-gray-400">
           {section.last_amendment_year}
