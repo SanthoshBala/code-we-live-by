@@ -5,6 +5,7 @@ the pipeline and application layers.
 """
 
 import enum
+from datetime import date
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -302,3 +303,55 @@ class SectionNotesSchema(BaseModel):
     def statutory_notes(self) -> list[SectionNoteSchema]:
         """Get all statutory notes."""
         return self.notes_by_category(NoteCategoryEnum.STATUTORY)
+
+
+# =========================================================================
+# Tree Navigation Schemas (API responses for browsing the Code hierarchy)
+# =========================================================================
+
+
+class TitleSummarySchema(BaseModel):
+    """Summary of a US Code title for list views."""
+
+    title_number: int
+    title_name: str
+    is_positive_law: bool
+    positive_law_date: date | None
+    chapter_count: int
+    section_count: int
+
+
+class SectionSummarySchema(BaseModel):
+    """Lightweight section reference within a tree view."""
+
+    section_number: str
+    heading: str
+    sort_order: int
+
+
+class SubchapterTreeSchema(BaseModel):
+    """Subchapter node in the title structure tree."""
+
+    subchapter_number: str
+    subchapter_name: str
+    sort_order: int
+    sections: list[SectionSummarySchema]
+
+
+class ChapterTreeSchema(BaseModel):
+    """Chapter node in the title structure tree."""
+
+    chapter_number: str
+    chapter_name: str
+    sort_order: int
+    subchapters: list[SubchapterTreeSchema]
+    sections: list[SectionSummarySchema]
+
+
+class TitleStructureSchema(BaseModel):
+    """Full structure tree for a single title."""
+
+    title_number: int
+    title_name: str
+    is_positive_law: bool
+    chapters: list[ChapterTreeSchema]

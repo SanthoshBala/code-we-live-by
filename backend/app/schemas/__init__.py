@@ -19,12 +19,17 @@ from app.schemas.public_law import (
 )
 from app.schemas.us_code import (
     AmendmentSchema,
+    ChapterTreeSchema,
     CodeLineSchema,
     CodeReferenceSchema,
     NoteCategoryEnum,
     SectionNoteSchema,
     SectionNotesSchema,
+    SectionSummarySchema,
     ShortTitleSchema,
+    SubchapterTreeSchema,
+    TitleStructureSchema,
+    TitleSummarySchema,
 )
 
 __all__ = [
@@ -43,4 +48,10 @@ __all__ = [
     "NoteCategoryEnum",
     "SectionNoteSchema",
     "SectionNotesSchema",
+    # Tree navigation schemas
+    "TitleSummarySchema",
+    "SectionSummarySchema",
+    "SubchapterTreeSchema",
+    "ChapterTreeSchema",
+    "TitleStructureSchema",
 ]
