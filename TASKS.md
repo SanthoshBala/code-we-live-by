@@ -223,7 +223,7 @@ This document translates the CWLB specification into an actionable backlog of im
   - `GET /api/v1/titles/{title_number}/structure` - Get chapters/subchapters/sections tree
   - Return hierarchical structure for UI navigation
 
-- [ ] **Task 1A.4**: Implement section viewer API
+- [x] **Task 1A.4**: Implement section viewer API
   - `GET /api/sections/:title/:section` - Get full section content
   - Return provisions, notes, source laws, amendments in structured format
   - Match the `NormalizedSection` schema from parser
