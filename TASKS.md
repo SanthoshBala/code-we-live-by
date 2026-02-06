@@ -229,7 +229,7 @@ This document translates the CWLB specification into an actionable backlog of im
   - Match the `NormalizedSection` schema from parser
 
 #### Minimal Frontend UI
-- [ ] **Task 1A.5**: Set up Next.js project with basic layout
+- [x] **Task 1A.5**: Set up Next.js project with basic layout ✅
   - Initialize Next.js with TypeScript and Tailwind CSS
   - Create header with navigation
   - Create responsive layout shell
