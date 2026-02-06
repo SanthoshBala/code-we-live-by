@@ -12,7 +12,9 @@ from app.models.us_code import (
 )
 from app.schemas.us_code import (
     ChapterTreeSchema,
+    SectionNotesSchema,
     SectionSummarySchema,
+    SectionViewerSchema,
     SubchapterTreeSchema,
     TitleStructureSchema,
     TitleSummarySchema,
@@ -125,4 +127,43 @@ async def get_title_structure(
         title_name=title.title_name,
         is_positive_law=title.is_positive_law,
         chapters=chapters,
+    )
+
+
+async def get_section(
+    session: AsyncSession, title_number: int, section_number: str
+) -> SectionViewerSchema | None:
+    """Return full section content for the viewer page.
+
+    Returns None if the section is not found.
+    """
+    stmt = (
+        select(USCodeSection)
+        .join(USCodeTitle, USCodeSection.title_id == USCodeTitle.title_id)
+        .where(
+            USCodeTitle.title_number == title_number,
+            USCodeSection.section_number == section_number,
+        )
+    )
+    result = await session.execute(stmt)
+    section = result.scalar_one_or_none()
+
+    if section is None:
+        return None
+
+    notes = None
+    if section.normalized_notes is not None:
+        notes = SectionNotesSchema.model_validate(section.normalized_notes)
+
+    return SectionViewerSchema(
+        title_number=title_number,
+        section_number=section.section_number,
+        heading=section.heading,
+        full_citation=section.full_citation,
+        text_content=section.text_content,
+        enacted_date=section.enacted_date,
+        last_modified_date=section.last_modified_date,
+        is_positive_law=section.is_positive_law,
+        is_repealed=section.is_repealed,
+        notes=notes,
     )
