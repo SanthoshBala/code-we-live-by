@@ -7,6 +7,7 @@ import pytest
 from pipeline.olrc.parser import (
     USLMParser,
     compute_text_hash,
+    title_case_heading,
     to_title_case,
 )
 
@@ -81,7 +82,7 @@ class TestUSLMParser:
         assert len(result.chapters) == 2
         assert result.chapters[0].chapter_number == "1"
         assert (
-            result.chapters[0].chapter_name == "SUBJECT MATTER AND SCOPE OF COPYRIGHT"
+            result.chapters[0].chapter_name == "Subject Matter and Scope of Copyright"
         )
         assert result.chapters[1].chapter_number == "2"
 
@@ -216,3 +217,69 @@ class TestComputeTextHash:
         hash2 = compute_text_hash("Content B")
 
         assert hash1 != hash2
+
+
+class TestTitleCaseHeading:
+    """Tests for title_case_heading function."""
+
+    def test_all_caps_basic(self) -> None:
+        """Test basic ALL-CAPS to Title Case conversion."""
+        assert title_case_heading("DEPARTMENT OF DEFENSE") == "Department of Defense"
+
+    def test_all_caps_with_articles(self) -> None:
+        """Test that articles and prepositions stay lowercase."""
+        assert (
+            title_case_heading("SUBJECT MATTER AND SCOPE OF COPYRIGHT")
+            == "Subject Matter and Scope of Copyright"
+        )
+
+    def test_first_word_always_capitalized(self) -> None:
+        """Test that the first word is always capitalized even if it's a small word."""
+        assert (
+            title_case_heading("THE JUDICIARY AND JUDICIAL PROCEDURE")
+            == "The Judiciary and Judicial Procedure"
+        )
+
+    def test_single_word(self) -> None:
+        """Test single-word ALL-CAPS heading."""
+        assert title_case_heading("COPYRIGHTS") == "Copyrights"
+
+    def test_mixed_case_unchanged(self) -> None:
+        """Test that mixed-case headings are returned unchanged."""
+        assert title_case_heading("General Provisions") == "General Provisions"
+
+    def test_already_title_case(self) -> None:
+        """Test that already Title Case text is returned unchanged."""
+        assert (
+            title_case_heading("Subject Matter and Scope of Copyright")
+            == "Subject Matter and Scope of Copyright"
+        )
+
+    def test_empty_string(self) -> None:
+        """Test empty string returns empty string."""
+        assert title_case_heading("") == ""
+
+    def test_hyphenated_words(self) -> None:
+        """Test hyphenated compound words are capitalized on each part."""
+        assert (
+            title_case_heading("ANTI-TERRORISM AND DEATH PENALTY")
+            == "Anti-Terrorism and Death Penalty"
+        )
+
+    def test_no_alpha_characters(self) -> None:
+        """Test string with no alphabetic characters returns unchanged."""
+        assert title_case_heading("123 - 456") == "123 - 456"
+
+    def test_multiple_prepositions(self) -> None:
+        """Test heading with multiple small words."""
+        assert (
+            title_case_heading("CRIMES AND CRIMINAL PROCEDURE")
+            == "Crimes and Criminal Procedure"
+        )
+
+    def test_of_in_middle(self) -> None:
+        """Test 'of' stays lowercase in the middle of a heading."""
+        assert (
+            title_case_heading("PROTECTION OF TRADING WITH ENEMIES")
+            == "Protection of Trading with Enemies"
+        )

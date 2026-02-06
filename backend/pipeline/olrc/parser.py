@@ -24,54 +24,76 @@ _TITLE_CASE_MINOR_WORDS = frozenset(
     {
         "a",
         "an",
-        "the",
         "and",
-        "but",
-        "or",
-        "nor",
-        "for",
-        "yet",
-        "so",
         "as",
         "at",
+        "but",
         "by",
+        "for",
+        "if",
         "in",
+        "nor",
         "of",
         "on",
+        "or",
+        "so",
+        "the",
         "to",
         "up",
+        "with",
+        "yet",
     }
 )
 
 
-def to_title_case(text: str) -> str:
-    """Convert an ALL-CAPS or mixed-case string to Title Case.
+def _capitalize_word(word: str) -> str:
+    """Capitalize a single word, handling hyphenated compounds."""
+    if "-" in word:
+        return "-".join(part.capitalize() for part in word.split("-"))
+    return word.capitalize()
+
+
+def title_case_heading(text: str) -> str:
+    """Convert an ALL-CAPS heading to Title Case.
+
+    US Code XML source data uses ALL-CAPS for title, chapter, and subchapter
+    headings (e.g. "DEPARTMENT OF DEFENSE"). This converts them to readable
+    Title Case (e.g. "Department of Defense").
+
+    Only applies conversion when the text is predominantly uppercase (>=80%
+    uppercase letters). Mixed-case headings are returned unchanged.
 
     Follows standard English title-case rules:
     - First and last words are always capitalized.
     - Minor words (articles, conjunctions, short prepositions) are lowercase.
-    - All other words are capitalized.
-
-    Examples:
-        >>> to_title_case("ARMED FORCES")
-        'Armed Forces'
-        >>> to_title_case("CRIMES AND CRIMINAL PROCEDURE")
-        'Crimes and Criminal Procedure'
-        >>> to_title_case("THE PUBLIC HEALTH AND WELFARE")
-        'The Public Health and Welfare'
+    - Hyphenated compounds are capitalized on each part.
     """
-    words = text.lower().split()
-    if not words:
+    if not text:
         return text
 
-    result = []
+    alpha_chars = [c for c in text if c.isalpha()]
+    if not alpha_chars:
+        return text
+
+    upper_ratio = sum(1 for c in alpha_chars if c.isupper()) / len(alpha_chars)
+    if upper_ratio < 0.8:
+        return text
+
+    words = text.split()
     last_idx = len(words) - 1
+    result: list[str] = []
     for i, word in enumerate(words):
-        if i == 0 or i == last_idx or word not in _TITLE_CASE_MINOR_WORDS:
-            result.append(word.capitalize())
+        lower = word.lower()
+        if i == 0 or i == last_idx or lower not in _TITLE_CASE_MINOR_WORDS:
+            result.append(_capitalize_word(word))
         else:
-            result.append(word)
+            result.append(lower)
+
     return " ".join(result)
+
+
+# Alias for backward compatibility
+to_title_case = title_case_heading
 
 
 # USLM XML namespaces
@@ -430,12 +452,12 @@ class USLMParser:
         if heading is not None:
             title_name = self._get_text_content(heading)
 
-        # Clean up title name and convert to Title Case
+        # Clean up title name and convert ALL-CAPS to Title Case
         title_name = title_name.strip()
         if not title_name:
             title_name = f"Title {title_number}"
         else:
-            title_name = to_title_case(title_name)
+            title_name = title_case_heading(title_name)
 
         # Check for positive law property in meta (OLRC format)
         for prop in root.findall(".//{*}property"):
@@ -489,9 +511,9 @@ class USLMParser:
         self._subchapter_order = 0
         self._section_order = 0
 
-        # Extract chapter number and name
+        # Extract chapter number and name (convert ALL-CAPS to Title Case)
         chapter_number = self._get_number(chapter_elem)
-        chapter_name = self._get_heading(chapter_elem)
+        chapter_name = title_case_heading(self._get_heading(chapter_elem))
 
         if not chapter_number:
             chapter_number = str(self._chapter_order)
@@ -542,7 +564,7 @@ class USLMParser:
         self._section_order = 0
 
         subch_number = self._get_number(subch_elem)
-        subch_name = self._get_heading(subch_elem)
+        subch_name = title_case_heading(self._get_heading(subch_elem))
 
         if not subch_number:
             subch_number = str(self._subchapter_order)
