@@ -1247,6 +1247,42 @@ class TestCleanHeading:
         assert _clean_heading("Sense of congress.—") == "Sense of congress"
         assert _clean_heading("Report .—") == "Report"  # Space before period
 
+    def test_strip_trailing_period(self) -> None:
+        """Test stripping trailing '.' from heading."""
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert _clean_heading("PENALTIES.") == "Penalties"
+        assert _clean_heading("Definitions.") == "Definitions"
+        assert _clean_heading("Report. ") == "Report"  # Trailing space
+
+    def test_all_caps_to_title_case(self) -> None:
+        """Test ALL-CAPS headings are converted to Title Case."""
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert _clean_heading("DEFINITIONS") == "Definitions"
+        assert _clean_heading("PENALTIES") == "Penalties"
+        assert _clean_heading("GENERAL PROVISIONS") == "General Provisions"
+        assert (
+            _clean_heading("SUBJECT MATTER AND SCOPE OF COPYRIGHT")
+            == "Subject Matter And Scope Of Copyright"
+        )
+
+    def test_all_caps_with_trailing_period(self) -> None:
+        """Test ALL-CAPS headings with trailing period."""
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert _clean_heading("DEFINITIONS.") == "Definitions"
+        assert _clean_heading("PENALTIES.") == "Penalties"
+        assert _clean_heading("GENERAL PROVISIONS.") == "General Provisions"
+
+    def test_mixed_case_unchanged(self) -> None:
+        """Test mixed-case headings are not altered."""
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert _clean_heading("Definitions") == "Definitions"
+        assert _clean_heading("General provisions") == "General provisions"
+        assert _clean_heading("Ownership of copyright") == "Ownership of copyright"
+
     def test_no_trailing_dash(self) -> None:
         """Test headings without trailing '.—' are unchanged."""
         from pipeline.olrc.normalized_section import _clean_heading

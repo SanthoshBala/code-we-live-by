@@ -16,7 +16,7 @@ from app.models import (
     USCodeTitle,
 )
 from pipeline.olrc.downloader import OLRCDownloader
-from pipeline.olrc.normalized_section import normalize_parsed_section
+from pipeline.olrc.normalized_section import _clean_heading, normalize_parsed_section
 from pipeline.olrc.parser import (
     ParsedChapter,
     ParsedSection,
@@ -499,7 +499,7 @@ class USCodeIngestionService:
 
         if existing:
             if force:
-                existing.heading = parsed.heading
+                existing.heading = _clean_heading(parsed.heading)
                 existing.full_citation = parsed.full_citation
                 existing.text_content = text_content
                 existing.chapter_id = chapter_id
@@ -517,7 +517,7 @@ class USCodeIngestionService:
             chapter_id=chapter_id,
             subchapter_id=subchapter_id,
             section_number=parsed.section_number,
-            heading=parsed.heading,
+            heading=_clean_heading(parsed.heading),
             full_citation=parsed.full_citation,
             text_content=text_content,
             notes=parsed.notes,

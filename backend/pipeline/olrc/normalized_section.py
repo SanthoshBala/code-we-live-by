@@ -184,20 +184,31 @@ SUBSECTION_HEADER_PATTERN = re.compile(
 
 
 def _clean_heading(heading: str) -> str:
-    """Strip trailing '.—' or ' .—' from heading text.
+    """Clean heading text for display.
 
-    US Code uses '.—' (period + em-dash) as a stylistic heading terminator.
-    This is antiquated and clutters the display, so we strip it.
+    Applies three transformations:
+    1. Strip trailing '.—' (period + em-dash) heading terminators.
+    2. Strip trailing standalone periods.
+    3. Convert ALL-CAPS headings to Title Case.
 
     Examples:
         "Implementation of New START Treaty.—" -> "Implementation of New START Treaty"
-        "Sense of congress .—" -> "Sense of congress"
+        "DEFINITIONS." -> "Definitions"
+        "PENALTIES" -> "Penalties"
+        "Sense of congress .—" -> "Sense of Congress"
     """
     if not heading:
         return heading
     # Strip trailing .— or . — (with optional space before period)
     heading = re.sub(r"\s*\.—\s*$", "", heading)
-    # Also normalize any remaining extra whitespace
+    # Strip trailing period(s)
+    heading = re.sub(r"\.+\s*$", "", heading)
+    # Convert ALL-CAPS headings to Title Case.
+    # Consider a heading "all caps" if its letters are all uppercase.
+    alpha_chars = [c for c in heading if c.isalpha()]
+    if alpha_chars and all(c.isupper() for c in alpha_chars):
+        heading = heading.title()
+    # Normalize any remaining extra whitespace
     heading = " ".join(heading.split())
     return heading
 
