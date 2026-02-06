@@ -40,8 +40,8 @@ export default function TitleList({ compact }: TitleListProps) {
       {!compact && (
         <div className="mb-1 flex items-center border-b border-gray-200 px-2 pb-1 text-xs font-semibold text-gray-500">
           <span className="flex-1">Name</span>
-          <span className="w-28 shrink-0 text-right">Last update</span>
-          <span className="w-20 shrink-0 text-right">Last update date</span>
+          <span className="w-28 shrink-0 text-right">Last law</span>
+          <span className="w-20 shrink-0 text-right">Last updated</span>
         </div>
       )}
       <div className="space-y-0.5">
