@@ -23,6 +23,12 @@ const section = {
   sort_order: 3,
 };
 
+const sectionWithAmendment = {
+  ...section,
+  last_amendment_year: 2020,
+  last_amendment_law: 'PL 116-283',
+};
+
 describe('SectionLeaf', () => {
   it('renders the section number and heading', () => {
     render(<SectionLeaf section={section} titleNumber={17} />);
@@ -46,5 +52,16 @@ describe('SectionLeaf', () => {
     );
     const link = container.querySelector('a');
     expect(link?.className).toContain('text-xs');
+  });
+
+  it('shows amendment metadata when present', () => {
+    render(<SectionLeaf section={sectionWithAmendment} titleNumber={17} />);
+    expect(screen.getByText(/2020/)).toBeInTheDocument();
+    expect(screen.getByText(/PL 116-283/)).toBeInTheDocument();
+  });
+
+  it('does not show amendment metadata when absent', () => {
+    render(<SectionLeaf section={section} titleNumber={17} />);
+    expect(screen.queryByText('PL')).not.toBeInTheDocument();
   });
 });
