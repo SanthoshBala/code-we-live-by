@@ -5,6 +5,7 @@
 #   ./dev.sh          Start Postgres, backend, and frontend
 #   ./dev.sh --seed   Also ingest Phase 1 titles into the database
 #   ./dev.sh stop     Stop Postgres container
+#   ./dev.sh reset    Destroy DB volume, recreate, migrate, and re-ingest
 #
 # Prerequisites:
 #   - Docker (for Postgres)
@@ -50,6 +51,37 @@ trap cleanup EXIT INT TERM
 if [[ "${1:-}" == "stop" ]]; then
     log "Stopping Postgres container..."
     docker compose -f "$ROOT_DIR/docker-compose.yml" down
+    exit 0
+fi
+
+# ── Reset command ────────────────────────────────────────────────────────────
+
+if [[ "${1:-}" == "reset" ]]; then
+    warn "This will destroy all local data and re-ingest from scratch."
+    read -rp "Continue? [y/N] " confirm
+    if [[ "$confirm" != [yY] ]]; then
+        log "Aborted."
+        exit 0
+    fi
+
+    log "Stopping Postgres and removing volume..."
+    docker compose -f "$ROOT_DIR/docker-compose.yml" down -v
+
+    log "Starting fresh Postgres..."
+    docker compose -f "$ROOT_DIR/docker-compose.yml" up -d
+    until docker exec cwlb-postgres pg_isready -U cwlb -d cwlb &>/dev/null; do
+        sleep 1
+    done
+    log "Postgres is ready."
+
+    log "Running migrations..."
+    cd "$BACKEND_DIR"
+    uv run python -m alembic upgrade head
+
+    log "Ingesting Phase 1 titles (this may take a few minutes)..."
+    uv run python -m pipeline.cli ingest-phase1
+
+    log "Reset complete."
     exit 0
 fi
 
