@@ -1,10 +1,19 @@
 """FastAPI application entry point."""
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.config import settings
+from app.core.logging_middleware import RequestLoggingMiddleware
+
+logging.basicConfig(
+    level=logging.DEBUG if settings.debug else logging.INFO,
+    format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 app = FastAPI(
     title="The Code We Live By API",
@@ -15,7 +24,8 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-# CORS middleware
+# Middleware (order matters — outermost first)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

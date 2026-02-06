@@ -133,7 +133,7 @@ class USCodeSection(Base, TimestampMixin):
         nullable=True,
     )
     section_number: Mapped[str] = mapped_column(String(50), nullable=False)
-    heading: Mapped[str] = mapped_column(String(500), nullable=False)
+    heading: Mapped[str] = mapped_column(Text, nullable=False)
     full_citation: Mapped[str] = mapped_column(String(200), nullable=False)
     text_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     enacted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
