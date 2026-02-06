@@ -17,7 +17,7 @@ export default function SectionLeaf({
   return (
     <Link
       href={`/sections/${titleNumber}/${section.section_number}`}
-      className={`flex items-center gap-1.5 rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
+      className={`flex items-center gap-1.5 overflow-hidden rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
     >
       <FileIcon />
       <span className="shrink-0 whitespace-nowrap font-mono text-gray-500">
