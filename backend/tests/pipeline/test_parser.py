@@ -7,6 +7,7 @@ import pytest
 from pipeline.olrc.parser import (
     USLMParser,
     compute_text_hash,
+    to_title_case,
 )
 
 
@@ -70,7 +71,7 @@ class TestUSLMParser:
         result = parser.parse_file(sample_xml)
 
         assert result.title.title_number == 17
-        assert result.title.title_name == "COPYRIGHTS"
+        assert result.title.title_name == "Copyrights"
         assert result.title.is_positive_law is True  # Title 17 is positive law
 
     def test_parse_chapters(self, parser: USLMParser, sample_xml: Path) -> None:
@@ -144,6 +145,50 @@ class TestUSLMParser:
         assert 17 in parser.POSITIVE_LAW_TITLES  # Copyrights
         assert 18 in parser.POSITIVE_LAW_TITLES  # Crimes
         assert 20 not in parser.POSITIVE_LAW_TITLES  # Education (not positive law)
+
+
+class TestToTitleCase:
+    """Tests for to_title_case function."""
+
+    def test_single_word(self) -> None:
+        assert to_title_case("COPYRIGHTS") == "Copyrights"
+
+    def test_two_words(self) -> None:
+        assert to_title_case("ARMED FORCES") == "Armed Forces"
+
+    def test_minor_word_lowercased(self) -> None:
+        assert (
+            to_title_case("CRIMES AND CRIMINAL PROCEDURE")
+            == "Crimes and Criminal Procedure"
+        )
+
+    def test_first_word_always_capitalized(self) -> None:
+        assert (
+            to_title_case("THE PUBLIC HEALTH AND WELFARE")
+            == "The Public Health and Welfare"
+        )
+
+    def test_last_word_always_capitalized(self) -> None:
+        """Last word is capitalized even if it's a minor word."""
+        assert to_title_case("SOMETHING TO") == "Something To"
+
+    def test_multiple_minor_words(self) -> None:
+        assert to_title_case("WAR AND NATIONAL DEFENSE") == "War and National Defense"
+
+    def test_already_title_case(self) -> None:
+        assert to_title_case("Armed Forces") == "Armed Forces"
+
+    def test_empty_string(self) -> None:
+        assert to_title_case("") == ""
+
+    def test_internal_revenue_code(self) -> None:
+        assert to_title_case("INTERNAL REVENUE CODE") == "Internal Revenue Code"
+
+    def test_foreign_relations_and_intercourse(self) -> None:
+        assert (
+            to_title_case("FOREIGN RELATIONS AND INTERCOURSE")
+            == "Foreign Relations and Intercourse"
+        )
 
 
 class TestComputeTextHash:
