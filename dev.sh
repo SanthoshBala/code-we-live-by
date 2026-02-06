@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# dev.sh — Start the full CWLB local development environment
+#
+# Usage:
+#   ./dev.sh          Start Postgres, backend, and frontend
+#   ./dev.sh --seed   Also ingest Phase 1 titles into the database
+#   ./dev.sh stop     Stop Postgres container
+#
+# Prerequisites:
+#   - Docker (for Postgres)
+#   - uv (Python package manager)
+#   - Node.js / npm
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$ROOT_DIR/backend"
+FRONTEND_DIR="$ROOT_DIR/frontend"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+log()  { echo -e "${GREEN}[dev]${NC} $*"; }
+warn() { echo -e "${YELLOW}[dev]${NC} $*"; }
+err()  { echo -e "${RED}[dev]${NC} $*" >&2; }
+
+# Track background PIDs for cleanup
+PIDS=()
+
+cleanup() {
+    log "Shutting down..."
+    for pid in "${PIDS[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    done
+    wait 2>/dev/null || true
+    log "Done."
+}
+
+trap cleanup EXIT INT TERM
+
+# ── Stop command ──────────────────────────────────────────────────────────────
+
+if [[ "${1:-}" == "stop" ]]; then
+    log "Stopping Postgres container..."
+    docker compose -f "$ROOT_DIR/docker-compose.yml" down
+    exit 0
+fi
+
+# ── Parse flags ───────────────────────────────────────────────────────────────
+
+SEED=false
+for arg in "$@"; do
+    case "$arg" in
+        --seed) SEED=true ;;
+        *) err "Unknown argument: $arg"; exit 1 ;;
+    esac
+done
+
+# ── Check prerequisites ──────────────────────────────────────────────────────
+
+for cmd in docker uv npm; do
+    if ! command -v "$cmd" &>/dev/null; then
+        err "Missing prerequisite: $cmd"
+        exit 1
+    fi
+done
+
+# ── 1. Start Postgres ────────────────────────────────────────────────────────
+
+log "Starting Postgres..."
+docker compose -f "$ROOT_DIR/docker-compose.yml" up -d
+
+log "Waiting for Postgres to be ready..."
+until docker exec cwlb-postgres pg_isready -U cwlb -d cwlb &>/dev/null; do
+    sleep 1
+done
+log "Postgres is ready."
+
+# ── 2. Run migrations ────────────────────────────────────────────────────────
+
+log "Running database migrations..."
+cd "$BACKEND_DIR"
+uv run alembic upgrade head
+
+# ── 3. Optionally seed data ──────────────────────────────────────────────────
+
+if [[ "$SEED" == true ]]; then
+    log "Seeding Phase 1 titles (this may take a few minutes)..."
+    uv run python -m pipeline.cli ingest-phase1
+    log "Seeding complete."
+fi
+
+# ── 4. Start backend ─────────────────────────────────────────────────────────
+
+log "Starting backend on ${CYAN}http://localhost:8000${NC} ..."
+cd "$BACKEND_DIR"
+uv run uvicorn app.main:app --reload --port 8000 &
+PIDS+=($!)
+
+# ── 5. Start frontend ────────────────────────────────────────────────────────
+
+log "Starting frontend on ${CYAN}http://localhost:3000${NC} ..."
+cd "$FRONTEND_DIR"
+npm run dev &
+PIDS+=($!)
+
+# ── Wait ──────────────────────────────────────────────────────────────────────
+
+echo ""
+log "Local environment is running:"
+echo -e "  ${CYAN}Frontend${NC}  http://localhost:3000"
+echo -e "  ${CYAN}Backend${NC}   http://localhost:8000"
+echo -e "  ${CYAN}API docs${NC}  http://localhost:8000/docs"
+echo -e "  ${CYAN}Postgres${NC}  localhost:5432 (cwlb/cwlb_dev)"
+echo ""
+log "Press Ctrl+C to stop all services."
+
+wait
