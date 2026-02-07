@@ -3,7 +3,7 @@ interface SectionProvisionsProps {
   isRepealed: boolean;
 }
 
-/** Renders the operative law text with whitespace-preserving layout. */
+/** Renders the operative law text as numbered lines like a code file. */
 export default function SectionProvisions({
   textContent,
   isRepealed,
@@ -18,9 +18,19 @@ export default function SectionProvisions({
     );
   }
 
+  const lines = textContent.split('\n');
+
   return (
-    <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-gray-800">
-      {textContent}
-    </pre>
+    <div className="rounded bg-gray-50 py-2 font-mono text-sm leading-relaxed">
+      {lines.map((line, i) => (
+        <div key={i} className="flex">
+          <span className="w-10 shrink-0 select-none text-right text-gray-400">
+            {i + 1}
+          </span>
+          <span className="mx-2 select-none text-gray-400">│</span>
+          <span className="whitespace-pre-wrap text-gray-800">{line}</span>
+        </div>
+      ))}
+    </div>
   );
 }
