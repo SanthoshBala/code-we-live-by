@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { SubchapterTree } from '@/lib/types';
 import TreeIndicator from './TreeIndicator';
-import SectionLeaf from './SectionLeaf';
+import SectionNode from './SectionNode';
 
 interface SubchapterNodeProps {
   subchapter: SubchapterTree;
@@ -38,7 +38,7 @@ export default function SubchapterNode({
             {subchapter.subchapter_number}
           </p>
           {subchapter.sections.map((section) => (
-            <SectionLeaf
+            <SectionNode
               key={section.section_number}
               section={section}
               titleNumber={titleNumber}
