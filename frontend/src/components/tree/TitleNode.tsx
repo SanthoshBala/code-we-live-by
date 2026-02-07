@@ -29,9 +29,7 @@ export default function TitleNode({
         className={`flex w-full items-center gap-1.5 rounded px-2 text-left font-semibold text-gray-800 hover:bg-gray-100 ${compact ? 'py-1 text-sm' : 'py-1.5 text-base'}`}
       >
         <TreeIndicator expanded={expanded} />
-        <span className="truncate">
-          Title {title.title_number} &mdash; {title.title_name}
-        </span>
+        <span className="truncate">{title.title_name}</span>
         <span
           className={`ml-auto shrink-0 font-normal text-gray-400 ${compact ? 'text-xs' : 'text-sm'}`}
         >
@@ -41,7 +39,7 @@ export default function TitleNode({
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
           <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
-            USC / Title {title.title_number}
+            Title {title.title_number}
           </p>
           {isLoading && (
             <p
