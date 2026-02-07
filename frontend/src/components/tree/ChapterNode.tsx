@@ -47,7 +47,7 @@ export default function ChapterNode({
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
           <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
-            Title {titleNumber} / Ch. {chapter.chapter_number}
+            Chapter {chapter.chapter_number}
           </p>
           {chapter.subchapters.map((sub) => (
             <SubchapterNode
