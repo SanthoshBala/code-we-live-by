@@ -27,7 +27,7 @@ export default function SectionProvisions({
   const lines = textContent.split('\n');
 
   return (
-    <div className="rounded bg-gray-100 py-2 font-mono text-sm leading-relaxed">
+    <div className="rounded bg-gray-100 py-2 pr-8 font-mono text-sm leading-relaxed">
       {docstring.map((text, i) => (
         <div key={`doc-${i}`} className="flex items-start text-green-700">
           <span className="w-10 shrink-0 select-none text-right text-gray-400">
