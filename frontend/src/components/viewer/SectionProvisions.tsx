@@ -12,8 +12,8 @@ export default function SectionProvisions({
     return (
       <div className="rounded border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
         {isRepealed
-          ? "This section has been repealed."
-          : "No text content available for this section."}
+          ? 'This section has been repealed.'
+          : 'No text content available for this section.'}
       </div>
     );
   }

@@ -16,9 +16,7 @@ export default function CitationList({ citations }: CitationListProps) {
 
   return (
     <section className="mt-8">
-      <h3 className="mb-4 text-lg font-semibold text-gray-900">
-        Source Laws
-      </h3>
+      <h3 className="mb-4 text-lg font-semibold text-gray-900">Source Laws</h3>
       <ul className="space-y-2">
         {citations.map((c, i) => (
           <li key={i} className="text-sm text-gray-600">

@@ -61,7 +61,7 @@ export interface SectionNote {
   header: string;
   content: string;
   lines: CodeLine[];
-  category: "historical" | "editorial" | "statutory";
+  category: 'historical' | 'editorial' | 'statutory';
 }
 
 /** An amendment record for a section. */

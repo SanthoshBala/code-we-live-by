@@ -36,9 +36,7 @@ export default function AmendmentList({ amendments }: AmendmentListProps) {
                 <span className="font-mono text-xs text-gray-500">
                   {a.public_law_id}
                 </span>
-                {a.description && (
-                  <span className="ml-2">{a.description}</span>
-                )}
+                {a.description && <span className="ml-2">{a.description}</span>}
               </li>
             ))}
           </ul>

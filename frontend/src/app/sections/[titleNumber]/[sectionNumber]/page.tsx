@@ -19,10 +19,7 @@ export default function SectionPage({ params }: SectionPageProps) {
         </Sidebar>
       }
     >
-      <SectionViewer
-        titleNumber={titleNumber}
-        sectionNumber={sectionNumber}
-      />
+      <SectionViewer titleNumber={titleNumber} sectionNumber={sectionNumber} />
     </MainLayout>
   );
 }
