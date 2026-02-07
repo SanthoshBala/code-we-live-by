@@ -824,6 +824,86 @@ class TestNormalizeParsedSection:
         assert result.provisions[6].content == "Another definition."
 
 
+class TestNormalizeParsedSectionDirectParagraphs:
+    """Tests for sections with paragraphs directly under section (no subsection).
+
+    Regression tests for 20 U.S.C. § 5204 which has <paragraph> elements as
+    direct children of <section> with a section-level <chapeau>.
+    """
+
+    def test_chapeau_with_direct_paragraphs(self) -> None:
+        """Chapeau + direct paragraphs produce indented lines."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="5204",
+            heading="Authorization of appropriations",
+            full_citation="20 U.S.C. § 5204",
+            text_content="flat text fallback",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content="To provide a permanent endowment—",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="$5,000,000; and",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(2)",
+                            heading=None,
+                            content="the lesser of—",
+                            children=[
+                                ParsedSubsection(
+                                    marker="(A)",
+                                    heading=None,
+                                    content="$2,500,000, or",
+                                    level="subparagraph",
+                                ),
+                                ParsedSubsection(
+                                    marker="(B)",
+                                    heading=None,
+                                    content="an amount equal to contributions.",
+                                    level="subparagraph",
+                                ),
+                            ],
+                            level="paragraph",
+                        ),
+                    ],
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Should produce indented lines, not flat text fallback
+        assert result.normalized_text != "flat text fallback"
+        assert result.provision_count == 5
+
+        # Chapeau at indent 0
+        assert result.provisions[0].content == "To provide a permanent endowment—"
+        assert result.provisions[0].indent_level == 0
+
+        # (1) at indent 1
+        assert result.provisions[1].content == "(1) $5,000,000; and"
+        assert result.provisions[1].indent_level == 1
+
+        # (2) at indent 1
+        assert result.provisions[2].content == "(2) the lesser of—"
+        assert result.provisions[2].indent_level == 1
+
+        # (A) and (B) at indent 2
+        assert result.provisions[3].content == "(A) $2,500,000, or"
+        assert result.provisions[3].indent_level == 2
+        assert result.provisions[4].content == "(B) an amount equal to contributions."
+        assert result.provisions[4].indent_level == 2
+
+
 class TestNormalizeNoteContent:
     """Tests for normalize_note_content function (notes parsing)."""
 

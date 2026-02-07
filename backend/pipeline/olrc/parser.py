@@ -731,11 +731,11 @@ class USLMParser:
         if content is not None:
             return self._get_text_content(content)
 
-        # Fall back to getting all text except heading
+        # Fall back to getting all text except heading and metadata
         parts = []
         for child in section_elem:
             tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
-            if tag not in ("heading", "num", "title"):
+            if tag not in ("heading", "num", "title", "sourceCredit", "notes"):
                 parts.append(self._get_text_content(child))
 
         return " ".join(parts).strip()
@@ -802,7 +802,13 @@ class USLMParser:
     def _extract_subsections(
         self, section_elem: etree._Element
     ) -> list[ParsedSubsection]:
-        """Extract structured subsections from a section element."""
+        """Extract structured subsections from a section element.
+
+        Handles two XML patterns:
+        1. Standard: <section> > <subsection> > <paragraph> > ...
+        2. Direct paragraphs: <section> > <chapeau>? > <paragraph> > ...
+           (e.g. 20 U.S.C. § 5204 which has no <subsection> wrapper)
+        """
         subsections = []
 
         # Try namespaced first, then non-namespaced
@@ -812,6 +818,39 @@ class USLMParser:
 
         for subsec_elem in subsec_elems:
             subsections.append(self._parse_subsection(subsec_elem, "subsection"))
+
+        # If no <subsection> elements, check for <paragraph> directly under section
+        if not subsections:
+            para_elems = section_elem.findall("{*}paragraph")
+            if not para_elems:
+                para_elems = section_elem.findall("paragraph")
+
+            if para_elems:
+                # Check for section-level chapeau (introductory text before the list)
+                chapeau_elem = section_elem.find("{*}chapeau")
+                if chapeau_elem is None:
+                    chapeau_elem = section_elem.find("chapeau")
+                chapeau_text = (
+                    self._get_text_content(chapeau_elem)
+                    if chapeau_elem is not None
+                    else ""
+                )
+
+                # Parse each paragraph
+                children = []
+                for para_elem in para_elems:
+                    children.append(self._parse_subsection(para_elem, "paragraph"))
+
+                # Wrap in a synthetic subsection so normalization handles it
+                subsections.append(
+                    ParsedSubsection(
+                        marker="",
+                        heading=None,
+                        content=chapeau_text,
+                        children=children,
+                        level="subsection",
+                    )
+                )
 
         return subsections
 
