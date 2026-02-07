@@ -22,6 +22,14 @@ const section = {
   section_number: '106',
   heading: 'Exclusive rights in copyrighted works',
   sort_order: 3,
+  note_categories: ['editorial', 'historical', 'statutory'],
+};
+
+const sectionNoNotes = {
+  section_number: '312',
+  heading: 'Program authorized',
+  sort_order: 1,
+  note_categories: ['editorial'],
 };
 
 const sectionWithAmendment = {
@@ -107,5 +115,28 @@ describe('SectionNode', () => {
   it('does not show amendment metadata when absent', () => {
     render(<SectionNode section={section} titleNumber={17} />);
     expect(screen.queryByText('PL')).not.toBeInTheDocument();
+  });
+
+  it('only shows note files for categories that exist', async () => {
+    const user = userEvent.setup();
+    render(<SectionNode section={sectionNoNotes} titleNumber={20} />);
+
+    await user.click(screen.getByRole('button'));
+
+    expect(screen.getByText('EDITORIAL_NOTES')).toBeInTheDocument();
+    expect(screen.queryByText('STATUTORY_NOTES')).not.toBeInTheDocument();
+    expect(screen.queryByText('HISTORICAL_NOTES')).not.toBeInTheDocument();
+  });
+
+  it('shows only provisions when note_categories is empty', async () => {
+    const user = userEvent.setup();
+    const noNotes = { ...section, note_categories: [] };
+    render(<SectionNode section={noNotes} titleNumber={17} />);
+
+    await user.click(screen.getByRole('button'));
+
+    const links = screen.getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', '/sections/17/106');
   });
 });

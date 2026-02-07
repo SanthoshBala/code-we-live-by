@@ -344,6 +344,7 @@ class SectionSummarySchema(BaseModel):
     sort_order: int
     last_amendment_year: int | None = None
     last_amendment_law: str | None = None  # e.g. "PL 118-50"
+    note_categories: list[str] = []  # e.g. ["editorial", "statutory"]
 
 
 class SubchapterTreeSchema(BaseModel):

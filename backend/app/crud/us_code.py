@@ -44,6 +44,16 @@ def _extract_last_amendment(
     return year, None
 
 
+def _extract_note_categories(section: USCodeSection) -> list[str]:
+    """Return the distinct note categories present in normalized_notes."""
+    if not section.normalized_notes:
+        return []
+    notes = section.normalized_notes.get("notes", [])
+    if not notes:
+        return []
+    return sorted({n["category"] for n in notes if "category" in n})
+
+
 async def get_all_titles(session: AsyncSession) -> list[TitleSummarySchema]:
     """Return all titles with chapter and section counts."""
     chapter_count = (
@@ -120,6 +130,7 @@ async def get_title_structure(
                     sort_order=s.sort_order,
                     last_amendment_year=year,
                     last_amendment_law=law,
+                    note_categories=_extract_note_categories(s),
                 )
             )
 
@@ -135,6 +146,7 @@ async def get_title_structure(
                         sort_order=s.sort_order,
                         last_amendment_year=year,
                         last_amendment_law=law,
+                        note_categories=_extract_note_categories(s),
                     )
                 )
             subchapters.append(

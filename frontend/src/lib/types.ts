@@ -18,6 +18,7 @@ export interface SectionSummary {
   sort_order: number;
   last_amendment_year?: number | null;
   last_amendment_law?: string | null;
+  note_categories?: string[];
 }
 
 /** Subchapter node in the title structure tree. */

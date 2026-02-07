@@ -13,10 +13,10 @@ interface SectionNodeProps {
   defaultExpanded?: boolean;
 }
 
-const FILE_CHILDREN = [
-  'EDITORIAL_NOTES',
-  'STATUTORY_NOTES',
-  'HISTORICAL_NOTES',
+const NOTE_FILES: { file: string; category: string }[] = [
+  { file: 'EDITORIAL_NOTES', category: 'editorial' },
+  { file: 'STATUTORY_NOTES', category: 'statutory' },
+  { file: 'HISTORICAL_NOTES', category: 'historical' },
 ];
 
 /** Expandable section node showing file children (provisions + notes). */
@@ -56,7 +56,9 @@ export default function SectionNode({
             <FileIcon />
             <span className="font-mono">{section.section_number}</span>
           </Link>
-          {FILE_CHILDREN.map((file) => (
+          {NOTE_FILES.filter(({ category }) =>
+            section.note_categories?.includes(category)
+          ).map(({ file }) => (
             <Link
               key={file}
               href={`${basePath}/${file}`}
