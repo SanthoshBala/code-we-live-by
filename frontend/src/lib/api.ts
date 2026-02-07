@@ -1,4 +1,4 @@
-import type { TitleSummary, TitleStructure } from './types';
+import type { TitleSummary, TitleStructure, SectionView } from './types';
 
 const API_BASE = '/api/v1';
 
@@ -19,6 +19,22 @@ export async function fetchTitleStructure(
   if (!res.ok) {
     throw new Error(
       `Failed to fetch structure for title ${titleNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
+/** Fetch the full detail view for a single section. */
+export async function fetchSection(
+  titleNumber: number,
+  sectionNumber: string
+): Promise<SectionView> {
+  const res = await fetch(
+    `${API_BASE}/sections/${titleNumber}/${sectionNumber}`
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch section ${titleNumber}/${sectionNumber}: ${res.status}`
     );
   }
   return res.json();

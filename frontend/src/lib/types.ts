@@ -18,6 +18,7 @@ export interface SectionSummary {
   sort_order: number;
   last_amendment_year?: number | null;
   last_amendment_law?: string | null;
+  note_categories?: string[];
 }
 
 /** Subchapter node in the title structure tree. */
@@ -43,4 +44,76 @@ export interface TitleStructure {
   title_name: string;
   is_positive_law: boolean;
   chapters: ChapterTree[];
+}
+
+// --- Section viewer types ---
+
+/** A single line of rendered section content. */
+export interface CodeLine {
+  line_number: number;
+  content: string;
+  indent_level: number;
+  marker: string | null;
+  is_header: boolean;
+}
+
+/** A structured note attached to a section. */
+export interface SectionNote {
+  header: string;
+  content: string;
+  lines: CodeLine[];
+  category: 'historical' | 'editorial' | 'statutory';
+}
+
+/** An amendment record for a section. */
+export interface Amendment {
+  law: {
+    congress: number;
+    law_number: number;
+    public_law_id: string;
+    date: string | null;
+  };
+  year: number;
+  description: string;
+  public_law_id: string;
+}
+
+/** A source law citation for a section. */
+export interface SourceLaw {
+  law_id: string;
+  law_title: string | null;
+  relationship: string;
+  raw_text: string;
+}
+
+/** Aggregated notes, citations, and amendments for a section. */
+export interface SectionNotes {
+  citations: SourceLaw[];
+  amendments: Amendment[];
+  short_titles: {
+    title: string;
+    year: number | null;
+    public_law: string | null;
+  }[];
+  notes: SectionNote[];
+  has_notes: boolean;
+  has_citations: boolean;
+  has_amendments: boolean;
+  transferred_to: string | null;
+  omitted: boolean;
+  renumbered_from: string | null;
+}
+
+/** Full section view returned by the section detail endpoint. */
+export interface SectionView {
+  title_number: number;
+  section_number: string;
+  heading: string;
+  full_citation: string;
+  text_content: string | null;
+  enacted_date: string | null;
+  last_modified_date: string | null;
+  is_positive_law: boolean;
+  is_repealed: boolean;
+  notes: SectionNotes | null;
 }

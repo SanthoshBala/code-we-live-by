@@ -5,10 +5,16 @@ import TitleNode from './TitleNode';
 
 interface TitleListProps {
   compact?: boolean;
+  activeTitleNumber?: number;
+  activeSectionNumber?: string;
 }
 
 /** Root tree component. Fetches titles eagerly and renders TitleNodes. */
-export default function TitleList({ compact }: TitleListProps) {
+export default function TitleList({
+  compact,
+  activeTitleNumber,
+  activeSectionNumber,
+}: TitleListProps) {
   const { data: titles, isLoading, error } = useTitles();
 
   if (isLoading) {
@@ -46,7 +52,16 @@ export default function TitleList({ compact }: TitleListProps) {
       )}
       <div className="space-y-0.5">
         {titles.map((title) => (
-          <TitleNode key={title.title_number} title={title} compact={compact} />
+          <TitleNode
+            key={title.title_number}
+            title={title}
+            compact={compact}
+            activeSectionNumber={
+              title.title_number === activeTitleNumber
+                ? activeSectionNumber
+                : undefined
+            }
+          />
         ))}
       </div>
     </nav>

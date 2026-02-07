@@ -7,11 +7,16 @@ import ChapterNode from './ChapterNode';
 interface TitleNodeProps {
   title: TitleSummary;
   compact?: boolean;
+  activeSectionNumber?: string;
 }
 
 /** Expandable title row. Lazy-loads structure on first expand. */
-export default function TitleNode({ title, compact }: TitleNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+export default function TitleNode({
+  title,
+  compact,
+  activeSectionNumber,
+}: TitleNodeProps) {
+  const [expanded, setExpanded] = useState(!!activeSectionNumber);
   const { data: structure, isLoading } = useTitleStructure(
     title.title_number,
     expanded
@@ -24,9 +29,7 @@ export default function TitleNode({ title, compact }: TitleNodeProps) {
         className={`flex w-full items-center gap-1.5 rounded px-2 text-left font-semibold text-gray-800 hover:bg-gray-100 ${compact ? 'py-1 text-sm' : 'py-1.5 text-base'}`}
       >
         <TreeIndicator expanded={expanded} />
-        <span className="truncate">
-          Title {title.title_number} &mdash; {title.title_name}
-        </span>
+        <span className="truncate">{title.title_name}</span>
         <span
           className={`ml-auto shrink-0 font-normal text-gray-400 ${compact ? 'text-xs' : 'text-sm'}`}
         >
@@ -36,7 +39,7 @@ export default function TitleNode({ title, compact }: TitleNodeProps) {
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
           <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
-            USC / Title {title.title_number}
+            Title {title.title_number}
           </p>
           {isLoading && (
             <p
@@ -51,6 +54,7 @@ export default function TitleNode({ title, compact }: TitleNodeProps) {
               chapter={ch}
               titleNumber={title.title_number}
               compact={compact}
+              activeSectionNumber={activeSectionNumber}
             />
           ))}
         </div>

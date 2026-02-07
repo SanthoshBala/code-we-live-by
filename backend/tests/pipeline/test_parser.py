@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from lxml import etree
 
 from pipeline.olrc.parser import (
     USLMParser,
@@ -146,6 +147,101 @@ class TestUSLMParser:
         assert 17 in parser.POSITIVE_LAW_TITLES  # Copyrights
         assert 18 in parser.POSITIVE_LAW_TITLES  # Crimes
         assert 20 not in parser.POSITIVE_LAW_TITLES  # Education (not positive law)
+
+    def test_get_text_content_no_extra_spaces_around_inline_elements(
+        self, parser: USLMParser
+    ) -> None:
+        """Inline elements like <date> and <ref> should not introduce extra spaces.
+
+        Regression test for 20 U.S.C. § 5204 where _get_text_content produced
+        'beginning on  October 24, 1990 .' with double spaces.
+        """
+        xml = """<content xmlns="http://xml.house.gov/schemas/uslm/1.0">
+          an amount during the 4-year period beginning on
+          <date date="1990-10-24">October 24, 1990</date>.
+        </content>"""
+        elem = etree.fromstring(xml)
+        text = parser._get_text_content(elem)
+        assert "on October 24, 1990." in text
+        assert "  " not in text  # No double spaces anywhere
+
+    def test_extract_section_text_excludes_source_credit(
+        self, parser: USLMParser
+    ) -> None:
+        """Source credit text should not appear in extracted section text.
+
+        Regression test for 20 U.S.C. § 5204 where the source credit
+        '(Pub. L. 101-454, § 5 ...)' was being included in text_content.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t20/s5204">
+          <num value="5204">§ 5204.</num>
+          <heading>Authorization of appropriations</heading>
+          <chapeau>To provide a permanent endowment—</chapeau>
+          <paragraph identifier="/us/usc/t20/s5204/1">
+            <num value="1">(1)</num>
+            <content>$5,000,000; and</content>
+          </paragraph>
+          <sourceCredit>(Pub. L. 101–454, § 5, Oct. 24, 1990, 104 Stat. 1064.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        text = parser._extract_section_text(elem)
+        assert "Pub. L." not in text
+        assert "endowment" in text
+
+    def test_extract_subsections_with_direct_paragraphs(
+        self, parser: USLMParser
+    ) -> None:
+        """Sections with paragraphs directly under section (no subsection wrapper)
+        should still produce structured subsections.
+
+        Regression test for 20 U.S.C. § 5204 which has <paragraph> elements
+        as direct children of <section> instead of nested inside <subsection>.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t20/s5204">
+          <num value="5204">§ 5204.</num>
+          <heading>Authorization of appropriations</heading>
+          <chapeau>To provide a permanent endowment—</chapeau>
+          <paragraph identifier="/us/usc/t20/s5204/1">
+            <num value="1">(1)</num>
+            <content>$5,000,000; and</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t20/s5204/2">
+            <num value="2">(2)</num>
+            <chapeau>the lesser of—</chapeau>
+            <subparagraph identifier="/us/usc/t20/s5204/2/A">
+              <num value="A">(A)</num>
+              <content>$2,500,000, or</content>
+            </subparagraph>
+            <subparagraph identifier="/us/usc/t20/s5204/2/B">
+              <num value="B">(B)</num>
+              <content>an amount equal to contributions.</content>
+            </subparagraph>
+          </paragraph>
+          <sourceCredit>(Pub. L. 101–454, § 5, Oct. 24, 1990, 104 Stat. 1064.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        # Should produce a synthetic subsection wrapping the chapeau + paragraphs
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+        assert "endowment" in wrapper.content
+        assert len(wrapper.children) == 2
+
+        # First paragraph: (1) $5,000,000; and
+        para1 = wrapper.children[0]
+        assert para1.marker == "(1)"
+        assert "$5,000,000" in para1.content
+
+        # Second paragraph: (2) the lesser of—, with 2 subparagraphs
+        para2 = wrapper.children[1]
+        assert para2.marker == "(2)"
+        assert "lesser of" in para2.content
+        assert len(para2.children) == 2
+        assert para2.children[0].marker == "(A)"
+        assert para2.children[1].marker == "(B)"
 
 
 class TestToTitleCase:

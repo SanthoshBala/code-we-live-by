@@ -140,6 +140,40 @@ Or in a hover/tooltip:
 
 ---
 
+## Tree Navigator Labels
+
+### Folder rows show names only; identifiers move to breadcrumbs
+
+In the sidebar tree, each expandable node (title, chapter, subchapter) displays **only its name** — not the hierarchy prefix or identifier. The legal identifier appears in the **breadcrumb path** shown when the node is expanded.
+
+**Before:**
+```
+📁 Title 17 — Copyrights
+   📁 Chapter 1 — Subject Matter
+      📁 Subchapter A — The Works
+      breadcrumb: USC / Title 17 / Ch. 1 / Subch. A
+```
+
+**After:**
+```
+📁 Copyrights
+   📁 Subject Matter
+      📁 The Works
+      breadcrumb: Title 17 / Ch. 1 / Subch. A
+```
+
+**Rationale:**
+
+1. **Scannability**: In a narrow sidebar, "Armed Forces" is instantly recognizable. "Title 10 — Armed Forces" wastes half the row on a number most users don't know by heart.
+
+2. **Legal legibility preserved**: The title/chapter/subchapter numbers are the primary way lawyers and researchers cite these sections. Rather than removing them entirely, they appear in the breadcrumb path that is visible whenever a node is expanded — one click away, always in context.
+
+3. **Redundancy reduction**: The hierarchy type (Title, Chapter, Subchapter) is already communicated by the tree depth and the folder icon. Repeating it in the label is redundant.
+
+4. **Breadcrumb prefix**: The `USC /` prefix was dropped from breadcrumbs because the entire application is scoped to the US Code — the context is implicit.
+
+---
+
 ## Future Sections
 
 *To be documented as decisions are made:*
