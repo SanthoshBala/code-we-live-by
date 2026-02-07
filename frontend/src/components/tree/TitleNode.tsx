@@ -7,11 +7,16 @@ import ChapterNode from './ChapterNode';
 interface TitleNodeProps {
   title: TitleSummary;
   compact?: boolean;
+  activeSectionNumber?: string;
 }
 
 /** Expandable title row. Lazy-loads structure on first expand. */
-export default function TitleNode({ title, compact }: TitleNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+export default function TitleNode({
+  title,
+  compact,
+  activeSectionNumber,
+}: TitleNodeProps) {
+  const [expanded, setExpanded] = useState(!!activeSectionNumber);
   const { data: structure, isLoading } = useTitleStructure(
     title.title_number,
     expanded
@@ -51,6 +56,7 @@ export default function TitleNode({ title, compact }: TitleNodeProps) {
               chapter={ch}
               titleNumber={title.title_number}
               compact={compact}
+              activeSectionNumber={activeSectionNumber}
             />
           ))}
         </div>

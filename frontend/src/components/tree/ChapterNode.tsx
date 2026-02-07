@@ -8,6 +8,19 @@ interface ChapterNodeProps {
   chapter: ChapterTree;
   titleNumber: number;
   compact?: boolean;
+  activeSectionNumber?: string;
+}
+
+function chapterContainsSection(
+  chapter: ChapterTree,
+  sectionNumber: string
+): boolean {
+  return (
+    chapter.sections.some((s) => s.section_number === sectionNumber) ||
+    chapter.subchapters.some((sub) =>
+      sub.sections.some((s) => s.section_number === sectionNumber)
+    )
+  );
 }
 
 /** Expandable chapter row in the tree. */
@@ -15,8 +28,12 @@ export default function ChapterNode({
   chapter,
   titleNumber,
   compact,
+  activeSectionNumber,
 }: ChapterNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(
+    !!activeSectionNumber &&
+      chapterContainsSection(chapter, activeSectionNumber)
+  );
 
   return (
     <div>
@@ -41,6 +58,7 @@ export default function ChapterNode({
               titleNumber={titleNumber}
               chapterNumber={chapter.chapter_number}
               compact={compact}
+              activeSectionNumber={activeSectionNumber}
             />
           ))}
           {chapter.sections.map((section) => (
@@ -49,6 +67,7 @@ export default function ChapterNode({
               section={section}
               titleNumber={titleNumber}
               compact={compact}
+              defaultExpanded={section.section_number === activeSectionNumber}
             />
           ))}
         </div>

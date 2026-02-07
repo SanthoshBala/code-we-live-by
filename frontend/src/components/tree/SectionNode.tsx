@@ -10,6 +10,7 @@ interface SectionNodeProps {
   section: SectionSummary;
   titleNumber: number;
   compact?: boolean;
+  defaultExpanded?: boolean;
 }
 
 const FILE_CHILDREN = [
@@ -23,8 +24,9 @@ export default function SectionNode({
   section,
   titleNumber,
   compact,
+  defaultExpanded = false,
 }: SectionNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const basePath = `/sections/${titleNumber}/${section.section_number}`;
 
   return (

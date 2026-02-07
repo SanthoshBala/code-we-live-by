@@ -26,7 +26,11 @@ export default function NoteFilePage({ params }: NoteFilePageProps) {
     <MainLayout
       sidebar={
         <Sidebar>
-          <TitleList compact />
+          <TitleList
+            compact
+            activeTitleNumber={titleNumber}
+            activeSectionNumber={sectionNumber}
+          />
         </Sidebar>
       }
     >

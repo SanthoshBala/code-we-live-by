@@ -8,6 +8,7 @@ interface SubchapterNodeProps {
   titleNumber: number;
   chapterNumber: string;
   compact?: boolean;
+  activeSectionNumber?: string;
 }
 
 /** Expandable subchapter row in the tree. */
@@ -16,8 +17,12 @@ export default function SubchapterNode({
   titleNumber,
   chapterNumber,
   compact,
+  activeSectionNumber,
 }: SubchapterNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(
+    !!activeSectionNumber &&
+      subchapter.sections.some((s) => s.section_number === activeSectionNumber)
+  );
 
   return (
     <div>
@@ -43,6 +48,7 @@ export default function SubchapterNode({
               section={section}
               titleNumber={titleNumber}
               compact={compact}
+              defaultExpanded={section.section_number === activeSectionNumber}
             />
           ))}
         </div>

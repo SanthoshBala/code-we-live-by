@@ -15,7 +15,11 @@ export default function SectionPage({ params }: SectionPageProps) {
     <MainLayout
       sidebar={
         <Sidebar>
-          <TitleList compact />
+          <TitleList
+            compact
+            activeTitleNumber={titleNumber}
+            activeSectionNumber={sectionNumber}
+          />
         </Sidebar>
       }
     >
