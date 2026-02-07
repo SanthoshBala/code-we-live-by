@@ -40,11 +40,11 @@ describe('SectionProvisions', () => {
     render(
       <SectionProvisions
         {...defaultProps}
-        textContent="    (a) Test provision text"
+        textContent="    (a) Test provision text;"
         isRepealed={false}
       />
     );
-    expect(screen.getByText('(a) Test provision text')).toBeInTheDocument();
+    expect(screen.getByText('(a) Test provision text;')).toBeInTheDocument();
   });
 
   it('shows repealed notice when text is null and section is repealed', () => {
@@ -77,15 +77,15 @@ describe('SectionProvisions', () => {
     render(
       <SectionProvisions
         {...defaultProps}
-        textContent={'(a) First\n    (1) Nested'}
+        textContent={'(a) First provision;\n    (1) Nested item;'}
         isRepealed={false}
       />
     );
     // Lines 1–2 are docstring, 3 is blank, 4–5 are provisions
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getByText('(a) First')).toBeInTheDocument();
-    expect(screen.getByText('(1) Nested')).toBeInTheDocument();
+    expect(screen.getByText('(a) First provision;')).toBeInTheDocument();
+    expect(screen.getByText('(1) Nested item;')).toBeInTheDocument();
   });
 
   it('applies hanging indent classes to content spans', () => {
@@ -113,7 +113,7 @@ describe('SectionProvisions', () => {
     const { container } = render(
       <SectionProvisions
         {...defaultProps}
-        textContent={'(a) First\n\t\t(1) Nested'}
+        textContent={'(a) First provision;\n\t\t(1) Nested item;'}
         isRepealed={false}
       />
     );
@@ -123,7 +123,7 @@ describe('SectionProvisions', () => {
     expect(indentSpan!.textContent).toBe('\t\t');
 
     // Text content (without leading whitespace) is in a whitespace-pre-wrap span
-    expect(screen.getByText('(1) Nested')).toBeInTheDocument();
+    expect(screen.getByText('(1) Nested item;')).toBeInTheDocument();
   });
 
   it('omits indent span when line has no leading whitespace', () => {
@@ -136,6 +136,145 @@ describe('SectionProvisions', () => {
     );
     const indentSpan = container.querySelector('.whitespace-pre.shrink-0');
     expect(indentSpan).not.toBeInTheDocument();
+  });
+
+  it('applies split header styling to short marker lines', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) In General"
+        isRepealed={false}
+      />
+    );
+    // Marker and title are split into separate spans
+    const markerSpan = container.querySelector('.text-blue-600');
+    expect(markerSpan).toBeInTheDocument();
+    expect(markerSpan!.textContent).toBe('(a) ');
+    expect(markerSpan).not.toHaveClass('font-bold');
+
+    const titleSpan = screen.getByText('In General');
+    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+
+    // Outer span should still have hanging indent (it's also a list item)
+    const outerSpan = markerSpan!.closest('.whitespace-pre-wrap');
+    expect(outerSpan).toHaveClass('pl-[4ch]', '-indent-[4ch]');
+
+    // Header row should be sticky with top set via inline style
+    const headerRow = markerSpan!.closest('.flex');
+    expect(headerRow).toHaveClass('sticky', 'z-10', 'bg-gray-100');
+    expect((headerRow as HTMLElement).style.top).toBe('0em');
+
+    // Border only appears when stuck (via IntersectionObserver), not by default
+    expect(headerRow).not.toHaveClass('border-b');
+  });
+
+  it('renders sentinel elements before sticky headers', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) In General"
+        isRepealed={false}
+      />
+    );
+    const sentinel = container.querySelector('[data-sticky-sentinel]');
+    expect(sentinel).toBeInTheDocument();
+    expect(sentinel).toHaveClass('h-0');
+    expect(sentinel).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('does not render sentinels for non-header lines', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(1) forcibly assaults, resists, opposes, impedes;"
+        isRepealed={false}
+      />
+    );
+    const sentinel = container.querySelector('[data-sticky-sentinel]');
+    expect(sentinel).not.toBeInTheDocument();
+  });
+
+  it('stacks nested headers with increasing top offsets', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent={'(a) In General\n    (1) First Rule\n        (A) Sub Rule'}
+        isRepealed={false}
+      />
+    );
+    const headers = container.querySelectorAll('[data-sticky-header]');
+    expect(headers).toHaveLength(3);
+
+    // Each depth level gets a progressively larger top offset
+    expect((headers[0] as HTMLElement).style.top).toBe('0em');
+    expect((headers[1] as HTMLElement).style.top).toBe('1.625em');
+    expect((headers[2] as HTMLElement).style.top).toBe('3.25em');
+
+    // All are sticky
+    expect(headers[0]).toHaveClass('sticky');
+    expect(headers[1]).toHaveClass('sticky');
+    expect(headers[2]).toHaveClass('sticky');
+  });
+
+  it('wraps sections so nested headers unstick with their parent', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent={'(a) First\n    (1) Nested\n(b) Second'}
+        isRepealed={false}
+      />
+    );
+    const headerA = container.querySelector('[data-sticky-header="0"]');
+    const header1 = container.querySelector('[data-sticky-header="1"]');
+    const headerB = container.querySelector('[data-sticky-header="2"]');
+
+    // (1) is nested inside (a)'s wrapper div
+    const wrapperA = headerA!.parentElement;
+    expect(wrapperA).toContainElement(header1 as HTMLElement);
+
+    // (b) is NOT inside (a)'s wrapper
+    expect(wrapperA).not.toContainElement(headerB as HTMLElement);
+  });
+
+  it('does not apply header styling to long list items ending with punctuation', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(1) forcibly assaults, resists, opposes, impedes, intimidates, or interferes with a person designated in section 1114;"
+        isRepealed={false}
+      />
+    );
+    const listItemSpan = screen.getByText(
+      '(1) forcibly assaults, resists, opposes, impedes, intimidates, or interferes with a person designated in section 1114;'
+    );
+    expect(listItemSpan).not.toHaveClass('font-bold');
+    expect(listItemSpan).toHaveClass('text-gray-800');
+  });
+
+  it('does not apply header styling to short list items ending with punctuation', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(A) the armed forces;"
+        isRepealed={false}
+      />
+    );
+    const span = screen.getByText('(A) the armed forces;');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
+  it('does not apply header styling to prose lines', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="Whoever knowingly does something."
+        isRepealed={false}
+      />
+    );
+    const span = screen.getByText('Whoever knowingly does something.');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
   });
 
   it('does not apply hanging indent to prose lines', () => {
