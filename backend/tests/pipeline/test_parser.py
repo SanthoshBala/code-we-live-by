@@ -148,6 +148,23 @@ class TestUSLMParser:
         assert 18 in parser.POSITIVE_LAW_TITLES  # Crimes
         assert 20 not in parser.POSITIVE_LAW_TITLES  # Education (not positive law)
 
+    def test_get_text_content_no_extra_spaces_around_inline_elements(
+        self, parser: USLMParser
+    ) -> None:
+        """Inline elements like <date> and <ref> should not introduce extra spaces.
+
+        Regression test for 20 U.S.C. § 5204 where _get_text_content produced
+        'beginning on  October 24, 1990 .' with double spaces.
+        """
+        xml = """<content xmlns="http://xml.house.gov/schemas/uslm/1.0">
+          an amount during the 4-year period beginning on
+          <date date="1990-10-24">October 24, 1990</date>.
+        </content>"""
+        elem = etree.fromstring(xml)
+        text = parser._get_text_content(elem)
+        assert "on October 24, 1990." in text
+        assert "  " not in text  # No double spaces anywhere
+
     def test_extract_section_text_excludes_source_credit(
         self, parser: USLMParser
     ) -> None:

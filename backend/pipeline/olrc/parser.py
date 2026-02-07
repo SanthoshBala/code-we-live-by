@@ -721,8 +721,11 @@ class USLMParser:
         if elem is None:
             return ""
 
-        # Use itertext to get all text including from child elements
-        return " ".join(elem.itertext()).strip()
+        # Concatenate text fragments preserving original whitespace, then
+        # collapse runs of whitespace to a single space.  Using "".join
+        # (instead of " ".join) avoids inserting extra spaces at inline
+        # element boundaries like <date> or <ref>.
+        return re.sub(r"\s+", " ", "".join(elem.itertext())).strip()
 
     def _extract_section_text(self, section_elem: etree._Element) -> str:
         """Extract the full text content of a section."""
