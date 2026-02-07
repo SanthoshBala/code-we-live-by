@@ -29,12 +29,12 @@ export default function SectionProvisions({
   return (
     <div className="rounded bg-gray-100 py-2 font-mono text-sm leading-relaxed">
       {docstring.map((text, i) => (
-        <div key={`doc-${i}`} className="flex text-green-700">
+        <div key={`doc-${i}`} className="flex items-start text-green-700">
           <span className="w-10 shrink-0 select-none text-right text-gray-400">
             {i + 1}
           </span>
           <span className="mx-2 select-none text-gray-400">│</span>
-          <span>
+          <span className="min-w-0 pl-[4ch] -indent-[4ch]">
             <span className="select-none"># </span>
             {text}
           </span>
@@ -46,15 +46,30 @@ export default function SectionProvisions({
         </span>
         <span className="mx-2 select-none text-gray-400">│</span>
       </div>
-      {lines.map((line, i) => (
-        <div key={i} className="flex">
-          <span className="w-10 shrink-0 select-none text-right text-gray-400">
-            {i + 1 + blankLineNumber}
-          </span>
-          <span className="mx-2 select-none text-gray-400">│</span>
-          <span className="whitespace-pre-wrap text-gray-800">{line}</span>
-        </div>
-      ))}
+      {lines.map((line, i) => {
+        const match = line.match(/^(\s*)(.*)/);
+        const indent = match?.[1] ?? '';
+        const text = match?.[2] ?? line;
+        const isListItem = /^\([a-zA-Z0-9]+\)/.test(text);
+        return (
+          <div key={i} className="flex items-start">
+            <span className="w-10 shrink-0 select-none text-right text-gray-400">
+              {i + 1 + blankLineNumber}
+            </span>
+            <span className="mx-2 select-none text-gray-400">│</span>
+            {indent && (
+              <span className="shrink-0 whitespace-pre text-gray-800">
+                {indent}
+              </span>
+            )}
+            <span
+              className={`min-w-0 whitespace-pre-wrap text-gray-800${isListItem ? ' pl-[4ch] -indent-[4ch]' : ''}`}
+            >
+              {text}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
