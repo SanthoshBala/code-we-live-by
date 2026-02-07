@@ -138,6 +138,61 @@ describe('SectionProvisions', () => {
     expect(indentSpan).not.toBeInTheDocument();
   });
 
+  it('applies header styling to short marker lines', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) In General"
+        isRepealed={false}
+      />
+    );
+    const headerSpan = screen.getByText('(a) In General');
+    expect(headerSpan).toHaveClass('font-bold', 'text-blue-700');
+    // Should still have hanging indent (it's also a list item)
+    expect(headerSpan).toHaveClass('pl-[4ch]', '-indent-[4ch]');
+  });
+
+  it('does not apply header styling to long list items ending with punctuation', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(1) forcibly assaults, resists, opposes, impedes, intimidates, or interferes with a person designated in section 1114;"
+        isRepealed={false}
+      />
+    );
+    const listItemSpan = screen.getByText(
+      '(1) forcibly assaults, resists, opposes, impedes, intimidates, or interferes with a person designated in section 1114;'
+    );
+    expect(listItemSpan).not.toHaveClass('font-bold');
+    expect(listItemSpan).toHaveClass('text-gray-800');
+  });
+
+  it('does not apply header styling to short list items ending with punctuation', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(A) the armed forces;"
+        isRepealed={false}
+      />
+    );
+    const span = screen.getByText('(A) the armed forces;');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
+  it('does not apply header styling to prose lines', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="Whoever knowingly does something."
+        isRepealed={false}
+      />
+    );
+    const span = screen.getByText('Whoever knowingly does something.');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
   it('does not apply hanging indent to prose lines', () => {
     render(
       <SectionProvisions
