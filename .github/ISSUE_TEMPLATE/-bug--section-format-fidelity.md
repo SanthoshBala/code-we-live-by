@@ -1,6 +1,6 @@
 ---
-name: "[Bug] Section Format"
-about: Report an issue related to the format and rendering of US Code Sections.
+name: "[Bug] Section Format Fidelity"
+about: Report an issue related to the formatting fidelity of US Code Sections.
 title: "[Bug] Section Format (XX USC §YY)"
 labels: bug
 assignees: ''
