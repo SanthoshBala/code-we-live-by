@@ -38,6 +38,8 @@ export default function SectionViewer({
         isRepealed={data.is_repealed}
       />
       <SectionProvisions
+        fullCitation={data.full_citation}
+        heading={data.heading}
         textContent={data.text_content}
         isRepealed={data.is_repealed}
       />
