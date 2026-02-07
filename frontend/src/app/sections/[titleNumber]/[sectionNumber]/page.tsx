@@ -1,13 +1,15 @@
 import MainLayout from '@/components/ui/MainLayout';
 import Sidebar from '@/components/ui/Sidebar';
 import TitleList from '@/components/tree/TitleList';
+import SectionViewer from '@/components/viewer/SectionViewer';
 
 interface SectionPageProps {
   params: { titleNumber: string; sectionNumber: string };
 }
 
 export default function SectionPage({ params }: SectionPageProps) {
-  const { titleNumber, sectionNumber } = params;
+  const titleNumber = Number(params.titleNumber);
+  const sectionNumber = params.sectionNumber;
 
   return (
     <MainLayout
@@ -17,12 +19,10 @@ export default function SectionPage({ params }: SectionPageProps) {
         </Sidebar>
       }
     >
-      <div>
-        <h1 className="mb-4 text-2xl font-bold">
-          {titleNumber} U.S.C. &sect; {sectionNumber}
-        </h1>
-        <p className="text-gray-500">Section viewer coming in Task 1A.7.</p>
-      </div>
+      <SectionViewer
+        titleNumber={titleNumber}
+        sectionNumber={sectionNumber}
+      />
     </MainLayout>
   );
 }
