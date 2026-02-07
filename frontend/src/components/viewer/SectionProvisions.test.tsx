@@ -88,15 +88,67 @@ describe('SectionProvisions', () => {
     expect(screen.getByText('(1) Nested')).toBeInTheDocument();
   });
 
-  it('preserves leading whitespace on each line', () => {
+  it('applies hanging indent classes to content spans', () => {
     const { container } = render(
       <SectionProvisions
         {...defaultProps}
-        textContent={'(a) First\n    (1) Nested'}
+        textContent="(a) First"
         isRepealed={false}
       />
     );
-    const spans = container.querySelectorAll('.whitespace-pre-wrap');
-    expect(spans[1]?.textContent).toBe('    (1) Nested');
+    // Provision content span has hanging indent and min-w-0 classes
+    const provisionSpan = container.querySelector('.whitespace-pre-wrap');
+    expect(provisionSpan).toHaveClass('pl-[4ch]', '-indent-[4ch]', 'min-w-0');
+
+    // Provision flex container has items-start
+    const provisionRow = provisionSpan!.closest('.flex');
+    expect(provisionRow).toHaveClass('items-start');
+
+    // Docstring content spans also have hanging indent
+    const docstringSpan = screen.getByText('17 U.S.C. § 106').closest('span');
+    expect(docstringSpan).toHaveClass('pl-[4ch]', '-indent-[4ch]', 'min-w-0');
+  });
+
+  it('splits leading whitespace into a separate indent span', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent={'(a) First\n\t\t(1) Nested'}
+        isRepealed={false}
+      />
+    );
+    // Leading whitespace is in a whitespace-pre span
+    const indentSpan = container.querySelector('.whitespace-pre.shrink-0');
+    expect(indentSpan).toBeInTheDocument();
+    expect(indentSpan!.textContent).toBe('\t\t');
+
+    // Text content (without leading whitespace) is in a whitespace-pre-wrap span
+    expect(screen.getByText('(1) Nested')).toBeInTheDocument();
+  });
+
+  it('omits indent span when line has no leading whitespace', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) First"
+        isRepealed={false}
+      />
+    );
+    const indentSpan = container.querySelector('.whitespace-pre.shrink-0');
+    expect(indentSpan).not.toBeInTheDocument();
+  });
+
+  it('does not apply hanging indent to prose lines', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent={'\tWhoever does something.'}
+        isRepealed={false}
+      />
+    );
+    const proseSpan = screen.getByText('Whoever does something.');
+    expect(proseSpan).not.toHaveClass('pl-[4ch]');
+    expect(proseSpan).not.toHaveClass('-indent-[4ch]');
+    expect(proseSpan).toHaveClass('min-w-0', 'whitespace-pre-wrap');
   });
 });
