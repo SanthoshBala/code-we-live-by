@@ -60,25 +60,35 @@ describe('SectionNotes', () => {
     expect(screen.getByText('Historical Notes (1)')).toBeInTheDocument();
   });
 
-  it('renders note headers', () => {
+  it('renders note headers with # prefix', () => {
     render(<SectionNotes notes={notes} />);
     expect(screen.getByText('References in Text')).toBeInTheDocument();
     expect(screen.getByText('Amendments')).toBeInTheDocument();
     expect(screen.getByText('Short Title')).toBeInTheDocument();
   });
 
-  it('renders content as preformatted text when lines is empty', () => {
+  it('renders content lines with # prefix when lines is empty', () => {
     render(<SectionNotes notes={notes} />);
     expect(
       screen.getByText('The Act referred to in subsection (a)...')
     ).toBeInTheDocument();
   });
 
-  it('renders structured lines when available', () => {
+  it('renders structured lines with # prefix when available', () => {
     render(<SectionNotes notes={notes} />);
     expect(
       screen.getByText(/2002—Subsec\. \(a\)\. Pub\. L\. 107–273/)
     ).toBeInTheDocument();
+  });
+
+  it('shows line numbers', () => {
+    render(<SectionNotes notes={notes} />);
+    // Each category starts at line 1; multiple "1"s expected across categories
+    const ones = screen.getAllByText('1');
+    expect(ones.length).toBeGreaterThanOrEqual(3); // one per category header
+    // Line 2 appears in editorial (content) and historical (first content line)
+    const twos = screen.getAllByText('2');
+    expect(twos.length).toBeGreaterThanOrEqual(2);
   });
 
   it('omits categories with no notes', () => {
