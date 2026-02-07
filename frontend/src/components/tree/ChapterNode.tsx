@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ChapterTree } from '@/lib/types';
+import { toTitleCase } from '@/lib/format';
 import TreeIndicator from './TreeIndicator';
 import SubchapterNode from './SubchapterNode';
 import SectionNode from './SectionNode';
@@ -42,7 +43,7 @@ export default function ChapterNode({
         className={`flex w-full items-center gap-1 rounded px-2 text-left font-medium text-gray-700 hover:bg-gray-100 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
       >
         <TreeIndicator expanded={expanded} />
-        <span className="truncate">{chapter.chapter_name}</span>
+        <span className="truncate">{toTitleCase(chapter.chapter_name)}</span>
       </button>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
