@@ -3,16 +3,13 @@
 import { useSection } from '@/hooks/useSection';
 import SectionHeader from './SectionHeader';
 import SectionProvisions from './SectionProvisions';
-import AmendmentList from './AmendmentList';
-import CitationList from './CitationList';
-import SectionNotes from './SectionNotes';
 
 interface SectionViewerProps {
   titleNumber: number;
   sectionNumber: string;
 }
 
-/** Client component that fetches and renders a full section view. */
+/** Client component that fetches and renders section provisions. */
 export default function SectionViewer({
   titleNumber,
   sectionNumber,
@@ -43,13 +40,6 @@ export default function SectionViewer({
         textContent={data.text_content}
         isRepealed={data.is_repealed}
       />
-      {data.notes?.has_amendments && (
-        <AmendmentList amendments={data.notes.amendments} />
-      )}
-      {data.notes?.has_citations && (
-        <CitationList citations={data.notes.citations} />
-      )}
-      {data.notes?.has_notes && <SectionNotes notes={data.notes.notes} />}
     </div>
   );
 }
