@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface SectionProvisionsProps {
   fullCitation: string;
@@ -16,11 +16,73 @@ function isHeaderLine(text: string): boolean {
   return true;
 }
 
-const headerStyles = {
-  1: 'font-bold text-blue-700',
-  2: 'font-bold text-gray-900',
-  3: 'font-bold text-violet-700',
-} as const;
+const headerMarkerClass = 'text-blue-600';
+const headerTitleClass = 'font-bold text-blue-700';
+
+/* ---- Tree-building types & helpers ---- */
+
+interface ParsedLine {
+  lineIndex: number;
+  indent: string;
+  text: string;
+  isListItem: boolean;
+  isHeader: boolean;
+}
+
+interface Section {
+  header: ParsedLine;
+  depth: number;
+  children: (ParsedLine | Section)[];
+}
+
+type TreeNode = ParsedLine | Section;
+
+function isSection(node: TreeNode): node is Section {
+  return 'depth' in node;
+}
+
+function indentLength(indent: string): number {
+  return indent.replace(/\t/g, '    ').length;
+}
+
+function buildSections(parsedLines: ParsedLine[]): TreeNode[] {
+  const root: TreeNode[] = [];
+  const stack: Section[] = [];
+
+  for (const pl of parsedLines) {
+    if (pl.isHeader) {
+      const len = indentLength(pl.indent);
+      while (stack.length > 0) {
+        const top = stack[stack.length - 1];
+        if (indentLength(top.header.indent) >= len) {
+          stack.pop();
+        } else {
+          break;
+        }
+      }
+      const section: Section = {
+        header: pl,
+        depth: stack.length,
+        children: [],
+      };
+      if (stack.length > 0) {
+        stack[stack.length - 1].children.push(section);
+      } else {
+        root.push(section);
+      }
+      stack.push(section);
+    } else {
+      if (stack.length > 0) {
+        stack[stack.length - 1].children.push(pl);
+      } else {
+        root.push(pl);
+      }
+    }
+  }
+  return root;
+}
+
+/* ---- Component ---- */
 
 /** Renders the operative law text as numbered lines like a code file. */
 export default function SectionProvisions({
@@ -29,7 +91,53 @@ export default function SectionProvisions({
   textContent,
   isRepealed,
 }: SectionProvisionsProps) {
-  const [headerStyle, setHeaderStyle] = useState<1 | 2 | 3>(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [stuckHeaders, setStuckHeaders] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof IntersectionObserver === 'undefined') return;
+
+    setStuckHeaders(new Set());
+
+    // Find the nearest scrollable ancestor for the IO root
+    let scrollParent: Element | null = container.parentElement;
+    while (scrollParent) {
+      const { overflowY } = getComputedStyle(scrollParent);
+      if (overflowY === 'auto' || overflowY === 'scroll') break;
+      scrollParent = scrollParent.parentElement;
+    }
+
+    const sentinels = container.querySelectorAll<HTMLElement>(
+      '[data-sticky-sentinel]'
+    );
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setStuckHeaders((prev) => {
+          const next = new Set(prev);
+          for (const entry of entries) {
+            const index = Number(
+              (entry.target as HTMLElement).dataset.stickySentinel
+            );
+            if (
+              !entry.isIntersecting &&
+              entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0)
+            ) {
+              next.add(index);
+            } else {
+              next.delete(index);
+            }
+          }
+          return next;
+        });
+      },
+      { root: scrollParent, threshold: 0 }
+    );
+
+    sentinels.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  }, [textContent]);
 
   if (!textContent) {
     return (
@@ -45,29 +153,89 @@ export default function SectionProvisions({
   const blankLineNumber = docstring.length + 1;
   const lines = textContent.split('\n');
 
+  const parsedLines: ParsedLine[] = lines.map((line, i) => {
+    const match = line.match(/^(\s*)(.*)/);
+    const indent = match?.[1] ?? '';
+    const text = match?.[2] ?? line;
+    return {
+      lineIndex: i,
+      indent,
+      text,
+      isListItem: /^\([a-zA-Z0-9]+\)/.test(text),
+      isHeader: isHeaderLine(text),
+    };
+  });
+
+  const tree = buildSections(parsedLines);
+
+  function renderLineContent(pl: ParsedLine) {
+    return (
+      <>
+        <span className="w-10 shrink-0 select-none text-right text-gray-400">
+          {pl.lineIndex + 1 + blankLineNumber}
+        </span>
+        <span className="mx-2 select-none text-gray-400">│</span>
+        {pl.indent && (
+          <span className="shrink-0 whitespace-pre text-gray-800">
+            {pl.indent}
+          </span>
+        )}
+        <span
+          className={`min-w-0 whitespace-pre-wrap ${pl.isHeader ? '' : 'text-gray-800'}${pl.isListItem ? ' pl-[4ch] -indent-[4ch]' : ''}`}
+        >
+          {pl.isHeader
+            ? (() => {
+                const headerMatch = pl.text.match(/^(\([a-zA-Z0-9]+\)\s*)(.*)/);
+                const marker = headerMatch?.[1] ?? '';
+                const title = headerMatch?.[2] ?? pl.text;
+                return (
+                  <>
+                    <span className={headerMarkerClass}>{marker}</span>
+                    <span className={headerTitleClass}>{title}</span>
+                  </>
+                );
+              })()
+            : pl.text}
+        </span>
+      </>
+    );
+  }
+
+  function renderNode(node: TreeNode): React.ReactNode {
+    if (isSection(node)) {
+      const pl = node.header;
+      const topOffset = node.depth * 1.625;
+      return (
+        <div key={`section-${pl.lineIndex}`}>
+          <div
+            data-sticky-sentinel={pl.lineIndex}
+            className="h-0"
+            aria-hidden="true"
+          />
+          <div
+            data-sticky-header={pl.lineIndex}
+            className={`sticky z-10 flex items-start bg-gray-100${stuckHeaders.has(pl.lineIndex) ? ' border-b border-gray-200' : ''}`}
+            style={{ top: `${topOffset}em` }}
+          >
+            {renderLineContent(pl)}
+          </div>
+          {node.children.map(renderNode)}
+        </div>
+      );
+    }
+    return (
+      <div key={node.lineIndex} className="flex items-start">
+        {renderLineContent(node)}
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div className="mb-2 flex items-center gap-1">
-        <span className="mr-1 text-xs text-gray-500">Headers:</span>
-        {([1, 2, 3] as const).map((style) => (
-          <button
-            key={style}
-            onClick={() => setHeaderStyle(style)}
-            className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
-              headerStyle === style
-                ? style === 1
-                  ? 'bg-blue-100 text-blue-700'
-                  : style === 2
-                    ? 'bg-gray-200 text-gray-900'
-                    : 'bg-violet-100 text-violet-700'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}
-          >
-            {style === 1 ? 'Blue' : style === 2 ? 'Bold' : 'Purple'}
-          </button>
-        ))}
-      </div>
-      <div className="rounded bg-gray-100 py-2 pr-8 font-mono text-sm leading-relaxed">
+      <div
+        ref={containerRef}
+        className="rounded bg-gray-100 py-2 pr-8 font-mono text-sm leading-relaxed"
+      >
         {docstring.map((text, i) => (
           <div key={`doc-${i}`} className="flex items-start text-green-700">
             <span className="w-10 shrink-0 select-none text-right text-gray-400">
@@ -86,31 +254,7 @@ export default function SectionProvisions({
           </span>
           <span className="mx-2 select-none text-gray-400">│</span>
         </div>
-        {lines.map((line, i) => {
-          const match = line.match(/^(\s*)(.*)/);
-          const indent = match?.[1] ?? '';
-          const text = match?.[2] ?? line;
-          const isListItem = /^\([a-zA-Z0-9]+\)/.test(text);
-          const isHeader = isHeaderLine(text);
-          return (
-            <div key={i} className="flex items-start">
-              <span className="w-10 shrink-0 select-none text-right text-gray-400">
-                {i + 1 + blankLineNumber}
-              </span>
-              <span className="mx-2 select-none text-gray-400">│</span>
-              {indent && (
-                <span className="shrink-0 whitespace-pre text-gray-800">
-                  {indent}
-                </span>
-              )}
-              <span
-                className={`min-w-0 whitespace-pre-wrap ${isHeader ? headerStyles[headerStyle] : 'text-gray-800'}${isListItem ? ' pl-[4ch] -indent-[4ch]' : ''}`}
-              >
-                {text}
-              </span>
-            </div>
-          );
-        })}
+        {tree.map(renderNode)}
       </div>
     </div>
   );

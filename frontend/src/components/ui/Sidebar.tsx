@@ -41,7 +41,7 @@ export default function Sidebar({ children }: { children?: React.ReactNode }) {
 
   return (
     <aside
-      className="relative hidden shrink-0 border-r border-gray-200 bg-gray-50 p-4 md:block"
+      className="relative hidden shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 p-4 md:block"
       style={{ width }}
     >
       {children ?? (
