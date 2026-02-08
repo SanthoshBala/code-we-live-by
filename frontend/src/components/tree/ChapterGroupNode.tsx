@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import type { ChapterGroupTree, TreeActivePath } from '@/lib/types';
 import TreeIndicator from './TreeIndicator';
 import ChapterNode from './ChapterNode';
@@ -6,6 +7,7 @@ import ChapterNode from './ChapterNode';
 interface ChapterGroupNodeProps {
   group: ChapterGroupTree;
   titleNumber: number;
+  parentPath: string;
   activePath?: TreeActivePath;
 }
 
@@ -14,6 +16,14 @@ function groupContainsActive(
   activePath?: TreeActivePath
 ): boolean {
   if (!activePath) return false;
+  // Check if this group is on the active group path
+  if (
+    activePath.groupPath?.some(
+      (gp) => gp.type === group.group_type && gp.number === group.group_number
+    )
+  ) {
+    return true;
+  }
   // Check chapters in this group
   for (const ch of group.chapters) {
     if (activePath.chapterNumber === ch.chapter_number) return true;
@@ -44,8 +54,10 @@ function capitalizeGroupType(type: string): string {
 export default function ChapterGroupNode({
   group,
   titleNumber,
+  parentPath,
   activePath,
 }: ChapterGroupNodeProps) {
+  const groupHref = `${parentPath}/${group.group_type}/${group.group_number}`;
   const [expanded, setExpanded] = useState(
     groupContainsActive(group, activePath)
   );
@@ -61,12 +73,12 @@ export default function ChapterGroupNode({
           expanded={expanded}
           onToggle={() => setExpanded((prev) => !prev)}
         />
-        <button
-          onClick={() => setExpanded((prev) => !prev)}
+        <Link
+          href={groupHref}
           className="min-w-0 truncate text-left hover:text-primary-700"
         >
           {group.group_name}
-        </button>
+        </Link>
       </div>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
@@ -78,6 +90,7 @@ export default function ChapterGroupNode({
               key={`${cg.group_type}-${cg.group_number}`}
               group={cg}
               titleNumber={titleNumber}
+              parentPath={groupHref}
               activePath={activePath}
             />
           ))}

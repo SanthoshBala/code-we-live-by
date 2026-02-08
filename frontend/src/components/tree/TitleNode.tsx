@@ -25,7 +25,8 @@ export default function TitleNode({ title, activePath }: TitleNodeProps) {
 
   const isActive =
     activePath?.titleNumber === title.title_number &&
-    !activePath?.chapterNumber;
+    !activePath?.chapterNumber &&
+    !activePath?.groupPath?.length;
 
   return (
     <div>
@@ -59,6 +60,7 @@ export default function TitleNode({ title, activePath }: TitleNodeProps) {
               key={`${g.group_type}-${g.group_number}`}
               group={g}
               titleNumber={title.title_number}
+              parentPath={`/titles/${title.title_number}`}
               activePath={activePath}
             />
           ))}
