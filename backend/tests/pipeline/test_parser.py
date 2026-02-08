@@ -7,6 +7,7 @@ from lxml import etree
 
 from pipeline.olrc.parser import (
     USLMParser,
+    _clean_bracket_heading,
     compute_text_hash,
     title_case_heading,
     to_title_case,
@@ -379,3 +380,35 @@ class TestTitleCaseHeading:
             title_case_heading("PROTECTION OF TRADING WITH ENEMIES")
             == "Protection of Trading with Enemies"
         )
+
+
+class TestCleanBracketHeading:
+    """Tests for _clean_bracket_heading()."""
+
+    def test_trailing_bracket_allcaps(self) -> None:
+        """Test trailing bracket from split-bracket REPEALED status."""
+        assert _clean_bracket_heading("REPEALED]") == "REPEALED"
+
+    def test_trailing_bracket_mixed_case(self) -> None:
+        """Test trailing bracket from split-bracket Repealed status."""
+        assert _clean_bracket_heading("Repealed]") == "Repealed"
+
+    def test_trailing_bracket_transferred(self) -> None:
+        """Test trailing bracket from split-bracket TRANSFERRED status."""
+        assert _clean_bracket_heading("TRANSFERRED]") == "TRANSFERRED"
+
+    def test_fully_bracketed_reserved(self) -> None:
+        """Test fully bracketed [Reserved] heading."""
+        assert _clean_bracket_heading("[Reserved]") == "Reserved"
+
+    def test_fully_bracketed_allcaps_reserved(self) -> None:
+        """Test fully bracketed [RESERVED] heading."""
+        assert _clean_bracket_heading("[RESERVED]") == "RESERVED"
+
+    def test_normal_heading_unchanged(self) -> None:
+        """Test normal heading without brackets is unchanged."""
+        assert _clean_bracket_heading("GENERAL PROVISIONS") == "GENERAL PROVISIONS"
+
+    def test_empty_string(self) -> None:
+        """Test empty string returns empty string."""
+        assert _clean_bracket_heading("") == ""

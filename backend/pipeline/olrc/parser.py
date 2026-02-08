@@ -92,6 +92,23 @@ def title_case_heading(text: str) -> str:
     return " ".join(result)
 
 
+def _clean_bracket_heading(text: str) -> str:
+    """Strip orphaned brackets from heading text.
+
+    OLRC XML splits bracket-enclosed status markers across <num> and <heading>
+    elements, e.g. ``<num>[CHAPTER 5—</num><heading>REPEALED]</heading>``.
+    This produces headings like ``REPEALED]`` (trailing bracket, missing opening
+    bracket) or ``[Reserved]`` (fully bracketed). Strip leading ``[`` and
+    trailing ``]`` so downstream title-casing works on clean text.
+    """
+    text = text.strip()
+    if text.startswith("["):
+        text = text[1:]
+    if text.endswith("]"):
+        text = text[:-1]
+    return text.strip()
+
+
 # Alias for backward compatibility
 to_title_case = title_case_heading
 
@@ -513,7 +530,9 @@ class USLMParser:
 
         # Extract chapter number and name (convert ALL-CAPS to Title Case)
         chapter_number = self._get_number(chapter_elem)
-        chapter_name = title_case_heading(self._get_heading(chapter_elem))
+        chapter_name = title_case_heading(
+            _clean_bracket_heading(self._get_heading(chapter_elem))
+        )
 
         if not chapter_number:
             chapter_number = str(self._chapter_order)
@@ -564,7 +583,9 @@ class USLMParser:
         self._section_order = 0
 
         subch_number = self._get_number(subch_elem)
-        subch_name = title_case_heading(self._get_heading(subch_elem))
+        subch_name = title_case_heading(
+            _clean_bracket_heading(self._get_heading(subch_elem))
+        )
 
         if not subch_number:
             subch_number = str(self._subchapter_order)
