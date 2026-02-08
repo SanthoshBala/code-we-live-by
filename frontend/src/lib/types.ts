@@ -46,6 +46,33 @@ export interface TitleStructure {
   chapters: ChapterTree[];
 }
 
+// --- Tree navigator types ---
+
+/** Identifies the active item in the tree so ancestors auto-expand and the node highlights. */
+export interface TreeActivePath {
+  titleNumber?: number;
+  chapterNumber?: string;
+  subchapterNumber?: string;
+  sectionNumber?: string;
+}
+
+/** An item displayed in a directory table row. */
+export interface DirectoryItem {
+  id: string;
+  name: string;
+  href: string;
+  kind: 'folder' | 'file';
+  sectionCount?: number | null;
+  lastAmendmentLaw?: string | null;
+  lastAmendmentYear?: number | null;
+}
+
+/** A breadcrumb segment with label and optional link. */
+export interface BreadcrumbSegment {
+  label: string;
+  href?: string;
+}
+
 // --- Section viewer types ---
 
 /** A single line of rendered section content. */

@@ -1,12 +1,26 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import SectionHeader from './SectionHeader';
 
+vi.mock('next/link', () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 describe('SectionHeader', () => {
-  it('renders citation and heading', () => {
+  it('renders heading as the page title', () => {
     render(
       <SectionHeader
-        fullCitation="17 U.S.C. § 106"
         heading="Exclusive rights in copyrighted works"
         enactedDate={null}
         lastModifiedDate={null}
@@ -14,16 +28,40 @@ describe('SectionHeader', () => {
         isRepealed={false}
       />
     );
-    expect(screen.getByText('17 U.S.C. § 106')).toBeInTheDocument();
-    expect(
-      screen.getByText('Exclusive rights in copyrighted works')
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Exclusive rights in copyrighted works'
+    );
+  });
+
+  it('renders breadcrumbs as subtitle', () => {
+    render(
+      <SectionHeader
+        heading="Exclusive rights"
+        breadcrumbs={[
+          { label: 'Title 17', href: '/titles/17' },
+          { label: 'Chapter 1', href: '/titles/17/chapters/1' },
+          { label: '\u00A7\u2009106' },
+        ]}
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        isRepealed={false}
+      />
+    );
+    expect(screen.getByRole('link', { name: 'Title 17' })).toHaveAttribute(
+      'href',
+      '/titles/17'
+    );
+    expect(screen.getByRole('link', { name: 'Chapter 1' })).toHaveAttribute(
+      'href',
+      '/titles/17/chapters/1'
+    );
+    expect(screen.getByText(/§/)).toBeInTheDocument();
   });
 
   it('shows Positive Law badge when isPositiveLaw is true', () => {
     render(
       <SectionHeader
-        fullCitation="17 U.S.C. § 106"
         heading="Test"
         enactedDate={null}
         lastModifiedDate={null}
@@ -37,7 +75,6 @@ describe('SectionHeader', () => {
   it('shows Repealed badge when isRepealed is true', () => {
     render(
       <SectionHeader
-        fullCitation="17 U.S.C. § 106"
         heading="Test"
         enactedDate={null}
         lastModifiedDate={null}
@@ -51,7 +88,6 @@ describe('SectionHeader', () => {
   it('shows enacted and last modified dates when provided', () => {
     render(
       <SectionHeader
-        fullCitation="17 U.S.C. § 106"
         heading="Test"
         enactedDate="1976-10-19"
         lastModifiedDate="2020-01-01"
@@ -66,7 +102,6 @@ describe('SectionHeader', () => {
   it('hides dates when not provided', () => {
     render(
       <SectionHeader
-        fullCitation="17 U.S.C. § 106"
         heading="Test"
         enactedDate={null}
         lastModifiedDate={null}
@@ -81,7 +116,6 @@ describe('SectionHeader', () => {
   it('renders latest amendment badge when provided', () => {
     render(
       <SectionHeader
-        fullCitation="17 U.S.C. § 106"
         heading="Test"
         enactedDate={null}
         lastModifiedDate={null}
@@ -93,20 +127,5 @@ describe('SectionHeader', () => {
     expect(screen.getByText('PL 116-283')).toBeInTheDocument();
     expect(screen.getByText(/2021/)).toBeInTheDocument();
     expect(screen.getByText(/Last amended by/)).toBeInTheDocument();
-  });
-
-  it('does not render latest amendment badge when null', () => {
-    render(
-      <SectionHeader
-        fullCitation="17 U.S.C. § 106"
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={false}
-        isRepealed={false}
-        latestAmendment={null}
-      />
-    );
-    expect(screen.queryByText(/Last amended by/)).not.toBeInTheDocument();
   });
 });

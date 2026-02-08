@@ -17,9 +17,9 @@ const FILE_TO_CATEGORY: Record<string, SectionNote['category']> = {
 };
 
 const CATEGORY_LABELS: Record<SectionNote['category'], string> = {
-  editorial: 'editorial',
-  statutory: 'statutory',
-  historical: 'historical',
+  editorial: 'Editorial Notes',
+  statutory: 'Statutory Notes',
+  historical: 'Historical Notes',
 };
 
 /** Client component that renders notes for a single category. */
@@ -43,13 +43,24 @@ export default function NotesViewer({
     (n) => n.category === category
   );
 
+  const fullCitation = data.full_citation ?? '';
+  const heading = data.heading ?? '';
+  const categoryLabel = CATEGORY_LABELS[category];
+
   if (filtered.length === 0) {
     return (
       <p className="text-gray-500">
-        No {CATEGORY_LABELS[category]} notes for this section.
+        No {categoryLabel.toLowerCase()} for this section.
       </p>
     );
   }
 
-  return <SectionNotes notes={filtered} />;
+  return (
+    <SectionNotes
+      notes={filtered}
+      fullCitation={fullCitation}
+      heading={heading}
+      categoryLabel={categoryLabel}
+    />
+  );
 }

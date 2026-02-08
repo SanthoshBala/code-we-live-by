@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { ChapterTree } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import type { ChapterTree, TreeActivePath } from '@/lib/types';
 import TreeIndicator from './TreeIndicator';
 import SubchapterNode from './SubchapterNode';
 import SectionNode from './SectionNode';
@@ -7,43 +8,65 @@ import SectionNode from './SectionNode';
 interface ChapterNodeProps {
   chapter: ChapterTree;
   titleNumber: number;
-  compact?: boolean;
-  activeSectionNumber?: string;
+  activePath?: TreeActivePath;
 }
 
-function chapterContainsSection(
+function chapterContainsActive(
   chapter: ChapterTree,
-  sectionNumber: string
+  activePath?: TreeActivePath
 ): boolean {
-  return (
-    chapter.sections.some((s) => s.section_number === sectionNumber) ||
-    chapter.subchapters.some((sub) =>
-      sub.sections.some((s) => s.section_number === sectionNumber)
-    )
-  );
+  if (!activePath) return false;
+  if (activePath.chapterNumber) {
+    return chapter.chapter_number === activePath.chapterNumber;
+  }
+  if (activePath.sectionNumber) {
+    return (
+      chapter.sections.some(
+        (s) => s.section_number === activePath.sectionNumber
+      ) ||
+      chapter.subchapters.some((sub) =>
+        sub.sections.some((s) => s.section_number === activePath.sectionNumber)
+      )
+    );
+  }
+  return false;
 }
 
 /** Expandable chapter row in the tree. */
 export default function ChapterNode({
   chapter,
   titleNumber,
-  compact,
-  activeSectionNumber,
+  activePath,
 }: ChapterNodeProps) {
   const [expanded, setExpanded] = useState(
-    !!activeSectionNumber &&
-      chapterContainsSection(chapter, activeSectionNumber)
+    chapterContainsActive(chapter, activePath)
   );
+
+  useEffect(() => {
+    if (chapterContainsActive(chapter, activePath)) setExpanded(true);
+  }, [chapter, activePath]);
+
+  const isActive =
+    activePath?.chapterNumber === chapter.chapter_number &&
+    !activePath?.subchapterNumber &&
+    !activePath?.sectionNumber;
 
   return (
     <div>
-      <button
-        onClick={() => setExpanded((prev) => !prev)}
-        className={`flex w-full items-center gap-1 rounded px-2 text-left font-medium text-gray-700 hover:bg-gray-100 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
+      <div
+        className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-100 ${isActive ? 'bg-primary-50' : ''}`}
       >
-        <TreeIndicator expanded={expanded} />
-        <span className="truncate">{chapter.chapter_name}</span>
-      </button>
+        <TreeIndicator
+          expanded={expanded}
+          onToggle={() => setExpanded((prev) => !prev)}
+        />
+        <Link
+          href={`/titles/${titleNumber}/chapters/${chapter.chapter_number}`}
+          className="min-w-0 truncate hover:text-primary-700"
+        >
+          {chapter.chapter_name}
+        </Link>
+      </div>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
           <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
@@ -55,8 +78,7 @@ export default function ChapterNode({
               subchapter={sub}
               titleNumber={titleNumber}
               chapterNumber={chapter.chapter_number}
-              compact={compact}
-              activeSectionNumber={activeSectionNumber}
+              activePath={activePath}
             />
           ))}
           {chapter.sections.map((section) => (
@@ -64,8 +86,7 @@ export default function ChapterNode({
               key={section.section_number}
               section={section}
               titleNumber={titleNumber}
-              compact={compact}
-              defaultExpanded={section.section_number === activeSectionNumber}
+              isActive={activePath?.sectionNumber === section.section_number}
             />
           ))}
         </div>

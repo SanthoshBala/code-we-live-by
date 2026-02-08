@@ -9,8 +9,7 @@ import FileIcon from './icons/FileIcon';
 interface SectionNodeProps {
   section: SectionSummary;
   titleNumber: number;
-  compact?: boolean;
-  defaultExpanded?: boolean;
+  isActive?: boolean;
 }
 
 const NOTE_FILES: { file: string; category: string }[] = [
@@ -19,50 +18,52 @@ const NOTE_FILES: { file: string; category: string }[] = [
   { file: 'HISTORICAL_NOTES', category: 'historical' },
 ];
 
-/** Expandable section node showing file children (provisions + notes). */
+/** Expandable section node showing file children (Code + notes). */
 export default function SectionNode({
   section,
   titleNumber,
-  compact,
-  defaultExpanded = false,
+  isActive,
 }: SectionNodeProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useState(!!isActive);
   const basePath = `/sections/${titleNumber}/${section.section_number}`;
+  const noteCategories = section.note_categories ?? [];
+  const noteFiles = NOTE_FILES.filter(({ category }) =>
+    noteCategories.includes(category)
+  );
 
   return (
     <div>
-      <button
-        onClick={() => setExpanded((prev) => !prev)}
-        className={`flex w-full items-center gap-1.5 overflow-hidden rounded px-2 text-left text-gray-700 hover:bg-gray-100 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
+      <div
+        className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 ${isActive ? 'bg-primary-50' : ''}`}
       >
-        <TreeIndicator expanded={expanded} />
-        <span className="shrink-0 whitespace-nowrap font-mono text-gray-500">
-          &sect;&thinsp;{section.section_number}
-        </span>
-        <span className="min-w-0 truncate">{section.heading}</span>
-        <span className="ml-auto w-28 shrink-0 text-right font-mono text-xs text-gray-400">
-          {section.last_amendment_law}
-        </span>
-        <span className="w-20 shrink-0 text-right font-mono text-xs text-gray-400">
-          {section.last_amendment_year}
-        </span>
-      </button>
+        <TreeIndicator
+          expanded={expanded}
+          onToggle={() => setExpanded((prev) => !prev)}
+        />
+        <Link
+          href={basePath}
+          className="min-w-0 truncate hover:text-primary-700"
+        >
+          {section.heading}
+        </Link>
+      </div>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
+          <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
+            &sect;&thinsp;{section.section_number}
+          </p>
           <Link
-            href={basePath}
-            className={`flex items-center gap-1.5 overflow-hidden rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
+            href={`${basePath}/CODE`}
+            className="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-primary-50 hover:text-primary-700"
           >
             <FileIcon />
-            <span className="font-mono">{section.section_number}</span>
+            <span className="truncate">{section.heading}</span>
           </Link>
-          {NOTE_FILES.filter(({ category }) =>
-            section.note_categories?.includes(category)
-          ).map(({ file }) => (
+          {noteFiles.map(({ file }) => (
             <Link
               key={file}
               href={`${basePath}/${file}`}
-              className={`flex items-center gap-1.5 overflow-hidden rounded px-2 text-gray-700 hover:bg-primary-50 hover:text-primary-700 ${compact ? 'py-0.5 text-xs' : 'py-1 text-sm'}`}
+              className="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-primary-50 hover:text-primary-700"
             >
               <FileIcon />
               <span className="font-mono">{file}</span>
