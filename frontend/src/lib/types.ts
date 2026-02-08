@@ -65,6 +65,7 @@ export interface TreeActivePath {
   chapterNumber?: string;
   subchapterNumber?: string;
   sectionNumber?: string;
+  groupPath?: { type: string; number: string }[];
 }
 
 /** An item displayed in a directory table row. */
