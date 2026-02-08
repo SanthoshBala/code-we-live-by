@@ -3,6 +3,8 @@
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import type {
+  ChapterGroupTree,
+  ChapterTree,
   DirectoryItem,
   SectionSummary,
   BreadcrumbSegment,
@@ -31,6 +33,19 @@ function latestAmendment(sections: SectionSummary[]): {
   return latest;
 }
 
+function findChapterInGroups(
+  groups: ChapterGroupTree[],
+  chapterNumber: string
+): ChapterTree | undefined {
+  for (const g of groups) {
+    const found = g.chapters.find((ch) => ch.chapter_number === chapterNumber);
+    if (found) return found;
+    const nested = findChapterInGroups(g.child_groups, chapterNumber);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 /** Chapter directory page showing subchapters and sections. */
 export default function ChapterDirectoryPage() {
   const params = useParams<{ titleNumber: string; chapterNumber: string }>();
@@ -50,9 +65,9 @@ export default function ChapterDirectoryPage() {
     return <p className="text-red-600">Failed to load title structure.</p>;
   }
 
-  const chapter = structure.chapters.find(
-    (ch) => ch.chapter_number === chapterNumber
-  );
+  const chapter =
+    structure.chapters.find((ch) => ch.chapter_number === chapterNumber) ??
+    findChapterInGroups(structure.chapter_groups ?? [], chapterNumber);
 
   if (!chapter) {
     return <p className="text-red-600">Chapter not found.</p>;

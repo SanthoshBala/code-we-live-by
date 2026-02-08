@@ -3,6 +3,8 @@
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import type {
+  ChapterGroupTree,
+  ChapterTree,
   DirectoryItem,
   SectionSummary,
   BreadcrumbSegment,
@@ -31,7 +33,42 @@ function latestAmendment(sections: SectionSummary[]): {
   return latest;
 }
 
-/** Title directory page showing chapters. */
+function capitalizeGroupType(type: string): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function collectAllSections(group: ChapterGroupTree): SectionSummary[] {
+  const sections: SectionSummary[] = [];
+  for (const ch of group.chapters) {
+    sections.push(...ch.sections);
+    for (const sub of ch.subchapters) {
+      sections.push(...sub.sections);
+    }
+  }
+  for (const cg of group.child_groups) {
+    sections.push(...collectAllSections(cg));
+  }
+  return sections;
+}
+
+function chapterToItem(ch: ChapterTree, titleNumber: number): DirectoryItem {
+  const allSections = [
+    ...ch.sections,
+    ...ch.subchapters.flatMap((sub) => sub.sections),
+  ];
+  const amendment = latestAmendment(allSections);
+  return {
+    id: `Ch. ${ch.chapter_number}`,
+    name: ch.chapter_name,
+    href: `/titles/${titleNumber}/chapters/${ch.chapter_number}`,
+    kind: 'folder' as const,
+    sectionCount: allSections.length,
+    lastAmendmentLaw: amendment.law,
+    lastAmendmentYear: amendment.year,
+  };
+}
+
+/** Title directory page showing chapter groups and ungrouped chapters. */
 export default function TitleDirectoryPage() {
   const params = useParams<{ titleNumber: string }>();
   const titleNumber = Number(params.titleNumber);
@@ -51,22 +88,27 @@ export default function TitleDirectoryPage() {
 
   const breadcrumbs: BreadcrumbSegment[] = [{ label: `Title ${titleNumber}` }];
 
-  const items: DirectoryItem[] = structure.chapters.map((ch) => {
-    const allSections = [
-      ...ch.sections,
-      ...ch.subchapters.flatMap((sub) => sub.sections),
-    ];
+  const items: DirectoryItem[] = [];
+
+  // Groups first
+  for (const g of structure.chapter_groups ?? []) {
+    const allSections = collectAllSections(g);
     const amendment = latestAmendment(allSections);
-    return {
-      id: `Ch. ${ch.chapter_number}`,
-      name: ch.chapter_name,
-      href: `/titles/${titleNumber}/chapters/${ch.chapter_number}`,
+    items.push({
+      id: `${capitalizeGroupType(g.group_type)} ${g.group_number}`,
+      name: `${capitalizeGroupType(g.group_type)} ${g.group_number} \u2014 ${g.group_name}`,
+      href: `/titles/${titleNumber}/${g.group_type}/${g.group_number}`,
       kind: 'folder' as const,
       sectionCount: allSections.length,
       lastAmendmentLaw: amendment.law,
       lastAmendmentYear: amendment.year,
-    };
-  });
+    });
+  }
+
+  // Ungrouped chapters
+  for (const ch of structure.chapters) {
+    items.push(chapterToItem(ch, titleNumber));
+  }
 
   return (
     <DirectoryView
