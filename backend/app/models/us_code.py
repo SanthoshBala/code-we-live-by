@@ -44,6 +44,9 @@ class USCodeTitle(Base, TimestampMixin):
     chapters: Mapped[list["USCodeChapter"]] = relationship(
         back_populates="title", cascade="all, delete-orphan"
     )
+    chapter_groups: Mapped[list["USCodeChapterGroup"]] = relationship(
+        back_populates="title", cascade="all, delete-orphan"
+    )
     sections: Mapped[list["USCodeSection"]] = relationship(back_populates="title")
 
     __table_args__ = (
@@ -58,6 +61,54 @@ class USCodeTitle(Base, TimestampMixin):
         return f"<USCodeTitle({self.title_number}: {self.title_name})>"
 
 
+class USCodeChapterGroup(Base, TimestampMixin):
+    """A structural grouping above chapters (subtitle, part, division)."""
+
+    __tablename__ = "us_code_chapter_group"
+
+    group_id: Mapped[int] = mapped_column(primary_key=True)
+    title_id: Mapped[int] = mapped_column(
+        ForeignKey("us_code_title.title_id", ondelete="CASCADE"), nullable=False
+    )
+    parent_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("us_code_chapter_group.group_id", ondelete="CASCADE"), nullable=True
+    )
+    group_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    group_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    group_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Relationships
+    title: Mapped["USCodeTitle"] = relationship(back_populates="chapter_groups")
+    parent_group: Mapped[Optional["USCodeChapterGroup"]] = relationship(
+        remote_side=[group_id], foreign_keys=[parent_group_id]
+    )
+    child_groups: Mapped[list["USCodeChapterGroup"]] = relationship(
+        back_populates="parent_group", foreign_keys=[parent_group_id]
+    )
+    chapters: Mapped[list["USCodeChapter"]] = relationship(
+        back_populates="chapter_group"
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "title_id",
+            "group_type",
+            "group_number",
+            "parent_group_id",
+            name="uq_chapter_group_identity",
+        ),
+        Index("idx_chapter_group_title", "title_id"),
+        Index("idx_chapter_group_parent", "parent_group_id"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<USCodeChapterGroup({self.group_type} {self.group_number}: "
+            f"{self.group_name})>"
+        )
+
+
 class USCodeChapter(Base, TimestampMixin):
     """A chapter within a US Code title."""
 
@@ -67,12 +118,19 @@ class USCodeChapter(Base, TimestampMixin):
     title_id: Mapped[int] = mapped_column(
         ForeignKey("us_code_title.title_id", ondelete="CASCADE"), nullable=False
     )
+    group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("us_code_chapter_group.group_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     chapter_number: Mapped[str] = mapped_column(String(50), nullable=False)
     chapter_name: Mapped[str] = mapped_column(String(500), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Relationships
     title: Mapped["USCodeTitle"] = relationship(back_populates="chapters")
+    chapter_group: Mapped[Optional["USCodeChapterGroup"]] = relationship(
+        back_populates="chapters"
+    )
     subchapters: Mapped[list["USCodeSubchapter"]] = relationship(
         back_populates="chapter", cascade="all, delete-orphan"
     )

@@ -38,6 +38,7 @@ from app.models.supporting import (
 )
 from app.models.us_code import (
     USCodeChapter,
+    USCodeChapterGroup,
     USCodeLine,
     USCodeSection,
     USCodeSubchapter,
@@ -75,6 +76,7 @@ __all__ = [
     "VoteType",
     # US Code
     "USCodeTitle",
+    "USCodeChapterGroup",
     "USCodeChapter",
     "USCodeSubchapter",
     "USCodeSection",
