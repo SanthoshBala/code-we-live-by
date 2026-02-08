@@ -318,6 +318,7 @@ class SectionViewerSchema(BaseModel):
     heading: str
     full_citation: str
     text_content: str | None
+    provisions: list[CodeLineSchema] | None = None
     enacted_date: date | None
     last_modified_date: date | None
     is_positive_law: bool

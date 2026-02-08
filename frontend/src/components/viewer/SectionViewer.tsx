@@ -38,6 +38,7 @@ export default function SectionViewer({
         fullCitation={data.full_citation}
         heading={data.heading}
         textContent={data.text_content}
+        provisions={data.provisions}
         isRepealed={data.is_repealed}
       />
     </div>

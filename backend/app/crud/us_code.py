@@ -12,6 +12,7 @@ from app.models.us_code import (
 )
 from app.schemas.us_code import (
     ChapterTreeSchema,
+    CodeLineSchema,
     SectionNotesSchema,
     SectionSummarySchema,
     SectionViewerSchema,
@@ -201,12 +202,20 @@ async def get_section(
     if section.normalized_notes is not None:
         notes = SectionNotesSchema.model_validate(section.normalized_notes)
 
+    provisions = None
+    if section.normalized_provisions is not None:
+        provisions = [
+            CodeLineSchema.model_validate(line)
+            for line in section.normalized_provisions
+        ]
+
     return SectionViewerSchema(
         title_number=title_number,
         section_number=section.section_number,
         heading=section.heading,
         full_citation=section.full_citation,
         text_content=section.text_content,
+        provisions=provisions,
         enacted_date=section.enacted_date,
         last_modified_date=section.last_modified_date,
         is_positive_law=section.is_positive_law,

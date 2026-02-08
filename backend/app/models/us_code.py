@@ -155,6 +155,9 @@ class USCodeSection(Base, TimestampMixin):
     normalized_notes: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
+    normalized_provisions: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Relationships
