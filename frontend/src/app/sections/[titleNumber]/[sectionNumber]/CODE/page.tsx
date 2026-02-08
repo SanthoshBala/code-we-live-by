@@ -58,7 +58,7 @@ function buildBreadcrumbs(
 export default function SectionCodePage() {
   const params = useParams<{ titleNumber: string; sectionNumber: string }>();
   const titleNumber = Number(params.titleNumber);
-  const sectionNumber = params.sectionNumber;
+  const sectionNumber = decodeURIComponent(params.sectionNumber);
   const { data: structure } = useTitleStructure(titleNumber, true);
 
   const breadcrumbs = buildBreadcrumbs(structure, titleNumber, sectionNumber);

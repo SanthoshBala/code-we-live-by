@@ -87,7 +87,7 @@ function buildBreadcrumbs(
 export default function SectionDirectoryPage() {
   const params = useParams<{ titleNumber: string; sectionNumber: string }>();
   const titleNumber = Number(params.titleNumber);
-  const sectionNumber = params.sectionNumber;
+  const sectionNumber = decodeURIComponent(params.sectionNumber);
   const { data: structure, isLoading } = useTitleStructure(titleNumber, true);
 
   const basePath = `/sections/${titleNumber}/${sectionNumber}`;

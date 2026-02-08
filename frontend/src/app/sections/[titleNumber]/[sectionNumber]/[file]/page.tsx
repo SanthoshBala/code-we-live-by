@@ -97,7 +97,7 @@ export default function NoteFilePage() {
   }
 
   const titleNumber = Number(params.titleNumber);
-  const sectionNumber = params.sectionNumber;
+  const sectionNumber = decodeURIComponent(params.sectionNumber);
   const { data: structure } = useTitleStructure(titleNumber, true);
   const breadcrumbs = buildBreadcrumbs(
     structure,

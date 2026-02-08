@@ -30,7 +30,7 @@ export async function fetchSection(
   sectionNumber: string
 ): Promise<SectionView> {
   const res = await fetch(
-    `${API_BASE}/sections/${titleNumber}/${sectionNumber}`
+    `${API_BASE}/sections/${titleNumber}/${encodeURIComponent(sectionNumber)}`
   );
   if (!res.ok) {
     throw new Error(
