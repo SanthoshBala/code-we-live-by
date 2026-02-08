@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import SectionNode from './SectionNode';
 
@@ -22,121 +21,32 @@ const section = {
   section_number: '106',
   heading: 'Exclusive rights in copyrighted works',
   sort_order: 3,
-  note_categories: ['editorial', 'historical', 'statutory'],
-};
-
-const sectionNoNotes = {
-  section_number: '312',
-  heading: 'Program authorized',
-  sort_order: 1,
-  note_categories: ['editorial'],
-};
-
-const sectionWithAmendment = {
-  ...section,
-  last_amendment_year: 2020,
-  last_amendment_law: 'PL 116-283',
 };
 
 describe('SectionNode', () => {
   it('renders the section number and heading', () => {
     render(<SectionNode section={section} titleNumber={17} />);
-    expect(screen.getByText('§ 106')).toBeInTheDocument();
+    expect(screen.getByText(/106/)).toBeInTheDocument();
     expect(
       screen.getByText('Exclusive rights in copyrighted works')
     ).toBeInTheDocument();
   });
 
-  it('does not show file children when collapsed', () => {
+  it('renders as a link to the section viewer', () => {
     render(<SectionNode section={section} titleNumber={17} />);
-    expect(screen.queryByText('EDITORIAL_NOTES')).not.toBeInTheDocument();
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', '/sections/17/106');
   });
 
-  it('shows 4 file children when expanded', async () => {
-    const user = userEvent.setup();
+  it('applies active styling when isActive', () => {
+    render(<SectionNode section={section} titleNumber={17} isActive />);
+    const link = screen.getByRole('link');
+    expect(link.className).toMatch(/(?<!\S)bg-primary-50(?!\S)/);
+  });
+
+  it('does not apply active styling by default', () => {
     render(<SectionNode section={section} titleNumber={17} />);
-
-    await user.click(screen.getByRole('button'));
-
-    expect(screen.getByText('106')).toBeInTheDocument();
-    expect(screen.getByText('EDITORIAL_NOTES')).toBeInTheDocument();
-    expect(screen.getByText('STATUTORY_NOTES')).toBeInTheDocument();
-    expect(screen.getByText('HISTORICAL_NOTES')).toBeInTheDocument();
-  });
-
-  it('generates correct URLs for file children', async () => {
-    const user = userEvent.setup();
-    render(<SectionNode section={section} titleNumber={17} />);
-
-    await user.click(screen.getByRole('button'));
-
-    const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(4);
-    expect(links[0]).toHaveAttribute('href', '/sections/17/106');
-    expect(links[1]).toHaveAttribute(
-      'href',
-      '/sections/17/106/EDITORIAL_NOTES'
-    );
-    expect(links[2]).toHaveAttribute(
-      'href',
-      '/sections/17/106/STATUTORY_NOTES'
-    );
-    expect(links[3]).toHaveAttribute(
-      'href',
-      '/sections/17/106/HISTORICAL_NOTES'
-    );
-  });
-
-  it('collapses children on second click', async () => {
-    const user = userEvent.setup();
-    render(<SectionNode section={section} titleNumber={17} />);
-
-    await user.click(screen.getByRole('button'));
-    expect(screen.getByText('EDITORIAL_NOTES')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button'));
-    expect(screen.queryByText('EDITORIAL_NOTES')).not.toBeInTheDocument();
-  });
-
-  it('applies compact styling when compact is true', () => {
-    const { container } = render(
-      <SectionNode section={section} titleNumber={17} compact />
-    );
-    const button = container.querySelector('button');
-    expect(button?.className).toContain('text-xs');
-  });
-
-  it('shows amendment metadata when present', () => {
-    render(<SectionNode section={sectionWithAmendment} titleNumber={17} />);
-    expect(screen.getByText(/2020/)).toBeInTheDocument();
-    expect(screen.getByText(/PL 116-283/)).toBeInTheDocument();
-  });
-
-  it('does not show amendment metadata when absent', () => {
-    render(<SectionNode section={section} titleNumber={17} />);
-    expect(screen.queryByText('PL')).not.toBeInTheDocument();
-  });
-
-  it('only shows note files for categories that exist', async () => {
-    const user = userEvent.setup();
-    render(<SectionNode section={sectionNoNotes} titleNumber={20} />);
-
-    await user.click(screen.getByRole('button'));
-
-    expect(screen.getByText('EDITORIAL_NOTES')).toBeInTheDocument();
-    expect(screen.queryByText('STATUTORY_NOTES')).not.toBeInTheDocument();
-    expect(screen.queryByText('HISTORICAL_NOTES')).not.toBeInTheDocument();
-  });
-
-  it('shows only provisions when note_categories is empty', async () => {
-    const user = userEvent.setup();
-    const noNotes = { ...section, note_categories: [] };
-    render(<SectionNode section={noNotes} titleNumber={17} />);
-
-    await user.click(screen.getByRole('button'));
-
-    const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute('href', '/sections/17/106');
+    const link = screen.getByRole('link');
+    expect(link.className).not.toMatch(/(?<!\S)bg-primary-50(?!\S)/);
   });
 });

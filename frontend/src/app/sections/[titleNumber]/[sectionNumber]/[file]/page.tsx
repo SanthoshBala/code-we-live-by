@@ -1,3 +1,6 @@
+'use client';
+
+import { useParams } from 'next/navigation';
 import { notFound } from 'next/navigation';
 import MainLayout from '@/components/ui/MainLayout';
 import Sidebar from '@/components/ui/Sidebar';
@@ -10,11 +13,13 @@ const VALID_FILES = new Set([
   'HISTORICAL_NOTES',
 ]);
 
-interface NoteFilePageProps {
-  params: { titleNumber: string; sectionNumber: string; file: string };
-}
+export default function NoteFilePage() {
+  const params = useParams<{
+    titleNumber: string;
+    sectionNumber: string;
+    file: string;
+  }>();
 
-export default function NoteFilePage({ params }: NoteFilePageProps) {
   if (!VALID_FILES.has(params.file)) {
     notFound();
   }
@@ -27,9 +32,10 @@ export default function NoteFilePage({ params }: NoteFilePageProps) {
       sidebar={
         <Sidebar>
           <TitleList
-            compact
-            activeTitleNumber={titleNumber}
-            activeSectionNumber={sectionNumber}
+            activePath={{
+              titleNumber,
+              sectionNumber,
+            }}
           />
         </Sidebar>
       }

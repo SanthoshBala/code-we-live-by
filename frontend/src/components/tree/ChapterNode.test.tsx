@@ -38,11 +38,12 @@ const chapter = {
 };
 
 describe('ChapterNode', () => {
-  it('renders the chapter name', () => {
+  it('renders the chapter name as a link', () => {
     render(<ChapterNode chapter={chapter} titleNumber={17} />);
-    expect(
-      screen.getByText(/Subject Matter and Scope of Copyright/)
-    ).toBeInTheDocument();
+    const link = screen.getByRole('link', {
+      name: /Subject Matter and Scope of Copyright/,
+    });
+    expect(link).toHaveAttribute('href', '/titles/17/chapters/1');
   });
 
   it('does not show children until expanded', () => {
@@ -50,21 +51,28 @@ describe('ChapterNode', () => {
     expect(screen.queryByText('Subject matter')).not.toBeInTheDocument();
   });
 
-  it('shows subchapters and sections when expanded', async () => {
+  it('icon click expands to show children', async () => {
     const user = userEvent.setup();
     render(<ChapterNode chapter={chapter} titleNumber={17} />);
-    await user.click(screen.getByText(/Subject Matter and Scope of Copyright/));
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(screen.getByText(/The Works/)).toBeInTheDocument();
     expect(screen.getByText('Subject matter')).toBeInTheDocument();
   });
 
-  it('collapses on second click', async () => {
+  it('icon click collapses children', async () => {
     const user = userEvent.setup();
     render(<ChapterNode chapter={chapter} titleNumber={17} />);
-    const button = screen.getByText(/Subject Matter and Scope of Copyright/);
-    await user.click(button);
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(screen.getByText('Subject matter')).toBeInTheDocument();
-    await user.click(button);
+    await user.click(screen.getByRole('button', { name: 'Collapse' }));
     expect(screen.queryByText('Subject matter')).not.toBeInTheDocument();
+  });
+
+  it('sections render as links to section viewer', async () => {
+    const user = userEvent.setup();
+    render(<ChapterNode chapter={chapter} titleNumber={17} />);
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    const sectionLink = screen.getByRole('link', { name: /Subject matter/ });
+    expect(sectionLink).toHaveAttribute('href', '/sections/17/102');
   });
 });

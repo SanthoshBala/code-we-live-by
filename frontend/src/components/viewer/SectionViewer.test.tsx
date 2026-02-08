@@ -158,7 +158,9 @@ describe('SectionViewer', () => {
     );
     // Provisions visible, history not
     expect(
-      screen.getByRole('heading', { name: '17 U.S.C. § 106' })
+      screen.getByRole('heading', {
+        name: 'Exclusive rights in copyrighted works',
+      })
     ).toBeInTheDocument();
     expect(screen.queryByText('Amendment History')).toBeNull();
   });

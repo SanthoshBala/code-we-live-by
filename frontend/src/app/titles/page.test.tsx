@@ -50,17 +50,23 @@ describe('TitlesPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the page heading', () => {
+  it('renders the page heading after loading', async () => {
     render(<TitlesPage />, { wrapper });
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Browse the US Code'
-    );
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+        'Browse the US Code'
+      );
+    });
   });
 
-  it('renders the title list after loading', async () => {
+  it('renders titles as directory items after loading', async () => {
     render(<TitlesPage />, { wrapper });
     await waitFor(() => {
       expect(screen.getByText(/Armed Forces/)).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: /Armed Forces/ })).toHaveAttribute(
+      'href',
+      '/titles/10'
+    );
   });
 });

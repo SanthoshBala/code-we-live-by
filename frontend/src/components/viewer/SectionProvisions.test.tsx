@@ -148,13 +148,13 @@ describe('SectionProvisions', () => {
       />
     );
     // Marker and title are split into separate spans
-    const markerSpan = container.querySelector('.text-blue-600');
+    const markerSpan = container.querySelector('.text-primary-600');
     expect(markerSpan).toBeInTheDocument();
     expect(markerSpan!.textContent).toBe('(a) ');
     expect(markerSpan).not.toHaveClass('font-bold');
 
     const titleSpan = screen.getByText('In General');
-    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+    expect(titleSpan).toHaveClass('font-bold', 'text-primary-700');
 
     // Outer span should still have hanging indent (it's also a list item)
     const outerSpan = markerSpan!.closest('.whitespace-pre-wrap');
@@ -342,7 +342,7 @@ describe('SectionProvisions', () => {
     );
     // Legacy heuristic should still detect header
     const titleSpan = screen.getByText('In General');
-    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+    expect(titleSpan).toHaveClass('font-bold', 'text-primary-700');
   });
 });
 
@@ -377,7 +377,7 @@ describe('SectionProvisions with structured provisions', () => {
       />
     );
     const titleSpan = screen.getByText('In General');
-    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+    expect(titleSpan).toHaveClass('font-bold', 'text-primary-700');
   });
 
   it('does not apply header styling when is_header is false even for short marker lines', () => {

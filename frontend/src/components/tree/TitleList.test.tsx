@@ -73,6 +73,15 @@ describe('TitleList', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders title names as links', async () => {
+    render(<TitleList />, { wrapper });
+    await waitFor(() => {
+      expect(screen.getByText(/Copyrights/)).toBeInTheDocument();
+    });
+    const link = screen.getByRole('link', { name: /Copyrights/ });
+    expect(link).toHaveAttribute('href', '/titles/17');
+  });
+
   it('shows error state on fetch failure', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('', { status: 500 })
@@ -80,13 +89,6 @@ describe('TitleList', () => {
     render(<TitleList />, { wrapper });
     await waitFor(() => {
       expect(screen.getByText('Failed to load titles.')).toBeInTheDocument();
-    });
-  });
-
-  it('renders with compact styling', async () => {
-    render(<TitleList compact />, { wrapper });
-    await waitFor(() => {
-      expect(screen.getByText(/Copyrights/)).toBeInTheDocument();
     });
   });
 });
