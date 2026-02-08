@@ -134,12 +134,25 @@ class ParsedTitle:
 
 
 @dataclass
+class ParsedChapterGroup:
+    """Parsed structural grouping above chapters (subtitle, part, division)."""
+
+    group_type: str  # "subtitle", "part", "division"
+    group_number: str
+    group_name: str
+    sort_order: int = 0
+    parent_key: str | None = None  # Key of parent group, e.g. "subtitle:A"
+    key: str = ""  # Unique key, e.g. "subtitle:A" or "subtitle:A/part:I"
+
+
+@dataclass
 class ParsedChapter:
     """Parsed US Code Chapter data."""
 
     chapter_number: str
     chapter_name: str
     sort_order: int = 0
+    group_key: str | None = None  # Key of the immediate parent group
 
 
 @dataclass
@@ -276,6 +289,7 @@ class USLMParseResult:
     chapters: list[ParsedChapter] = field(default_factory=list)
     subchapters: list[ParsedSubchapter] = field(default_factory=list)
     sections: list[ParsedSection] = field(default_factory=list)
+    chapter_groups: list[ParsedChapterGroup] = field(default_factory=list)
 
 
 class USLMParser:
@@ -334,6 +348,9 @@ class USLMParser:
         54,
     }
 
+    # Structural elements that can appear between title and chapter
+    _GROUP_ELEMENTS = ("subtitle", "part", "division")
+
     def __init__(self):
         """Initialize the parser."""
         self._current_chapter: str | None = None
@@ -341,6 +358,8 @@ class USLMParser:
         self._chapter_order = 0
         self._subchapter_order = 0
         self._section_order = 0
+        self._group_order = 0
+        self._chapter_groups: list[ParsedChapterGroup] = []
 
     def parse_file(self, xml_path: Path | str) -> USLMParseResult:
         """Parse a USLM XML file.
@@ -360,6 +379,8 @@ class USLMParser:
         self._chapter_order = 0
         self._subchapter_order = 0
         self._section_order = 0
+        self._group_order = 0
+        self._chapter_groups = []
 
         # Parse XML
         tree = etree.parse(str(xml_path))
@@ -397,6 +418,7 @@ class USLMParser:
             chapters=chapters,
             subchapters=subchapters,
             sections=sections,
+            chapter_groups=self._chapter_groups,
         )
 
     def _find_main_content(self, root: etree._Element) -> etree._Element | None:
@@ -492,6 +514,101 @@ class USLMParser:
             is_positive_law=is_positive_law,
         )
 
+    def _find_group_elements(
+        self, parent: etree._Element
+    ) -> list[tuple[etree._Element, str]]:
+        """Find direct structural children (subtitle, part, division).
+
+        Checks direct children of *parent* first, then children of any
+        <title> wrapper (since USLM often nests <subtitle>/<part> under
+        <main>/<title> rather than directly under <main>).
+
+        Returns a list of (element, group_type) tuples.
+        """
+        results: list[tuple[etree._Element, str]] = []
+        ns = NAMESPACES["uslm"]
+
+        # Build list of containers to search: parent itself, plus any <title> child
+        containers = [parent]
+        title_child = parent.find(f"./{{{ns}}}title")
+        if title_child is None:
+            title_child = parent.find("./title")
+        if title_child is not None:
+            containers.append(title_child)
+
+        for container in containers:
+            for tag in self._GROUP_ELEMENTS:
+                for elem in container.findall(f"./{tag}"):
+                    results.append((elem, tag))
+                for elem in container.findall(f"./{{{ns}}}{tag}"):
+                    results.append((elem, tag))
+                # Also check <level> elements with matching type
+                for lvl in container.findall("./level"):
+                    if self._get_level_type(lvl) == tag:
+                        results.append((lvl, tag))
+                for lvl in container.findall(f"./{{{ns}}}level"):
+                    if self._get_level_type(lvl) == tag:
+                        results.append((lvl, tag))
+        return results
+
+    def _parse_group(
+        self,
+        elem: etree._Element,
+        group_type: str,
+        title_number: int,
+        parent_key: str | None,
+    ) -> Iterator[
+        tuple[ParsedChapter | None, list[ParsedSubchapter], list[ParsedSection]]
+    ]:
+        """Parse a structural group element, recursing into nested groups."""
+        self._group_order += 1
+        number = self._get_number(elem)
+        name = title_case_heading(_clean_bracket_heading(self._get_heading(elem)))
+        key = (
+            f"{parent_key}/{group_type}:{number}"
+            if parent_key
+            else f"{group_type}:{number}"
+        )
+
+        group = ParsedChapterGroup(
+            group_type=group_type,
+            group_number=number,
+            group_name=name,
+            sort_order=self._group_order,
+            parent_key=parent_key,
+            key=key,
+        )
+        self._chapter_groups.append(group)
+
+        # Look for nested structural children first
+        nested_groups = self._find_group_elements(elem)
+        if nested_groups:
+            for child_elem, child_type in nested_groups:
+                yield from self._parse_group(
+                    child_elem, child_type, title_number, parent_key=key
+                )
+        else:
+            # Look for chapters within this group
+            chapters = elem.findall("./chapter") + elem.findall(
+                f"./{{{NAMESPACES['uslm']}}}chapter"
+            )
+            if not chapters:
+                chapters = [
+                    lvl
+                    for lvl in elem.findall("./level")
+                    + elem.findall(f"./{{{NAMESPACES['uslm']}}}level")
+                    if self._get_level_type(lvl) == "chapter"
+                ]
+            if chapters:
+                for chapter_elem in chapters:
+                    ch, subchs, secs = self._parse_chapter(chapter_elem, title_number)
+                    ch.group_key = key
+                    yield ch, subchs, secs
+            else:
+                # No chapters found — parse sections directly
+                sections = self._parse_sections_in_element(elem, title_number)
+                yield (None, [], sections)
+
     def _parse_levels(
         self, parent: etree._Element, title_number: int
     ) -> Iterator[
@@ -499,9 +616,22 @@ class USLMParser:
     ]:
         """Recursively parse hierarchical levels.
 
+        First checks for structural group elements (subtitle, part, division)
+        between title and chapter level. If found, descends recursively.
+        Otherwise falls through to direct chapter/section parsing.
+
         Yields:
             Tuple of (chapter, subchapters, sections) for each top-level structure.
         """
+        # Check for structural groups above chapter level
+        groups = self._find_group_elements(parent)
+        if groups:
+            for group_elem, group_type in groups:
+                yield from self._parse_group(
+                    group_elem, group_type, title_number, parent_key=None
+                )
+            return
+
         # Look for chapter elements
         chapters = parent.findall(".//chapter") + parent.findall(".//{*}chapter")
         if not chapters:
@@ -682,7 +812,15 @@ class USLMParser:
 
         # Check role attribute
         role = elem.get("role", "").lower()
-        if role in ("chapter", "subchapter", "section"):
+        valid_types = {
+            "chapter",
+            "subchapter",
+            "section",
+            "subtitle",
+            "part",
+            "division",
+        }
+        if role in valid_types:
             return role
 
         return None

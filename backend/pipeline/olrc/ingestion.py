@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     DataIngestionLog,
     USCodeChapter,
+    USCodeChapterGroup,
     USCodeSection,
     USCodeSubchapter,
     USCodeTitle,
@@ -19,6 +20,7 @@ from pipeline.olrc.downloader import OLRCDownloader
 from pipeline.olrc.normalized_section import _clean_heading, normalize_parsed_section
 from pipeline.olrc.parser import (
     ParsedChapter,
+    ParsedChapterGroup,
     ParsedSection,
     ParsedSubchapter,
     ParsedTitle,
@@ -265,13 +267,31 @@ class USCodeIngestionService:
         title_record, title_created = await self._upsert_title(result.title, force)
         stats["created" if title_created else "updated"] += 1
 
+        # Ingest chapter groups (parents before children due to sort_order)
+        group_lookup: dict[str, USCodeChapterGroup] = {}
+        for parsed_group in result.chapter_groups:
+            parent_group_id = None
+            if parsed_group.parent_key:
+                parent_record = group_lookup.get(parsed_group.parent_key)
+                if parent_record:
+                    parent_group_id = parent_record.group_id
+            group_record, group_created = await self._upsert_chapter_group(
+                parsed_group, title_record.title_id, parent_group_id, force
+            )
+            group_lookup[parsed_group.key] = group_record
+
         # Create chapter lookup
         chapter_lookup: dict[str, USCodeChapter] = {}
 
         # Ingest chapters
         for chapter in result.chapters:
+            group_id = None
+            if chapter.group_key:
+                group_record = group_lookup.get(chapter.group_key)
+                if group_record:
+                    group_id = group_record.group_id
             chapter_record, chapter_created = await self._upsert_chapter(
-                chapter, title_record.title_id, force
+                chapter, title_record.title_id, force, group_id=group_id
             )
             chapter_lookup[chapter.chapter_number] = chapter_record
             stats["chapters"] += 1
@@ -361,8 +381,59 @@ class USCodeIngestionService:
         await self.session.flush()
         return title, True
 
+    async def _upsert_chapter_group(
+        self,
+        parsed: "ParsedChapterGroup",
+        title_id: int,
+        parent_group_id: int | None,
+        force: bool = False,
+    ) -> tuple[USCodeChapterGroup, bool]:
+        """Insert or update a chapter group record.
+
+        Returns:
+            Tuple of (chapter group record, was_created).
+        """
+        if parent_group_id is not None:
+            stmt = select(USCodeChapterGroup).where(
+                USCodeChapterGroup.title_id == title_id,
+                USCodeChapterGroup.group_type == parsed.group_type,
+                USCodeChapterGroup.group_number == parsed.group_number,
+                USCodeChapterGroup.parent_group_id == parent_group_id,
+            )
+        else:
+            stmt = select(USCodeChapterGroup).where(
+                USCodeChapterGroup.title_id == title_id,
+                USCodeChapterGroup.group_type == parsed.group_type,
+                USCodeChapterGroup.group_number == parsed.group_number,
+                USCodeChapterGroup.parent_group_id.is_(None),
+            )
+        result = await self.session.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            if force:
+                existing.group_name = parsed.group_name
+                existing.sort_order = parsed.sort_order
+            return existing, False
+
+        group = USCodeChapterGroup(
+            title_id=title_id,
+            parent_group_id=parent_group_id,
+            group_type=parsed.group_type,
+            group_number=parsed.group_number,
+            group_name=parsed.group_name,
+            sort_order=parsed.sort_order,
+        )
+        self.session.add(group)
+        await self.session.flush()
+        return group, True
+
     async def _upsert_chapter(
-        self, parsed: "ParsedChapter", title_id: int, force: bool = False
+        self,
+        parsed: "ParsedChapter",
+        title_id: int,
+        force: bool = False,
+        group_id: int | None = None,
     ) -> tuple[USCodeChapter, bool]:
         """Insert or update a chapter record.
 
@@ -382,6 +453,7 @@ class USCodeIngestionService:
             if force:
                 existing.chapter_name = parsed.chapter_name
                 existing.sort_order = parsed.sort_order
+                existing.group_id = group_id
             return existing, False
 
         chapter = USCodeChapter(
@@ -389,6 +461,7 @@ class USCodeIngestionService:
             chapter_number=parsed.chapter_number,
             chapter_name=parsed.chapter_name,
             sort_order=parsed.sort_order,
+            group_id=group_id,
         )
         self.session.add(chapter)
         await self.session.flush()

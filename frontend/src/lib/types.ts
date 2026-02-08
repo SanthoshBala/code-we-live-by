@@ -38,11 +38,22 @@ export interface ChapterTree {
   sections: SectionSummary[];
 }
 
+/** Recursive structural grouping node (subtitle, part, division). */
+export interface ChapterGroupTree {
+  group_type: string;
+  group_number: string;
+  group_name: string;
+  sort_order: number;
+  child_groups: ChapterGroupTree[];
+  chapters: ChapterTree[];
+}
+
 /** Full structure tree for a single title. */
 export interface TitleStructure {
   title_number: number;
   title_name: string;
   is_positive_law: boolean;
+  chapter_groups: ChapterGroupTree[];
   chapters: ChapterTree[];
 }
 
@@ -54,6 +65,7 @@ export interface TreeActivePath {
   chapterNumber?: string;
   subchapterNumber?: string;
   sectionNumber?: string;
+  groupPath?: { type: string; number: string }[];
 }
 
 /** An item displayed in a directory table row. */
