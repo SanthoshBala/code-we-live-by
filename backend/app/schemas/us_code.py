@@ -367,10 +367,22 @@ class ChapterTreeSchema(BaseModel):
     sections: list[SectionSummarySchema]
 
 
+class ChapterGroupTreeSchema(BaseModel):
+    """Recursive structural grouping node (subtitle, part, division)."""
+
+    group_type: str
+    group_number: str
+    group_name: str
+    sort_order: int
+    child_groups: list["ChapterGroupTreeSchema"]
+    chapters: list[ChapterTreeSchema]
+
+
 class TitleStructureSchema(BaseModel):
     """Full structure tree for a single title."""
 
     title_number: int
     title_name: str
     is_positive_law: bool
+    chapter_groups: list[ChapterGroupTreeSchema] = []
     chapters: list[ChapterTreeSchema]

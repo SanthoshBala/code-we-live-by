@@ -6,11 +6,13 @@ from sqlalchemy.orm import selectinload
 
 from app.models.us_code import (
     USCodeChapter,
+    USCodeChapterGroup,
     USCodeSection,
     USCodeSubchapter,
     USCodeTitle,
 )
 from app.schemas.us_code import (
+    ChapterGroupTreeSchema,
     ChapterTreeSchema,
     CodeLineSchema,
     SectionNotesSchema,
@@ -93,6 +95,85 @@ async def get_all_titles(session: AsyncSession) -> list[TitleSummarySchema]:
     return titles
 
 
+def _build_chapter_tree(ch: USCodeChapter) -> ChapterTreeSchema:
+    """Build a ChapterTreeSchema from a USCodeChapter ORM object."""
+    direct_sections = []
+    for s in sorted(ch.sections, key=lambda s: s.sort_order):
+        if s.subchapter_id is not None:
+            continue
+        year, law = _extract_last_amendment(s)
+        direct_sections.append(
+            SectionSummarySchema(
+                section_number=s.section_number,
+                heading=s.heading,
+                sort_order=s.sort_order,
+                last_amendment_year=year,
+                last_amendment_law=law,
+                note_categories=_extract_note_categories(s),
+            )
+        )
+
+    subchapters = []
+    for sc in sorted(ch.subchapters, key=lambda sc: sc.sort_order):
+        sc_sections = []
+        for s in sorted(sc.sections, key=lambda s: s.sort_order):
+            year, law = _extract_last_amendment(s)
+            sc_sections.append(
+                SectionSummarySchema(
+                    section_number=s.section_number,
+                    heading=s.heading,
+                    sort_order=s.sort_order,
+                    last_amendment_year=year,
+                    last_amendment_law=law,
+                    note_categories=_extract_note_categories(s),
+                )
+            )
+        subchapters.append(
+            SubchapterTreeSchema(
+                subchapter_number=sc.subchapter_number,
+                subchapter_name=sc.subchapter_name,
+                sort_order=sc.sort_order,
+                sections=sc_sections,
+            )
+        )
+
+    return ChapterTreeSchema(
+        chapter_number=ch.chapter_number,
+        chapter_name=ch.chapter_name,
+        sort_order=ch.sort_order,
+        subchapters=subchapters,
+        sections=direct_sections,
+    )
+
+
+def _build_group_tree(
+    group: USCodeChapterGroup,
+    groups_by_parent: dict[int | None, list[USCodeChapterGroup]],
+    chapters_by_group: dict[int | None, list[USCodeChapter]],
+) -> ChapterGroupTreeSchema:
+    """Recursively build a ChapterGroupTreeSchema from ORM objects."""
+    child_groups = sorted(
+        groups_by_parent.get(group.group_id, []),
+        key=lambda g: g.sort_order,
+    )
+    group_chapters = sorted(
+        chapters_by_group.get(group.group_id, []),
+        key=lambda c: c.sort_order,
+    )
+
+    return ChapterGroupTreeSchema(
+        group_type=group.group_type,
+        group_number=group.group_number,
+        group_name=group.group_name,
+        sort_order=group.sort_order,
+        child_groups=[
+            _build_group_tree(cg, groups_by_parent, chapters_by_group)
+            for cg in child_groups
+        ],
+        chapters=[_build_chapter_tree(ch) for ch in group_chapters],
+    )
+
+
 async def get_title_structure(
     session: AsyncSession, title_number: int
 ) -> TitleStructureSchema | None:
@@ -108,6 +189,7 @@ async def get_title_structure(
             .selectinload(USCodeChapter.subchapters)
             .selectinload(USCodeSubchapter.sections),
             selectinload(USCodeTitle.chapters).selectinload(USCodeChapter.sections),
+            selectinload(USCodeTitle.chapter_groups),
         )
     )
     result = await session.execute(stmt)
@@ -116,64 +198,37 @@ async def get_title_structure(
     if title is None:
         return None
 
-    chapters: list[ChapterTreeSchema] = []
-    for ch in sorted(title.chapters, key=lambda c: c.sort_order):
-        # Sections directly under this chapter (no subchapter)
-        direct_sections = []
-        for s in sorted(ch.sections, key=lambda s: s.sort_order):
-            if s.subchapter_id is not None:
-                continue
-            year, law = _extract_last_amendment(s)
-            direct_sections.append(
-                SectionSummarySchema(
-                    section_number=s.section_number,
-                    heading=s.heading,
-                    sort_order=s.sort_order,
-                    last_amendment_year=year,
-                    last_amendment_law=law,
-                    note_categories=_extract_note_categories(s),
-                )
-            )
+    # Build group tree
+    groups_by_parent: dict[int | None, list[USCodeChapterGroup]] = {}
+    for g in title.chapter_groups:
+        groups_by_parent.setdefault(g.parent_group_id, []).append(g)
 
-        subchapters = []
-        for sc in sorted(ch.subchapters, key=lambda sc: sc.sort_order):
-            sc_sections = []
-            for s in sorted(sc.sections, key=lambda s: s.sort_order):
-                year, law = _extract_last_amendment(s)
-                sc_sections.append(
-                    SectionSummarySchema(
-                        section_number=s.section_number,
-                        heading=s.heading,
-                        sort_order=s.sort_order,
-                        last_amendment_year=year,
-                        last_amendment_law=law,
-                        note_categories=_extract_note_categories(s),
-                    )
-                )
-            subchapters.append(
-                SubchapterTreeSchema(
-                    subchapter_number=sc.subchapter_number,
-                    subchapter_name=sc.subchapter_name,
-                    sort_order=sc.sort_order,
-                    sections=sc_sections,
-                )
-            )
+    chapters_by_group: dict[int | None, list[USCodeChapter]] = {}
+    for ch in title.chapters:
+        chapters_by_group.setdefault(ch.group_id, []).append(ch)
 
-        chapters.append(
-            ChapterTreeSchema(
-                chapter_number=ch.chapter_number,
-                chapter_name=ch.chapter_name,
-                sort_order=ch.sort_order,
-                subchapters=subchapters,
-                sections=direct_sections,
-            )
-        )
+    # Top-level groups (no parent)
+    top_groups = sorted(
+        groups_by_parent.get(None, []),
+        key=lambda g: g.sort_order,
+    )
+    chapter_group_trees = [
+        _build_group_tree(g, groups_by_parent, chapters_by_group) for g in top_groups
+    ]
+
+    # Ungrouped chapters (group_id is None)
+    ungrouped_chapters = sorted(
+        chapters_by_group.get(None, []),
+        key=lambda c: c.sort_order,
+    )
+    chapter_trees = [_build_chapter_tree(ch) for ch in ungrouped_chapters]
 
     return TitleStructureSchema(
         title_number=title.title_number,
         title_name=title.title_name,
         is_positive_law=title.is_positive_law,
-        chapters=chapters,
+        chapter_groups=chapter_group_trees,
+        chapters=chapter_trees,
     )
 
 
