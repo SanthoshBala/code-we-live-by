@@ -102,7 +102,7 @@ export default function SectionDirectoryPage() {
   const items: DirectoryItem[] = [
     {
       id: `\u00A7\u2009${sectionNumber}`,
-      name: 'Code',
+      name: heading,
       href: `${basePath}/CODE`,
       kind: 'file' as const,
       lastAmendmentLaw: path?.section.last_amendment_law ?? null,

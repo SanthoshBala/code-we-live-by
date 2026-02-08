@@ -8,6 +8,7 @@ import TitleList from '@/components/tree/TitleList';
 import NotesViewer from '@/components/viewer/NotesViewer';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import PageHeader from '@/components/ui/PageHeader';
+import TabBar from '@/components/ui/TabBar';
 import type { BreadcrumbSegment, TitleStructure } from '@/lib/types';
 import Link from 'next/link';
 
@@ -125,6 +126,11 @@ export default function NoteFilePage() {
             <Breadcrumbs segments={breadcrumbs} />
           ) : undefined
         }
+      />
+      <TabBar
+        tabs={[{ id: 'notes', label: 'Notes' }]}
+        activeTab="notes"
+        onTabChange={() => {}}
       />
       <NotesViewer
         titleNumber={titleNumber}

@@ -165,7 +165,7 @@ export default function SectionProvisions({
     );
   }
 
-  const docstring = [fullCitation, heading];
+  const docstring = [fullCitation, heading, 'Provisions'];
   const blankLineNumber = docstring.length + 1;
   const lines = textContent.split('\n');
 

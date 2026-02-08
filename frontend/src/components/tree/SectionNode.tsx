@@ -42,22 +42,22 @@ export default function SectionNode({
         />
         <Link
           href={basePath}
-          className="flex min-w-0 items-center gap-1.5 overflow-hidden hover:text-primary-700"
+          className="min-w-0 truncate hover:text-primary-700"
         >
-          <span className="shrink-0 whitespace-nowrap font-mono text-gray-500">
-            &sect;&thinsp;{section.section_number}
-          </span>
-          <span className="min-w-0 truncate">{section.heading}</span>
+          {section.heading}
         </Link>
       </div>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
+          <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
+            &sect;&thinsp;{section.section_number}
+          </p>
           <Link
             href={`${basePath}/CODE`}
             className="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-primary-50 hover:text-primary-700"
           >
             <FileIcon />
-            <span className="font-mono">CODE</span>
+            <span className="truncate">{section.heading}</span>
           </Link>
           {noteFiles.map(({ file }) => (
             <Link
