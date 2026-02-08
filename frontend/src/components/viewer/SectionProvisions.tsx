@@ -1,23 +1,38 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { CodeLine } from '@/lib/types';
 
 interface SectionProvisionsProps {
   fullCitation: string;
   heading: string;
   textContent: string | null;
+  provisions: CodeLine[] | null;
   isRepealed: boolean;
 }
 
+// Legacy heuristic fallback — used when structured provisions are not available.
+// Will be removed after all sections are re-ingested with normalized_provisions.
 function isHeaderLine(text: string): boolean {
   if (!/^\([a-zA-Z0-9]+\)/.test(text)) return false;
   if (text.length > 80) return false;
-  if (/[.;,:]$/.test(text)) return false;
+  if (/[.;,:—]$/.test(text)) return false;
+  if (/\b(or|and)$/.test(text)) return false;
   return true;
 }
 
 const headerMarkerClass = 'text-blue-600';
 const headerTitleClass = 'font-bold text-blue-700';
+
+function provisionsToParseLines(provisions: CodeLine[]): ParsedLine[] {
+  return provisions.map((line) => ({
+    lineIndex: line.line_number - 1,
+    indent: '\t'.repeat(line.indent_level),
+    text: line.content,
+    isListItem: line.marker !== null,
+    isHeader: line.is_header,
+  }));
+}
 
 /* ---- Tree-building types & helpers ---- */
 
@@ -89,6 +104,7 @@ export default function SectionProvisions({
   fullCitation,
   heading,
   textContent,
+  provisions,
   isRepealed,
 }: SectionProvisionsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,18 +169,20 @@ export default function SectionProvisions({
   const blankLineNumber = docstring.length + 1;
   const lines = textContent.split('\n');
 
-  const parsedLines: ParsedLine[] = lines.map((line, i) => {
-    const match = line.match(/^(\s*)(.*)/);
-    const indent = match?.[1] ?? '';
-    const text = match?.[2] ?? line;
-    return {
-      lineIndex: i,
-      indent,
-      text,
-      isListItem: /^\([a-zA-Z0-9]+\)/.test(text),
-      isHeader: isHeaderLine(text),
-    };
-  });
+  const parsedLines: ParsedLine[] = provisions
+    ? provisionsToParseLines(provisions)
+    : lines.map((line, i) => {
+        const match = line.match(/^(\s*)(.*)/);
+        const indent = match?.[1] ?? '';
+        const text = match?.[2] ?? line;
+        return {
+          lineIndex: i,
+          indent,
+          text,
+          isListItem: /^\([a-zA-Z0-9]+\)/.test(text),
+          isHeader: isHeaderLine(text),
+        };
+      });
 
   const tree = buildSections(parsedLines);
 

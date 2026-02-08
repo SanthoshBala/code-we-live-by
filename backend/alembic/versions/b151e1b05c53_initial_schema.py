@@ -8,6 +8,7 @@ Create Date: 2026-01-28 15:34:41.968195
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -602,7 +603,7 @@ def upgrade() -> None:
         sa.Column("chapter_id", sa.Integer(), nullable=True),
         sa.Column("subchapter_id", sa.Integer(), nullable=True),
         sa.Column("section_number", sa.String(length=50), nullable=False),
-        sa.Column("heading", sa.String(length=500), nullable=False),
+        sa.Column("heading", sa.Text(), nullable=False),
         sa.Column("full_citation", sa.String(length=200), nullable=False),
         sa.Column("text_content", sa.Text(), nullable=True),
         sa.Column("enacted_date", sa.Date(), nullable=True),
@@ -615,6 +616,16 @@ def upgrade() -> None:
         sa.Column("repealed_date", sa.Date(), nullable=True),
         sa.Column("repealed_by_law_id", sa.Integer(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column(
+            "normalized_notes",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+        sa.Column(
+            "normalized_provisions",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
         sa.Column("sort_order", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
@@ -680,6 +691,14 @@ def upgrade() -> None:
         "idx_section_subchapter", "us_code_section", ["subchapter_id"], unique=False
     )
     op.create_index("idx_section_title", "us_code_section", ["title_id"], unique=False)
+    op.create_index(
+        "idx_section_normalized_notes_gin",
+        "us_code_section",
+        ["normalized_notes"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"normalized_notes": "jsonb_path_ops"},
+    )
     op.create_table(
         "law_change",
         sa.Column("change_id", sa.Integer(), nullable=False),
@@ -1060,6 +1079,7 @@ def downgrade() -> None:
     op.drop_index("idx_change_law_section", table_name="law_change")
     op.drop_index("idx_change_law", table_name="law_change")
     op.drop_table("law_change")
+    op.drop_index("idx_section_normalized_notes_gin", table_name="us_code_section")
     op.drop_index("idx_section_title", table_name="us_code_section")
     op.drop_index("idx_section_subchapter", table_name="us_code_section")
     op.drop_index("idx_section_sort", table_name="us_code_section")

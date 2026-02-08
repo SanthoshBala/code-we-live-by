@@ -5,6 +5,7 @@ import SectionProvisions from './SectionProvisions';
 const defaultProps = {
   fullCitation: '17 U.S.C. § 106',
   heading: 'Exclusive rights in copyrighted works',
+  provisions: null as null,
 };
 
 describe('SectionProvisions', () => {
@@ -277,6 +278,45 @@ describe('SectionProvisions', () => {
     expect(span).toHaveClass('text-gray-800');
   });
 
+  it('does not apply header styling to lines ending with em dash', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(b) Whoever willfully—"
+        isRepealed={false}
+      />
+    );
+    const span = screen.getByText('(b) Whoever willfully—');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
+  it('does not apply header styling to lines ending with trailing "or"', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(C) a foreign official; or"
+        isRepealed={false}
+      />
+    );
+    const span = screen.getByText('(C) a foreign official; or');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
+  it('does not apply header styling to lines ending with trailing "and"', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(2) in any other case; and"
+        isRepealed={false}
+      />
+    );
+    const span = screen.getByText('(2) in any other case; and');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
   it('does not apply hanging indent to prose lines', () => {
     render(
       <SectionProvisions
@@ -289,5 +329,134 @@ describe('SectionProvisions', () => {
     expect(proseSpan).not.toHaveClass('pl-[4ch]');
     expect(proseSpan).not.toHaveClass('-indent-[4ch]');
     expect(proseSpan).toHaveClass('min-w-0', 'whitespace-pre-wrap');
+  });
+
+  it('falls back to text_content parsing when provisions is null', () => {
+    render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) In General"
+        provisions={null}
+        isRepealed={false}
+      />
+    );
+    // Legacy heuristic should still detect header
+    const titleSpan = screen.getByText('In General');
+    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+  });
+});
+
+describe('SectionProvisions with structured provisions', () => {
+  const baseProps = {
+    fullCitation: '18 U.S.C. § 112',
+    heading: 'Protection of foreign officials',
+    textContent: '(a) In General\n\tWhoever assaults...',
+    isRepealed: false,
+  };
+
+  it('applies header styling when is_header is true', () => {
+    render(
+      <SectionProvisions
+        {...baseProps}
+        provisions={[
+          {
+            line_number: 1,
+            content: '(a) In General',
+            indent_level: 0,
+            marker: '(a)',
+            is_header: true,
+          },
+          {
+            line_number: 2,
+            content: 'Whoever assaults...',
+            indent_level: 1,
+            marker: null,
+            is_header: false,
+          },
+        ]}
+      />
+    );
+    const titleSpan = screen.getByText('In General');
+    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+  });
+
+  it('does not apply header styling when is_header is false even for short marker lines', () => {
+    render(
+      <SectionProvisions
+        {...baseProps}
+        provisions={[
+          {
+            line_number: 1,
+            content: '(b) Whoever willfully—',
+            indent_level: 0,
+            marker: '(b)',
+            is_header: false,
+          },
+        ]}
+      />
+    );
+    const span = screen.getByText('(b) Whoever willfully—');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
+  it('does not apply header styling to non-header list items', () => {
+    render(
+      <SectionProvisions
+        {...baseProps}
+        provisions={[
+          {
+            line_number: 1,
+            content: '(C) a foreign official; or',
+            indent_level: 2,
+            marker: '(C)',
+            is_header: false,
+          },
+        ]}
+      />
+    );
+    const span = screen.getByText('(C) a foreign official; or');
+    expect(span).not.toHaveClass('font-bold');
+    expect(span).toHaveClass('text-gray-800');
+  });
+
+  it('uses indent_level for indentation', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...baseProps}
+        provisions={[
+          {
+            line_number: 1,
+            content: 'Nested content',
+            indent_level: 2,
+            marker: null,
+            is_header: false,
+          },
+        ]}
+      />
+    );
+    const indentSpan = container.querySelector('.whitespace-pre.shrink-0');
+    expect(indentSpan).toBeInTheDocument();
+    expect(indentSpan!.textContent).toBe('\t\t');
+  });
+
+  it('renders sticky header for provisions-driven header lines', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...baseProps}
+        provisions={[
+          {
+            line_number: 1,
+            content: '(a) Definitions',
+            indent_level: 0,
+            marker: '(a)',
+            is_header: true,
+          },
+        ]}
+      />
+    );
+    const stickyHeader = container.querySelector('[data-sticky-header]');
+    expect(stickyHeader).toBeInTheDocument();
+    expect(stickyHeader).toHaveClass('sticky');
   });
 });

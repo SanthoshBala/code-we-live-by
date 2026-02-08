@@ -448,6 +448,13 @@ class USCodeIngestionService:
         # Extract text content (prefer normalized, fall back to raw)
         text_content = normalized.normalized_text or parsed.text_content
 
+        # Serialize structured provisions for frontend display
+        normalized_provisions = None
+        if normalized.provisions:
+            normalized_provisions = [
+                line.model_dump(mode="json") for line in normalized.provisions
+            ]
+
         # Get normalized notes as JSON
         normalized_notes = None
         enacted_date = None
@@ -506,6 +513,7 @@ class USCodeIngestionService:
                 existing.subchapter_id = subchapter_id
                 existing.notes = parsed.notes
                 existing.normalized_notes = normalized_notes
+                existing.normalized_provisions = normalized_provisions
                 existing.enacted_date = enacted_date
                 existing.statutes_at_large_citation = statutes_at_large_citation
                 existing.last_modified_date = last_modified_date
@@ -522,6 +530,7 @@ class USCodeIngestionService:
             text_content=text_content,
             notes=parsed.notes,
             normalized_notes=normalized_notes,
+            normalized_provisions=normalized_provisions,
             enacted_date=enacted_date,
             statutes_at_large_citation=statutes_at_large_citation,
             last_modified_date=last_modified_date,

@@ -16,7 +16,9 @@ from app.models.base import async_session_maker
 from app.models.us_code import USCodeSection
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(levelname)-5.5s [%(name)s] %(message)s"
+)
 
 BATCH_SIZE = 500
 

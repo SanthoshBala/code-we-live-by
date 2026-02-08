@@ -10,6 +10,7 @@ const sectionData: SectionView = {
   heading: 'Exclusive rights in copyrighted works',
   full_citation: '17 U.S.C. § 106',
   text_content: 'The owner of copyright...',
+  provisions: null,
   enacted_date: '1976-10-19',
   last_modified_date: '2020-01-01',
   is_positive_law: true,

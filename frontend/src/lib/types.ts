@@ -111,6 +111,7 @@ export interface SectionView {
   heading: string;
   full_citation: string;
   text_content: string | null;
+  provisions: CodeLine[] | null;
   enacted_date: string | null;
   last_modified_date: string | null;
   is_positive_law: boolean;
