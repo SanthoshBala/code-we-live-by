@@ -412,3 +412,187 @@ class TestCleanBracketHeading:
     def test_empty_string(self) -> None:
         """Test empty string returns empty string."""
         assert _clean_bracket_heading("") == ""
+
+
+class TestChapterGroups:
+    """Tests for chapter group (subtitle, part, division) parsing."""
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_subtitle_groups_t26_pattern(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Title 26 pattern: subtitle → chapter (no intermediate part)."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <main>
+    <title identifier="/us/usc/t26" number="26">
+      <heading>INTERNAL REVENUE CODE</heading>
+      <subtitle identifier="/us/usc/t26/stA" number="A">
+        <heading>INCOME TAXES</heading>
+        <chapter identifier="/us/usc/t26/stA/ch1" number="1">
+          <heading>NORMAL TAXES AND SURTAXES</heading>
+          <section identifier="/us/usc/t26/s1" number="1">
+            <heading>Tax imposed</heading>
+            <content><p>There is imposed a tax.</p></content>
+          </section>
+        </chapter>
+      </subtitle>
+      <subtitle identifier="/us/usc/t26/stB" number="B">
+        <heading>ESTATE AND GIFT TAXES</heading>
+        <chapter identifier="/us/usc/t26/stB/ch11" number="11">
+          <heading>ESTATE TAX</heading>
+          <section identifier="/us/usc/t26/s2001" number="2001">
+            <heading>Imposition and rate of tax</heading>
+            <content><p>A tax is imposed.</p></content>
+          </section>
+        </chapter>
+      </subtitle>
+    </title>
+  </main>
+</usc>"""
+        xml_path = tmp_path / "t26.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        # Should find 2 subtitle groups
+        assert len(result.chapter_groups) == 2
+        assert result.chapter_groups[0].group_type == "subtitle"
+        assert result.chapter_groups[0].group_number == "A"
+        assert result.chapter_groups[0].group_name == "Income Taxes"
+        assert result.chapter_groups[0].key == "subtitle:A"
+        assert result.chapter_groups[0].parent_key is None
+        assert result.chapter_groups[1].group_number == "B"
+        assert result.chapter_groups[1].key == "subtitle:B"
+
+        # Chapters should be tagged with group keys
+        assert len(result.chapters) == 2
+        assert result.chapters[0].group_key == "subtitle:A"
+        assert result.chapters[1].group_key == "subtitle:B"
+
+        # Sections should still be parsed
+        assert len(result.sections) == 2
+
+    def test_nested_groups_t10_pattern(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Title 10 pattern: subtitle → part → chapter."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <main>
+    <title identifier="/us/usc/t10" number="10">
+      <heading>ARMED FORCES</heading>
+      <subtitle identifier="/us/usc/t10/stA" number="A">
+        <heading>GENERAL MILITARY LAW</heading>
+        <part identifier="/us/usc/t10/stA/ptI" number="I">
+          <heading>ORGANIZATION AND GENERAL MILITARY POWERS</heading>
+          <chapter identifier="/us/usc/t10/stA/ptI/ch1" number="1">
+            <heading>DEFINITIONS</heading>
+            <section identifier="/us/usc/t10/s101" number="101">
+              <heading>Definitions</heading>
+              <content><p>In this title.</p></content>
+            </section>
+          </chapter>
+        </part>
+        <part identifier="/us/usc/t10/stA/ptII" number="II">
+          <heading>PERSONNEL</heading>
+          <chapter identifier="/us/usc/t10/stA/ptII/ch31" number="31">
+            <heading>ENLISTMENTS</heading>
+            <section identifier="/us/usc/t10/s501" number="501">
+              <heading>Enlistment oath</heading>
+              <content><p>Each person enlisted.</p></content>
+            </section>
+          </chapter>
+        </part>
+      </subtitle>
+    </title>
+  </main>
+</usc>"""
+        xml_path = tmp_path / "t10.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        # Should find: 1 subtitle + 2 parts = 3 groups
+        assert len(result.chapter_groups) == 3
+        subtitle = result.chapter_groups[0]
+        assert subtitle.group_type == "subtitle"
+        assert subtitle.group_number == "A"
+        assert subtitle.parent_key is None
+        assert subtitle.key == "subtitle:A"
+
+        part1 = result.chapter_groups[1]
+        assert part1.group_type == "part"
+        assert part1.group_number == "I"
+        assert part1.parent_key == "subtitle:A"
+        assert part1.key == "subtitle:A/part:I"
+
+        part2 = result.chapter_groups[2]
+        assert part2.group_type == "part"
+        assert part2.group_number == "II"
+        assert part2.parent_key == "subtitle:A"
+        assert part2.key == "subtitle:A/part:II"
+
+        # Chapters tagged with their parent part keys
+        assert len(result.chapters) == 2
+        assert result.chapters[0].group_key == "subtitle:A/part:I"
+        assert result.chapters[1].group_key == "subtitle:A/part:II"
+
+    def test_part_only_t18_pattern(self, parser: USLMParser, tmp_path: Path) -> None:
+        """Title 18 pattern: part → chapter (no subtitle)."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <main>
+    <title identifier="/us/usc/t18" number="18">
+      <heading>CRIMES AND CRIMINAL PROCEDURE</heading>
+      <part identifier="/us/usc/t18/ptI" number="I">
+        <heading>CRIMES</heading>
+        <chapter identifier="/us/usc/t18/ptI/ch1" number="1">
+          <heading>GENERAL PROVISIONS</heading>
+          <section identifier="/us/usc/t18/s1" number="1">
+            <heading>Applicability</heading>
+            <content><p>This title applies.</p></content>
+          </section>
+        </chapter>
+      </part>
+    </title>
+  </main>
+</usc>"""
+        xml_path = tmp_path / "t18.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.chapter_groups) == 1
+        assert result.chapter_groups[0].group_type == "part"
+        assert result.chapter_groups[0].group_number == "I"
+        assert result.chapter_groups[0].parent_key is None
+
+        assert len(result.chapters) == 1
+        assert result.chapters[0].group_key == "part:I"
+
+    def test_no_groups_t17_pattern(self, parser: USLMParser, tmp_path: Path) -> None:
+        """Title 17 pattern: chapters directly under title (no groups)."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>SUBJECT MATTER</heading>
+        <section identifier="/us/usc/t17/s101" number="101">
+          <heading>Definitions</heading>
+          <content><p>As used in this title.</p></content>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>"""
+        xml_path = tmp_path / "t17.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.chapter_groups) == 0
+        assert len(result.chapters) == 1
+        assert result.chapters[0].group_key is None

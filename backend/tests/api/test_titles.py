@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.schemas.us_code import (
+    ChapterGroupTreeSchema,
     ChapterTreeSchema,
     SectionSummarySchema,
     SubchapterTreeSchema,
@@ -132,6 +133,54 @@ def test_get_title_structure_success(mock_get: AsyncMock, client: TestClient) ->
     assert chapter["sections"][0]["section_number"] == "100"
     assert chapter["sections"][0]["last_amendment_year"] is None
     assert chapter["sections"][0]["last_amendment_law"] is None
+
+
+@patch("app.api.v1.titles.get_title_structure", new_callable=AsyncMock)
+def test_get_title_structure_with_groups(
+    mock_get: AsyncMock, client: TestClient
+) -> None:
+    """Structure endpoint returns chapter_groups for titles with subtitles/parts."""
+    mock_get.return_value = TitleStructureSchema(
+        title_number=26,
+        title_name="Internal Revenue Code",
+        is_positive_law=False,
+        chapter_groups=[
+            ChapterGroupTreeSchema(
+                group_type="subtitle",
+                group_number="A",
+                group_name="Income Taxes",
+                sort_order=1,
+                child_groups=[],
+                chapters=[
+                    ChapterTreeSchema(
+                        chapter_number="1",
+                        chapter_name="Normal Taxes and Surtaxes",
+                        sort_order=1,
+                        subchapters=[],
+                        sections=[
+                            SectionSummarySchema(
+                                section_number="1",
+                                heading="Tax imposed",
+                                sort_order=1,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+        chapters=[],
+    )
+
+    response = client.get("/api/v1/titles/26/structure")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["title_number"] == 26
+    assert len(data["chapter_groups"]) == 1
+    assert data["chapter_groups"][0]["group_type"] == "subtitle"
+    assert data["chapter_groups"][0]["group_number"] == "A"
+    assert len(data["chapter_groups"][0]["chapters"]) == 1
+    assert data["chapters"] == []
 
 
 @patch("app.api.v1.titles.get_title_structure", new_callable=AsyncMock)
