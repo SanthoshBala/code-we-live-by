@@ -77,4 +77,36 @@ describe('SectionHeader', () => {
     expect(screen.queryByText(/Enacted/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Last modified/)).not.toBeInTheDocument();
   });
+
+  it('renders latest amendment badge when provided', () => {
+    render(
+      <SectionHeader
+        fullCitation="17 U.S.C. § 106"
+        heading="Test"
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        isRepealed={false}
+        latestAmendment={{ publicLawId: 'PL 116-283', year: 2021 }}
+      />
+    );
+    expect(screen.getByText('PL 116-283')).toBeInTheDocument();
+    expect(screen.getByText(/2021/)).toBeInTheDocument();
+    expect(screen.getByText(/Last amended by/)).toBeInTheDocument();
+  });
+
+  it('does not render latest amendment badge when null', () => {
+    render(
+      <SectionHeader
+        fullCitation="17 U.S.C. § 106"
+        heading="Test"
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        isRepealed={false}
+        latestAmendment={null}
+      />
+    );
+    expect(screen.queryByText(/Last amended by/)).not.toBeInTheDocument();
+  });
 });
