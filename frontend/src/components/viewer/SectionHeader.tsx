@@ -5,6 +5,7 @@ interface SectionHeaderProps {
   lastModifiedDate: string | null;
   isPositiveLaw: boolean;
   isRepealed: boolean;
+  latestAmendment?: { publicLawId: string; year: number } | null;
 }
 
 /** Renders the section heading, citation, and metadata badges. */
@@ -15,6 +16,7 @@ export default function SectionHeader({
   lastModifiedDate,
   isPositiveLaw,
   isRepealed,
+  latestAmendment,
 }: SectionHeaderProps) {
   return (
     <header className="mb-6">
@@ -37,6 +39,13 @@ export default function SectionHeader({
         {lastModifiedDate && (
           <span className="text-gray-500">
             Last modified {lastModifiedDate}
+          </span>
+        )}
+        {latestAmendment && (
+          <span className="rounded bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">
+            Last amended by{' '}
+            <span className="font-mono">{latestAmendment.publicLawId}</span> (
+            {latestAmendment.year})
           </span>
         )}
       </div>
