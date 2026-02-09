@@ -2,7 +2,7 @@
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import attributes, selectinload
 
 from app.models.us_code import (
     SectionGroup,
@@ -185,10 +185,9 @@ async def get_title_structure(
 
     # Attach children lists to each group for _build_group_tree
     for g in all_groups.values():
-        # Override the lazy-loaded children with our eagerly loaded ones
+        # Use set_committed_value to bypass lazy-load trigger on assignment
         children = children_by_parent.get(g.group_id, [])
-        # We set children directly since we want to avoid lazy loading
-        g.children = children
+        attributes.set_committed_value(g, "children", children)
 
     # Build the tree from title's direct children
     title_obj = all_groups[title_group.group_id]
