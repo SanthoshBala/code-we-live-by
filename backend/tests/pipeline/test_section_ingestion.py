@@ -131,9 +131,8 @@ class TestUpsertSectionNormalization:
         service = USCodeIngestionService(mock_session)
         await service._upsert_section(
             sample_parsed_section,
-            title_id=1,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=17,
             force=False,
         )
 
@@ -162,9 +161,8 @@ class TestUpsertSectionNormalization:
         service = USCodeIngestionService(mock_session)
         await service._upsert_section(
             sample_parsed_section,
-            title_id=1,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=17,
             force=False,
         )
 
@@ -199,9 +197,8 @@ class TestUpsertSectionNormalization:
         service = USCodeIngestionService(mock_session)
         await service._upsert_section(
             sample_parsed_section,
-            title_id=1,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=17,
             force=False,
         )
 
@@ -225,9 +222,8 @@ class TestUpsertSectionNormalization:
         service = USCodeIngestionService(mock_session)
         await service._upsert_section(
             sample_parsed_section,
-            title_id=1,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=17,
             force=False,
         )
 
@@ -257,9 +253,8 @@ class TestUpsertSectionNormalization:
         service = USCodeIngestionService(mock_session)
         result = await service._upsert_section(
             sample_parsed_section,
-            title_id=1,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=17,
             force=True,
         )
 
@@ -290,9 +285,8 @@ class TestUpsertSectionNormalization:
         service = USCodeIngestionService(mock_session)
         result = await service._upsert_section(
             sample_parsed_section,
-            title_id=1,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=17,
             force=False,
         )
 
@@ -354,9 +348,8 @@ class TestUpsertSectionWithActRefs:
         service = USCodeIngestionService(mock_session)
         await service._upsert_section(
             parsed_section_with_act,
-            title_id=15,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=15,
             force=False,
         )
 
@@ -379,9 +372,8 @@ class TestUpsertSectionWithActRefs:
         service = USCodeIngestionService(mock_session)
         await service._upsert_section(
             parsed_section_with_act,
-            title_id=15,
-            chapter_id=1,
-            subchapter_id=None,
+            group_id=1,
+            title_number=15,
             force=False,
         )
 

@@ -32,17 +32,19 @@ const structure = {
   title_number: 17,
   title_name: 'Copyrights',
   is_positive_law: true,
-  chapters: [
+  children: [
     {
-      chapter_number: '1',
-      chapter_name: 'Subject Matter',
+      group_type: 'chapter',
+      number: '1',
+      name: 'Subject Matter',
       sort_order: 1,
-      subchapters: [],
+      children: [],
       sections: [
         { section_number: '101', heading: 'Definitions', sort_order: 1 },
       ],
     },
   ],
+  sections: [],
 };
 
 function wrapper({ children }: { children: React.ReactNode }) {

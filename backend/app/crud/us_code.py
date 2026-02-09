@@ -5,20 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.us_code import (
-    USCodeChapter,
-    USCodeChapterGroup,
+    SectionGroup,
     USCodeSection,
-    USCodeSubchapter,
-    USCodeTitle,
 )
 from app.schemas.us_code import (
-    ChapterGroupTreeSchema,
-    ChapterTreeSchema,
     CodeLineSchema,
+    SectionGroupTreeSchema,
     SectionNotesSchema,
     SectionSummarySchema,
     SectionViewerSchema,
-    SubchapterTreeSchema,
     TitleStructureSchema,
     TitleSummarySchema,
 )
@@ -57,178 +52,161 @@ def _extract_note_categories(section: USCodeSection) -> list[str]:
     return sorted({n["category"] for n in notes if "category" in n})
 
 
-async def get_all_titles(session: AsyncSession) -> list[TitleSummarySchema]:
-    """Return all titles with chapter and section counts."""
-    chapter_count = (
-        select(func.count(USCodeChapter.chapter_id))
-        .where(USCodeChapter.title_id == USCodeTitle.title_id)
-        .correlate(USCodeTitle)
-        .scalar_subquery()
-        .label("chapter_count")
-    )
-    section_count = (
-        select(func.count(USCodeSection.section_id))
-        .where(USCodeSection.title_id == USCodeTitle.title_id)
-        .correlate(USCodeTitle)
-        .scalar_subquery()
-        .label("section_count")
+def _build_section_summary(section: USCodeSection) -> SectionSummarySchema:
+    """Build a SectionSummarySchema from a USCodeSection ORM object."""
+    year, law = _extract_last_amendment(section)
+    return SectionSummarySchema(
+        section_number=section.section_number,
+        heading=section.heading,
+        sort_order=section.sort_order,
+        last_amendment_year=year,
+        last_amendment_law=law,
+        note_categories=_extract_note_categories(section),
     )
 
-    stmt = select(USCodeTitle, chapter_count, section_count).order_by(
-        USCodeTitle.title_number
+
+def _build_group_tree(group: SectionGroup) -> SectionGroupTreeSchema:
+    """Recursively build a SectionGroupTreeSchema from ORM objects."""
+    child_trees = [
+        _build_group_tree(child)
+        for child in sorted(group.children, key=lambda g: g.sort_order)
+    ]
+    section_summaries = [
+        _build_section_summary(s)
+        for s in sorted(group.sections, key=lambda s: s.sort_order)
+    ]
+    return SectionGroupTreeSchema(
+        group_type=group.group_type,
+        number=group.number,
+        name=group.name,
+        sort_order=group.sort_order,
+        is_positive_law=group.is_positive_law,
+        children=child_trees,
+        sections=section_summaries,
+    )
+
+
+async def get_all_titles(session: AsyncSession) -> list[TitleSummarySchema]:
+    """Return all titles with child group and section counts."""
+    stmt = (
+        select(SectionGroup)
+        .where(SectionGroup.group_type == "title")
+        .order_by(SectionGroup.number)
     )
     result = await session.execute(stmt)
+    title_groups = result.scalars().all()
 
     titles: list[TitleSummarySchema] = []
-    for row in result.all():
-        title = row[0]
+    for tg in title_groups:
+        title_number = int(tg.number)
+
+        # Count sections for this title
+        sec_count_result = await session.execute(
+            select(func.count(USCodeSection.section_id)).where(
+                USCodeSection.title_number == title_number
+            )
+        )
+        sec_count = sec_count_result.scalar() or 0
+
+        # Count direct child groups (chapters or top-level groups)
+        ch_count_result = await session.execute(
+            select(func.count(SectionGroup.group_id)).where(
+                SectionGroup.parent_id == tg.group_id
+            )
+        )
+        ch_count = ch_count_result.scalar() or 0
+
         titles.append(
             TitleSummarySchema(
-                title_number=title.title_number,
-                title_name=title.title_name,
-                is_positive_law=title.is_positive_law,
-                positive_law_date=title.positive_law_date,
-                chapter_count=row[1],
-                section_count=row[2],
+                title_number=title_number,
+                title_name=tg.name,
+                is_positive_law=tg.is_positive_law,
+                positive_law_date=tg.positive_law_date,
+                chapter_count=ch_count,
+                section_count=sec_count,
             )
         )
     return titles
 
 
-def _build_chapter_tree(ch: USCodeChapter) -> ChapterTreeSchema:
-    """Build a ChapterTreeSchema from a USCodeChapter ORM object."""
-    direct_sections = []
-    for s in sorted(ch.sections, key=lambda s: s.sort_order):
-        if s.subchapter_id is not None:
-            continue
-        year, law = _extract_last_amendment(s)
-        direct_sections.append(
-            SectionSummarySchema(
-                section_number=s.section_number,
-                heading=s.heading,
-                sort_order=s.sort_order,
-                last_amendment_year=year,
-                last_amendment_law=law,
-                note_categories=_extract_note_categories(s),
-            )
-        )
-
-    subchapters = []
-    for sc in sorted(ch.subchapters, key=lambda sc: sc.sort_order):
-        sc_sections = []
-        for s in sorted(sc.sections, key=lambda s: s.sort_order):
-            year, law = _extract_last_amendment(s)
-            sc_sections.append(
-                SectionSummarySchema(
-                    section_number=s.section_number,
-                    heading=s.heading,
-                    sort_order=s.sort_order,
-                    last_amendment_year=year,
-                    last_amendment_law=law,
-                    note_categories=_extract_note_categories(s),
-                )
-            )
-        subchapters.append(
-            SubchapterTreeSchema(
-                subchapter_number=sc.subchapter_number,
-                subchapter_name=sc.subchapter_name,
-                sort_order=sc.sort_order,
-                sections=sc_sections,
-            )
-        )
-
-    return ChapterTreeSchema(
-        chapter_number=ch.chapter_number,
-        chapter_name=ch.chapter_name,
-        sort_order=ch.sort_order,
-        subchapters=subchapters,
-        sections=direct_sections,
-    )
-
-
-def _build_group_tree(
-    group: USCodeChapterGroup,
-    groups_by_parent: dict[int | None, list[USCodeChapterGroup]],
-    chapters_by_group: dict[int | None, list[USCodeChapter]],
-) -> ChapterGroupTreeSchema:
-    """Recursively build a ChapterGroupTreeSchema from ORM objects."""
-    child_groups = sorted(
-        groups_by_parent.get(group.group_id, []),
-        key=lambda g: g.sort_order,
-    )
-    group_chapters = sorted(
-        chapters_by_group.get(group.group_id, []),
-        key=lambda c: c.sort_order,
-    )
-
-    return ChapterGroupTreeSchema(
-        group_type=group.group_type,
-        group_number=group.group_number,
-        group_name=group.group_name,
-        sort_order=group.sort_order,
-        child_groups=[
-            _build_group_tree(cg, groups_by_parent, chapters_by_group)
-            for cg in child_groups
-        ],
-        chapters=[_build_chapter_tree(ch) for ch in group_chapters],
-    )
-
-
 async def get_title_structure(
     session: AsyncSession, title_number: int
 ) -> TitleStructureSchema | None:
-    """Return the chapter/subchapter/section tree for a title.
+    """Return the full group/section tree for a title.
 
     Returns None if the title is not found.
     """
-    stmt = (
-        select(USCodeTitle)
-        .where(USCodeTitle.title_number == title_number)
-        .options(
-            selectinload(USCodeTitle.chapters)
-            .selectinload(USCodeChapter.subchapters)
-            .selectinload(USCodeSubchapter.sections),
-            selectinload(USCodeTitle.chapters).selectinload(USCodeChapter.sections),
-            selectinload(USCodeTitle.chapter_groups),
-        )
+    # Load the title group with all descendants eagerly loaded.
+    # We use a CTE approach: load the title, then load ALL SectionGroup
+    # records for this title and build the tree in Python.
+    stmt = select(SectionGroup).where(
+        SectionGroup.group_type == "title",
+        SectionGroup.number == str(title_number),
     )
     result = await session.execute(stmt)
-    title = result.scalar_one_or_none()
+    title_group = result.scalar_one_or_none()
 
-    if title is None:
+    if title_group is None:
         return None
 
-    # Build group tree
-    groups_by_parent: dict[int | None, list[USCodeChapterGroup]] = {}
-    for g in title.chapter_groups:
-        groups_by_parent.setdefault(g.parent_group_id, []).append(g)
+    # Load all groups that descend from this title using a recursive CTE
+    # (sqlalchemy CTE used below for recursive loading)
 
-    chapters_by_group: dict[int | None, list[USCodeChapter]] = {}
-    for ch in title.chapters:
-        chapters_by_group.setdefault(ch.group_id, []).append(ch)
-
-    # Top-level groups (no parent)
-    top_groups = sorted(
-        groups_by_parent.get(None, []),
-        key=lambda g: g.sort_order,
+    # Base case: direct children of the title
+    base = (
+        select(SectionGroup.group_id)
+        .where(SectionGroup.parent_id == title_group.group_id)
+        .cte(name="descendants", recursive=True)
     )
-    chapter_group_trees = [
-        _build_group_tree(g, groups_by_parent, chapters_by_group) for g in top_groups
+    # Recursive case: children of children
+    descendants = base.union_all(
+        select(SectionGroup.group_id).where(SectionGroup.parent_id == base.c.group_id)
+    )
+
+    # Load all descendant groups with their sections
+    all_ids = [title_group.group_id] + [
+        row[0] for row in (await session.execute(select(descendants.c.group_id))).all()
     ]
 
-    # Ungrouped chapters (group_id is None)
-    ungrouped_chapters = sorted(
-        chapters_by_group.get(None, []),
-        key=lambda c: c.sort_order,
+    # Load all groups at once with their sections
+    groups_stmt = (
+        select(SectionGroup)
+        .where(SectionGroup.group_id.in_(all_ids))
+        .options(selectinload(SectionGroup.sections))
     )
-    chapter_trees = [_build_chapter_tree(ch) for ch in ungrouped_chapters]
+    groups_result = await session.execute(groups_stmt)
+    all_groups = {g.group_id: g for g in groups_result.scalars().unique().all()}
+
+    # Build parent->children mapping
+    children_by_parent: dict[int, list[SectionGroup]] = {}
+    for g in all_groups.values():
+        if g.parent_id is not None and g.parent_id in all_groups:
+            children_by_parent.setdefault(g.parent_id, []).append(g)
+
+    # Attach children lists to each group for _build_group_tree
+    for g in all_groups.values():
+        # Override the lazy-loaded children with our eagerly loaded ones
+        children = children_by_parent.get(g.group_id, [])
+        # We set children directly since we want to avoid lazy loading
+        g.children = children
+
+    # Build the tree from title's direct children
+    title_obj = all_groups[title_group.group_id]
+    child_trees = [
+        _build_group_tree(child)
+        for child in sorted(title_obj.children, key=lambda g: g.sort_order)
+    ]
+    section_summaries = [
+        _build_section_summary(s)
+        for s in sorted(title_obj.sections, key=lambda s: s.sort_order)
+    ]
 
     return TitleStructureSchema(
-        title_number=title.title_number,
-        title_name=title.title_name,
-        is_positive_law=title.is_positive_law,
-        chapter_groups=chapter_group_trees,
-        chapters=chapter_trees,
+        title_number=int(title_obj.number),
+        title_name=title_obj.name,
+        is_positive_law=title_obj.is_positive_law,
+        children=child_trees,
+        sections=section_summaries,
     )
 
 
@@ -239,13 +217,9 @@ async def get_section(
 
     Returns None if the section is not found.
     """
-    stmt = (
-        select(USCodeSection)
-        .join(USCodeTitle, USCodeSection.title_id == USCodeTitle.title_id)
-        .where(
-            USCodeTitle.title_number == title_number,
-            USCodeSection.section_number == section_number,
-        )
+    stmt = select(USCodeSection).where(
+        USCodeSection.title_number == title_number,
+        USCodeSection.section_number == section_number,
     )
     result = await session.execute(stmt)
     section = result.scalar_one_or_none()

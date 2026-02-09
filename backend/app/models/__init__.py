@@ -37,12 +37,9 @@ from app.models.supporting import (
     SectionReference,
 )
 from app.models.us_code import (
-    USCodeChapter,
-    USCodeChapterGroup,
+    SectionGroup,
     USCodeLine,
     USCodeSection,
-    USCodeSubchapter,
-    USCodeTitle,
 )
 from app.models.validation import (
     IngestionReport,
@@ -75,10 +72,7 @@ __all__ = [
     "SponsorshipRole",
     "VoteType",
     # US Code
-    "USCodeTitle",
-    "USCodeChapterGroup",
-    "USCodeChapter",
-    "USCodeSubchapter",
+    "SectionGroup",
     "USCodeSection",
     "USCodeLine",
     # Public Law

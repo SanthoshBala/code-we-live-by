@@ -7,19 +7,7 @@ import TitleList from '@/components/tree/TitleList';
 import type { TreeActivePath } from '@/lib/types';
 
 function parseActivePath(pathname: string): TreeActivePath | undefined {
-  // /titles/17/chapters/1/subchapters/A
-  const chapterMatch = pathname.match(
-    /^\/titles\/(\d+)\/chapters\/([^/]+)(?:\/subchapters\/([^/]+))?/
-  );
-  if (chapterMatch) {
-    return {
-      titleNumber: Number(chapterMatch[1]),
-      chapterNumber: chapterMatch[2],
-      subchapterNumber: chapterMatch[3] || undefined,
-    };
-  }
-
-  // /titles/18/part/III or /titles/10/subtitle/A/part/I
+  // /titles/18/part/III or /titles/10/subtitle/A/part/I or /titles/26/chapter/1/subchapter/A
   const groupMatch = pathname.match(/^\/titles\/(\d+)((?:\/[^/]+\/[^/]+)+)$/);
   if (groupMatch) {
     const segments = groupMatch[2].slice(1).split('/');

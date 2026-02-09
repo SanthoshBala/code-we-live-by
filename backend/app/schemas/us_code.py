@@ -348,41 +348,32 @@ class SectionSummarySchema(BaseModel):
     note_categories: list[str] = []  # e.g. ["editorial", "statutory"]
 
 
-class SubchapterTreeSchema(BaseModel):
-    """Subchapter node in the title structure tree."""
+class SectionGroupTreeSchema(BaseModel):
+    """Recursive node in the unified US Code hierarchy tree.
 
-    subchapter_number: str
-    subchapter_name: str
-    sort_order: int
-    sections: list[SectionSummarySchema]
-
-
-class ChapterTreeSchema(BaseModel):
-    """Chapter node in the title structure tree."""
-
-    chapter_number: str
-    chapter_name: str
-    sort_order: int
-    subchapters: list[SubchapterTreeSchema]
-    sections: list[SectionSummarySchema]
-
-
-class ChapterGroupTreeSchema(BaseModel):
-    """Recursive structural grouping node (subtitle, part, division)."""
+    Replaces ChapterGroupTreeSchema, ChapterTreeSchema, and
+    SubchapterTreeSchema with a single self-referential schema.
+    """
 
     group_type: str
-    group_number: str
-    group_name: str
+    number: str
+    name: str
     sort_order: int
-    child_groups: list["ChapterGroupTreeSchema"]
-    chapters: list[ChapterTreeSchema]
+    is_positive_law: bool = False
+    children: list["SectionGroupTreeSchema"] = []
+    sections: list[SectionSummarySchema] = []
 
 
 class TitleStructureSchema(BaseModel):
-    """Full structure tree for a single title."""
+    """Full structure tree for a single title.
+
+    The ``children`` list contains the recursive group tree
+    (subtitles, parts, chapters, subchapters, etc.) starting from
+    the title's immediate children.
+    """
 
     title_number: int
     title_name: str
     is_positive_law: bool
-    chapter_groups: list[ChapterGroupTreeSchema] = []
-    chapters: list[ChapterTreeSchema]
+    children: list[SectionGroupTreeSchema] = []
+    sections: list[SectionSummarySchema] = []

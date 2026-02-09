@@ -8,8 +8,8 @@ import DirectoryView from '@/components/directory/DirectoryView';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import type {
   BreadcrumbSegment,
-  ChapterGroupTree,
   DirectoryItem,
+  SectionGroupTree,
   SectionSummary,
   TitleStructure,
 } from '@/lib/types';
@@ -35,56 +35,23 @@ interface GroupAncestor {
 
 interface SectionPath {
   section: SectionSummary;
-  chapterNumber: string;
-  subchapterNumber?: string;
   groupAncestors: GroupAncestor[];
 }
 
-function findSectionInChapters(
-  chapters: {
-    chapter_number: string;
-    sections: SectionSummary[];
-    subchapters: { subchapter_number: string; sections: SectionSummary[] }[];
-  }[],
-  sectionNumber: string,
-  groupAncestors: GroupAncestor[] = []
-): SectionPath | null {
-  for (const ch of chapters) {
-    const direct = ch.sections.find((s) => s.section_number === sectionNumber);
-    if (direct) {
-      return {
-        section: direct,
-        chapterNumber: ch.chapter_number,
-        groupAncestors,
-      };
-    }
-    for (const sub of ch.subchapters) {
-      const inSub = sub.sections.find(
-        (s) => s.section_number === sectionNumber
-      );
-      if (inSub) {
-        return {
-          section: inSub,
-          chapterNumber: ch.chapter_number,
-          subchapterNumber: sub.subchapter_number,
-          groupAncestors,
-        };
-      }
-    }
-  }
-  return null;
-}
-
 function findSectionInGroups(
-  groups: ChapterGroupTree[],
+  groups: SectionGroupTree[],
   sectionNumber: string,
   ancestors: GroupAncestor[] = []
 ): SectionPath | null {
   for (const g of groups) {
-    const path = [...ancestors, { type: g.group_type, number: g.group_number }];
-    const found = findSectionInChapters(g.chapters, sectionNumber, path);
-    if (found) return found;
-    const nested = findSectionInGroups(g.child_groups, sectionNumber, path);
+    const path = [...ancestors, { type: g.group_type, number: g.number }];
+    // Check direct sections
+    const direct = g.sections.find((s) => s.section_number === sectionNumber);
+    if (direct) {
+      return { section: direct, groupAncestors: path };
+    }
+    // Recurse into children
+    const nested = findSectionInGroups(g.children, sectionNumber, path);
     if (nested) return nested;
   }
   return null;
@@ -94,10 +61,14 @@ function findSection(
   structure: TitleStructure,
   sectionNumber: string
 ): SectionPath | null {
-  return (
-    findSectionInChapters(structure.chapters, sectionNumber) ??
-    findSectionInGroups(structure.chapter_groups ?? [], sectionNumber)
+  // Check direct sections on the title
+  const direct = (structure.sections ?? []).find(
+    (s) => s.section_number === sectionNumber
   );
+  if (direct) {
+    return { section: direct, groupAncestors: [] };
+  }
+  return findSectionInGroups(structure.children ?? [], sectionNumber);
 }
 
 function capitalizeGroupType(type: string): string {
@@ -120,16 +91,6 @@ function buildBreadcrumbs(
       crumbs.push({
         label: `${capitalizeGroupType(ancestor.type)} ${ancestor.number}`,
         href: pathSoFar,
-      });
-    }
-    crumbs.push({
-      label: `Chapter ${path.chapterNumber}`,
-      href: `/titles/${titleNumber}/chapters/${path.chapterNumber}`,
-    });
-    if (path.subchapterNumber) {
-      crumbs.push({
-        label: `Subchapter ${path.subchapterNumber}`,
-        href: `/titles/${titleNumber}/chapters/${path.chapterNumber}/subchapters/${path.subchapterNumber}`,
       });
     }
   }

@@ -10,20 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     DataIngestionLog,
-    USCodeChapter,
-    USCodeChapterGroup,
+    SectionGroup,
     USCodeSection,
-    USCodeSubchapter,
-    USCodeTitle,
 )
 from pipeline.olrc.downloader import OLRCDownloader
 from pipeline.olrc.normalized_section import _clean_heading, normalize_parsed_section
 from pipeline.olrc.parser import (
-    ParsedChapter,
-    ParsedChapterGroup,
+    ParsedGroup,
     ParsedSection,
-    ParsedSubchapter,
-    ParsedTitle,
     USLMParser,
     USLMParseResult,
 )
@@ -191,7 +185,10 @@ class USCodeIngestionService:
             # Check if already ingested
             if not force_parse:
                 existing = await self.session.execute(
-                    select(USCodeTitle).where(USCodeTitle.title_number == title_number)
+                    select(SectionGroup).where(
+                        SectionGroup.group_type == "title",
+                        SectionGroup.number == str(title_number),
+                    )
                 )
                 if existing.scalar_one_or_none():
                     log.status = "skipped"
@@ -220,15 +217,10 @@ class USCodeIngestionService:
             # Update log
             log.status = "completed"
             log.completed_at = datetime.utcnow()
-            log.records_processed = (
-                1 + stats["chapters"] + stats["subchapters"] + stats["sections"]
-            )
+            log.records_processed = stats["groups"] + stats["sections"]
             log.records_created = stats["created"]
             log.records_updated = stats["updated"]
-            log.details = (
-                f"Title: 1, Chapters: {stats['chapters']}, "
-                f"Subchapters: {stats['subchapters']}, Sections: {stats['sections']}"
-            )
+            log.details = f"Groups: {stats['groups']}, Sections: {stats['sections']}"
 
             await self.session.commit()
             return log
@@ -256,265 +248,115 @@ class USCodeIngestionService:
             Statistics dict with counts.
         """
         stats = {
-            "chapters": 0,
-            "subchapters": 0,
+            "groups": 0,
             "sections": 0,
             "created": 0,
             "updated": 0,
         }
 
-        # Ingest or update title
-        title_record, title_created = await self._upsert_title(result.title, force)
-        stats["created" if title_created else "updated"] += 1
+        # Groups are already sorted parents-before-children by parser order
+        group_lookup: dict[str, SectionGroup] = {}
 
-        # Ingest chapter groups (parents before children due to sort_order)
-        group_lookup: dict[str, USCodeChapterGroup] = {}
-        for parsed_group in result.chapter_groups:
-            parent_group_id = None
+        for parsed_group in result.groups:
+            parent_id = None
             if parsed_group.parent_key:
                 parent_record = group_lookup.get(parsed_group.parent_key)
                 if parent_record:
-                    parent_group_id = parent_record.group_id
-            group_record, group_created = await self._upsert_chapter_group(
-                parsed_group, title_record.title_id, parent_group_id, force
+                    parent_id = parent_record.group_id
+
+            group_record, group_created = await self._upsert_group(
+                parsed_group, parent_id, force
             )
             group_lookup[parsed_group.key] = group_record
+            stats["groups"] += 1
+            stats["created" if group_created else "updated"] += 1
 
-        # Create chapter lookup
-        chapter_lookup: dict[str, USCodeChapter] = {}
-
-        # Ingest chapters
-        for chapter in result.chapters:
-            group_id = None
-            if chapter.group_key:
-                group_record = group_lookup.get(chapter.group_key)
-                if group_record:
-                    group_id = group_record.group_id
-            chapter_record, chapter_created = await self._upsert_chapter(
-                chapter, title_record.title_id, force, group_id=group_id
-            )
-            chapter_lookup[chapter.chapter_number] = chapter_record
-            stats["chapters"] += 1
-            stats["created" if chapter_created else "updated"] += 1
-
-        # Create subchapter lookup
-        subchapter_lookup: dict[str, USCodeSubchapter] = {}
-
-        # Ingest subchapters
-        for subchapter in result.subchapters:
-            parent_chapter = chapter_lookup.get(subchapter.chapter_number)
-            if parent_chapter:
-                subch_record, subch_created = await self._upsert_subchapter(
-                    subchapter, parent_chapter.chapter_id, force
-                )
-                key = f"{subchapter.chapter_number}/{subchapter.subchapter_number}"
-                subchapter_lookup[key] = subch_record
-                stats["subchapters"] += 1
-                stats["created" if subch_created else "updated"] += 1
+        # Extract title_number from the root title group
+        title_number = result.title.title_number
 
         # Ingest sections
         for section in result.sections:
-            chapter_id = None
-            subchapter_id = None
-
-            if section.chapter_number:
-                chapter_record = chapter_lookup.get(section.chapter_number)
-                if chapter_record:
-                    chapter_id = chapter_record.chapter_id
-
-            if section.subchapter_number and section.chapter_number:
-                key = f"{section.chapter_number}/{section.subchapter_number}"
-                subch_record = subchapter_lookup.get(key)
-                if subch_record:
-                    subchapter_id = subch_record.subchapter_id
+            group_id = None
+            if section.parent_group_key:
+                group_record = group_lookup.get(section.parent_group_key)
+                if group_record:
+                    group_id = group_record.group_id
 
             await self._upsert_section(
                 section,
-                title_record.title_id,
-                chapter_id,
-                subchapter_id,
+                group_id,
+                title_number,
                 force,
             )
             stats["sections"] += 1
 
         return stats
 
-    async def _upsert_title(
-        self, parsed: "ParsedTitle", force: bool = False
-    ) -> tuple[USCodeTitle, bool]:
-        """Insert or update a title record.
-
-        Returns:
-            Tuple of (title record, was_created).
-        """
-        # Parse positive_law_date if provided as string
-        positive_law_date = None
-        if parsed.positive_law_date:
-            positive_law_date = _parse_citation_date(parsed.positive_law_date)
-
-        # If positive law but no date from parser, use fallback dates
-        # These are the enactment dates for positive law titles
-        if parsed.is_positive_law and not positive_law_date:
-            positive_law_date = _get_positive_law_date(parsed.title_number)
-
-        result = await self.session.execute(
-            select(USCodeTitle).where(USCodeTitle.title_number == parsed.title_number)
-        )
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            if force:
-                existing.title_name = parsed.title_name
-                existing.is_positive_law = parsed.is_positive_law
-                existing.positive_law_date = positive_law_date
-                existing.positive_law_citation = parsed.positive_law_citation
-            return existing, False
-
-        title = USCodeTitle(
-            title_number=parsed.title_number,
-            title_name=parsed.title_name,
-            is_positive_law=parsed.is_positive_law,
-            positive_law_date=positive_law_date,
-            positive_law_citation=parsed.positive_law_citation,
-        )
-        self.session.add(title)
-        await self.session.flush()
-        return title, True
-
-    async def _upsert_chapter_group(
+    async def _upsert_group(
         self,
-        parsed: "ParsedChapterGroup",
-        title_id: int,
-        parent_group_id: int | None,
+        parsed: ParsedGroup,
+        parent_id: int | None,
         force: bool = False,
-    ) -> tuple[USCodeChapterGroup, bool]:
-        """Insert or update a chapter group record.
+    ) -> tuple[SectionGroup, bool]:
+        """Insert or update a group record.
 
         Returns:
-            Tuple of (chapter group record, was_created).
+            Tuple of (group record, was_created).
         """
-        if parent_group_id is not None:
-            stmt = select(USCodeChapterGroup).where(
-                USCodeChapterGroup.title_id == title_id,
-                USCodeChapterGroup.group_type == parsed.group_type,
-                USCodeChapterGroup.group_number == parsed.group_number,
-                USCodeChapterGroup.parent_group_id == parent_group_id,
+        # For title groups, also handle positive_law_date
+        positive_law_date = None
+        if parsed.group_type == "title":
+            if parsed.positive_law_date:
+                positive_law_date = _parse_citation_date(parsed.positive_law_date)
+            if parsed.is_positive_law and not positive_law_date:
+                positive_law_date = _get_positive_law_date(int(parsed.number))
+
+        if parent_id is not None:
+            stmt = select(SectionGroup).where(
+                SectionGroup.parent_id == parent_id,
+                SectionGroup.group_type == parsed.group_type,
+                SectionGroup.number == parsed.number,
             )
         else:
-            stmt = select(USCodeChapterGroup).where(
-                USCodeChapterGroup.title_id == title_id,
-                USCodeChapterGroup.group_type == parsed.group_type,
-                USCodeChapterGroup.group_number == parsed.group_number,
-                USCodeChapterGroup.parent_group_id.is_(None),
+            stmt = select(SectionGroup).where(
+                SectionGroup.parent_id.is_(None),
+                SectionGroup.group_type == parsed.group_type,
+                SectionGroup.number == parsed.number,
             )
         result = await self.session.execute(stmt)
         existing = result.scalar_one_or_none()
 
         if existing:
             if force:
-                existing.group_name = parsed.group_name
+                existing.name = parsed.name
                 existing.sort_order = parsed.sort_order
+                existing.is_positive_law = parsed.is_positive_law
+                existing.positive_law_date = positive_law_date
+                existing.positive_law_citation = parsed.positive_law_citation
             return existing, False
 
-        group = USCodeChapterGroup(
-            title_id=title_id,
-            parent_group_id=parent_group_id,
+        group = SectionGroup(
+            parent_id=parent_id,
             group_type=parsed.group_type,
-            group_number=parsed.group_number,
-            group_name=parsed.group_name,
+            number=parsed.number,
+            name=parsed.name,
             sort_order=parsed.sort_order,
+            is_positive_law=parsed.is_positive_law,
+            positive_law_date=positive_law_date,
+            positive_law_citation=parsed.positive_law_citation,
         )
         self.session.add(group)
         await self.session.flush()
         return group, True
 
-    async def _upsert_chapter(
-        self,
-        parsed: "ParsedChapter",
-        title_id: int,
-        force: bool = False,
-        group_id: int | None = None,
-    ) -> tuple[USCodeChapter, bool]:
-        """Insert or update a chapter record.
-
-        Returns:
-            Tuple of (chapter record, was_created).
-        """
-
-        result = await self.session.execute(
-            select(USCodeChapter).where(
-                USCodeChapter.title_id == title_id,
-                USCodeChapter.chapter_number == parsed.chapter_number,
-            )
-        )
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            if force:
-                existing.chapter_name = parsed.chapter_name
-                existing.sort_order = parsed.sort_order
-                existing.group_id = group_id
-            return existing, False
-
-        chapter = USCodeChapter(
-            title_id=title_id,
-            chapter_number=parsed.chapter_number,
-            chapter_name=parsed.chapter_name,
-            sort_order=parsed.sort_order,
-            group_id=group_id,
-        )
-        self.session.add(chapter)
-        await self.session.flush()
-        return chapter, True
-
-    async def _upsert_subchapter(
-        self, parsed: "ParsedSubchapter", chapter_id: int, force: bool = False
-    ) -> tuple[USCodeSubchapter, bool]:
-        """Insert or update a subchapter record.
-
-        Returns:
-            Tuple of (subchapter record, was_created).
-        """
-
-        result = await self.session.execute(
-            select(USCodeSubchapter).where(
-                USCodeSubchapter.chapter_id == chapter_id,
-                USCodeSubchapter.subchapter_number == parsed.subchapter_number,
-            )
-        )
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            if force:
-                existing.subchapter_name = parsed.subchapter_name
-                existing.sort_order = parsed.sort_order
-            return existing, False
-
-        subchapter = USCodeSubchapter(
-            chapter_id=chapter_id,
-            subchapter_number=parsed.subchapter_number,
-            subchapter_name=parsed.subchapter_name,
-            sort_order=parsed.sort_order,
-        )
-        self.session.add(subchapter)
-        await self.session.flush()
-        return subchapter, True
-
     async def _upsert_section(
         self,
         parsed: "ParsedSection",
-        title_id: int,
-        chapter_id: int | None,
-        subchapter_id: int | None,
+        group_id: int | None,
+        title_number: int,
         force: bool = False,
     ) -> USCodeSection:
-        """Insert or update a section record.
-
-        This method normalizes the parsed section and stores:
-        - normalized_text in text_content (display-ready indented text)
-        - section_notes as JSON in normalized_notes
-        - enacted_date and statutes_at_large_citation from first citation
-        """
+        """Insert or update a section record."""
         # Normalize the parsed section to get structured data
         normalized = normalize_parsed_section(parsed)
 
@@ -571,7 +413,7 @@ class USCodeIngestionService:
 
         result = await self.session.execute(
             select(USCodeSection).where(
-                USCodeSection.title_id == title_id,
+                USCodeSection.title_number == title_number,
                 USCodeSection.section_number == parsed.section_number,
             )
         )
@@ -582,8 +424,7 @@ class USCodeIngestionService:
                 existing.heading = _clean_heading(parsed.heading)
                 existing.full_citation = parsed.full_citation
                 existing.text_content = text_content
-                existing.chapter_id = chapter_id
-                existing.subchapter_id = subchapter_id
+                existing.group_id = group_id
                 existing.notes = parsed.notes
                 existing.normalized_notes = normalized_notes
                 existing.normalized_provisions = normalized_provisions
@@ -594,9 +435,8 @@ class USCodeIngestionService:
             return existing
 
         section = USCodeSection(
-            title_id=title_id,
-            chapter_id=chapter_id,
-            subchapter_id=subchapter_id,
+            group_id=group_id,
+            title_number=title_number,
             section_number=parsed.section_number,
             heading=_clean_heading(parsed.heading),
             full_citation=parsed.full_citation,

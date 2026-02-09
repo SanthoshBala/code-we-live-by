@@ -3,8 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import type {
-  ChapterGroupTree,
-  ChapterTree,
+  SectionGroupTree,
   DirectoryItem,
   SectionSummary,
   BreadcrumbSegment,
@@ -37,16 +36,10 @@ function capitalizeGroupType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-function collectAllSections(group: ChapterGroupTree): SectionSummary[] {
-  const sections: SectionSummary[] = [];
-  for (const ch of group.chapters) {
-    sections.push(...ch.sections);
-    for (const sub of ch.subchapters) {
-      sections.push(...sub.sections);
-    }
-  }
-  for (const cg of group.child_groups) {
-    sections.push(...collectAllSections(cg));
+function collectAllSections(group: SectionGroupTree): SectionSummary[] {
+  const sections: SectionSummary[] = [...group.sections];
+  for (const child of group.children) {
+    sections.push(...collectAllSections(child));
   }
   return sections;
 }
@@ -66,23 +59,23 @@ function parseGroupPath(
 }
 
 /**
- * Walk the chapter_groups tree to find the target group by path pairs.
+ * Walk the children tree to find the target group by path pairs.
  */
 function findGroup(
-  groups: ChapterGroupTree[],
+  groups: SectionGroupTree[],
   pairs: { type: string; number: string }[]
-): ChapterGroupTree | null {
+): SectionGroupTree | null {
   if (pairs.length === 0) return null;
   const [first, ...rest] = pairs;
   const match = groups.find(
-    (g) => g.group_type === first.type && g.group_number === first.number
+    (g) => g.group_type === first.type && g.number === first.number
   );
   if (!match) return null;
   if (rest.length === 0) return match;
-  return findGroup(match.child_groups, rest);
+  return findGroup(match.children, rest);
 }
 
-/** Group directory page for paths like /titles/26/subtitle/A or /titles/10/subtitle/A/part/I */
+/** Group directory page for paths like /titles/26/chapter/1 or /titles/10/subtitle/A/part/I */
 export default function GroupDirectoryPage() {
   const params = useParams<{ titleNumber: string; groupPath: string[] }>();
   const titleNumber = Number(params.titleNumber);
@@ -102,7 +95,7 @@ export default function GroupDirectoryPage() {
   }
 
   const pairs = parseGroupPath(groupPath);
-  const group = findGroup(structure.chapter_groups ?? [], pairs);
+  const group = findGroup(structure.children ?? [], pairs);
 
   if (!group) {
     return <p className="text-red-600">Group not found.</p>;
@@ -131,13 +124,13 @@ export default function GroupDirectoryPage() {
   const items: DirectoryItem[] = [];
 
   // Child groups as folders
-  for (const cg of group.child_groups) {
-    const allSections = collectAllSections(cg);
+  for (const child of group.children) {
+    const allSections = collectAllSections(child);
     const amendment = latestAmendment(allSections);
     items.push({
-      id: `${capitalizeGroupType(cg.group_type)} ${cg.group_number}`,
-      name: `${capitalizeGroupType(cg.group_type)} ${cg.group_number} \u2014 ${cg.group_name}`,
-      href: `${pathSoFar}/${cg.group_type}/${cg.group_number}`,
+      id: `${capitalizeGroupType(child.group_type)} ${child.number}`,
+      name: `${capitalizeGroupType(child.group_type)} ${child.number} \u2014 ${child.name}`,
+      href: `${pathSoFar}/${child.group_type}/${child.number}`,
       kind: 'folder' as const,
       sectionCount: allSections.length,
       lastAmendmentLaw: amendment.law,
@@ -145,29 +138,19 @@ export default function GroupDirectoryPage() {
     });
   }
 
-  // Chapters as folders
-  for (const ch of group.chapters) {
-    const allSections = [
-      ...ch.sections,
-      ...ch.subchapters.flatMap((sub) => sub.sections),
-    ];
-    const amendment = latestAmendment(allSections);
+  // Direct sections as files
+  for (const s of group.sections) {
     items.push({
-      id: `Ch. ${ch.chapter_number}`,
-      name: ch.chapter_name,
-      href: `/titles/${titleNumber}/chapters/${ch.chapter_number}`,
-      kind: 'folder' as const,
-      sectionCount: allSections.length,
-      lastAmendmentLaw: amendment.law,
-      lastAmendmentYear: amendment.year,
+      id: `\u00A7\u2009${s.section_number}`,
+      name: s.heading,
+      href: `/sections/${titleNumber}/${s.section_number}`,
+      kind: 'file' as const,
+      lastAmendmentLaw: s.last_amendment_law ?? null,
+      lastAmendmentYear: s.last_amendment_year ?? null,
     });
   }
 
   return (
-    <DirectoryView
-      title={group.group_name}
-      breadcrumbs={breadcrumbs}
-      items={items}
-    />
+    <DirectoryView title={group.name} breadcrumbs={breadcrumbs} items={items} />
   );
 }

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
-import ChapterNode from './ChapterNode';
+import GroupNode from './GroupNode';
 
 vi.mock('next/link', () => ({
   default: ({
@@ -18,15 +18,18 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-const chapter = {
-  chapter_number: '1',
-  chapter_name: 'Subject Matter and Scope of Copyright',
+const group = {
+  group_type: 'chapter',
+  number: '1',
+  name: 'Subject Matter and Scope of Copyright',
   sort_order: 1,
-  subchapters: [
+  children: [
     {
-      subchapter_number: 'A',
-      subchapter_name: 'The Works',
+      group_type: 'subchapter',
+      number: 'A',
+      name: 'The Works',
       sort_order: 1,
+      children: [],
       sections: [
         { section_number: '101', heading: 'Definitions', sort_order: 1 },
       ],
@@ -37,23 +40,29 @@ const chapter = {
   ],
 };
 
-describe('ChapterNode', () => {
-  it('renders the chapter name as a link', () => {
-    render(<ChapterNode chapter={chapter} titleNumber={17} />);
+describe('GroupNode', () => {
+  it('renders the group name as a link', () => {
+    render(
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+    );
     const link = screen.getByRole('link', {
       name: /Subject Matter and Scope of Copyright/,
     });
-    expect(link).toHaveAttribute('href', '/titles/17/chapters/1');
+    expect(link).toHaveAttribute('href', '/titles/17/chapter/1');
   });
 
   it('does not show children until expanded', () => {
-    render(<ChapterNode chapter={chapter} titleNumber={17} />);
+    render(
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+    );
     expect(screen.queryByText('Subject matter')).not.toBeInTheDocument();
   });
 
   it('icon click expands to show children', async () => {
     const user = userEvent.setup();
-    render(<ChapterNode chapter={chapter} titleNumber={17} />);
+    render(
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+    );
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(screen.getByText(/The Works/)).toBeInTheDocument();
     expect(screen.getByText('Subject matter')).toBeInTheDocument();
@@ -61,7 +70,9 @@ describe('ChapterNode', () => {
 
   it('icon click collapses children', async () => {
     const user = userEvent.setup();
-    render(<ChapterNode chapter={chapter} titleNumber={17} />);
+    render(
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+    );
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(screen.getByText('Subject matter')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Collapse' }));
@@ -70,7 +81,9 @@ describe('ChapterNode', () => {
 
   it('sections render as links to section viewer', async () => {
     const user = userEvent.setup();
-    render(<ChapterNode chapter={chapter} titleNumber={17} />);
+    render(
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+    );
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     const sectionLink = screen.getByRole('link', { name: /Subject matter/ });
     expect(sectionLink).toHaveAttribute('href', '/sections/17/102');
