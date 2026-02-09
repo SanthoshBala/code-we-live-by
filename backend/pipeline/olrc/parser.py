@@ -605,15 +605,25 @@ class USLMParser:
                 )
             return
 
-        # Look for chapter elements
-        chapters = parent.findall(".//chapter") + parent.findall(".//{*}chapter")
-        if not chapters:
-            # Try level elements with chapter identifier
-            chapters = [
+        # Look for chapter elements (check parent and any <title> child wrapper)
+        ns = NAMESPACES["uslm"]
+        containers = [parent]
+        title_child = parent.find(f"./{{{ns}}}title")
+        if title_child is None:
+            title_child = parent.find("./title")
+        if title_child is not None:
+            containers.append(title_child)
+
+        chapters: list[etree._Element] = []
+        for container in containers:
+            chapters.extend(container.findall("./chapter"))
+            chapters.extend(container.findall(f"./{{{ns}}}chapter"))
+            chapters.extend(
                 lvl
-                for lvl in parent.findall(".//level") + parent.findall(".//{*}level")
+                for lvl in container.findall("./level")
+                + container.findall(f"./{{{ns}}}level")
                 if self._get_level_type(lvl) == "chapter"
-            ]
+            )
 
         if chapters:
             for chapter_elem in chapters:
@@ -657,14 +667,14 @@ class USLMParser:
         self._groups.append(chapter_group)
 
         # Look for subchapters
-        subchapter_elems = chapter_elem.findall(".//subchapter") + chapter_elem.findall(
-            ".//{*}subchapter"
+        subchapter_elems = chapter_elem.findall("./subchapter") + chapter_elem.findall(
+            "./{*}subchapter"
         )
         if not subchapter_elems:
             subchapter_elems = [
                 lvl
-                for lvl in chapter_elem.findall(".//level")
-                + chapter_elem.findall(".//{*}level")
+                for lvl in chapter_elem.findall("./level")
+                + chapter_elem.findall("./{*}level")
                 if self._get_level_type(lvl) == "subchapter"
             ]
 
@@ -778,12 +788,12 @@ class USLMParser:
         """Parse all section elements within a parent element."""
         sections: list[ParsedSection] = []
 
-        # Find section elements
-        section_elems = parent.findall(".//section") + parent.findall(".//{*}section")
+        # Find direct child section elements only (not nested in notes/quotedContent)
+        section_elems = parent.findall("./section") + parent.findall("./{*}section")
         if not section_elems:
             section_elems = [
                 lvl
-                for lvl in parent.findall(".//level") + parent.findall(".//{*}level")
+                for lvl in parent.findall("./level") + parent.findall("./{*}level")
                 if self._get_level_type(lvl) == "section"
             ]
 

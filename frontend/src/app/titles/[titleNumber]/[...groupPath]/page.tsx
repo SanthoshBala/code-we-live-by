@@ -129,7 +129,7 @@ export default function GroupDirectoryPage() {
     const amendment = latestAmendment(allSections);
     items.push({
       id: `${capitalizeGroupType(child.group_type)} ${child.number}`,
-      name: `${capitalizeGroupType(child.group_type)} ${child.number} \u2014 ${child.name}`,
+      name: child.name,
       href: `${pathSoFar}/${child.group_type}/${child.number}`,
       kind: 'folder' as const,
       sectionCount: allSections.length,

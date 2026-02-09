@@ -53,7 +53,7 @@ function groupToItem(
   const amendment = latestAmendment(allSections);
   return {
     id: `${capitalizeGroupType(group.group_type)} ${group.number}`,
-    name: `${capitalizeGroupType(group.group_type)} ${group.number} \u2014 ${group.name}`,
+    name: group.name,
     href: `${parentPath}/${group.group_type}/${group.number}`,
     kind: 'folder' as const,
     sectionCount: allSections.length,
