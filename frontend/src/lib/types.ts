@@ -21,31 +21,15 @@ export interface SectionSummary {
   note_categories?: string[];
 }
 
-/** Subchapter node in the title structure tree. */
-export interface SubchapterTree {
-  subchapter_number: string;
-  subchapter_name: string;
-  sort_order: number;
-  sections: SectionSummary[];
-}
-
-/** Chapter node in the title structure tree. */
-export interface ChapterTree {
-  chapter_number: string;
-  chapter_name: string;
-  sort_order: number;
-  subchapters: SubchapterTree[];
-  sections: SectionSummary[];
-}
-
-/** Recursive structural grouping node (subtitle, part, division). */
-export interface ChapterGroupTree {
+/** Recursive structural grouping node (title, subtitle, part, chapter, subchapter, division, etc.). */
+export interface SectionGroupTree {
   group_type: string;
-  group_number: string;
-  group_name: string;
+  number: string;
+  name: string;
   sort_order: number;
-  child_groups: ChapterGroupTree[];
-  chapters: ChapterTree[];
+  is_positive_law?: boolean;
+  children: SectionGroupTree[];
+  sections: SectionSummary[];
 }
 
 /** Full structure tree for a single title. */
@@ -53,8 +37,8 @@ export interface TitleStructure {
   title_number: number;
   title_name: string;
   is_positive_law: boolean;
-  chapter_groups: ChapterGroupTree[];
-  chapters: ChapterTree[];
+  children: SectionGroupTree[];
+  sections: SectionSummary[];
 }
 
 // --- Tree navigator types ---
@@ -62,8 +46,6 @@ export interface TitleStructure {
 /** Identifies the active item in the tree so ancestors auto-expand and the node highlights. */
 export interface TreeActivePath {
   titleNumber?: number;
-  chapterNumber?: string;
-  subchapterNumber?: string;
   sectionNumber?: string;
   groupPath?: { type: string; number: string }[];
 }

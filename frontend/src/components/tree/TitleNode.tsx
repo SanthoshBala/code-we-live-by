@@ -3,8 +3,7 @@ import Link from 'next/link';
 import type { TitleSummary, TreeActivePath } from '@/lib/types';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import TreeIndicator from './TreeIndicator';
-import ChapterGroupNode from './ChapterGroupNode';
-import ChapterNode from './ChapterNode';
+import GroupNode from './GroupNode';
 
 interface TitleNodeProps {
   title: TitleSummary;
@@ -25,8 +24,8 @@ export default function TitleNode({ title, activePath }: TitleNodeProps) {
 
   const isActive =
     activePath?.titleNumber === title.title_number &&
-    !activePath?.chapterNumber &&
-    !activePath?.groupPath?.length;
+    !activePath?.groupPath?.length &&
+    !activePath?.sectionNumber;
 
   return (
     <div>
@@ -55,20 +54,12 @@ export default function TitleNode({ title, activePath }: TitleNodeProps) {
           {isLoading && (
             <p className="px-2 py-0.5 text-xs text-gray-400">Loading...</p>
           )}
-          {structure?.chapter_groups?.map((g) => (
-            <ChapterGroupNode
-              key={`${g.group_type}-${g.group_number}`}
+          {structure?.children?.map((g) => (
+            <GroupNode
+              key={`${g.group_type}-${g.number}`}
               group={g}
               titleNumber={title.title_number}
               parentPath={`/titles/${title.title_number}`}
-              activePath={activePath}
-            />
-          ))}
-          {structure?.chapters.map((ch) => (
-            <ChapterNode
-              key={ch.chapter_number}
-              chapter={ch}
-              titleNumber={title.title_number}
               activePath={activePath}
             />
           ))}

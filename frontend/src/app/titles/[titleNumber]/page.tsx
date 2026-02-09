@@ -3,8 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import type {
-  ChapterGroupTree,
-  ChapterTree,
+  SectionGroupTree,
   DirectoryItem,
   SectionSummary,
   BreadcrumbSegment,
@@ -37,30 +36,25 @@ function capitalizeGroupType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-function collectAllSections(group: ChapterGroupTree): SectionSummary[] {
-  const sections: SectionSummary[] = [];
-  for (const ch of group.chapters) {
-    sections.push(...ch.sections);
-    for (const sub of ch.subchapters) {
-      sections.push(...sub.sections);
-    }
-  }
-  for (const cg of group.child_groups) {
-    sections.push(...collectAllSections(cg));
+function collectAllSections(group: SectionGroupTree): SectionSummary[] {
+  const sections: SectionSummary[] = [...group.sections];
+  for (const child of group.children) {
+    sections.push(...collectAllSections(child));
   }
   return sections;
 }
 
-function chapterToItem(ch: ChapterTree, titleNumber: number): DirectoryItem {
-  const allSections = [
-    ...ch.sections,
-    ...ch.subchapters.flatMap((sub) => sub.sections),
-  ];
+function groupToItem(
+  group: SectionGroupTree,
+  titleNumber: number,
+  parentPath: string
+): DirectoryItem {
+  const allSections = collectAllSections(group);
   const amendment = latestAmendment(allSections);
   return {
-    id: `Ch. ${ch.chapter_number}`,
-    name: ch.chapter_name,
-    href: `/titles/${titleNumber}/chapters/${ch.chapter_number}`,
+    id: `${capitalizeGroupType(group.group_type)} ${group.number}`,
+    name: group.name,
+    href: `${parentPath}/${group.group_type}/${group.number}`,
     kind: 'folder' as const,
     sectionCount: allSections.length,
     lastAmendmentLaw: amendment.law,
@@ -68,7 +62,7 @@ function chapterToItem(ch: ChapterTree, titleNumber: number): DirectoryItem {
   };
 }
 
-/** Title directory page showing chapter groups and ungrouped chapters. */
+/** Title directory page showing child groups and direct sections. */
 export default function TitleDirectoryPage() {
   const params = useParams<{ titleNumber: string }>();
   const titleNumber = Number(params.titleNumber);
@@ -87,27 +81,25 @@ export default function TitleDirectoryPage() {
   }
 
   const breadcrumbs: BreadcrumbSegment[] = [{ label: `Title ${titleNumber}` }];
+  const basePath = `/titles/${titleNumber}`;
 
   const items: DirectoryItem[] = [];
 
-  // Groups first
-  for (const g of structure.chapter_groups ?? []) {
-    const allSections = collectAllSections(g);
-    const amendment = latestAmendment(allSections);
-    items.push({
-      id: `${capitalizeGroupType(g.group_type)} ${g.group_number}`,
-      name: `${capitalizeGroupType(g.group_type)} ${g.group_number} \u2014 ${g.group_name}`,
-      href: `/titles/${titleNumber}/${g.group_type}/${g.group_number}`,
-      kind: 'folder' as const,
-      sectionCount: allSections.length,
-      lastAmendmentLaw: amendment.law,
-      lastAmendmentYear: amendment.year,
-    });
+  // Child groups as folders
+  for (const g of structure.children ?? []) {
+    items.push(groupToItem(g, titleNumber, basePath));
   }
 
-  // Ungrouped chapters
-  for (const ch of structure.chapters) {
-    items.push(chapterToItem(ch, titleNumber));
+  // Direct sections as files
+  for (const s of structure.sections ?? []) {
+    items.push({
+      id: `\u00A7\u2009${s.section_number}`,
+      name: s.heading,
+      href: `/sections/${titleNumber}/${s.section_number}`,
+      kind: 'file' as const,
+      lastAmendmentLaw: s.last_amendment_law ?? null,
+      lastAmendmentYear: s.last_amendment_year ?? null,
+    });
   }
 
   return (

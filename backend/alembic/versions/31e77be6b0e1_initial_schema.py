@@ -1,8 +1,8 @@
-"""Initial schema
+"""initial schema
 
-Revision ID: b151e1b05c53
+Revision ID: 31e77be6b0e1
 Revises:
-Create Date: 2026-01-28 15:34:41.968195
+Create Date: 2026-02-08 16:44:06.180922
 """
 
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "b151e1b05c53"
+revision: str = "31e77be6b0e1"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -45,20 +45,20 @@ def upgrade() -> None:
         sa.Column(
             "status",
             sa.Enum(
-                "INTRODUCED",
-                "IN_COMMITTEE",
-                "REPORTED_BY_COMMITTEE",
-                "PASSED_HOUSE",
-                "PASSED_SENATE",
-                "RESOLVING_DIFFERENCES",
-                "TO_PRESIDENT",
-                "BECAME_LAW",
-                "FAILED",
-                "VETOED",
-                "VETO_OVERRIDDEN",
-                "POCKET_VETOED",
-                "DIED_IN_COMMITTEE",
-                "WITHDRAWN",
+                "Introduced",
+                "In_Committee",
+                "Reported_by_Committee",
+                "Passed_House",
+                "Passed_Senate",
+                "Resolving_Differences",
+                "To_President",
+                "Became_Law",
+                "Failed",
+                "Vetoed",
+                "Veto_Overridden",
+                "Pocket_Vetoed",
+                "Died_in_Committee",
+                "Withdrawn",
                 name="bill_status",
             ),
             nullable=False,
@@ -85,7 +85,7 @@ def upgrade() -> None:
         "bill",
         ["status"],
         unique=False,
-        postgresql_where="status NOT IN ('BECAME_LAW', 'FAILED', 'VETOED', 'DIED_IN_COMMITTEE')",
+        postgresql_where="status NOT IN ('Became_Law', 'Failed', 'Vetoed', 'Died_in_Committee')",
     )
     op.create_index("idx_bill_status", "bill", ["status"], unique=False)
     op.create_table(
@@ -93,7 +93,7 @@ def upgrade() -> None:
         sa.Column("committee_id", sa.Integer(), nullable=False),
         sa.Column("committee_code", sa.String(length=20), nullable=False),
         sa.Column(
-            "chamber", sa.Enum("HOUSE", "SENATE", name="chamber"), nullable=False
+            "chamber", sa.Enum("House", "Senate", name="chamber"), nullable=False
         ),
         sa.Column("name", sa.String(length=300), nullable=False),
         sa.Column("parent_committee_id", sa.Integer(), nullable=True),
@@ -183,12 +183,12 @@ def upgrade() -> None:
         sa.Column(
             "party",
             sa.Enum(
-                "DEMOCRAT",
-                "REPUBLICAN",
-                "INDEPENDENT",
-                "LIBERTARIAN",
-                "GREEN",
-                "OTHER",
+                "Democrat",
+                "Republican",
+                "Independent",
+                "Libertarian",
+                "Green",
+                "Other",
                 name="political_party",
             ),
             nullable=True,
@@ -196,7 +196,7 @@ def upgrade() -> None:
         sa.Column("state", sa.CHAR(length=2), nullable=True),
         sa.Column("district", sa.String(length=10), nullable=True),
         sa.Column(
-            "current_chamber", sa.Enum("HOUSE", "SENATE", name="chamber"), nullable=True
+            "current_chamber", sa.Enum("House", "Senate", name="chamber"), nullable=True
         ),
         sa.Column("is_current_member", sa.Boolean(), nullable=False),
         sa.Column("first_served", sa.Date(), nullable=True),
@@ -222,21 +222,40 @@ def upgrade() -> None:
     op.create_index("idx_legislator_party", "legislator", ["party"], unique=False)
     op.create_index("idx_legislator_state", "legislator", ["state"], unique=False)
     op.create_table(
-        "us_code_title",
-        sa.Column("title_id", sa.Integer(), nullable=False),
-        sa.Column("title_number", sa.Integer(), nullable=False),
-        sa.Column("title_name", sa.String(length=500), nullable=False),
+        "section_group",
+        sa.Column("group_id", sa.Integer(), nullable=False),
+        sa.Column("parent_id", sa.Integer(), nullable=True),
+        sa.Column("group_type", sa.String(length=50), nullable=False),
+        sa.Column("number", sa.String(length=50), nullable=False),
+        sa.Column("name", sa.String(length=500), nullable=False),
+        sa.Column("sort_order", sa.Integer(), nullable=False),
         sa.Column("is_positive_law", sa.Boolean(), nullable=False),
         sa.Column("positive_law_date", sa.Date(), nullable=True),
         sa.Column("positive_law_citation", sa.String(length=200), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.CheckConstraint(
-            "(is_positive_law = FALSE AND positive_law_date IS NULL) OR (is_positive_law = TRUE AND positive_law_date IS NOT NULL)",
-            name=op.f("ck_us_code_title_ck_us_code_title_positive_law_consistency"),
+        sa.ForeignKeyConstraint(
+            ["parent_id"],
+            ["section_group.group_id"],
+            name=op.f("fk_section_group_parent_id_section_group"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("title_id", name=op.f("pk_us_code_title")),
-        sa.UniqueConstraint("title_number", name=op.f("uq_us_code_title_title_number")),
+        sa.PrimaryKeyConstraint("group_id", name=op.f("pk_section_group")),
+        sa.UniqueConstraint(
+            "parent_id", "group_type", "number", name="uq_section_group_child"
+        ),
+    )
+    op.create_index(
+        "idx_section_group_parent", "section_group", ["parent_id"], unique=False
+    )
+    op.create_index(
+        "idx_section_group_sort",
+        "section_group",
+        ["parent_id", "sort_order"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_section_group_type", "section_group", ["group_type"], unique=False
     )
     op.create_table(
         "amendment",
@@ -244,7 +263,7 @@ def upgrade() -> None:
         sa.Column("bill_id", sa.Integer(), nullable=False),
         sa.Column("amendment_number", sa.String(length=50), nullable=False),
         sa.Column(
-            "chamber", sa.Enum("HOUSE", "SENATE", name="chamber"), nullable=False
+            "chamber", sa.Enum("House", "Senate", name="chamber"), nullable=False
         ),
         sa.Column("congress", sa.Integer(), nullable=False),
         sa.Column("purpose", sa.Text(), nullable=True),
@@ -314,19 +333,19 @@ def upgrade() -> None:
         sa.Column("term_id", sa.Integer(), nullable=False),
         sa.Column("legislator_id", sa.Integer(), nullable=False),
         sa.Column(
-            "chamber", sa.Enum("HOUSE", "SENATE", name="chamber"), nullable=False
+            "chamber", sa.Enum("House", "Senate", name="chamber"), nullable=False
         ),
         sa.Column("state", sa.CHAR(length=2), nullable=False),
         sa.Column("district", sa.String(length=10), nullable=True),
         sa.Column(
             "party",
             sa.Enum(
-                "DEMOCRAT",
-                "REPUBLICAN",
-                "INDEPENDENT",
-                "LIBERTARIAN",
-                "GREEN",
-                "OTHER",
+                "Democrat",
+                "Republican",
+                "Independent",
+                "Libertarian",
+                "Green",
+                "Other",
                 name="political_party",
             ),
             nullable=False,
@@ -359,7 +378,7 @@ def upgrade() -> None:
         sa.Column("law_number", sa.String(length=20), nullable=False),
         sa.Column("congress", sa.Integer(), nullable=False),
         sa.Column(
-            "law_type", sa.Enum("PUBLIC", "PRIVATE", name="law_type"), nullable=False
+            "law_type", sa.Enum("Public", "Private", name="law_type"), nullable=False
         ),
         sa.Column("popular_name", sa.String(length=500), nullable=True),
         sa.Column("official_title", sa.Text(), nullable=True),
@@ -411,27 +430,59 @@ def upgrade() -> None:
     )
     op.create_index("idx_law_president", "public_law", ["president"], unique=False)
     op.create_table(
-        "us_code_chapter",
-        sa.Column("chapter_id", sa.Integer(), nullable=False),
-        sa.Column("title_id", sa.Integer(), nullable=False),
-        sa.Column("chapter_number", sa.String(length=50), nullable=False),
-        sa.Column("chapter_name", sa.String(length=500), nullable=False),
-        sa.Column("sort_order", sa.Integer(), nullable=False),
+        "parsing_session",
+        sa.Column("session_id", sa.Integer(), nullable=False),
+        sa.Column("law_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "mode",
+            sa.Enum("Human_Plus_LLM", "LLM", "RegEx", name="parsing_mode"),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "In_Progress",
+                "Completed",
+                "Failed",
+                "Escalated",
+                name="parsing_session_status",
+            ),
+            nullable=False,
+        ),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("parent_session_id", sa.Integer(), nullable=True),
+        sa.Column("escalation_reason", sa.Text(), nullable=True),
+        sa.Column("escalated_by", sa.String(length=100), nullable=True),
+        sa.Column("error_message", sa.Text(), nullable=True),
+        sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["title_id"],
-            ["us_code_title.title_id"],
-            name=op.f("fk_us_code_chapter_title_id_us_code_title"),
+            ["law_id"],
+            ["public_law.law_id"],
+            name=op.f("fk_parsing_session_law_id_public_law"),
             ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("chapter_id", name=op.f("pk_us_code_chapter")),
-        sa.UniqueConstraint(
-            "title_id", "chapter_number", name="uq_chapter_title_number"
+        sa.ForeignKeyConstraint(
+            ["parent_session_id"],
+            ["parsing_session.session_id"],
+            name=op.f("fk_parsing_session_parent_session_id_parsing_session"),
+            ondelete="SET NULL",
         ),
+        sa.PrimaryKeyConstraint("session_id", name=op.f("pk_parsing_session")),
     )
     op.create_index(
-        "idx_chapter_sort", "us_code_chapter", ["title_id", "sort_order"], unique=False
+        "idx_parsing_session_law", "parsing_session", ["law_id"], unique=False
+    )
+    op.create_index(
+        "idx_parsing_session_mode", "parsing_session", ["mode"], unique=False
+    )
+    op.create_index(
+        "idx_parsing_session_started", "parsing_session", ["started_at"], unique=False
+    )
+    op.create_index(
+        "idx_parsing_session_status", "parsing_session", ["status"], unique=False
     )
     op.create_table(
         "sponsorship",
@@ -441,7 +492,7 @@ def upgrade() -> None:
         sa.Column("legislator_id", sa.Integer(), nullable=False),
         sa.Column(
             "role",
-            sa.Enum("SPONSOR", "COSPONSOR", name="sponsorship_role"),
+            sa.Enum("Sponsor", "Cosponsor", name="sponsorship_role"),
             nullable=False,
         ),
         sa.Column("sponsorship_date", sa.Date(), nullable=True),
@@ -482,36 +533,81 @@ def upgrade() -> None:
         "sponsorship",
         ["law_id", "role"],
         unique=False,
-        postgresql_where="role = 'SPONSOR'",
+        postgresql_where="role = 'Sponsor'",
     )
     op.create_table(
-        "us_code_subchapter",
-        sa.Column("subchapter_id", sa.Integer(), nullable=False),
-        sa.Column("chapter_id", sa.Integer(), nullable=False),
-        sa.Column("subchapter_number", sa.String(length=50), nullable=False),
-        sa.Column("subchapter_name", sa.String(length=500), nullable=False),
+        "us_code_section",
+        sa.Column("section_id", sa.Integer(), nullable=False),
+        sa.Column("group_id", sa.Integer(), nullable=True),
+        sa.Column("title_number", sa.Integer(), nullable=False),
+        sa.Column("section_number", sa.String(length=50), nullable=False),
+        sa.Column("heading", sa.Text(), nullable=False),
+        sa.Column("full_citation", sa.String(length=200), nullable=False),
+        sa.Column("text_content", sa.Text(), nullable=True),
+        sa.Column("enacted_date", sa.Date(), nullable=True),
+        sa.Column("last_modified_date", sa.Date(), nullable=True),
+        sa.Column("effective_date", sa.Date(), nullable=True),
+        sa.Column("is_positive_law", sa.Boolean(), nullable=False),
+        sa.Column("title_positive_law_date", sa.Date(), nullable=True),
+        sa.Column("statutes_at_large_citation", sa.String(length=200), nullable=True),
+        sa.Column("is_repealed", sa.Boolean(), nullable=False),
+        sa.Column("repealed_date", sa.Date(), nullable=True),
+        sa.Column("repealed_by_law_id", sa.Integer(), nullable=True),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column(
+            "normalized_notes", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
+        sa.Column(
+            "normalized_provisions",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
         sa.Column("sort_order", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.CheckConstraint(
+            "(is_repealed = FALSE AND repealed_date IS NULL) OR (is_repealed = TRUE AND repealed_date IS NOT NULL)",
+            name=op.f("ck_us_code_section_ck_us_code_section_repealed_consistency"),
+        ),
         sa.ForeignKeyConstraint(
-            ["chapter_id"],
-            ["us_code_chapter.chapter_id"],
-            name=op.f("fk_us_code_subchapter_chapter_id_us_code_chapter"),
-            ondelete="CASCADE",
+            ["group_id"],
+            ["section_group.group_id"],
+            name=op.f("fk_us_code_section_group_id_section_group"),
+            ondelete="SET NULL",
         ),
-        sa.PrimaryKeyConstraint("subchapter_id", name=op.f("pk_us_code_subchapter")),
+        sa.ForeignKeyConstraint(
+            ["repealed_by_law_id"],
+            ["public_law.law_id"],
+            name=op.f("fk_us_code_section_repealed_by_law_id_public_law"),
+            ondelete="SET NULL",
+        ),
+        sa.PrimaryKeyConstraint("section_id", name=op.f("pk_us_code_section")),
         sa.UniqueConstraint(
-            "chapter_id", "subchapter_number", name="uq_subchapter_chapter_number"
+            "title_number", "section_number", name="uq_section_title_number"
         ),
     )
     op.create_index(
-        "idx_subchapter_chapter", "us_code_subchapter", ["chapter_id"], unique=False
+        "idx_section_active",
+        "us_code_section",
+        ["is_repealed"],
+        unique=False,
+        postgresql_where="is_repealed = FALSE",
     )
     op.create_index(
-        "idx_subchapter_sort",
-        "us_code_subchapter",
-        ["chapter_id", "sort_order"],
+        "idx_section_citation", "us_code_section", ["full_citation"], unique=False
+    )
+    op.create_index("idx_section_group", "us_code_section", ["group_id"], unique=False)
+    op.create_index(
+        "idx_section_number",
+        "us_code_section",
+        ["title_number", "section_number"],
         unique=False,
+    )
+    op.create_index(
+        "idx_section_sort", "us_code_section", ["group_id", "sort_order"], unique=False
+    )
+    op.create_index(
+        "idx_section_title_number", "us_code_section", ["title_number"], unique=False
     )
     op.create_table(
         "vote",
@@ -519,7 +615,7 @@ def upgrade() -> None:
         sa.Column("law_id", sa.Integer(), nullable=True),
         sa.Column("bill_id", sa.Integer(), nullable=True),
         sa.Column(
-            "chamber", sa.Enum("HOUSE", "SENATE", name="chamber"), nullable=False
+            "chamber", sa.Enum("House", "Senate", name="chamber"), nullable=False
         ),
         sa.Column("vote_date", sa.Date(), nullable=False),
         sa.Column("vote_number", sa.Integer(), nullable=True),
@@ -560,12 +656,12 @@ def upgrade() -> None:
         sa.Column(
             "vote_cast",
             sa.Enum(
-                "YEA",
-                "NAY",
-                "PRESENT",
-                "NOT_VOTING",
-                "PAIRED_YEA",
-                "PAIRED_NAY",
+                "Yea",
+                "Nay",
+                "Present",
+                "Not_Voting",
+                "Paired_Yea",
+                "Paired_Nay",
                 name="vote_type",
             ),
             nullable=False,
@@ -597,107 +693,71 @@ def upgrade() -> None:
         "idx_individual_vote_vote", "individual_vote", ["vote_id"], unique=False
     )
     op.create_table(
-        "us_code_section",
-        sa.Column("section_id", sa.Integer(), nullable=False),
-        sa.Column("title_id", sa.Integer(), nullable=False),
-        sa.Column("chapter_id", sa.Integer(), nullable=True),
-        sa.Column("subchapter_id", sa.Integer(), nullable=True),
-        sa.Column("section_number", sa.String(length=50), nullable=False),
-        sa.Column("heading", sa.Text(), nullable=False),
-        sa.Column("full_citation", sa.String(length=200), nullable=False),
-        sa.Column("text_content", sa.Text(), nullable=True),
-        sa.Column("enacted_date", sa.Date(), nullable=True),
-        sa.Column("last_modified_date", sa.Date(), nullable=True),
-        sa.Column("effective_date", sa.Date(), nullable=True),
-        sa.Column("is_positive_law", sa.Boolean(), nullable=False),
-        sa.Column("title_positive_law_date", sa.Date(), nullable=True),
-        sa.Column("statutes_at_large_citation", sa.String(length=200), nullable=True),
-        sa.Column("is_repealed", sa.Boolean(), nullable=False),
-        sa.Column("repealed_date", sa.Date(), nullable=True),
-        sa.Column("repealed_by_law_id", sa.Integer(), nullable=True),
-        sa.Column("notes", sa.Text(), nullable=True),
+        "ingestion_report",
+        sa.Column("report_id", sa.Integer(), nullable=False),
+        sa.Column("session_id", sa.Integer(), nullable=False),
+        sa.Column("law_id", sa.Integer(), nullable=False),
+        sa.Column("total_text_length", sa.Integer(), nullable=False),
+        sa.Column("claimed_text_length", sa.Integer(), nullable=False),
+        sa.Column("coverage_percentage", sa.Float(), nullable=False),
+        sa.Column("unclaimed_flagged_count", sa.Integer(), nullable=False),
+        sa.Column("unclaimed_ignored_count", sa.Integer(), nullable=False),
+        sa.Column("total_amendments", sa.Integer(), nullable=False),
+        sa.Column("high_confidence_count", sa.Integer(), nullable=False),
+        sa.Column("needs_review_count", sa.Integer(), nullable=False),
+        sa.Column("avg_confidence", sa.Float(), nullable=False),
         sa.Column(
-            "normalized_notes",
+            "amendments_by_type", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
+        sa.Column(
+            "amendments_by_pattern",
             postgresql.JSONB(astext_type=sa.Text()),
             nullable=True,
         ),
-        sa.Column(
-            "normalized_provisions",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=True,
-        ),
-        sa.Column("sort_order", sa.Integer(), nullable=False),
+        sa.Column("auto_approve_eligible", sa.Boolean(), nullable=False),
+        sa.Column("escalation_recommended", sa.Boolean(), nullable=False),
+        sa.Column("escalation_reason", sa.Text(), nullable=True),
+        sa.Column("govinfo_amendment_count", sa.Integer(), nullable=True),
+        sa.Column("amendment_count_mismatch", sa.Boolean(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.CheckConstraint(
-            "(is_repealed = FALSE AND repealed_date IS NULL) OR (is_repealed = TRUE AND repealed_date IS NOT NULL)",
-            name=op.f("ck_us_code_section_ck_us_code_section_repealed_consistency"),
+            "avg_confidence >= 0 AND avg_confidence <= 1",
+            name=op.f("ck_ingestion_report_ck_ingestion_report_confidence_range"),
+        ),
+        sa.CheckConstraint(
+            "coverage_percentage >= 0 AND coverage_percentage <= 100",
+            name=op.f("ck_ingestion_report_ck_ingestion_report_coverage_range"),
         ),
         sa.ForeignKeyConstraint(
-            ["chapter_id"],
-            ["us_code_chapter.chapter_id"],
-            name=op.f("fk_us_code_section_chapter_id_us_code_chapter"),
-            ondelete="SET NULL",
-        ),
-        sa.ForeignKeyConstraint(
-            ["repealed_by_law_id"],
+            ["law_id"],
             ["public_law.law_id"],
-            name=op.f("fk_us_code_section_repealed_by_law_id_public_law"),
-            ondelete="SET NULL",
+            name=op.f("fk_ingestion_report_law_id_public_law"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["subchapter_id"],
-            ["us_code_subchapter.subchapter_id"],
-            name=op.f("fk_us_code_section_subchapter_id_us_code_subchapter"),
-            ondelete="SET NULL",
+            ["session_id"],
+            ["parsing_session.session_id"],
+            name=op.f("fk_ingestion_report_session_id_parsing_session"),
+            ondelete="CASCADE",
         ),
-        sa.ForeignKeyConstraint(
-            ["title_id"],
-            ["us_code_title.title_id"],
-            name=op.f("fk_us_code_section_title_id_us_code_title"),
-            ondelete="RESTRICT",
-        ),
-        sa.PrimaryKeyConstraint("section_id", name=op.f("pk_us_code_section")),
-        sa.UniqueConstraint(
-            "title_id", "section_number", name="uq_section_title_number"
-        ),
+        sa.PrimaryKeyConstraint("report_id", name=op.f("pk_ingestion_report")),
+        sa.UniqueConstraint("session_id", name=op.f("uq_ingestion_report_session_id")),
     )
     op.create_index(
-        "idx_section_active",
-        "us_code_section",
-        ["is_repealed"],
-        unique=False,
-        postgresql_where="is_repealed = FALSE",
-    )
-    op.create_index(
-        "idx_section_chapter", "us_code_section", ["chapter_id"], unique=False
-    )
-    op.create_index(
-        "idx_section_citation", "us_code_section", ["full_citation"], unique=False
-    )
-    op.create_index(
-        "idx_section_number",
-        "us_code_section",
-        ["title_id", "section_number"],
+        "idx_ingestion_report_coverage",
+        "ingestion_report",
+        ["coverage_percentage"],
         unique=False,
     )
     op.create_index(
-        "idx_section_sort",
-        "us_code_section",
-        ["chapter_id", "sort_order"],
+        "idx_ingestion_report_eligible",
+        "ingestion_report",
+        ["auto_approve_eligible"],
         unique=False,
     )
     op.create_index(
-        "idx_section_subchapter", "us_code_section", ["subchapter_id"], unique=False
-    )
-    op.create_index("idx_section_title", "us_code_section", ["title_id"], unique=False)
-    op.create_index(
-        "idx_section_normalized_notes_gin",
-        "us_code_section",
-        ["normalized_notes"],
-        unique=False,
-        postgresql_using="gin",
-        postgresql_ops={"normalized_notes": "jsonb_path_ops"},
+        "idx_ingestion_report_law", "ingestion_report", ["law_id"], unique=False
     )
     op.create_table(
         "law_change",
@@ -707,12 +767,12 @@ def upgrade() -> None:
         sa.Column(
             "change_type",
             sa.Enum(
-                "ADD",
-                "DELETE",
-                "MODIFY",
-                "REPEAL",
-                "REDESIGNATE",
-                "TRANSFER",
+                "Add",
+                "Delete",
+                "Modify",
+                "Repeal",
+                "Redesignate",
+                "Transfer",
                 name="change_type",
             ),
             nullable=False,
@@ -744,6 +804,204 @@ def upgrade() -> None:
     )
     op.create_index("idx_change_section", "law_change", ["section_id"], unique=False)
     op.create_table(
+        "parsed_amendment_record",
+        sa.Column("record_id", sa.Integer(), nullable=False),
+        sa.Column("session_id", sa.Integer(), nullable=False),
+        sa.Column("pattern_name", sa.String(length=100), nullable=False),
+        sa.Column("pattern_type", sa.String(length=50), nullable=False),
+        sa.Column(
+            "change_type",
+            sa.Enum(
+                "Add",
+                "Delete",
+                "Modify",
+                "Repeal",
+                "Redesignate",
+                "Transfer",
+                name="change_type",
+            ),
+            nullable=False,
+        ),
+        sa.Column("target_title", sa.Integer(), nullable=True),
+        sa.Column("target_section", sa.String(length=50), nullable=True),
+        sa.Column("target_subsection_path", sa.String(length=100), nullable=True),
+        sa.Column("old_text", sa.Text(), nullable=True),
+        sa.Column("new_text", sa.Text(), nullable=True),
+        sa.Column("start_pos", sa.Integer(), nullable=False),
+        sa.Column("end_pos", sa.Integer(), nullable=False),
+        sa.Column("confidence", sa.Float(), nullable=False),
+        sa.Column("needs_review", sa.Boolean(), nullable=False),
+        sa.Column(
+            "review_status",
+            sa.Enum(
+                "Pending",
+                "Approved",
+                "Rejected",
+                "Corrected",
+                name="amendment_review_status",
+            ),
+            nullable=False,
+        ),
+        sa.Column("reviewed_by", sa.String(length=100), nullable=True),
+        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("review_notes", sa.Text(), nullable=True),
+        sa.Column("corrected_pattern_name", sa.String(length=100), nullable=True),
+        sa.Column("corrected_section", sa.String(length=50), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.CheckConstraint(
+            "confidence >= 0 AND confidence <= 1",
+            name=op.f(
+                "ck_parsed_amendment_record_ck_parsed_amendment_confidence_range"
+            ),
+        ),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["parsing_session.session_id"],
+            name=op.f("fk_parsed_amendment_record_session_id_parsing_session"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("record_id", name=op.f("pk_parsed_amendment_record")),
+    )
+    op.create_index(
+        "idx_parsed_amendment_needs_review",
+        "parsed_amendment_record",
+        ["needs_review"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_parsed_amendment_pattern",
+        "parsed_amendment_record",
+        ["pattern_name"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_parsed_amendment_review",
+        "parsed_amendment_record",
+        ["review_status"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_parsed_amendment_session",
+        "parsed_amendment_record",
+        ["session_id"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_parsed_amendment_target",
+        "parsed_amendment_record",
+        ["target_title", "target_section"],
+        unique=False,
+    )
+    op.create_table(
+        "parsing_verification",
+        sa.Column("verification_id", sa.Integer(), nullable=False),
+        sa.Column("session_id", sa.Integer(), nullable=False),
+        sa.Column("verified_by", sa.String(length=100), nullable=False),
+        sa.Column("verified_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "method",
+            sa.Enum(
+                "Manual_Review",
+                "Automated_Comparison",
+                "Third_Party_Audit",
+                name="verification_method",
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "result",
+            sa.Enum(
+                "Passed", "Failed", "Passed_With_Issues", name="verification_result"
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "notes",
+            sa.Text(),
+            nullable=True,
+            comment="Free-form notes: methodology, issues found, coverage gaps, etc.",
+        ),
+        sa.Column(
+            "issues_found", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["parsing_session.session_id"],
+            name=op.f("fk_parsing_verification_session_id_parsing_session"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint(
+            "verification_id", name=op.f("pk_parsing_verification")
+        ),
+    )
+    op.create_index(
+        "idx_parsing_verification_result",
+        "parsing_verification",
+        ["result"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_parsing_verification_session",
+        "parsing_verification",
+        ["session_id"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_parsing_verification_verified_at",
+        "parsing_verification",
+        ["verified_at"],
+        unique=False,
+    )
+    op.create_table(
+        "pattern_discovery",
+        sa.Column("discovery_id", sa.Integer(), nullable=False),
+        sa.Column("session_id", sa.Integer(), nullable=False),
+        sa.Column("unmatched_text", sa.Text(), nullable=False),
+        sa.Column("detected_keywords", sa.Text(), nullable=True),
+        sa.Column("context_text", sa.Text(), nullable=True),
+        sa.Column("start_pos", sa.Integer(), nullable=False),
+        sa.Column("end_pos", sa.Integer(), nullable=False),
+        sa.Column("suggested_pattern_name", sa.String(length=100), nullable=True),
+        sa.Column("suggested_pattern_regex", sa.Text(), nullable=True),
+        sa.Column("suggested_pattern_type", sa.String(length=50), nullable=True),
+        sa.Column(
+            "status",
+            sa.Enum(
+                "New",
+                "Under_Review",
+                "Promoted",
+                "Rejected",
+                name="pattern_discovery_status",
+            ),
+            nullable=False,
+        ),
+        sa.Column("reviewed_by", sa.String(length=100), nullable=True),
+        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("review_notes", sa.Text(), nullable=True),
+        sa.Column("promoted_pattern_name", sa.String(length=100), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["parsing_session.session_id"],
+            name=op.f("fk_pattern_discovery_session_id_parsing_session"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("discovery_id", name=op.f("pk_pattern_discovery")),
+    )
+    op.create_index(
+        "idx_pattern_discovery_session",
+        "pattern_discovery",
+        ["session_id"],
+        unique=False,
+    )
+    op.create_index(
+        "idx_pattern_discovery_status", "pattern_discovery", ["status"], unique=False
+    )
+    op.create_table(
         "proposed_change",
         sa.Column("change_id", sa.Integer(), nullable=False),
         sa.Column("bill_id", sa.Integer(), nullable=False),
@@ -751,12 +1009,12 @@ def upgrade() -> None:
         sa.Column(
             "change_type",
             sa.Enum(
-                "ADD",
-                "DELETE",
-                "MODIFY",
-                "REPEAL",
-                "REDESIGNATE",
-                "TRANSFER",
+                "Add",
+                "Delete",
+                "Modify",
+                "Repeal",
+                "Redesignate",
+                "Transfer",
                 name="change_type",
             ),
             nullable=False,
@@ -850,12 +1108,12 @@ def upgrade() -> None:
         sa.Column(
             "reference_type",
             sa.Enum(
-                "EXPLICIT_CITATION",
-                "CROSS_REFERENCE",
-                "SUBJECT_TO",
-                "CONDITIONAL",
-                "EXCEPTION",
-                "INCORPORATION",
+                "Explicit_Citation",
+                "Cross_Reference",
+                "Subject_To",
+                "Conditional",
+                "Exception",
+                "Incorporation",
                 name="reference_type",
             ),
             nullable=False,
@@ -906,11 +1164,7 @@ def upgrade() -> None:
         sa.Column("section_id", sa.Integer(), nullable=False),
         sa.Column("parent_line_id", sa.Integer(), nullable=True),
         sa.Column("line_number", sa.Integer(), nullable=False),
-        sa.Column(
-            "line_type",
-            sa.Enum("HEADING", "PROSE", "LIST_ITEM", name="line_type"),
-            nullable=False,
-        ),
+        sa.Column("is_header", sa.Boolean(), nullable=False),
         sa.Column("text_content", sa.Text(), nullable=False),
         sa.Column("subsection_path", sa.String(length=100), nullable=True),
         sa.Column("depth_level", sa.Integer(), nullable=False),
@@ -1038,12 +1292,61 @@ def upgrade() -> None:
         ["line_id", "version_number"],
         unique=False,
     )
+    op.create_table(
+        "text_span",
+        sa.Column("span_id", sa.Integer(), nullable=False),
+        sa.Column("session_id", sa.Integer(), nullable=False),
+        sa.Column("start_pos", sa.Integer(), nullable=False),
+        sa.Column("end_pos", sa.Integer(), nullable=False),
+        sa.Column(
+            "span_type",
+            sa.Enum(
+                "Claimed", "Unclaimed_Flagged", "Unclaimed_Ignored", name="span_type"
+            ),
+            nullable=False,
+        ),
+        sa.Column("amendment_record_id", sa.Integer(), nullable=True),
+        sa.Column("pattern_name", sa.String(length=100), nullable=True),
+        sa.Column("detected_keywords", sa.Text(), nullable=True),
+        sa.CheckConstraint(
+            "(span_type = 'Claimed' AND pattern_name IS NOT NULL) OR (span_type != 'Claimed')",
+            name=op.f("ck_text_span_ck_text_span_claimed_has_pattern"),
+        ),
+        sa.CheckConstraint(
+            "end_pos > start_pos", name=op.f("ck_text_span_ck_text_span_valid_range")
+        ),
+        sa.ForeignKeyConstraint(
+            ["amendment_record_id"],
+            ["parsed_amendment_record.record_id"],
+            name=op.f("fk_text_span_amendment_record_id_parsed_amendment_record"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["parsing_session.session_id"],
+            name=op.f("fk_text_span_session_id_parsing_session"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("span_id", name=op.f("pk_text_span")),
+    )
+    op.create_index(
+        "idx_text_span_positions",
+        "text_span",
+        ["session_id", "start_pos", "end_pos"],
+        unique=False,
+    )
+    op.create_index("idx_text_span_session", "text_span", ["session_id"], unique=False)
+    op.create_index("idx_text_span_type", "text_span", ["span_type"], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade database schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index("idx_text_span_type", table_name="text_span")
+    op.drop_index("idx_text_span_session", table_name="text_span")
+    op.drop_index("idx_text_span_positions", table_name="text_span")
+    op.drop_table("text_span")
     op.drop_index("idx_line_history_version", table_name="line_history")
     op.drop_index("idx_line_history_line_date", table_name="line_history")
     op.drop_index("idx_line_history_line", table_name="line_history")
@@ -1075,23 +1378,31 @@ def downgrade() -> None:
     op.drop_index("idx_proposed_change_section", table_name="proposed_change")
     op.drop_index("idx_proposed_change_bill", table_name="proposed_change")
     op.drop_table("proposed_change")
+    op.drop_index("idx_pattern_discovery_status", table_name="pattern_discovery")
+    op.drop_index("idx_pattern_discovery_session", table_name="pattern_discovery")
+    op.drop_table("pattern_discovery")
+    op.drop_index(
+        "idx_parsing_verification_verified_at", table_name="parsing_verification"
+    )
+    op.drop_index("idx_parsing_verification_session", table_name="parsing_verification")
+    op.drop_index("idx_parsing_verification_result", table_name="parsing_verification")
+    op.drop_table("parsing_verification")
+    op.drop_index("idx_parsed_amendment_target", table_name="parsed_amendment_record")
+    op.drop_index("idx_parsed_amendment_session", table_name="parsed_amendment_record")
+    op.drop_index("idx_parsed_amendment_review", table_name="parsed_amendment_record")
+    op.drop_index("idx_parsed_amendment_pattern", table_name="parsed_amendment_record")
+    op.drop_index(
+        "idx_parsed_amendment_needs_review", table_name="parsed_amendment_record"
+    )
+    op.drop_table("parsed_amendment_record")
     op.drop_index("idx_change_section", table_name="law_change")
     op.drop_index("idx_change_law_section", table_name="law_change")
     op.drop_index("idx_change_law", table_name="law_change")
     op.drop_table("law_change")
-    op.drop_index("idx_section_normalized_notes_gin", table_name="us_code_section")
-    op.drop_index("idx_section_title", table_name="us_code_section")
-    op.drop_index("idx_section_subchapter", table_name="us_code_section")
-    op.drop_index("idx_section_sort", table_name="us_code_section")
-    op.drop_index("idx_section_number", table_name="us_code_section")
-    op.drop_index("idx_section_citation", table_name="us_code_section")
-    op.drop_index("idx_section_chapter", table_name="us_code_section")
-    op.drop_index(
-        "idx_section_active",
-        table_name="us_code_section",
-        postgresql_where="is_repealed = FALSE",
-    )
-    op.drop_table("us_code_section")
+    op.drop_index("idx_ingestion_report_law", table_name="ingestion_report")
+    op.drop_index("idx_ingestion_report_eligible", table_name="ingestion_report")
+    op.drop_index("idx_ingestion_report_coverage", table_name="ingestion_report")
+    op.drop_table("ingestion_report")
     op.drop_index("idx_individual_vote_vote", table_name="individual_vote")
     op.drop_index("idx_individual_vote_legislator", table_name="individual_vote")
     op.drop_table("individual_vote")
@@ -1100,20 +1411,31 @@ def downgrade() -> None:
     op.drop_index("idx_vote_chamber", table_name="vote")
     op.drop_index("idx_vote_bill", table_name="vote")
     op.drop_table("vote")
-    op.drop_index("idx_subchapter_sort", table_name="us_code_subchapter")
-    op.drop_index("idx_subchapter_chapter", table_name="us_code_subchapter")
-    op.drop_table("us_code_subchapter")
+    op.drop_index("idx_section_title_number", table_name="us_code_section")
+    op.drop_index("idx_section_sort", table_name="us_code_section")
+    op.drop_index("idx_section_number", table_name="us_code_section")
+    op.drop_index("idx_section_group", table_name="us_code_section")
+    op.drop_index("idx_section_citation", table_name="us_code_section")
+    op.drop_index(
+        "idx_section_active",
+        table_name="us_code_section",
+        postgresql_where="is_repealed = FALSE",
+    )
+    op.drop_table("us_code_section")
     op.drop_index(
         "idx_sponsorship_sponsor",
         table_name="sponsorship",
-        postgresql_where="role = 'SPONSOR'",
+        postgresql_where="role = 'Sponsor'",
     )
     op.drop_index("idx_sponsorship_legislator", table_name="sponsorship")
     op.drop_index("idx_sponsorship_law", table_name="sponsorship")
     op.drop_index("idx_sponsorship_bill", table_name="sponsorship")
     op.drop_table("sponsorship")
-    op.drop_index("idx_chapter_sort", table_name="us_code_chapter")
-    op.drop_table("us_code_chapter")
+    op.drop_index("idx_parsing_session_status", table_name="parsing_session")
+    op.drop_index("idx_parsing_session_started", table_name="parsing_session")
+    op.drop_index("idx_parsing_session_mode", table_name="parsing_session")
+    op.drop_index("idx_parsing_session_law", table_name="parsing_session")
+    op.drop_table("parsing_session")
     op.drop_index("idx_law_president", table_name="public_law")
     op.drop_index("idx_law_popular_name", table_name="public_law")
     op.drop_index("idx_law_number", table_name="public_law")
@@ -1131,7 +1453,10 @@ def downgrade() -> None:
     op.drop_index("idx_amendment_congress", table_name="amendment")
     op.drop_index("idx_amendment_bill", table_name="amendment")
     op.drop_table("amendment")
-    op.drop_table("us_code_title")
+    op.drop_index("idx_section_group_type", table_name="section_group")
+    op.drop_index("idx_section_group_sort", table_name="section_group")
+    op.drop_index("idx_section_group_parent", table_name="section_group")
+    op.drop_table("section_group")
     op.drop_index("idx_legislator_state", table_name="legislator")
     op.drop_index("idx_legislator_party", table_name="legislator")
     op.drop_index(
@@ -1154,7 +1479,7 @@ def downgrade() -> None:
     op.drop_index(
         "idx_bill_pending",
         table_name="bill",
-        postgresql_where="status NOT IN ('BECAME_LAW', 'FAILED', 'VETOED', 'DIED_IN_COMMITTEE')",
+        postgresql_where="status NOT IN ('Became_Law', 'Failed', 'Vetoed', 'Died_in_Committee')",
     )
     op.drop_index("idx_bill_congress", table_name="bill")
     op.drop_table("bill")

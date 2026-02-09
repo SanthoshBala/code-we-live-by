@@ -23,7 +23,7 @@ async def get_structure(
     title_number: int,
     session: AsyncSession = Depends(get_async_session),
 ) -> TitleStructureSchema:
-    """Get the chapter/subchapter/section tree for a title."""
+    """Get the group/section tree for a title."""
     result = await get_title_structure(session, title_number)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Title {title_number} not found")

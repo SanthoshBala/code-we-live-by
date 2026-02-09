@@ -63,14 +63,14 @@ def parse_title(xml_path: Path) -> None:
 
     print(f"\nTitle {result.title.title_number}: {result.title.title_name}")
     print(f"  Positive Law: {result.title.is_positive_law}")
-    print(f"  Chapters: {len(result.chapters)}")
-    print(f"  Subchapters: {len(result.subchapters)}")
+    print(f"  Groups: {len(result.groups)}")
     print(f"  Sections: {len(result.sections)}")
 
-    if result.chapters:
+    chapters = [g for g in result.groups if g.group_type == "chapter"]
+    if chapters:
         print("\n  First 5 chapters:")
-        for ch in result.chapters[:5]:
-            print(f"    Chapter {ch.chapter_number}: {ch.chapter_name}")
+        for ch in chapters[:5]:
+            print(f"    Chapter {ch.number}: {ch.name}")
 
     if result.sections:
         print("\n  First 5 sections:")
@@ -483,14 +483,12 @@ async def _fetch_section_from_db(title_num: int, section_num: str) -> str | None
     from sqlalchemy import select
 
     from app.models.base import async_session_maker
-    from app.models.us_code import USCodeSection, USCodeTitle
+    from app.models.us_code import USCodeSection
 
     async with async_session_maker() as session:
         result = await session.execute(
-            select(USCodeSection)
-            .join(USCodeTitle)
-            .where(
-                USCodeTitle.title_number == title_num,
+            select(USCodeSection).where(
+                USCodeSection.title_number == title_num,
                 USCodeSection.section_number == section_num,
             )
         )

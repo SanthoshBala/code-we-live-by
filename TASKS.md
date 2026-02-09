@@ -319,6 +319,17 @@ This document translates the CWLB specification into an actionable backlog of im
   - Enable linking from notes to referenced laws/sections
   - **Context**: Notes contain hyperlinked citations (e.g., "Pub. L. 115-264") that link to `/us/pl/115/264`
 
+- [ ] **Task 1.17c**: Parse `<quotedContent>` in notes for blockquote rendering
+  - Parse `<quotedContent>` elements within `<note>` → `<p>` elements in USLM XML
+  - Extract structured content: `<section>`, `<chapeau>`, `<paragraph>`, `<subparagraph>`, `<continuation>`, `<subsection>`
+  - Store as structured data in `normalized_notes` (new `quoted_content` field per note entry)
+  - Two patterns to handle:
+    - **Inline anonymous** (`class="inline"`, empty `<num>`): single quoted provision with chapeau + enumerated items + continuation
+    - **Full named sections** (with `<num value="1">`, `<heading>`): entire Act sections quoted verbatim, sometimes multiple sections per `<quotedContent>`
+  - Render as styled blockquotes in the section viewer notes UI, preserving indentation hierarchy
+  - **Scale**: 426 occurrences across Phase 1 titles (Title 42: 122, Title 26: 77)
+  - **Context**: Currently these are skipped by the parser (XPath changed to `./section` to avoid treating them as real code sections). They contain the actual statutory text of amendments and should be rendered as quoted blocks in the notes display.
+
 ### Data Pipeline - Historical Depth
 - [ ] **Task 1.18**: Ingest historical Public Laws (last 20 years as MVP scope)
   - Fetch laws from ~2004 to present for selected titles

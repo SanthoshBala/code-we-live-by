@@ -1,4 +1,4 @@
-"""US Code models: Title, Chapter, Section, Line."""
+"""US Code models: SectionGroup, Section, Line."""
 
 from datetime import date
 from typing import TYPE_CHECKING, Any, Optional
@@ -24,14 +24,28 @@ if TYPE_CHECKING:
     from app.models.public_law import LawChange, PublicLaw
 
 
-class USCodeTitle(Base, TimestampMixin):
-    """A title of the US Code (e.g., Title 17 - Copyrights)."""
+class SectionGroup(Base, TimestampMixin):
+    """A recursive structural node in the US Code hierarchy.
 
-    __tablename__ = "us_code_title"
+    Replaces USCodeTitle, USCodeChapterGroup, USCodeChapter, and
+    USCodeSubchapter with a single self-referential model.  The
+    ``group_type`` discriminator indicates the level (title, subtitle,
+    part, division, chapter, subchapter, etc.) and ``parent_id`` forms
+    the tree.  Root nodes (titles) have ``parent_id IS NULL``.
+    """
 
-    title_id: Mapped[int] = mapped_column(primary_key=True)
-    title_number: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
-    title_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    __tablename__ = "section_group"
+
+    group_id: Mapped[int] = mapped_column(primary_key=True)
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("section_group.group_id", ondelete="CASCADE"), nullable=True
+    )
+    group_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    number: Mapped[str] = mapped_column(String(50), nullable=False)
+    name: Mapped[str] = mapped_column(String(500), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Title-specific fields (nullable, only populated for group_type='title')
     is_positive_law: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
@@ -40,138 +54,36 @@ class USCodeTitle(Base, TimestampMixin):
         String(200), nullable=True
     )
 
-    # Relationships
-    chapters: Mapped[list["USCodeChapter"]] = relationship(
-        back_populates="title", cascade="all, delete-orphan"
+    # Self-referential relationships
+    parent: Mapped[Optional["SectionGroup"]] = relationship(
+        remote_side="SectionGroup.group_id",
+        foreign_keys=[parent_id],
+        back_populates="children",
     )
-    chapter_groups: Mapped[list["USCodeChapterGroup"]] = relationship(
-        back_populates="title", cascade="all, delete-orphan"
+    children: Mapped[list["SectionGroup"]] = relationship(
+        back_populates="parent",
+        foreign_keys=[parent_id],
+        cascade="all, delete-orphan",
     )
-    sections: Mapped[list["USCodeSection"]] = relationship(back_populates="title")
-
-    __table_args__ = (
-        CheckConstraint(
-            "(is_positive_law = FALSE AND positive_law_date IS NULL) OR "
-            "(is_positive_law = TRUE AND positive_law_date IS NOT NULL)",
-            name="ck_us_code_title_positive_law_consistency",
-        ),
-    )
-
-    def __repr__(self) -> str:
-        return f"<USCodeTitle({self.title_number}: {self.title_name})>"
-
-
-class USCodeChapterGroup(Base, TimestampMixin):
-    """A structural grouping above chapters (subtitle, part, division)."""
-
-    __tablename__ = "us_code_chapter_group"
-
-    group_id: Mapped[int] = mapped_column(primary_key=True)
-    title_id: Mapped[int] = mapped_column(
-        ForeignKey("us_code_title.title_id", ondelete="CASCADE"), nullable=False
-    )
-    parent_group_id: Mapped[int | None] = mapped_column(
-        ForeignKey("us_code_chapter_group.group_id", ondelete="CASCADE"), nullable=True
-    )
-    group_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    group_number: Mapped[str] = mapped_column(String(50), nullable=False)
-    group_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-
-    # Relationships
-    title: Mapped["USCodeTitle"] = relationship(back_populates="chapter_groups")
-    parent_group: Mapped[Optional["USCodeChapterGroup"]] = relationship(
-        remote_side=[group_id], foreign_keys=[parent_group_id]
-    )
-    child_groups: Mapped[list["USCodeChapterGroup"]] = relationship(
-        back_populates="parent_group", foreign_keys=[parent_group_id]
-    )
-    chapters: Mapped[list["USCodeChapter"]] = relationship(
-        back_populates="chapter_group"
+    sections: Mapped[list["USCodeSection"]] = relationship(
+        back_populates="group", foreign_keys="USCodeSection.group_id"
     )
 
     __table_args__ = (
+        # No duplicate children under the same parent
         UniqueConstraint(
-            "title_id",
+            "parent_id",
             "group_type",
-            "group_number",
-            "parent_group_id",
-            name="uq_chapter_group_identity",
+            "number",
+            name="uq_section_group_child",
         ),
-        Index("idx_chapter_group_title", "title_id"),
-        Index("idx_chapter_group_parent", "parent_group_id"),
+        Index("idx_section_group_parent", "parent_id"),
+        Index("idx_section_group_type", "group_type"),
+        Index("idx_section_group_sort", "parent_id", "sort_order"),
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<USCodeChapterGroup({self.group_type} {self.group_number}: "
-            f"{self.group_name})>"
-        )
-
-
-class USCodeChapter(Base, TimestampMixin):
-    """A chapter within a US Code title."""
-
-    __tablename__ = "us_code_chapter"
-
-    chapter_id: Mapped[int] = mapped_column(primary_key=True)
-    title_id: Mapped[int] = mapped_column(
-        ForeignKey("us_code_title.title_id", ondelete="CASCADE"), nullable=False
-    )
-    group_id: Mapped[int | None] = mapped_column(
-        ForeignKey("us_code_chapter_group.group_id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    chapter_number: Mapped[str] = mapped_column(String(50), nullable=False)
-    chapter_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-
-    # Relationships
-    title: Mapped["USCodeTitle"] = relationship(back_populates="chapters")
-    chapter_group: Mapped[Optional["USCodeChapterGroup"]] = relationship(
-        back_populates="chapters"
-    )
-    subchapters: Mapped[list["USCodeSubchapter"]] = relationship(
-        back_populates="chapter", cascade="all, delete-orphan"
-    )
-    sections: Mapped[list["USCodeSection"]] = relationship(back_populates="chapter")
-
-    __table_args__ = (
-        UniqueConstraint("title_id", "chapter_number", name="uq_chapter_title_number"),
-        Index("idx_chapter_sort", "title_id", "sort_order"),
-    )
-
-    def __repr__(self) -> str:
-        return f"<USCodeChapter({self.chapter_number}: {self.chapter_name})>"
-
-
-class USCodeSubchapter(Base, TimestampMixin):
-    """A subchapter within a US Code chapter."""
-
-    __tablename__ = "us_code_subchapter"
-
-    subchapter_id: Mapped[int] = mapped_column(primary_key=True)
-    chapter_id: Mapped[int] = mapped_column(
-        ForeignKey("us_code_chapter.chapter_id", ondelete="CASCADE"), nullable=False
-    )
-    subchapter_number: Mapped[str] = mapped_column(String(50), nullable=False)
-    subchapter_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-
-    # Relationships
-    chapter: Mapped["USCodeChapter"] = relationship(back_populates="subchapters")
-    sections: Mapped[list["USCodeSection"]] = relationship(back_populates="subchapter")
-
-    __table_args__ = (
-        UniqueConstraint(
-            "chapter_id", "subchapter_number", name="uq_subchapter_chapter_number"
-        ),
-        Index("idx_subchapter_chapter", "chapter_id"),
-        Index("idx_subchapter_sort", "chapter_id", "sort_order"),
-    )
-
-    def __repr__(self) -> str:
-        return f"<USCodeSubchapter({self.subchapter_number}: {self.subchapter_name})>"
+        return f"<SectionGroup({self.group_type} {self.number}: {self.name})>"
 
 
 class USCodeSection(Base, TimestampMixin):
@@ -180,16 +92,10 @@ class USCodeSection(Base, TimestampMixin):
     __tablename__ = "us_code_section"
 
     section_id: Mapped[int] = mapped_column(primary_key=True)
-    title_id: Mapped[int] = mapped_column(
-        ForeignKey("us_code_title.title_id", ondelete="RESTRICT"), nullable=False
+    group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("section_group.group_id", ondelete="SET NULL"), nullable=True
     )
-    chapter_id: Mapped[int | None] = mapped_column(
-        ForeignKey("us_code_chapter.chapter_id", ondelete="SET NULL"), nullable=True
-    )
-    subchapter_id: Mapped[int | None] = mapped_column(
-        ForeignKey("us_code_subchapter.subchapter_id", ondelete="SET NULL"),
-        nullable=True,
-    )
+    title_number: Mapped[int] = mapped_column(Integer, nullable=False)
     section_number: Mapped[str] = mapped_column(String(50), nullable=False)
     heading: Mapped[str] = mapped_column(Text, nullable=False)
     full_citation: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -219,10 +125,8 @@ class USCodeSection(Base, TimestampMixin):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Relationships
-    title: Mapped["USCodeTitle"] = relationship(back_populates="sections")
-    chapter: Mapped[Optional["USCodeChapter"]] = relationship(back_populates="sections")
-    subchapter: Mapped[Optional["USCodeSubchapter"]] = relationship(
-        back_populates="sections"
+    group: Mapped[Optional["SectionGroup"]] = relationship(
+        back_populates="sections", foreign_keys=[group_id]
     )
     repealed_by_law: Mapped[Optional["PublicLaw"]] = relationship(
         foreign_keys=[repealed_by_law_id]
@@ -236,23 +140,24 @@ class USCodeSection(Base, TimestampMixin):
     changes: Mapped[list["LawChange"]] = relationship(back_populates="section")
 
     __table_args__ = (
-        UniqueConstraint("title_id", "section_number", name="uq_section_title_number"),
+        UniqueConstraint(
+            "title_number", "section_number", name="uq_section_title_number"
+        ),
         CheckConstraint(
             "(is_repealed = FALSE AND repealed_date IS NULL) OR "
             "(is_repealed = TRUE AND repealed_date IS NOT NULL)",
             name="ck_us_code_section_repealed_consistency",
         ),
-        Index("idx_section_title", "title_id"),
-        Index("idx_section_chapter", "chapter_id"),
-        Index("idx_section_subchapter", "subchapter_id"),
-        Index("idx_section_number", "title_id", "section_number"),
+        Index("idx_section_group", "group_id"),
+        Index("idx_section_title_number", "title_number"),
+        Index("idx_section_number", "title_number", "section_number"),
         Index("idx_section_citation", "full_citation"),
         Index(
             "idx_section_active",
             "is_repealed",
             postgresql_where="is_repealed = FALSE",
         ),
-        Index("idx_section_sort", "chapter_id", "sort_order"),
+        Index("idx_section_sort", "group_id", "sort_order"),
     )
 
     def __repr__(self) -> str:
