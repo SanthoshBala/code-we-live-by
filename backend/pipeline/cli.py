@@ -1120,6 +1120,35 @@ def normalize_text_command(
 # =============================================================================
 
 
+def _extract_short_title(law_text: str) -> str | None:
+    """Extract the short title from law text.
+
+    Looks for the common pattern: "may be cited as the '<short title>'"
+    in both plain text and XML (where quotes may be inside <quotedText> tags).
+    """
+    import re
+
+    # Plain text: "may be cited as the 'Foo Bar Act of 2023'"
+    m = re.search(
+        r"""may be cited as (?:the\s+)?["\u2018\u201c'`]+([^"'\u2019\u201d`]+)""",
+        law_text,
+    )
+    if m:
+        return m.group(1).strip().rstrip(".")
+
+    # XML: may be cited as ... <quotedText>Foo Bar Act</quotedText>
+    m = re.search(
+        r"may be cited as.*?<quotedText[^>]*>(.*?)</quotedText>",
+        law_text,
+        re.DOTALL,
+    )
+    if m:
+        # Strip any nested XML tags from inside the quotedText
+        return re.sub(r"<[^>]+>", "", m.group(1)).strip().rstrip(".")
+
+    return None
+
+
 async def parse_law_command(
     congress: int,
     law_number: int,
@@ -1171,15 +1200,19 @@ async def parse_law_command(
         logger.error(f"Could not retrieve text for PL {congress}-{law_number}")
         return 1
 
-    print(f"\nParsing PL {congress}-{law_number}")
-    print(
-        f"  Title: {law_info.title[:70]}..."
-        if len(law_info.title) > 70
-        else f"  Title: {law_info.title}"
+    # Detect source format
+    from pipeline.legal_parser.parsing_modes import _is_uslm_xml
+    from pipeline.olrc.title_lookup import lookup_public_law_title
+
+    source_format = "USLM XML" if _is_uslm_xml(law_text) else "Plain text"
+
+    # Look up short title: GovInfo API > text extraction > DB field
+    title_info = await lookup_public_law_title(congress, law_number)
+    short_title = (
+        title_info.short_title if title_info and title_info.short_title else None
     )
-    print(f"  Text length: {len(law_text):,} characters")
-    print(f"  Mode: {parsing_mode.value}")
-    print()
+    if not short_title:
+        short_title = _extract_short_title(law_text)
 
     async with async_session_maker() as session:
         # Get or create law_id
@@ -1202,6 +1235,38 @@ async def parse_law_command(
             )
             return 1
 
+        # Use DB short_title if available, else use extracted
+        if law.short_title:
+            short_title = law.short_title
+
+        # --- METADATA section ---
+        print()
+        print("=" * 72)
+        print("METADATA")
+        print("=" * 72)
+        print(f"  Law:            PL {congress}-{law_number}")
+        if short_title:
+            print(f"  Short title:    {short_title}")
+        if title_info and title_info.short_title_aliases:
+            for alias in title_info.short_title_aliases:
+                print(f"                  aka {alias}")
+        official = law.official_title or law_info.title
+        if official:
+            if len(official) > 100:
+                official = official[:97] + "..."
+            print(f"  Official title: {official}")
+        if law.enacted_date:
+            print(f"  Enacted:        {law.enacted_date}")
+        if law.statutes_at_large_citation:
+            print(f"  Stat citation:  {law.statutes_at_large_citation}")
+        if law_info.bill_id:
+            print(f"  Bill:           {law_info.bill_id}")
+        print(f"  Source format:  {source_format}")
+        print(f"  Text length:    {len(law_text):,} characters")
+        if default_title:
+            print(f"  Default title:  {default_title}")
+        print(f"  Parse mode:     {parsing_mode.value}")
+
         # Parse the law
         parser_session = RegExParsingSession(
             session,
@@ -1214,14 +1279,18 @@ async def parse_law_command(
             save_to_db=not dry_run,
         )
 
-        # Display results
+        # --- RESULTS summary ---
         status_label = (
             "completed" if result.status.value == "Completed" else result.status.value
         )
-        print(f"Parsing {status_label}")
-        print(f"  Amendments found: {len(result.amendments)}")
+        print()
+        print("=" * 72)
+        print("RESULTS")
+        print("=" * 72)
+        print(f"  Status:         {status_label}")
+        print(f"  Amendments:     {len(result.amendments)}")
         print(
-            f"  Coverage: {result.coverage_report.coverage_percentage:.1f}% "
+            f"  Coverage:       {result.coverage_report.coverage_percentage:.1f}% "
             f"({result.coverage_report.claimed_length:,} / "
             f"{result.coverage_report.total_length:,} chars)"
         )
@@ -1230,9 +1299,9 @@ async def parse_law_command(
             stats = parser_session.parser.get_statistics(result.amendments)
             print(f"  Avg confidence: {stats['avg_confidence']:.0%}")
             if stats.get("by_change_type"):
-                print(f"  By type: {stats['by_change_type']}")
+                print(f"  By type:        {stats['by_change_type']}")
 
-        # Detailed per-amendment listing
+        # --- AMENDMENTS detail ---
         if result.amendments:
             print()
             print("=" * 72)
