@@ -207,3 +207,106 @@ class OLRCDownloader:
             if xml_files:
                 return xml_files[0]
         return None
+
+    # =========================================================================
+    # Multi-release-point support (Task 1.12)
+    # =========================================================================
+
+    async def download_title_at_release_point(
+        self,
+        title_number: int,
+        release_point: str,
+        force: bool = False,
+    ) -> Path | None:
+        """Download XML for a title at a specific release point.
+
+        Downloads are cached in data/olrc/releases/{release_point}/title{N}/.
+
+        Args:
+            title_number: The US Code title number (1-54).
+            release_point: Release point identifier (e.g., "113-21").
+            force: If True, download even if file exists.
+
+        Returns:
+            Path to the extracted XML file, or None if download failed.
+        """
+        # Cache in release-point-specific directory
+        rp_dir = self.download_dir / "releases" / release_point / f"title{title_number}"
+
+        if rp_dir.exists() and not force:
+            xml_files = list(rp_dir.glob("*.xml"))
+            if xml_files:
+                logger.info(
+                    f"Title {title_number}@{release_point} already downloaded: "
+                    f"{xml_files[0]}"
+                )
+                return xml_files[0]
+
+        # Parse the release point
+        parts = release_point.split("-", 1)
+        congress = parts[0]
+        public_law = parts[1] if len(parts) > 1 else ""
+
+        url = TITLE_XML_URL_PATTERN.format(
+            congress=congress,
+            public_law=public_law,
+            title_number=title_number,
+        )
+        logger.info(f"Downloading Title {title_number}@{release_point} from {url}")
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url, follow_redirects=True)
+                response.raise_for_status()
+
+                rp_dir.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(BytesIO(response.content)) as zf:
+                    zf.extractall(rp_dir)
+
+                xml_files = list(rp_dir.glob("*.xml"))
+                if xml_files:
+                    logger.info(
+                        f"Title {title_number}@{release_point} downloaded: {xml_files[0]}"
+                    )
+                    return xml_files[0]
+                else:
+                    logger.error(
+                        f"No XML file found in archive for "
+                        f"Title {title_number}@{release_point}"
+                    )
+                    return None
+
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"HTTP error downloading Title {title_number}@{release_point}: {e}"
+            )
+            return None
+        except zipfile.BadZipFile as e:
+            logger.error(
+                f"Invalid ZIP file for Title {title_number}@{release_point}: {e}"
+            )
+            return None
+        except Exception as e:
+            logger.exception(
+                f"Error downloading Title {title_number}@{release_point}: {e}"
+            )
+            return None
+
+    def get_xml_path_at_release_point(
+        self, title_number: int, release_point: str
+    ) -> Path | None:
+        """Get the path to a title's XML file at a specific release point.
+
+        Args:
+            title_number: The US Code title number.
+            release_point: Release point identifier (e.g., "113-21").
+
+        Returns:
+            Path to the XML file, or None if not downloaded.
+        """
+        rp_dir = self.download_dir / "releases" / release_point / f"title{title_number}"
+        if rp_dir.exists():
+            xml_files = list(rp_dir.glob("*.xml"))
+            if xml_files:
+                return xml_files[0]
+        return None

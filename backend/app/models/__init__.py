@@ -20,6 +20,7 @@ from app.models.enums import (
     VoteType,
 )
 from app.models.history import LineHistory, SectionHistory
+from app.models.release_point import OLRCReleasePoint
 from app.models.legislator import (
     IndividualVote,
     Legislator,
@@ -89,6 +90,8 @@ __all__ = [
     # History
     "SectionHistory",
     "LineHistory",
+    # Release Points (Task 1.12)
+    "OLRCReleasePoint",
     # Supporting
     "SectionReference",
     "Committee",
