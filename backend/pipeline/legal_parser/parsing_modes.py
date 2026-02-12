@@ -35,6 +35,12 @@ from pipeline.legal_parser.text_accounting import (
 logger = logging.getLogger(__name__)
 
 
+def _is_uslm_xml(text: str) -> bool:
+    """Detect whether *text* is a USLM XML document."""
+    head = text.lstrip()[:2000]
+    return head.startswith("<?xml") and "schemas.gpo.gov/xml/uslm" in head
+
+
 @dataclass
 class ParsingResult:
     """Result of a parsing session."""
@@ -123,8 +129,14 @@ class RegExParsingSession:
             await self.db.flush()
 
         try:
-            # Parse the law text
-            amendments = self.parser.parse(law_text)
+            # Parse the law text (XML-native path or regex fallback)
+            if _is_uslm_xml(law_text):
+                from pipeline.legal_parser.xml_parser import XMLAmendmentParser
+
+                xml_parser = XMLAmendmentParser(default_title=self.default_title)
+                amendments = xml_parser.parse(law_text)
+            else:
+                amendments = self.parser.parse(law_text)
 
             # Track text coverage
             accountant = TextAccountant(law_text)

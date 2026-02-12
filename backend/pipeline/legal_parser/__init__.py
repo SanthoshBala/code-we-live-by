@@ -16,6 +16,7 @@ from pipeline.legal_parser.text_accounting import (
 __all__ = [
     # Parser
     "AmendmentParser",
+    "XMLAmendmentParser",
     "ParsedAmendment",
     "SectionReference",
     "AMENDMENT_PATTERNS",
@@ -51,4 +52,8 @@ def __getattr__(name: str):
         from pipeline.legal_parser.law_change_service import LawChangeService
 
         return LawChangeService
+    elif name == "XMLAmendmentParser":
+        from pipeline.legal_parser.xml_parser import XMLAmendmentParser
+
+        return XMLAmendmentParser
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
