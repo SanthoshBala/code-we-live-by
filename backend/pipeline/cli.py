@@ -1156,6 +1156,39 @@ async def parse_law_command(
             if stats.get("by_change_type"):
                 print(f"  By type: {stats['by_change_type']}")
 
+        # Detailed per-amendment listing
+        if result.amendments:
+            print()
+            print("=" * 72)
+            print("AMENDMENTS")
+            print("=" * 72)
+            for i, a in enumerate(result.amendments, 1):
+                section_str = str(a.section_ref) if a.section_ref else "??"
+                review_flag = " [REVIEW]" if a.needs_review else ""
+                source = a.metadata.get("source", "regex")
+                print()
+                print(f"  #{i}  {a.change_type.value:<10}  {section_str}")
+                print(f"      Pattern:    {a.pattern_name} ({source})")
+                print(f"      Confidence: {a.confidence:.0%}{review_flag}")
+                if a.old_text:
+                    old_preview = a.old_text[:120]
+                    if len(a.old_text) > 120:
+                        old_preview += "..."
+                    print(f'      Old text:   "{old_preview}"')
+                if a.new_text:
+                    new_preview = a.new_text[:120]
+                    if len(a.new_text) > 120:
+                        new_preview += "..."
+                    print(f'      New text:   "{new_preview}"')
+                if not a.old_text and not a.new_text:
+                    # Show a snippet of the full match for context
+                    snippet = a.full_match[:140]
+                    if len(a.full_match) > 140:
+                        snippet += "..."
+                    print(f"      Context:    {snippet}")
+            print()
+            print("-" * 72)
+
         if result.escalation_recommended:
             print(f"\n  ESCALATION RECOMMENDED: {result.escalation_reason}")
 
