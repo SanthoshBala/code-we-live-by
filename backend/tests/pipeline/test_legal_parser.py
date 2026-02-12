@@ -135,6 +135,31 @@ class TestStrikeInsertPatterns:
         ]
         assert len(strike_insert) >= 1
 
+    def test_strike_insert_backtick_quotes(self) -> None:
+        """Test strike and insert with GovInfo backtick-style quotes (``text'').
+
+        PL 113-22: The heading of subsection (c) of section 219 of the
+        Internal Revenue Code of 1986 is amended by striking ``Special
+        Rules for Certain Married Individuals'' and inserting ``Kay Bailey
+        Hutchison Spousal IRA''.
+        """
+        parser = AmendmentParser(default_title=26)
+        text = (
+            "The heading of subsection (c) of section 219 of the Internal Revenue "
+            "Code of 1986 is amended by striking ``Special Rules for Certain Married "
+            "Individuals'' and inserting ``Kay Bailey Hutchison Spousal IRA''."
+        )
+
+        amendments = parser.parse(text)
+        strike_insert = [
+            a for a in amendments if a.pattern_type == PatternType.STRIKE_INSERT
+        ]
+        assert len(strike_insert) >= 1
+
+        amendment = strike_insert[0]
+        assert amendment.old_text == "Special Rules for Certain Married Individuals"
+        assert amendment.new_text == "Kay Bailey Hutchison Spousal IRA"
+
 
 class TestRepealPatterns:
     """Tests for repeal pattern matching."""
