@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import (
     CheckConstraint,
     Date,
-    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -16,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, enum_column
 from app.models.enums import BillStatus, BillType, ChangeType, LawType
 
 if TYPE_CHECKING:
@@ -33,7 +32,7 @@ class PublicLaw(Base, TimestampMixin):
     law_number: Mapped[str] = mapped_column(String(20), nullable=False)
     congress: Mapped[int] = mapped_column(Integer, nullable=False)
     law_type: Mapped[LawType] = mapped_column(
-        Enum(LawType, name="law_type"), default=LawType.PUBLIC, nullable=False
+        enum_column(LawType, "law_type"), default=LawType.PUBLIC, nullable=False
     )
     popular_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
     official_title: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -113,10 +112,10 @@ class Bill(Base, TimestampMixin):
     bill_number: Mapped[str] = mapped_column(String(50), nullable=False)
     congress: Mapped[int] = mapped_column(Integer, nullable=False)
     bill_type: Mapped[BillType] = mapped_column(
-        Enum(BillType, name="bill_type"), nullable=False
+        enum_column(BillType, "bill_type"), nullable=False
     )
     status: Mapped[BillStatus] = mapped_column(
-        Enum(BillStatus, name="bill_status"),
+        enum_column(BillStatus, "bill_status"),
         default=BillStatus.INTRODUCED,
         nullable=False,
     )
@@ -178,7 +177,7 @@ class LawChange(Base, TimestampMixin):
         ForeignKey("us_code_section.section_id", ondelete="RESTRICT"), nullable=False
     )
     change_type: Mapped[ChangeType] = mapped_column(
-        Enum(ChangeType, name="change_type"), nullable=False
+        enum_column(ChangeType, "change_type"), nullable=False
     )
     old_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     new_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -213,7 +212,7 @@ class ProposedChange(Base, TimestampMixin):
         ForeignKey("us_code_section.section_id", ondelete="SET NULL"), nullable=True
     )
     change_type: Mapped[ChangeType] = mapped_column(
-        Enum(ChangeType, name="change_type"), nullable=False
+        enum_column(ChangeType, "change_type"), nullable=False
     )
     old_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     new_text: Mapped[str | None] = mapped_column(Text, nullable=True)
