@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -354,15 +355,29 @@ class GovInfoClient:
         logger.info(f"Fetched {len(results)} public laws")
         return results
 
-    async def get_public_law_detail(self, package_id: str) -> PLAWPackageDetail:
+    async def get_public_law_detail(
+        self, package_id: str, force: bool = False
+    ) -> PLAWPackageDetail:
         """Fetch detailed information about a specific Public Law.
+
+        Results are cached as JSON in {cache_dir}/plaw/{package_id}.json.
 
         Args:
             package_id: The GovInfo package ID (e.g., "PLAW-119publ60").
+            force: If True, re-fetch even if cached.
 
         Returns:
             PLAWPackageDetail with full metadata and download URLs.
         """
+        # Check cache first
+        cache_file = None
+        if self.cache_dir:
+            cache_file = self.cache_dir / "plaw" / f"{package_id}.json"
+            if cache_file.exists() and not force:
+                logger.info(f"Using cached summary for {package_id}: {cache_file}")
+                data = json.loads(cache_file.read_text())
+                return PLAWPackageDetail.from_api_response(data)
+
         url = f"{self.base_url}/packages/{package_id}/summary"
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -370,6 +385,12 @@ class GovInfoClient:
             logger.info(f"Fetching package detail for {package_id}")
             response = await self._request_with_retry(client, "GET", url, params=params)
             data = response.json()
+
+        # Write to cache
+        if cache_file:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(json.dumps(data))
+            logger.info(f"Cached summary to {cache_file}")
 
         return PLAWPackageDetail.from_api_response(data)
 
