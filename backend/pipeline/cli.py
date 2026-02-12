@@ -1139,35 +1139,25 @@ async def parse_law_command(
         )
 
         # Display results
-        print(
-            f"Parsing {'completed' if result.status.value == 'Completed' else result.status.value}"
+        status_label = (
+            "completed" if result.status.value == "Completed" else result.status.value
         )
-        print(f"  Session ID: {result.session_id}")
+        print(f"Parsing {status_label}")
         print(f"  Amendments found: {len(result.amendments)}")
-        print(f"  Coverage: {result.coverage_report.coverage_percentage:.1f}%")
         print(
-            f"    Claimed: {result.coverage_report.claimed_length:,} / {result.coverage_report.total_length:,} chars"
+            f"  Coverage: {result.coverage_report.coverage_percentage:.1f}% "
+            f"({result.coverage_report.claimed_length:,} / "
+            f"{result.coverage_report.total_length:,} chars)"
         )
-        print(f"    Flagged unclaimed: {len(result.coverage_report.flagged_unclaimed)}")
-        print(f"    Ignored unclaimed: {len(result.coverage_report.ignored_unclaimed)}")
 
         if result.amendments:
-            # Show amendment stats
             stats = parser_session.parser.get_statistics(result.amendments)
-            print("\n  Amendment statistics:")
-            print(f"    High confidence (>=90%): {stats['high_confidence']}")
-            print(f"    Needs review: {stats['needs_review']}")
-            print(f"    Average confidence: {stats['avg_confidence']:.2%}")
-
+            print(f"  Avg confidence: {stats['avg_confidence']:.0%}")
             if stats.get("by_change_type"):
-                print(f"    By type: {stats['by_change_type']}")
+                print(f"  By type: {stats['by_change_type']}")
 
-        # Show GovInfo validation results
         if result.escalation_recommended:
             print(f"\n  ESCALATION RECOMMENDED: {result.escalation_reason}")
-
-        if result.ingestion_report_id:
-            print(f"\n  Ingestion report ID: {result.ingestion_report_id}")
 
         if dry_run:
             print("\n  [DRY RUN - results not saved to database]")
