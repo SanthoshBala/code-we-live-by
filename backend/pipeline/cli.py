@@ -167,6 +167,82 @@ async def ingest_phase1(
 
 
 # =============================================================================
+# Seed laws for local development
+# =============================================================================
+
+# Curated set of Public Laws spanning Phase 1 titles with varying complexity.
+# Each entry: (congress, law_number, default_title, short_name)
+SEED_LAWS: list[tuple[int, int, int | None, str]] = [
+    # Simple (1-3 amendments)
+    (113, 22, 26, "Kay Bailey Hutchison Spousal IRA"),
+    (117, 107, 18, "Emmett Till Antilynching Act"),
+    (117, 224, None, "Speak Out Act"),
+    # Small-medium (4-6 amendments)
+    (114, 153, 18, "Defend Trade Secrets Act"),
+    (116, 128, 42, "PPP Flexibility Act"),
+    # Medium (7-20 amendments)
+    (115, 264, 17, "Music Modernization Act"),
+    (115, 118, 50, "FISA Amendments Reauthorization"),
+    (118, 49, 50, "Reforming Intelligence and Securing America Act"),
+    # Large (many amendments)
+    (115, 97, 26, "Tax Cuts and Jobs Act"),
+    (117, 169, 26, "Inflation Reduction Act"),
+]
+
+
+async def seed_laws_command() -> int:
+    """Ingest the curated set of seed laws into the database.
+
+    Returns:
+        0 on success, 1 if any law failed.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+    print(f"\nSeeding {len(SEED_LAWS)} Public Laws...")
+    print()
+
+    failed = 0
+    async with async_session_maker() as session:
+        service = PublicLawIngestionService(session)
+        for congress, law_number, _default_title, short_name in SEED_LAWS:
+            label = f"PL {congress}-{law_number}"
+            try:
+                log = await service.ingest_law(congress, law_number, force=False)
+                if log.status in ("completed", "skipped"):
+                    status = "ok" if log.status == "completed" else "exists"
+                    print(f"  [{status:<6}] {label:<14} {short_name}")
+                else:
+                    print(f"  [FAIL  ] {label:<14} {short_name}: {log.error_message}")
+                    failed += 1
+            except Exception as exc:
+                print(f"  [ERROR ] {label:<14} {short_name}: {exc}")
+                failed += 1
+
+    print()
+    if failed:
+        print(
+            f"  {len(SEED_LAWS) - failed}/{len(SEED_LAWS)} succeeded, {failed} failed"
+        )
+    else:
+        print(f"  All {len(SEED_LAWS)} laws seeded successfully.")
+
+    # Print parse-law quick-reference
+    print()
+    print("Try parsing with:")
+    for congress, law_number, default_title, _short_name in SEED_LAWS[:3]:
+        cmd = f"  uv run python -m pipeline.cli parse-law {congress} {law_number}"
+        if default_title:
+            cmd += f" --default-title {default_title}"
+        cmd += " --dry-run"
+        print(cmd)
+    print("  ...")
+    print()
+
+    return 1 if failed else 0
+
+
+# =============================================================================
 # GovInfo Public Law functions
 # =============================================================================
 
@@ -1791,6 +1867,12 @@ def main() -> int:
         help="Re-parse and update existing records",
     )
 
+    # seed-laws command
+    subparsers.add_parser(
+        "seed-laws",
+        help="Ingest curated seed laws for local development and parse-law testing",
+    )
+
     # =========================================================================
     # GovInfo Public Law commands
     # =========================================================================
@@ -2346,6 +2428,9 @@ Examples:
                 force_parse=args.force_parse,
             )
         )
+
+    elif args.command == "seed-laws":
+        return asyncio.run(seed_laws_command())
 
     # =========================================================================
     # GovInfo command handlers
