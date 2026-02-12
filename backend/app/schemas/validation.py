@@ -143,8 +143,6 @@ class IngestionReportCreate(BaseModel):
     auto_approve_eligible: bool = False
     escalation_recommended: bool = False
     escalation_reason: str | None = None
-    govinfo_amendment_count: int | None = None
-    amendment_count_mismatch: bool | None = None
 
 
 class IngestionReportResponse(BaseModel):
@@ -177,10 +175,6 @@ class IngestionReportResponse(BaseModel):
     auto_approve_eligible: bool
     escalation_recommended: bool
     escalation_reason: str | None = None
-
-    # External validation
-    govinfo_amendment_count: int | None = None
-    amendment_count_mismatch: bool | None = None
 
     # Timestamps
     created_at: datetime

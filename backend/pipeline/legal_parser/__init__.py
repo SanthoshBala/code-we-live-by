@@ -7,7 +7,6 @@ from pipeline.legal_parser.amendment_parser import (
 )
 from pipeline.legal_parser.patterns import AMENDMENT_PATTERNS, PatternType
 from pipeline.legal_parser.text_accounting import (
-    AMENDMENT_KEYWORDS,
     ClaimedSpan,
     CoverageReport,
     TextAccountant,
@@ -26,7 +25,6 @@ __all__ = [
     "ClaimedSpan",
     "UnclaimedSpan",
     "CoverageReport",
-    "AMENDMENT_KEYWORDS",
     # Law Change Pipeline (Task 1.12-1.13)
     "SectionResolver",
     "TextExtractor",

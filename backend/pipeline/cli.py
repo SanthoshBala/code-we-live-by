@@ -1051,7 +1051,6 @@ async def parse_law_command(
     default_title: int | None = None,
     min_confidence: float = 0.0,
     dry_run: bool = False,
-    validate: bool = True,
 ) -> int:
     """Parse a Public Law for amendments.
 
@@ -1062,7 +1061,6 @@ async def parse_law_command(
         default_title: Default US Code title.
         min_confidence: Minimum confidence threshold.
         dry_run: If True, parse without saving.
-        validate: If True, validate against GovInfo metadata.
 
     Returns:
         0 on success, 1 on failure.
@@ -1070,10 +1068,7 @@ async def parse_law_command(
     from app.models.base import async_session_maker
     from app.models.enums import ParsingMode
     from pipeline.govinfo.client import GovInfoClient
-    from pipeline.legal_parser.parsing_modes import (
-        RegExParsingSession,
-        validate_against_govinfo,
-    )
+    from pipeline.legal_parser.parsing_modes import RegExParsingSession
 
     # Map mode string to enum
     mode_map = {
@@ -1143,26 +1138,6 @@ async def parse_law_command(
             save_to_db=not dry_run,
         )
 
-        # Validate against GovInfo metadata
-        govinfo_mismatch = None
-        if validate and not dry_run and result.ingestion_report_id:
-            from sqlalchemy import select
-
-            from app.models.validation import IngestionReport
-
-            report_result = await session.execute(
-                select(IngestionReport).where(
-                    IngestionReport.report_id == result.ingestion_report_id
-                )
-            )
-            report = report_result.scalar_one_or_none()
-            if report:
-                has_mismatch, mismatch_desc = await validate_against_govinfo(
-                    report, congress, law_number, session
-                )
-                if has_mismatch:
-                    govinfo_mismatch = mismatch_desc
-
         # Display results
         print(
             f"Parsing {'completed' if result.status.value == 'Completed' else result.status.value}"
@@ -1188,16 +1163,8 @@ async def parse_law_command(
                 print(f"    By type: {stats['by_change_type']}")
 
         # Show GovInfo validation results
-        if validate and not dry_run:
-            print("\n  GovInfo validation:")
-            if govinfo_mismatch:
-                print(f"    WARNING: {govinfo_mismatch}")
-            else:
-                print("    Amendment count appears reasonable")
-
-        if result.escalation_recommended or govinfo_mismatch:
-            reason = result.escalation_reason or govinfo_mismatch
-            print(f"\n  ESCALATION RECOMMENDED: {reason}")
+        if result.escalation_recommended:
+            print(f"\n  ESCALATION RECOMMENDED: {result.escalation_reason}")
 
         if result.ingestion_report_id:
             print(f"\n  Ingestion report ID: {result.ingestion_report_id}")
@@ -2153,12 +2120,6 @@ Examples:
         action="store_true",
         help="Parse without saving to database",
     )
-    parse_law_parser.add_argument(
-        "--no-validate",
-        action="store_true",
-        help="Skip GovInfo metadata validation",
-    )
-
     # show-ingestion-report command
     show_report_parser = subparsers.add_parser(
         "show-ingestion-report", help="Display an ingestion report"
@@ -2503,7 +2464,6 @@ Examples:
                 default_title=args.default_title,
                 min_confidence=args.min_confidence,
                 dry_run=args.dry_run,
-                validate=not args.no_validate,
             )
         )
 
