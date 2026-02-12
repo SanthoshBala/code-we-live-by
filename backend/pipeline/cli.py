@@ -1478,6 +1478,234 @@ async def ingest_house_votes(
             return 1
 
 
+# =============================================================================
+# Law Change Pipeline functions (Task 1.12-1.13)
+# =============================================================================
+
+
+async def initial_commit_command(
+    release_point: str,
+    titles: list[int] | None = None,
+    download_dir: Path = Path("data/olrc"),
+) -> int:
+    """Create initial commit from an OLRC release point.
+
+    Args:
+        release_point: Release point identifier (e.g., "113-21").
+        titles: Title numbers to process (default: Phase 1 titles).
+        download_dir: Directory for OLRC XML files.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.olrc.initial_commit import InitialCommitService
+
+    async with async_session_maker() as session:
+        service = InitialCommitService(session, download_dir=str(download_dir))
+        try:
+            rp = await service.create_initial_commit(
+                release_point=release_point,
+                titles=titles,
+            )
+            logger.info(
+                f"Initial commit created from {rp.full_identifier} "
+                f"(titles: {rp.titles_updated})"
+            )
+            return 0
+        except Exception as e:
+            logger.error(f"Failed to create initial commit: {e}")
+            return 1
+
+
+async def process_law_command(
+    congress: int,
+    law_number: int,
+    default_title: int | None = None,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> int:
+    """Process a Public Law to generate LawChange records.
+
+    Args:
+        congress: Congress number.
+        law_number: Law number.
+        default_title: Default US Code title.
+        dry_run: If True, don't persist changes.
+        verbose: If True, show detailed progress.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.legal_parser.law_change_service import LawChangeService
+
+    async with async_session_maker() as session:
+        service = LawChangeService(session)
+        result = await service.process_law(
+            congress=congress,
+            law_number=law_number,
+            default_title=default_title,
+            dry_run=dry_run,
+            verbose=verbose,
+        )
+
+        print(f"\nPL {congress}-{law_number} Processing Results:")
+        print(f"  Amendments found: {len(result.amendments)}")
+        print(f"  Diffs generated: {len(result.diffs)}")
+        print(f"  LawChange records: {len(result.changes)}")
+
+        if result.report:
+            report = result.report
+            print(f"\n  Diff Report:")
+            print(f"    Unresolved: {report.unresolved}")
+            print(f"    Skipped: {report.diffs_skipped}")
+            print(f"    Validation failures: {report.validation_failures}")
+            if report.by_type:
+                print(f"    By type: {report.by_type}")
+
+        if result.errors:
+            print(f"\n  Errors:")
+            for error in result.errors:
+                print(f"    - {error}")
+            return 1
+
+        if dry_run:
+            print("\n  [DRY RUN - changes not persisted]")
+
+        return 0
+
+
+async def validate_release_point_command(
+    release_point: str,
+    titles: list[int] | None = None,
+    download_dir: Path = Path("data/olrc"),
+    verbose: bool = False,
+) -> int:
+    """Validate database state against an OLRC release point.
+
+    Args:
+        release_point: Release point identifier (e.g., "113-22").
+        titles: Title numbers to validate (default: Phase 1 titles).
+        download_dir: Directory for OLRC XML files.
+        verbose: If True, show per-section results.
+
+    Returns:
+        0 on success/valid, 1 on failure/invalid.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.legal_parser.release_point_validator import ReleasePointValidator
+
+    titles = titles or PHASE_1_TITLES
+
+    async with async_session_maker() as session:
+        validator = ReleasePointValidator(session, download_dir=download_dir)
+        report = await validator.validate_against_release_point(
+            release_point=release_point,
+            titles=titles,
+            verbose=verbose,
+        )
+
+        print(f"\nValidation Report: {release_point}")
+        print(f"  Titles checked: {report.titles_checked}")
+        print(f"  Total sections: {report.total_sections}")
+        print(f"  Matches: {report.matches} ({report.match_rate:.1%})")
+        print(f"  Mismatches: {report.mismatches}")
+        print(f"  Only in DB: {report.only_in_db}")
+        print(f"  Only in RP: {report.only_in_rp}")
+
+        if report.comparisons:
+            print(f"\n  Mismatched sections (first 10):")
+            for comp in report.comparisons[:10]:
+                print(
+                    f"    {comp.title_number} USC {comp.section_number}: "
+                    f"{comp.diff_summary}"
+                )
+
+        if report.errors:
+            print(f"\n  Errors:")
+            for error in report.errors:
+                print(f"    - {error}")
+
+        print(f"\n  Valid: {'YES' if report.is_valid else 'NO'}")
+
+        return 0 if report.is_valid else 1
+
+
+async def cross_ref_law_command(
+    congress: int,
+    law_number: int,
+    verbose: bool = False,
+) -> int:
+    """Cross-reference a law's changes against OLRC amendment notes.
+
+    Args:
+        congress: Congress number.
+        law_number: Law number.
+        verbose: If True, show detailed results.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.public_law import LawChange, PublicLaw
+    from pipeline.legal_parser.release_point_validator import AmendmentCrossReferencer
+
+    async with async_session_maker() as session:
+        # Get law
+        result = await session.execute(
+            select(PublicLaw).where(
+                PublicLaw.congress == congress,
+                PublicLaw.law_number == str(law_number),
+            )
+        )
+        law = result.scalar_one_or_none()
+        if not law:
+            logger.error(f"PL {congress}-{law_number} not in database")
+            return 1
+
+        # Get generated changes
+        changes_result = await session.execute(
+            select(LawChange).where(LawChange.law_id == law.law_id)
+        )
+        changes = changes_result.scalars().all()
+
+        if not changes:
+            print(f"No LawChange records for PL {congress}-{law_number}")
+            print("Run 'process-law' first to generate changes.")
+            return 1
+
+        cross_ref = AmendmentCrossReferencer(session)
+        xref = await cross_ref.cross_reference(
+            congress=congress,
+            law_number=law_number,
+            generated_changes=changes,
+        )
+
+        print(f"\nCross-Reference: PL {congress}-{law_number}")
+        print(f"  Sections in OLRC notes: {len(xref.sections_in_notes)}")
+        print(f"  Sections in our changes: {len(xref.sections_in_changes)}")
+        print(f"  Matched: {len(xref.matched)}")
+        print(f"  Only in notes (parser missed): {len(xref.only_in_notes)}")
+        print(f"  Only in changes (possible FP): {len(xref.only_in_changes)}")
+        print(f"  Precision: {xref.precision:.1%}")
+        print(f"  Recall: {xref.recall:.1%}")
+
+        if verbose and xref.only_in_notes:
+            print(f"\n  Sections in notes but NOT in changes:")
+            for title, section in xref.only_in_notes:
+                print(f"    {title} USC {section}")
+
+        if verbose and xref.only_in_changes:
+            print(f"\n  Sections in changes but NOT in notes:")
+            for title, section in xref.only_in_changes:
+                print(f"    {title} USC {section}")
+
+        return 0
+
+
 def main() -> int:
     """Main entry point for CLI."""
     parser = argparse.ArgumentParser(description="US Code data ingestion pipeline CLI")
@@ -1973,6 +2201,116 @@ Examples:
         help="Name for the new pattern",
     )
 
+    # =========================================================================
+    # Law Change Pipeline commands (Task 1.12-1.13)
+    # =========================================================================
+
+    # initial-commit command
+    initial_commit_parser = subparsers.add_parser(
+        "initial-commit",
+        help="Create initial commit from an OLRC release point",
+    )
+    initial_commit_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier (e.g., '113-21')",
+    )
+    initial_commit_parser.add_argument(
+        "--titles",
+        type=int,
+        nargs="+",
+        help="Title numbers to process (default: Phase 1 titles)",
+    )
+    initial_commit_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
+    # process-law command
+    process_law_parser = subparsers.add_parser(
+        "process-law",
+        help="Process a Public Law to generate LawChange records",
+    )
+    process_law_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 113)",
+    )
+    process_law_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 22 for PL 113-22)",
+    )
+    process_law_parser.add_argument(
+        "--default-title",
+        type=int,
+        help="Default US Code title when not specified in text",
+    )
+    process_law_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate diffs without persisting to database",
+    )
+    process_law_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed progress",
+    )
+
+    # validate-release-point command
+    validate_rp_parser = subparsers.add_parser(
+        "validate-release-point",
+        help="Validate database state against an OLRC release point",
+    )
+    validate_rp_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier (e.g., '113-22')",
+    )
+    validate_rp_parser.add_argument(
+        "--titles",
+        type=int,
+        nargs="+",
+        help="Title numbers to validate (default: Phase 1 titles)",
+    )
+    validate_rp_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+    validate_rp_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show per-section comparison results",
+    )
+
+    # cross-ref-law command
+    cross_ref_parser = subparsers.add_parser(
+        "cross-ref-law",
+        help="Cross-reference a law's changes against OLRC amendment notes",
+    )
+    cross_ref_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 113)",
+    )
+    cross_ref_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 22)",
+    )
+    cross_ref_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed section-level results",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2189,6 +2527,49 @@ Examples:
             promote_pattern_command(
                 discovery_id=args.discovery_id,
                 pattern_name=args.pattern_name,
+            )
+        )
+
+    # =========================================================================
+    # Law Change Pipeline command handlers (Task 1.12-1.13)
+    # =========================================================================
+
+    elif args.command == "initial-commit":
+        return asyncio.run(
+            initial_commit_command(
+                release_point=args.release_point,
+                titles=args.titles,
+                download_dir=args.dir,
+            )
+        )
+
+    elif args.command == "process-law":
+        return asyncio.run(
+            process_law_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                default_title=args.default_title,
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+            )
+        )
+
+    elif args.command == "validate-release-point":
+        return asyncio.run(
+            validate_release_point_command(
+                release_point=args.release_point,
+                titles=args.titles,
+                download_dir=args.dir,
+                verbose=args.verbose,
+            )
+        )
+
+    elif args.command == "cross-ref-law":
+        return asyncio.run(
+            cross_ref_law_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                verbose=args.verbose,
             )
         )
 
