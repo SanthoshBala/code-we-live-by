@@ -253,8 +253,8 @@ class PLAWPackageDetail:
             collection_code=data.get("collectionCode", "PLAW"),
             doc_class=data.get("docClass"),
             pdf_url=download.get("pdfLink"),
-            xml_url=download.get("xmlLink"),
-            htm_url=download.get("htmLink"),
+            xml_url=download.get("xmlLink") or download.get("uslmLink"),
+            htm_url=download.get("htmLink") or download.get("txtLink"),
             bill_id=bill_id,
             statutes_at_large_citation=data.get("suDocClassNumber"),
         )
@@ -489,9 +489,11 @@ class GovInfoClient:
             return None
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # XML downloads don't need API key
             logger.info(f"Downloading XML for {detail.package_id}")
-            response = await self._request_with_retry(client, "GET", detail.xml_url)
+            params = {"api_key": self.api_key}
+            response = await self._request_with_retry(
+                client, "GET", detail.xml_url, params=params
+            )
             return response.text
 
     def build_package_id(
@@ -565,7 +567,10 @@ class GovInfoClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             logger.info(f"Downloading {format.upper()} for PL {congress}-{law_number}")
             try:
-                response = await self._request_with_retry(client, "GET", url)
+                params = {"api_key": self.api_key}
+                response = await self._request_with_retry(
+                    client, "GET", url, params=params
+                )
                 return response.text
             except httpx.HTTPStatusError as e:
                 logger.error(f"Failed to download law text: {e}")
