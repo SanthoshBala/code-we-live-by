@@ -27,4 +27,25 @@ __all__ = [
     "UnclaimedSpan",
     "CoverageReport",
     "AMENDMENT_KEYWORDS",
+    # Law Change Pipeline (Task 1.12-1.13)
+    "SectionResolver",
+    "TextExtractor",
+    "DiffGenerator",
+    "LawChangeService",
 ]
+
+# Lazy imports for Task 1.12-1.13 modules (avoid circular imports)
+def __getattr__(name: str):
+    if name == "SectionResolver":
+        from pipeline.legal_parser.section_resolver import SectionResolver
+        return SectionResolver
+    elif name == "TextExtractor":
+        from pipeline.legal_parser.text_extractor import TextExtractor
+        return TextExtractor
+    elif name == "DiffGenerator":
+        from pipeline.legal_parser.diff_generator import DiffGenerator
+        return DiffGenerator
+    elif name == "LawChangeService":
+        from pipeline.legal_parser.law_change_service import LawChangeService
+        return LawChangeService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
