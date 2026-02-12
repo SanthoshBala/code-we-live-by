@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from app.models.enums import ChangeType
 from pipeline.legal_parser.parsing_modes import _is_uslm_xml
 from pipeline.legal_parser.patterns import PatternType
@@ -20,6 +22,11 @@ _PL113_22_XML = (
     / "PLAW-113publ22.xml"
 )
 
+_skip_no_fixture = pytest.mark.skipif(
+    not _PL113_22_XML.exists(),
+    reason="Cached PL 113-22 XML not available (run seed-laws first)",
+)
+
 
 def _load_pl113_22() -> str:
     return _PL113_22_XML.read_text(encoding="utf-8")
@@ -30,6 +37,7 @@ def _load_pl113_22() -> str:
 # ---------------------------------------------------------------------------
 
 
+@_skip_no_fixture
 class TestParsePL113_22:
     """Integration tests using cached PL 113-22 XML."""
 
