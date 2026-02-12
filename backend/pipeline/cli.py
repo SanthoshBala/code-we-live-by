@@ -1200,11 +1200,7 @@ async def parse_law_command(
         logger.error(f"Could not retrieve text for PL {congress}-{law_number}")
         return 1
 
-    # Detect source format
-    from pipeline.legal_parser.parsing_modes import _is_uslm_xml
     from pipeline.olrc.title_lookup import lookup_public_law_title
-
-    source_format = "USLM XML" if _is_uslm_xml(law_text) else "Plain text"
 
     # Look up short title: GovInfo API > text extraction > DB field
     title_info = await lookup_public_law_title(congress, law_number)
@@ -1257,12 +1253,18 @@ async def parse_law_command(
             print(f"  Official title: {official}")
         if law.enacted_date:
             print(f"  Enacted:        {law.enacted_date}")
-        if law.statutes_at_large_citation:
-            print(f"  Stat citation:  {law.statutes_at_large_citation}")
         if law_info.bill_id:
             print(f"  Bill:           {law_info.bill_id}")
-        print(f"  Source format:  {source_format}")
-        print(f"  Text length:    {len(law_text):,} characters")
+        if law_info.committees:
+            names = [
+                c.get("committeeName", "")
+                for c in law_info.committees
+                if c.get("committeeName")
+            ]
+            if names:
+                print(f"  Committees:     {names[0]}")
+                for name in names[1:]:
+                    print(f"                  {name}")
         if default_title:
             print(f"  Default title:  {default_title}")
         print(f"  Parse mode:     {parsing_mode.value}")

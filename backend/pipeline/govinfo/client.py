@@ -121,6 +121,8 @@ class PLAWPackageDetail:
     # Related documents
     bill_id: str | None
     statutes_at_large_citation: str | None
+    # Committees
+    committees: list[dict[str, str]]
 
     @classmethod
     def from_api_response(cls, data: dict[str, Any]) -> "PLAWPackageDetail":
@@ -181,6 +183,7 @@ class PLAWPackageDetail:
             htm_url=download.get("htmLink") or download.get("txtLink"),
             bill_id=bill_id,
             statutes_at_large_citation=data.get("suDocClassNumber"),
+            committees=data.get("committees", []),
         )
 
 
