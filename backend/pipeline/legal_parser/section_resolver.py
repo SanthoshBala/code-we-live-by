@@ -179,6 +179,4 @@ class SectionResolver:
                 cache_key = (title, section.section_number)
                 self._cache[cache_key] = section
 
-            logger.debug(
-                f"Pre-fetched {len(sections)} sections for Title {title}"
-            )
+            logger.debug(f"Pre-fetched {len(sections)} sections for Title {title}")

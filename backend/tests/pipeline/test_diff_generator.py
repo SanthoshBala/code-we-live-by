@@ -1,7 +1,5 @@
 """Tests for diff generator."""
 
-import pytest
-
 from app.models.enums import ChangeType
 from pipeline.legal_parser.amendment_parser import ParsedAmendment, SectionReference
 from pipeline.legal_parser.diff_generator import DiffReport, DiffResult, _truncate

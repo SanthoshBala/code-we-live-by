@@ -6,7 +6,7 @@ Create Date: 2026-02-11
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -15,9 +15,9 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a2f3b8c1d4e5"
-down_revision: Union[str, None] = "31e77be6b0e1"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "31e77be6b0e1"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -32,9 +32,7 @@ def upgrade() -> None:
         sa.Column(
             "parent_release_point_id",
             sa.Integer(),
-            sa.ForeignKey(
-                "olrc_release_point.release_point_id", ondelete="SET NULL"
-            ),
+            sa.ForeignKey("olrc_release_point.release_point_id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column("is_initial", sa.Boolean(), nullable=False, server_default="false"),
@@ -52,7 +50,9 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
         sa.PrimaryKeyConstraint("release_point_id", name="pk_olrc_release_point"),
-        sa.UniqueConstraint("full_identifier", name="uq_olrc_release_point_full_identifier"),
+        sa.UniqueConstraint(
+            "full_identifier", name="uq_olrc_release_point_full_identifier"
+        ),
         sa.UniqueConstraint(
             "congress", "law_identifier", name="uq_release_point_congress_law"
         ),

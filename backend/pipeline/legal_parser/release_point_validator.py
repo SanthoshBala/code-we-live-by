@@ -131,17 +131,12 @@ class ReleasePointValidator:
 
         for title_num in titles:
             try:
-                await self._validate_title(
-                    title_num, release_point, report, verbose
-                )
+                await self._validate_title(title_num, release_point, report, verbose)
             except Exception as e:
                 logger.exception(
-                    f"Error validating Title {title_num} "
-                    f"at {release_point}"
+                    f"Error validating Title {title_num} " f"at {release_point}"
                 )
-                report.errors.append(
-                    f"Title {title_num}: {e}"
-                )
+                report.errors.append(f"Title {title_num}: {e}")
 
         logger.info(
             f"Validation against {release_point}: "
@@ -182,14 +177,11 @@ class ReleasePointValidator:
 
         # Fetch DB sections for this title
         result = await self.session.execute(
-            select(USCodeSection).where(
-                USCodeSection.title_number == title_num
-            )
+            select(USCodeSection).where(USCodeSection.title_number == title_num)
         )
         db_sections_list = result.scalars().all()
         db_sections: dict[str, str] = {
-            s.section_number: (s.text_content or "")
-            for s in db_sections_list
+            s.section_number: (s.text_content or "") for s in db_sections_list
         }
 
         # Compare
@@ -205,9 +197,7 @@ class ReleasePointValidator:
                 if self._texts_match(db_text, rp_text):
                     report.matches += 1
                     if verbose:
-                        logger.debug(
-                            f"  MATCH: Title {title_num} § {section_num}"
-                        )
+                        logger.debug(f"  MATCH: Title {title_num} § {section_num}")
                 else:
                     report.mismatches += 1
                     comparison = SectionComparison(
@@ -220,22 +210,16 @@ class ReleasePointValidator:
                     )
                     report.comparisons.append(comparison)
                     if verbose:
-                        logger.info(
-                            f"  MISMATCH: Title {title_num} § {section_num}"
-                        )
+                        logger.info(f"  MISMATCH: Title {title_num} § {section_num}")
 
             elif db_text is not None:
                 report.only_in_db += 1
                 if verbose:
-                    logger.debug(
-                        f"  DB-ONLY: Title {title_num} § {section_num}"
-                    )
+                    logger.debug(f"  DB-ONLY: Title {title_num} § {section_num}")
             else:
                 report.only_in_rp += 1
                 if verbose:
-                    logger.debug(
-                        f"  RP-ONLY: Title {title_num} § {section_num}"
-                    )
+                    logger.debug(f"  RP-ONLY: Title {title_num} § {section_num}")
 
     def _texts_match(self, text_a: str, text_b: str) -> bool:
         """Compare two section texts, normalizing whitespace."""
@@ -253,7 +237,7 @@ class ReleasePointValidator:
             )
 
         # Find first difference position
-        for i, (a, b) in enumerate(zip(norm_db, norm_rp)):
+        for i, (a, b) in enumerate(zip(norm_db, norm_rp, strict=False)):
             if a != b:
                 context_start = max(0, i - 20)
                 context_end = min(len(norm_db), i + 20)
@@ -324,7 +308,7 @@ class AmendmentCrossReferencer:
 
     async def find_sections_amended_by_law(
         self,
-        congress: int,
+        _congress: int,
         law_number: int,
     ) -> list[tuple[int, str]]:
         """Find sections whose OLRC notes reference a specific law.
@@ -333,13 +317,12 @@ class AmendmentCrossReferencer:
         to the given Public Law.
 
         Args:
-            congress: Congress number.
+            _congress: Congress number (reserved for future filtering).
             law_number: Law number.
 
         Returns:
             List of (title_number, section_number) tuples.
         """
-        from sqlalchemy import text
 
         # Query sections whose normalized_notes JSONB contains amendment
         # references to this law (e.g., "Pub. L. 113-22")

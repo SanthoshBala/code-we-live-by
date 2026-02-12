@@ -1,7 +1,5 @@
 """Tests for the initial commit service."""
 
-import pytest
-
 from pipeline.olrc.initial_commit import InitialCommitService
 from pipeline.olrc.release_point import parse_release_point_identifier
 
@@ -15,7 +13,7 @@ class TestInitialCommitService:
         assert congress == 113
         assert law_id == "21"
 
-    def test_service_init(self, tmp_path) -> None:
+    def test_service_init(self) -> None:
         """Test InitialCommitService can be initialized without DB."""
         # We can't fully test without a database, but we can verify
         # the class is importable and the constructor works with a mock

@@ -81,10 +81,10 @@ def parse_release_point_identifier(identifier: str) -> tuple[int, str]:
         )
     try:
         congress = int(parts[0])
-    except ValueError:
+    except ValueError as exc:
         raise ValueError(
             f"Invalid congress number in release point: {parts[0]}"
-        )
+        ) from exc
     return congress, parts[1]
 
 
@@ -132,9 +132,7 @@ class ReleasePointRegistry:
                 unique_rps.append(rp)
 
         # Sort by congress then law number
-        unique_rps.sort(
-            key=lambda rp: (rp.congress, rp.primary_law_number or 0)
-        )
+        unique_rps.sort(key=lambda rp: (rp.congress, rp.primary_law_number or 0))
 
         self._release_points = unique_rps
         logger.info(f"Found {len(unique_rps)} release points")
@@ -198,10 +196,7 @@ class ReleasePointRegistry:
         Returns:
             List of release points for that congress, sorted by law number.
         """
-        return [
-            rp for rp in self.get_release_points()
-            if rp.congress == congress
-        ]
+        return [rp for rp in self.get_release_points() if rp.congress == congress]
 
     def get_adjacent_pairs(
         self, congress: int | None = None
@@ -223,9 +218,7 @@ class ReleasePointRegistry:
             pairs.append((rps[i], rps[i + 1]))
         return pairs
 
-    def get_laws_in_range(
-        self, rp_before: str, rp_after: str
-    ) -> list[tuple[int, int]]:
+    def get_laws_in_range(self, rp_before: str, rp_after: str) -> list[tuple[int, int]]:
         """Return (congress, law_number) pairs enacted between two release points.
 
         This identifies which Public Laws were enacted between two release

@@ -1,7 +1,5 @@
 """Tests for text extractor."""
 
-import pytest
-
 from app.models.enums import ChangeType
 from pipeline.legal_parser.amendment_parser import ParsedAmendment, SectionReference
 from pipeline.legal_parser.patterns import PatternType
@@ -30,7 +28,7 @@ class TestTextExtractor:
     def test_extract_colon_quoted(self) -> None:
         """Test extraction of colon + quoted text pattern."""
         law_text = (
-            'Section 106 is amended by adding at the end the following: '
+            "Section 106 is amended by adding at the end the following: "
             '"(c) Special rules.—The provisions of this section shall apply.".'
         )
         extractor = TextExtractor(law_text)
@@ -55,9 +53,7 @@ class TestTextExtractor:
 
         amendments = [
             self._make_amendment(PatternType.STRIKE_INSERT, 0, 50),
-            self._make_amendment(
-                PatternType.ADD_AT_END, 70, 120
-            ),
+            self._make_amendment(PatternType.ADD_AT_END, 70, 120),
         ]
 
         results = extractor.extract_batch(amendments)

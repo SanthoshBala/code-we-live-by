@@ -1557,7 +1557,7 @@ async def process_law_command(
 
         if result.report:
             report = result.report
-            print(f"\n  Diff Report:")
+            print("\n  Diff Report:")
             print(f"    Unresolved: {report.unresolved}")
             print(f"    Skipped: {report.diffs_skipped}")
             print(f"    Validation failures: {report.validation_failures}")
@@ -1565,7 +1565,7 @@ async def process_law_command(
                 print(f"    By type: {report.by_type}")
 
         if result.errors:
-            print(f"\n  Errors:")
+            print("\n  Errors:")
             for error in result.errors:
                 print(f"    - {error}")
             return 1
@@ -1615,7 +1615,7 @@ async def validate_release_point_command(
         print(f"  Only in RP: {report.only_in_rp}")
 
         if report.comparisons:
-            print(f"\n  Mismatched sections (first 10):")
+            print("\n  Mismatched sections (first 10):")
             for comp in report.comparisons[:10]:
                 print(
                     f"    {comp.title_number} USC {comp.section_number}: "
@@ -1623,7 +1623,7 @@ async def validate_release_point_command(
                 )
 
         if report.errors:
-            print(f"\n  Errors:")
+            print("\n  Errors:")
             for error in report.errors:
                 print(f"    - {error}")
 
@@ -1694,12 +1694,12 @@ async def cross_ref_law_command(
         print(f"  Recall: {xref.recall:.1%}")
 
         if verbose and xref.only_in_notes:
-            print(f"\n  Sections in notes but NOT in changes:")
+            print("\n  Sections in notes but NOT in changes:")
             for title, section in xref.only_in_notes:
                 print(f"    {title} USC {section}")
 
         if verbose and xref.only_in_changes:
-            print(f"\n  Sections in changes but NOT in notes:")
+            print("\n  Sections in changes but NOT in notes:")
             for title, section in xref.only_in_changes:
                 print(f"    {title} USC {section}")
 

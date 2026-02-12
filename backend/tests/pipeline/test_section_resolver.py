@@ -1,7 +1,5 @@
 """Tests for section resolver."""
 
-import pytest
-
 from pipeline.legal_parser.section_resolver import (
     ResolutionResult,
     normalize_section_number,

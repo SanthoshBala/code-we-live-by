@@ -160,17 +160,25 @@ The translation process:
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Section Lookup (future: Task 1.11)                         │
+│  Section Resolution (section_resolver.py)                    │
 │  - Fetch current text of 17 USC § 106(3) from database     │
-│  - Locate "X" within the section text                       │
+│  - Normalize section numbers (hyphen ↔ en-dash)            │
+│  - Cache resolved sections for batch efficiency             │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Diff Generation (future: Task 1.11)                        │
-│  - old_text → new_text replacement                          │
-│  - Generate unified diff                                    │
-│  - Store in LawChange table                                 │
+│  Text Extraction (text_extractor.py)                         │
+│  - Extract "the following" content for ADD/INSERT patterns  │
+│  - Handle colon-delimited, quoted, and paragraph formats    │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Diff Generation (diff_generator.py)                         │
+│  - old_text → new_text per change type                      │
+│  - Validate diffs against section content                   │
+│  - Persist LawChange records                                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -252,8 +260,15 @@ These are flagged with `needs_review=True` for human verification.
 | **graduation.py** | Decides when to escalate to human review, evaluates pattern graduation criteria |
 | **verification.py** | Records verifications of parsing sessions; quality measured by verification count |
 | **pattern_learning.py** | Captures unmatched text with amendment keywords for future pattern development |
+| **section_resolver.py** | Maps `SectionReference` to `USCodeSection` in the database with normalization |
+| **text_extractor.py** | Extracts "the following" content for ADD/INSERT/SUBSTITUTE patterns |
+| **diff_generator.py** | Generates validated `DiffResult` objects and persists `LawChange` records |
+| **law_change_service.py** | Orchestrates the full pipeline: fetch → parse → resolve → extract → diff → persist |
+| **release_point_validator.py** | Validates DB state against OLRC release points; cross-references OLRC notes |
 
 ### Data Flow
+
+**Parsing stage** (existing):
 
 1. **Input**: Raw Public Law text
 2. **AmendmentParser** applies patterns → list of `ParsedAmendment`
@@ -261,6 +276,22 @@ These are flagged with `needs_review=True` for human verification.
 4. **GraduationManager** checks thresholds → escalation decision
 5. **Output**: `IngestionReport` with coverage stats, confidence scores, approval status
 6. **VerificationManager** records human/automated verifications → quality signal
+
+**Diff generation stage** (Tasks 1.12-1.13):
+
+1. **LawChangeService** orchestrates the full pipeline
+2. **SectionResolver** maps section references to database records (with caching)
+3. **TextExtractor** extracts "the following" content for ADD/INSERT patterns
+4. **DiffGenerator** produces validated diffs per change type:
+    - STRIKE_INSERT: old_text + new_text from parser; validated against section
+    - STRIKE: old_text from parser
+    - ADD: new_text from TextExtractor
+    - REPEAL: old_text = entire section content
+    - SUBSTITUTE: old_text from section, new_text from TextExtractor
+    - REDESIGNATE/TRANSFER: descriptive record
+5. **DiffGenerator.persist_law_changes()** creates `LawChange` records
+6. **ReleasePointValidator** validates results against OLRC release point snapshots
+7. **AmendmentCrossReferencer** computes precision/recall against OLRC amendment notes
 
 ## Usage
 
@@ -301,6 +332,22 @@ Currently supported (26 patterns):
 - [House Practice: Amendments](https://www.govinfo.gov/content/pkg/GPO-HPRACTICE-112/html/GPO-HPRACTICE-112-3.htm) — Official House drafting guidelines
 - [Deschler's Precedents: Motions to Strike](https://govinfo.gov/content/pkg/GPO-HPREC-DESCHLERS-V9/html/GPO-HPREC-DESCHLERS-V9-1-4-3.htm)
 - [OLRC USLM Schema](https://uscode.house.gov/download/resources/USLM-User-Guide.pdf) — XML markup for US Code
+
+## CLI Commands
+
+```bash
+# Process a single law (generate LawChange records)
+uv run python -m pipeline.cli process-law 113 22 --default-title 17 --verbose
+
+# Dry run (generate diffs without persisting)
+uv run python -m pipeline.cli process-law 113 22 --dry-run --verbose
+
+# Validate against a release point
+uv run python -m pipeline.cli validate-release-point 113-22 --titles 17 18
+
+# Cross-reference a law against OLRC notes
+uv run python -m pipeline.cli cross-ref-law 113 22
+```
 
 ## Future Enhancements
 

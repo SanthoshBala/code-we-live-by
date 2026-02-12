@@ -15,15 +15,17 @@ from pipeline.legal_parser.patterns import PatternType
 logger = logging.getLogger(__name__)
 
 # Patterns that typically need text extraction from following content
-NEEDS_EXTRACTION = frozenset({
-    PatternType.ADD_AT_END,
-    PatternType.INSERT_AFTER,
-    PatternType.INSERT_BEFORE,
-    PatternType.SUBSTITUTE,
-    PatternType.ADD_SECTION,
-    PatternType.ADD_SUBSECTION,
-    PatternType.INSERT_NEW_TEXT,
-})
+NEEDS_EXTRACTION = frozenset(
+    {
+        PatternType.ADD_AT_END,
+        PatternType.INSERT_AFTER,
+        PatternType.INSERT_BEFORE,
+        PatternType.SUBSTITUTE,
+        PatternType.ADD_SECTION,
+        PatternType.ADD_SUBSECTION,
+        PatternType.INSERT_NEW_TEXT,
+    }
+)
 
 # Common delimiters that signal the start of quoted/inserted text
 # In law text, new content is typically introduced with a colon followed by
@@ -164,9 +166,7 @@ class TextExtractor:
         # Try to find quoted content
         quote_match = re.match(r'\s*["""\u201c]', remaining)
         if quote_match:
-            return self._extract_between_quotes(
-                text_start + quote_match.end() - 1
-            )
+            return self._extract_between_quotes(text_start + quote_match.end() - 1)
 
         # Otherwise extract until next section marker or double newline
         end_match = re.search(r"\n\s*(?:SEC\.\s+\d+|\([a-z]\)\s+)", remaining)
@@ -204,7 +204,7 @@ class TextExtractor:
 
         # Track quote depth
         open_char = remaining[0] if remaining else ""
-        close_chars = {'"': '"', "\u201c": "\u201d", '"': '"'}
+        close_chars = {'"': '"', "\u201c": "\u201d"}
         close_char = close_chars.get(open_char, '"')
 
         depth = 0
@@ -233,7 +233,7 @@ class TextExtractor:
         if close_match:
             text = remaining[1 : 1 + close_match.end()]
             return ExtractedText(
-                text=text.strip().rstrip('""\u201d'),
+                text=text.strip().rstrip('"').rstrip("\u201d"),
                 start_pos=quote_start + 1,
                 end_pos=quote_start + 1 + close_match.end(),
                 confidence=0.7,

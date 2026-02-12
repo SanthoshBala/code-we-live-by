@@ -20,7 +20,6 @@ from app.models.enums import (
     VoteType,
 )
 from app.models.history import LineHistory, SectionHistory
-from app.models.release_point import OLRCReleasePoint
 from app.models.legislator import (
     IndividualVote,
     Legislator,
@@ -29,6 +28,7 @@ from app.models.legislator import (
     Vote,
 )
 from app.models.public_law import Bill, LawChange, ProposedChange, PublicLaw
+from app.models.release_point import OLRCReleasePoint
 from app.models.supporting import (
     Amendment,
     BillCommitteeAssignment,

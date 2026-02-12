@@ -42,7 +42,7 @@ class OLRCReleasePoint(Base, TimestampMixin):
     congress: Mapped[int] = mapped_column(Integer, nullable=False)
     law_identifier: Mapped[str] = mapped_column(String(30), nullable=False)
     publication_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    titles_updated: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    titles_updated: Mapped[list[int] | None] = mapped_column(JSONB, nullable=True)
     parent_release_point_id: Mapped[int | None] = mapped_column(
         ForeignKey("olrc_release_point.release_point_id", ondelete="SET NULL"),
         nullable=True,
@@ -59,7 +59,9 @@ class OLRCReleasePoint(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_release_point_congress", "congress"),
         Index("idx_release_point_parent", "parent_release_point_id"),
-        UniqueConstraint("congress", "law_identifier", name="uq_release_point_congress_law"),
+        UniqueConstraint(
+            "congress", "law_identifier", name="uq_release_point_congress_law"
+        ),
     )
 
     def __repr__(self) -> str:

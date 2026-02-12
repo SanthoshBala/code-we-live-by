@@ -19,7 +19,7 @@ from app.models import (
     USCodeSection,
 )
 from app.models.release_point import OLRCReleasePoint
-from pipeline.olrc.downloader import OLRCDownloader, PHASE_1_TITLES
+from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
 from pipeline.olrc.ingestion import USCodeIngestionService
 from pipeline.olrc.release_point import parse_release_point_identifier
 
@@ -164,9 +164,7 @@ class InitialCommitService:
 
         for title_num in titles:
             result = await self.session.execute(
-                select(USCodeSection).where(
-                    USCodeSection.title_number == title_num
-                )
+                select(USCodeSection).where(USCodeSection.title_number == title_num)
             )
             sections = result.scalars().all()
 

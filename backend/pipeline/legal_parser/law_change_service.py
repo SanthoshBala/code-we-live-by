@@ -186,8 +186,8 @@ class LawChangeService:
                     full_resolutions.append(resolutions[resolution_idx])
                     resolution_idx += 1
                 else:
-                    from pipeline.legal_parser.section_resolver import ResolutionResult
                     from pipeline.legal_parser.amendment_parser import SectionReference
+                    from pipeline.legal_parser.section_resolver import ResolutionResult
 
                     full_resolutions.append(
                         ResolutionResult(
@@ -264,11 +264,8 @@ class LawChangeService:
             await self.session.commit()
             return result
 
-    async def _update_law_stats(
-        self, law: PublicLaw, report: DiffReport
-    ) -> None:
+    async def _update_law_stats(self, law: PublicLaw, report: DiffReport) -> None:
         """Update PublicLaw aggregate statistics from diff report."""
-        sections_affected = set()
         sections_added = 0
         sections_modified = 0
         sections_repealed = 0

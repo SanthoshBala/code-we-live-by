@@ -6,7 +6,6 @@ validated LawChange records, implementing the core of the version control model.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -103,19 +102,17 @@ class DiffGenerator:
         report = DiffReport(total_amendments=len(amendments))
         diffs: list[DiffResult] = []
 
-        for i, (amendment, resolution) in enumerate(zip(amendments, resolutions)):
+        for i, (amendment, resolution) in enumerate(
+            zip(amendments, resolutions, strict=False)
+        ):
             extraction = extractions.get(i)
 
             if not resolution.resolved:
                 report.unresolved += 1
-                report.errors.append(
-                    f"Amendment {i}: {resolution.error}"
-                )
+                report.errors.append(f"Amendment {i}: {resolution.error}")
                 continue
 
-            diff = self._generate_single_diff(
-                amendment, resolution, extraction, law
-            )
+            diff = self._generate_single_diff(amendment, resolution, extraction, law)
 
             if diff:
                 # Validate against current section content
@@ -139,7 +136,7 @@ class DiffGenerator:
         amendment: ParsedAmendment,
         resolution: ResolutionResult,
         extraction: ExtractedText | None,
-        law: PublicLaw,
+        _law: PublicLaw,
     ) -> DiffResult | None:
         """Generate a diff for a single amendment.
 
@@ -150,9 +147,7 @@ class DiffGenerator:
         old_text = amendment.old_text
         new_text = amendment.new_text
         subsection_path = (
-            amendment.section_ref.subsection_path
-            if amendment.section_ref
-            else None
+            amendment.section_ref.subsection_path if amendment.section_ref else None
         )
 
         # Dispatch based on pattern type
@@ -255,9 +250,7 @@ class DiffGenerator:
                     diff.validated = True
                     diff.validation_notes = "old_text found (case-insensitive)"
                 else:
-                    diff.validation_notes = (
-                        "old_text NOT found in section content"
-                    )
+                    diff.validation_notes = "old_text NOT found in section content"
         elif diff.change_type in (ChangeType.ADD, ChangeType.REPEAL):
             # ADD doesn't need old_text validation
             # REPEAL is validated by section existence
