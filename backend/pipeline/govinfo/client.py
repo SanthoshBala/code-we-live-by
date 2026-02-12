@@ -3,9 +3,9 @@
 import asyncio
 import contextlib
 import logging
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -39,83 +39,6 @@ COLLECTION_USCODE = "USCODE"  # US Code
 # Source: https://github.com/usgpo/api (see collections endpoint docs)
 # Maximum allowed is 1000. Using 100 for reasonable response sizes.
 DEFAULT_PAGE_SIZE = 100
-
-
-@dataclass
-class PLAWAmendmentMetadata:
-    """Metadata about amendments in a Public Law extracted from XML structure.
-
-    This provides an estimated count of amendments based on the law's structure,
-    useful for validating parser output.
-    """
-
-    # Section counts from XML structure
-    total_sections: int = 0
-    amendment_sections: int = 0  # Sections that appear to amend existing law
-
-    # Keywords found that indicate amendments
-    amendment_keyword_count: int = 0
-    titles_amended: list[int] = field(default_factory=list)
-
-    # Confidence in the estimate (lower if structure is unusual)
-    confidence: float = 1.0
-    notes: str | None = None
-
-    @classmethod
-    def from_xml(cls, xml_content: str) -> "PLAWAmendmentMetadata":
-        """Extract amendment metadata from PLAW XML content.
-
-        This is a heuristic-based extraction that looks for:
-        - Section elements in the XML
-        - Amendment keywords in section headings
-        - References to USC titles being amended
-        """
-        metadata = cls()
-
-        # Count sections
-        section_pattern = r"<section[^>]*>"
-        sections = re.findall(section_pattern, xml_content, re.IGNORECASE)
-        metadata.total_sections = len(sections)
-
-        # Count amendment-related keywords in the text
-        # Use centralized keywords from legal_parser module
-        from pipeline.legal_parser import AMENDMENT_KEYWORDS
-
-        for keyword in AMENDMENT_KEYWORDS:
-            pattern = rf"\b{re.escape(keyword)}\b"
-            matches = re.findall(pattern, xml_content, re.IGNORECASE)
-            metadata.amendment_keyword_count += len(matches)
-
-        # Find USC titles being amended
-        # Pattern: "title X, United States Code" or "title X of the United States Code"
-        title_pattern = (
-            r"title\s+(\d+)(?:\s+of)?\s*,?\s*(?:the\s+)?United\s+States\s+Code"
-        )
-        title_matches = re.findall(title_pattern, xml_content, re.IGNORECASE)
-        metadata.titles_amended = sorted({int(t) for t in title_matches})
-
-        # Estimate amendment sections
-        # Look for sections with amendment-related headings
-        section_with_amend = (
-            r"<section[^>]*>.*?(?:amend|striking|inserting).*?</section>"
-        )
-        amendment_sections = re.findall(
-            section_with_amend, xml_content, re.IGNORECASE | re.DOTALL
-        )
-        # This is a rough estimate; the actual structure varies
-        metadata.amendment_sections = min(
-            len(amendment_sections), metadata.amendment_keyword_count // 2
-        )
-
-        # Adjust confidence based on structure
-        if metadata.total_sections == 0:
-            metadata.confidence = 0.3
-            metadata.notes = "No section elements found in XML"
-        elif metadata.amendment_keyword_count == 0:
-            metadata.confidence = 0.5
-            metadata.notes = "No amendment keywords found"
-
-        return metadata
 
 
 @dataclass
@@ -273,6 +196,7 @@ class GovInfoClient:
         self,
         api_key: str | None = None,
         timeout: float = 30.0,
+        cache_dir: Path | str | None = "data/govinfo",
     ):
         """Initialize the GovInfo client.
 
@@ -280,6 +204,8 @@ class GovInfoClient:
             api_key: GovInfo API key. If not provided, reads from app settings
                 (which loads from GOVINFO_API_KEY environment variable or .env).
             timeout: HTTP request timeout in seconds.
+            cache_dir: Directory for caching downloaded law texts. Set to None
+                to disable caching. Defaults to "data/govinfo".
 
         Raises:
             ValueError: If no API key is provided or found in settings.
@@ -301,6 +227,7 @@ class GovInfoClient:
         self.base_url = GOVINFO_BASE_URL
         self.max_retries = 3
         self.retry_delay = 2.0  # seconds
+        self.cache_dir = Path(cache_dir) if cache_dir else None
 
     async def _request_with_retry(
         self,
@@ -537,24 +464,47 @@ class GovInfoClient:
                 return None
             raise
 
+    def _cache_path(
+        self, congress: int, law_number: int, law_type: str, fmt: str
+    ) -> Path | None:
+        """Build cache file path for a law text, or None if caching disabled."""
+        if not self.cache_dir:
+            return None
+        package_id = self.build_package_id(congress, law_number, law_type)
+        return self.cache_dir / "plaw" / f"{package_id}.{fmt}"
+
     async def get_law_text(
         self,
         congress: int,
         law_number: int,
         law_type: str = "public",
-        format: str = "htm",
+        format: str = "xml",
+        force: bool = False,
     ) -> str | None:
         """Fetch the text content of a Public Law.
+
+        Downloaded texts are cached locally to avoid repeated API calls.
+        Cached files are stored in {cache_dir}/plaw/{package_id}.{format}.
 
         Args:
             congress: Congress number.
             law_number: Law number.
             law_type: "public" or "private".
-            format: "htm" for HTML text, "xml" for structured XML.
+            format: "xml" for structured XML (default), "htm" for HTML text.
+            force: If True, re-download even if cached file exists.
 
         Returns:
             Law text as string, or None if not available.
         """
+        # Check cache first
+        cache_file = self._cache_path(congress, law_number, law_type, format)
+        if cache_file and cache_file.exists() and not force:
+            logger.info(
+                f"Using cached {format.upper()} for PL {congress}-{law_number}: "
+                f"{cache_file}"
+            )
+            return cache_file.read_text()
+
         detail = await self.get_public_law(congress, law_number, law_type)
         if not detail:
             return None
@@ -571,44 +521,15 @@ class GovInfoClient:
                 response = await self._request_with_retry(
                     client, "GET", url, params=params
                 )
-                return response.text
+                text = response.text
+
+                # Write to cache
+                if cache_file:
+                    cache_file.parent.mkdir(parents=True, exist_ok=True)
+                    cache_file.write_text(text)
+                    logger.info(f"Cached {format.upper()} to {cache_file}")
+
+                return text
             except httpx.HTTPStatusError as e:
                 logger.error(f"Failed to download law text: {e}")
                 return None
-
-    async def get_law_xml(
-        self,
-        congress: int,
-        law_number: int,
-        law_type: str = "public",
-    ) -> str | None:
-        """Fetch the XML content of a Public Law.
-
-        Convenience method that calls get_law_text with format="xml".
-        """
-        return await self.get_law_text(congress, law_number, law_type, format="xml")
-
-    async def get_amendment_metadata(
-        self,
-        congress: int,
-        law_number: int,
-        law_type: str = "public",
-    ) -> PLAWAmendmentMetadata | None:
-        """Extract amendment metadata from a Public Law's XML.
-
-        This provides estimates of amendment counts that can be used
-        to validate parser output.
-
-        Args:
-            congress: Congress number.
-            law_number: Law number.
-            law_type: "public" or "private".
-
-        Returns:
-            PLAWAmendmentMetadata or None if XML not available.
-        """
-        xml_content = await self.get_law_xml(congress, law_number, law_type)
-        if not xml_content:
-            return None
-
-        return PLAWAmendmentMetadata.from_xml(xml_content)
