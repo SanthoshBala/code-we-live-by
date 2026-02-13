@@ -1321,12 +1321,12 @@ async def parse_law_command(
                     old_preview = a.old_text[:120]
                     if len(a.old_text) > 120:
                         old_preview += "..."
-                    print(f'      Old text:   "{old_preview}"')
+                    print(f"      Old text:   {old_preview}")
                 if a.new_text:
                     new_preview = a.new_text[:120]
                     if len(a.new_text) > 120:
                         new_preview += "..."
-                    print(f'      New text:   "{new_preview}"')
+                    print(f"      New text:   {new_preview}")
                 if not a.old_text and not a.new_text:
                     # Show a snippet of the full match for context
                     snippet = a.full_match[:140]
