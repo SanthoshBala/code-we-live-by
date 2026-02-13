@@ -229,13 +229,20 @@ class XMLAmendmentParser:
         return _parse_section_from_text(content_text, self.default_title)
 
     def _extract_quoted_texts(self, section: ET.Element) -> list[str]:
-        """Collect text from all ``<quotedText>`` and ``<quotedContent>`` elements."""
+        """Collect text from all ``<quotedText>`` and ``<quotedContent>`` elements.
+
+        Strips leading/trailing typographic quote characters that appear as
+        formatting artifacts inside the XML (the tags themselves already
+        mark the semantic boundary of the quoted content).
+        """
         texts: list[str] = []
         for tag_name in ("quotedText", "quotedContent"):
             for elem in section.iter(_tag(tag_name)):
                 text = _element_text(elem)
                 if text:
-                    texts.append(text)
+                    text = text.strip('"\u201c\u201d\u2018\u2019\u0060\u00b4')
+                    if text:
+                        texts.append(text)
         return texts
 
     def _assign_old_new(
