@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import type { ParsedAmendment } from '@/lib/types';
 import AffectedSectionsTree from './AffectedSectionsTree';
+import SectionBreadcrumb from './SectionBreadcrumb';
 
 interface LawDiffViewerProps {
   amendments: ParsedAmendment[];
@@ -47,6 +48,15 @@ function sectionGroupKey(a: ParsedAmendment): string {
     return `${a.section_ref.title} U.S.C. § ${a.section_ref.section}`;
   }
   return `§ ${a.section_ref.section}`;
+}
+
+/** Parse a section group key like "50 U.S.C. § 1881a" into title + section. */
+function parseSectionKey(
+  key: string
+): { title: number; section: string } | null {
+  const m = key.match(/^(\d+)\s+U\.S\.C\.\s+§\s+(.+)$/);
+  if (!m) return null;
+  return { title: Number(m[1]), section: m[2] };
 }
 
 /** Groups amendments by section (ignoring subsection path). */
@@ -128,9 +138,24 @@ export default function LawDiffViewer({
                 if (el) sectionRefs.current.set(sectionKey, el);
               }}
             >
-              <h3 className="mb-3 text-sm font-semibold text-gray-900">
-                {sectionKey}
-              </h3>
+              <div className="mb-3">
+                {(() => {
+                  const parsed = parseSectionKey(sectionKey);
+                  if (parsed) {
+                    return (
+                      <SectionBreadcrumb
+                        titleNumber={parsed.title}
+                        sectionNumber={parsed.section}
+                      />
+                    );
+                  }
+                  return (
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {sectionKey}
+                    </h3>
+                  );
+                })()}
+              </div>
               <div className="space-y-3">
                 {sectionAmendments.map((a, i) => (
                   <div
