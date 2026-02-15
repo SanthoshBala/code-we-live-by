@@ -40,13 +40,22 @@ function ConfidenceBadge({ score }: { score: number }) {
   return <span className={`text-xs ${color}`}>{pct}%</span>;
 }
 
-/** Groups amendments by their section_ref display string. */
+/** Build a section-level key (no subsection path) for grouping. */
+function sectionGroupKey(a: ParsedAmendment): string {
+  if (!a.section_ref) return 'No section reference';
+  if (a.section_ref.title != null) {
+    return `${a.section_ref.title} U.S.C. § ${a.section_ref.section}`;
+  }
+  return `§ ${a.section_ref.section}`;
+}
+
+/** Groups amendments by section (ignoring subsection path). */
 function groupAmendmentsBySection(
   amendments: ParsedAmendment[]
 ): Map<string, ParsedAmendment[]> {
   const groups = new Map<string, ParsedAmendment[]>();
   for (const a of amendments) {
-    const key = a.section_ref?.display || 'No section reference';
+    const key = sectionGroupKey(a);
     const list = groups.get(key);
     if (list) {
       list.push(a);
@@ -90,7 +99,7 @@ export default function LawDiffViewer({
   return (
     <div className="flex gap-6">
       {/* Left sidebar — affected sections tree */}
-      <div className="hidden w-56 shrink-0 lg:block">
+      <div className="hidden w-72 shrink-0 lg:block">
         <div className="sticky top-4">
           <h2 className="mb-2 px-3 text-sm font-semibold text-gray-900">
             Affected Sections
