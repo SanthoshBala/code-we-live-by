@@ -3,6 +3,8 @@
 from pipeline.legal_parser.amendment_parser import (
     AmendmentParser,
     ParsedAmendment,
+    PositionQualifier,
+    PositionType,
     SectionReference,
 )
 from pipeline.legal_parser.patterns import AMENDMENT_PATTERNS, PatternType
@@ -18,6 +20,8 @@ __all__ = [
     "AmendmentParser",
     "XMLAmendmentParser",
     "ParsedAmendment",
+    "PositionQualifier",
+    "PositionType",
     "SectionReference",
     "AMENDMENT_PATTERNS",
     "PatternType",

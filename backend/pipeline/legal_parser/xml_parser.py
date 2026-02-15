@@ -10,7 +10,12 @@ import re
 import xml.etree.ElementTree as ET
 
 from app.models.enums import ChangeType
-from pipeline.legal_parser.amendment_parser import ParsedAmendment, SectionReference
+from pipeline.legal_parser.amendment_parser import (
+    ParsedAmendment,
+    PositionQualifier,
+    PositionType,
+    SectionReference,
+)
 from pipeline.legal_parser.patterns import PatternType
 
 logger = logging.getLogger(__name__)
@@ -289,6 +294,11 @@ class XMLAmendmentParser:
         # --- Quoted text ---
         quoted_texts, old_text, new_text = self._extract_old_new(leaf)
 
+        # --- Position qualifier ---
+        position_qualifier = self._extract_position_qualifier(
+            leaf, quoted_texts, old_text, new_text
+        )
+
         # --- Position in source XML (byte-level approximation) ---
         start_pos, end_pos = self._find_section_positions(leaf, xml_text)
 
@@ -320,6 +330,7 @@ class XMLAmendmentParser:
             end_pos=end_pos,
             needs_review=needs_review,
             context=content_text[:200],
+            position_qualifier=position_qualifier,
             metadata={"source": "xml", "action_types": sorted(action_types)},
         )
 
@@ -495,6 +506,100 @@ class XMLAmendmentParser:
                 old_text = pairs[0][1]
 
         return all_texts, old_text, new_text
+
+    def _extract_position_qualifier(
+        self,
+        leaf: ET.Element,
+        all_quoted_texts: list[str],
+        old_text: str | None,
+        new_text: str | None,
+    ) -> PositionQualifier | None:
+        """Extract positional context from instruction prose.
+
+        Detects patterns like "at the end", "after <quotedText>",
+        "before <quotedText>", "each place", and unquoted targets
+        like "striking the period at the end".
+
+        Returns a PositionQualifier or None if no positional context found.
+        """
+        prose = _instruction_text(leaf)
+        prose_lower = prose.lower()
+
+        # 1. "each place" → EACH_PLACE
+        if re.search(r"each place", prose_lower):
+            return PositionQualifier(type=PositionType.EACH_PLACE)
+
+        # 2/3. "after <quotedText>" or "before <quotedText>" → AFTER/BEFORE
+        #   Walk the element tree to find "after"/"before" keywords preceding
+        #   a <quotedText> whose content differs from old_text/new_text.
+        anchor = self._find_anchor_text(leaf, all_quoted_texts, old_text, new_text)
+        if anchor is not None:
+            return anchor
+
+        # 4. Unquoted target: "striking the period at the end" (no quotedText for old)
+        if old_text is None:
+            m = re.search(r"striking\s+(the\s+\w+(?:\s+at the end)?)", prose_lower)
+            if m:
+                return PositionQualifier(
+                    type=PositionType.UNQUOTED_TARGET,
+                    target_text=m.group(1),
+                )
+
+        # 5. "at the end" (catch-all after ruling out above)
+        if "at the end" in prose_lower:
+            return PositionQualifier(type=PositionType.AT_END)
+
+        return None
+
+    @staticmethod
+    def _find_anchor_text(
+        leaf: ET.Element,
+        all_quoted_texts: list[str],  # noqa: ARG004 - reserved for future heuristics
+        old_text: str | None,
+        new_text: str | None,
+    ) -> PositionQualifier | None:
+        """Find BEFORE/AFTER anchor by walking the element tree.
+
+        Looks for "after" or "before" keywords in text preceding a
+        <quotedText> element whose content is neither old_text nor new_text
+        (i.e., it's an anchor reference, not the amendment payload).
+        """
+        action_tag = _tag("amendingAction")
+        quoted_tag = _tag("quotedText")
+        known_texts = {t for t in (old_text, new_text) if t}
+
+        # Collect text fragments and quoted elements in document order.
+        # We look for the pattern: ...keyword... <quotedText>anchor</quotedText>
+        prev_text = ""
+        for elem in leaf.iter():
+            if elem.tag == quoted_tag:
+                text = _quoted_element_text(elem)
+                if text and text not in known_texts:
+                    # Strip quote characters before checking for keywords
+                    cleaned = prev_text.rstrip(_QUOTE_CHARS + " \t\n")
+                    cleaned_lower = cleaned.lower()
+                    if re.search(r"\bafter$", cleaned_lower):
+                        return PositionQualifier(
+                            type=PositionType.AFTER,
+                            anchor_text=text,
+                        )
+                    if re.search(r"\bbefore$", cleaned_lower):
+                        return PositionQualifier(
+                            type=PositionType.BEFORE,
+                            anchor_text=text,
+                        )
+                # Reset accumulated text after any quoted element
+                prev_text = elem.tail or ""
+            elif elem.tag == action_tag:
+                # Action elements contribute their text + tail
+                prev_text += (elem.text or "") + " " + (elem.tail or "")
+            else:
+                if elem.text and elem.tag != leaf.tag:
+                    prev_text += elem.text
+                if elem.tail:
+                    prev_text += elem.tail
+
+        return None
 
     def _find_section_positions(
         self, section: ET.Element, xml_text: str

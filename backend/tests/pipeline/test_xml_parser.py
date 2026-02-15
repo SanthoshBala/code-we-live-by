@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.models.enums import ChangeType
+from pipeline.legal_parser.amendment_parser import PositionType
 from pipeline.legal_parser.parsing_modes import _is_uslm_xml
 from pipeline.legal_parser.patterns import PatternType
 from pipeline.legal_parser.xml_parser import (
@@ -448,3 +449,255 @@ class TestEdgeCases:
         assert result[0].section_ref is not None
         assert result[0].section_ref.title == 42
         assert result[0].section_ref.section == "101"
+
+
+# ---------------------------------------------------------------------------
+# Position qualifier tests — unit tests with minimal XML snippets
+# ---------------------------------------------------------------------------
+
+
+class TestPositionQualifierUnit:
+    """Unit tests for position qualifier extraction using minimal XML."""
+
+    def test_at_end_strike(self) -> None:
+        """'striking "X" at the end' → AT_END."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            '"<quotedText>and</quotedText>" at the end.'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].old_text == "and"
+        pq = result[0].position_qualifier
+        assert pq is not None
+        assert pq.type == PositionType.AT_END
+
+    def test_at_end_add(self) -> None:
+        """'adding at the end the following' → AT_END."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="add">adding</amendingAction> '
+            "at the end the following:"
+            '<quotedContent>"(5) new paragraph.</quotedContent>.'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].new_text is not None
+        pq = result[0].position_qualifier
+        assert pq is not None
+        assert pq.type == PositionType.AT_END
+
+    def test_after_anchor(self) -> None:
+        """'inserting "X" after "Y"' → AFTER with anchor_text."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>new words</quotedText>" '
+            'after "<quotedText>prohibit</quotedText>".'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].new_text == "new words"
+        pq = result[0].position_qualifier
+        assert pq is not None
+        assert pq.type == PositionType.AFTER
+        assert pq.anchor_text == "prohibit"
+
+    def test_before_anchor(self) -> None:
+        """'inserting "X" before "Y"' → BEFORE with anchor_text."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>new clause,</quotedText>" '
+            'before "<quotedText>section 1951</quotedText>".'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].new_text == "new clause,"
+        pq = result[0].position_qualifier
+        assert pq is not None
+        assert pq.type == PositionType.BEFORE
+        assert pq.anchor_text == "section 1951"
+
+    def test_each_place(self) -> None:
+        """'striking "X" each place such term appears' → EACH_PLACE."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            '"<quotedText>old term</quotedText>" each place such term '
+            "appears and "
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>new term</quotedText>".'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].old_text == "old term"
+        assert result[0].new_text == "new term"
+        pq = result[0].position_qualifier
+        assert pq is not None
+        assert pq.type == PositionType.EACH_PLACE
+
+    def test_unquoted_target(self) -> None:
+        """'striking the period at the end' (no quotedText) → UNQUOTED_TARGET."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            "the period at the end and "
+            '<amendingAction type="insert">inserting</amendingAction> '
+            "a semicolon."
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].old_text is None
+        pq = result[0].position_qualifier
+        assert pq is not None
+        assert pq.type == PositionType.UNQUOTED_TARGET
+        assert "the period" in pq.target_text
+
+    def test_no_qualifier_for_simple_strike_insert(self) -> None:
+        """Simple strike-and-insert with no positional context → None."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            '"<quotedText>old phrase</quotedText>" and '
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>new phrase</quotedText>".'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].position_qualifier is None
+
+
+# ---------------------------------------------------------------------------
+# Position qualifier tests — integration with cached PL XML
+# ---------------------------------------------------------------------------
+
+
+@_skip_no_114_153
+class TestPositionQualifierPL114_153:
+    """Integration tests for position qualifiers using PL 114-153."""
+
+    def _parse(self) -> list:
+        parser = XMLAmendmentParser(default_title=18)
+        return parser.parse(_load_pl114_153())
+
+    def test_at_end_qualifier_strike_and(self) -> None:
+        """§ 2(b)(1)(B): striking 'and' at the end → AT_END."""
+        amendments = self._parse()
+        # Find the amendment that strikes "and"
+        matches = [
+            a
+            for a in amendments
+            if a.old_text == "and" and a.position_qualifier is not None
+        ]
+        assert len(matches) >= 1
+        pq = matches[0].position_qualifier
+        assert pq.type == PositionType.AT_END
+
+    def test_unquoted_target_period(self) -> None:
+        """§ 2(b)(2): striking the period at the end → UNQUOTED_TARGET."""
+        amendments = self._parse()
+        matches = [
+            a
+            for a in amendments
+            if a.position_qualifier is not None
+            and a.position_qualifier.type == PositionType.UNQUOTED_TARGET
+        ]
+        assert len(matches) >= 1
+        assert "the period" in matches[0].position_qualifier.target_text
+
+    def test_add_at_end_qualifier(self) -> None:
+        """§ 2(b)(3): adding at the end the following → AT_END."""
+        amendments = self._parse()
+        matches = [
+            a
+            for a in amendments
+            if a.position_qualifier is not None
+            and a.position_qualifier.type == PositionType.AT_END
+            and a.new_text is not None
+        ]
+        assert len(matches) >= 1
+
+    def test_after_anchor_prohibit(self) -> None:
+        """§ 2(c): inserting ... after 'prohibit' → AFTER."""
+        amendments = self._parse()
+        matches = [
+            a
+            for a in amendments
+            if a.position_qualifier is not None
+            and a.position_qualifier.type == PositionType.AFTER
+            and a.position_qualifier.anchor_text == "prohibit"
+        ]
+        assert len(matches) == 1
+        assert "private right of action" in matches[0].new_text
+
+    def test_before_anchor_section_1951(self) -> None:
+        """§ 3(b): inserting ... before 'section 1951' → BEFORE."""
+        amendments = self._parse()
+        matches = [
+            a
+            for a in amendments
+            if a.position_qualifier is not None
+            and a.position_qualifier.type == PositionType.BEFORE
+            and a.position_qualifier.anchor_text is not None
+            and "section 1951" in a.position_qualifier.anchor_text
+        ]
+        assert len(matches) == 1
+        assert "1831" in matches[0].new_text
+
+    def test_no_qualifier_for_simple_strike_insert(self) -> None:
+        """PL 113-22 has a simple strike/insert with no positional context."""
+        parser = XMLAmendmentParser(default_title=26)
+        amendments = parser.parse(_load_pl113_22())
+        assert len(amendments) == 1
+        assert amendments[0].position_qualifier is None

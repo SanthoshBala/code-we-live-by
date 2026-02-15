@@ -1327,6 +1327,14 @@ async def parse_law_command(
                     if len(a.new_text) > 120:
                         new_preview += "..."
                     print(f"      New text:   {new_preview}")
+                if a.position_qualifier:
+                    pq = a.position_qualifier
+                    print(f"      Position:   {pq.type.value}", end="")
+                    if pq.anchor_text:
+                        print(f' (anchor: "{pq.anchor_text[:60]}")', end="")
+                    if pq.target_text:
+                        print(f' (target: "{pq.target_text}")', end="")
+                    print()
                 if not a.old_text and not a.new_text:
                     # Show a snippet of the full match for context
                     snippet = a.full_match[:140]
