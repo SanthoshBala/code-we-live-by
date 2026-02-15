@@ -108,10 +108,11 @@ class TestParsePL114_153:
     ``<subsection>`` and ``<paragraph>`` elements — not ``<section>``.
     """
 
-    def test_parse_finds_nine_amendments(self) -> None:
+    def test_parse_finds_amendments(self) -> None:
         parser = XMLAmendmentParser(default_title=18)
         amendments = parser.parse(_load_pl114_153())
-        assert len(amendments) == 9
+        # Multi-part instructions are decomposed into leaf amendments.
+        assert len(amendments) == 16
 
     def test_amendments_reference_title_18(self) -> None:
         parser = XMLAmendmentParser(default_title=18)
@@ -315,28 +316,46 @@ class TestEdgeCases:
         assert ref.section == "1836"
         assert ref.subsection_path == "(b)"
 
-    def test_no_subsection_for_multipart_amendment(self) -> None:
-        """Multi-part amendments ('is amended—(1)...') keep section-level ref."""
+    def test_multipart_decomposed_into_leaves(self) -> None:
+        """Multi-part amendment with structural <paragraph> children is decomposed."""
         xml = (
             '<?xml version="1.0"?>'
             '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
-            '<main><section role="instruction">'
-            "<num>1</num>"
-            "<content>"
+            '<main><subsection role="instruction">'
+            "<num>(b)</num>"
+            "<chapeau>"
             '<ref href="/us/usc/t18/s1839">Section 1839 of title 18</ref>, '
             '<amendingAction type="amend">is amended</amendingAction>'
-            "\u2014(1) in paragraph (3), by "
+            "\u2014</chapeau>"
+            "<paragraph><num>(1)</num>"
+            "<content>in paragraph (3), by "
             '<amendingAction type="delete">striking</amendingAction> '
-            '"<quotedText>old</quotedText>".'
-            "</content></section></main></pLaw>"
+            '"<quotedText>old</quotedText>" and '
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>new</quotedText>".'
+            "</content></paragraph>"
+            "<paragraph><num>(2)</num>"
+            "<content>by "
+            '<amendingAction type="add">adding</amendingAction> '
+            "at the end the following:"
+            '<quotedContent>"(5) new definition.</quotedContent>.'
+            "</content></paragraph>"
+            "</subsection></main></pLaw>"
         )
         parser = XMLAmendmentParser(default_title=18)
         result = parser.parse(xml)
-        assert len(result) == 1
-        ref = result[0].section_ref
-        assert ref is not None
-        assert ref.section == "1839"
-        assert ref.subsection_path is None
+        assert len(result) == 2
+        # First leaf: "in paragraph (3), by striking..."
+        assert result[0].section_ref is not None
+        assert result[0].section_ref.section == "1839"
+        assert result[0].section_ref.subsection_path == "(3)"
+        assert result[0].old_text == "old"
+        assert result[0].new_text == "new"
+        # Second leaf: "by adding..."
+        assert result[1].section_ref is not None
+        assert result[1].section_ref.section == "1839"
+        assert result[1].new_text is not None
+        assert result[1].new_text.startswith("(5)")
 
     def test_paragraph_role_instruction(self) -> None:
         """role=instruction on <paragraph> should be found."""

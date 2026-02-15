@@ -161,6 +161,59 @@ def _parse_section_from_text(
     )
 
 
+_ACTION_TAG = _tag("amendingAction")
+
+# Structural USLM elements that can contain sub-instructions.
+_STRUCTURAL_TAGS = frozenset(
+    _tag(n)
+    for n in ("paragraph", "subparagraph", "clause", "subclause", "item", "subitem")
+)
+
+
+def _has_amending_action(elem: ET.Element) -> bool:
+    """Return True if *elem* or any descendant contains an ``<amendingAction>``."""
+    return any(True for _ in elem.iter(_ACTION_TAG))
+
+
+def _find_leaf_instructions(
+    elem: ET.Element, ancestor_prose: str = ""
+) -> list[tuple[ET.Element, str]]:
+    """Decompose a multi-part instruction into its leaf amendment groups.
+
+    A "leaf" is the deepest structural element that contains
+    ``<amendingAction>`` tags without having structural children that also
+    contain ``<amendingAction>`` tags.
+
+    Returns ``(leaf_element, ancestor_prose)`` pairs.  *ancestor_prose*
+    accumulates ``<chapeau>`` / ``<num>`` text from parent structural
+    elements so the leaf can inherit subsection context like "in paragraph (3)".
+    """
+    # Accumulate this element's chapeau / heading text for context.
+    local_prose = ""
+    for child in elem:
+        local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+        if local in ("chapeau", "heading", "num"):
+            local_prose += _instruction_text(child) + " "
+
+    combined = ancestor_prose + local_prose
+
+    # Check for structural children that carry their own amending actions.
+    structural_kids = [
+        child
+        for child in elem
+        if child.tag in _STRUCTURAL_TAGS and _has_amending_action(child)
+    ]
+    if structural_kids:
+        leaves: list[tuple[ET.Element, str]] = []
+        for kid in structural_kids:
+            leaves.extend(_find_leaf_instructions(kid, combined))
+        return leaves
+
+    if _has_amending_action(elem):
+        return [(elem, combined)]
+    return []
+
+
 class XMLAmendmentParser:
     """Parse amendments from USLM XML using semantic tags.
 
@@ -190,41 +243,54 @@ class XMLAmendmentParser:
             if elem.get("role") != "instruction":
                 continue
 
-            amendment = self._parse_instruction(elem, xml_text)
-            if amendment is not None:
-                amendments.append(amendment)
+            # Extract the section reference from the top-level instruction
+            # (the <ref> tag lives here, not in the leaf sub-instructions).
+            parent_ref = self._extract_section_ref(elem)
+
+            # Decompose multi-part instructions into leaf amendment groups.
+            for leaf, ancestor_prose in _find_leaf_instructions(elem):
+                amendment = self._parse_leaf(leaf, xml_text, parent_ref, ancestor_prose)
+                if amendment is not None:
+                    amendments.append(amendment)
 
         return amendments
 
-    def _parse_instruction(
-        self, section: ET.Element, xml_text: str
+    def _parse_leaf(
+        self,
+        leaf: ET.Element,
+        xml_text: str,
+        parent_ref: SectionReference | None,
+        ancestor_prose: str = "",
     ) -> ParsedAmendment | None:
-        """Parse an element with ``role="instruction"`` into a ParsedAmendment."""
-        # Collect all text for full_match / context
-        content_text = _element_text(section)
+        """Parse a leaf instruction element into a ParsedAmendment.
 
-        # --- Section reference ---
-        section_ref = self._extract_section_ref(section)
+        The *parent_ref* carries the section reference extracted from the
+        top-level ``role="instruction"`` element.  *ancestor_prose* contains
+        accumulated text from intermediate structural elements (e.g.
+        "in paragraph (3)—") for refining the subsection path.
+        """
+        content_text = _element_text(leaf)
+
+        # --- Section reference (inherit from parent, refine locally) ---
+        section_ref = self._refine_section_ref(parent_ref, leaf, ancestor_prose)
 
         # --- Action types ---
         action_types: set[str] = set()
-        for action_elem in section.iter(_tag("amendingAction")):
+        for action_elem in leaf.iter(_ACTION_TAG):
             atype = action_elem.get("type")
             if atype:
                 action_types.add(atype)
 
         if not action_types:
-            # Not an amending instruction we can classify
             return None
 
         pattern_type, change_type = _classify_actions(action_types)
 
         # --- Quoted text ---
-        quoted_texts, old_text, new_text = self._extract_old_new(section)
+        quoted_texts, old_text, new_text = self._extract_old_new(leaf)
 
         # --- Position in source XML (byte-level approximation) ---
-        # Use the section's identifier or find its position in the raw XML
-        start_pos, end_pos = self._find_section_positions(section, xml_text)
+        start_pos, end_pos = self._find_section_positions(leaf, xml_text)
 
         # --- Confidence ---
         has_ref = section_ref is not None
@@ -239,7 +305,6 @@ class XMLAmendmentParser:
         # --- Needs review ---
         needs_review = self._needs_review(pattern_type, section_ref, old_text, new_text)
 
-        # Pattern name reflects XML source
         pattern_name = f"xml_{pattern_type.value}"
 
         return ParsedAmendment(
@@ -273,6 +338,53 @@ class XMLAmendmentParser:
         # Fallback: parse plain text content
         content_text = _element_text(section)
         return _parse_section_from_text(content_text, self.default_title)
+
+    def _refine_section_ref(
+        self,
+        parent_ref: SectionReference | None,
+        leaf: ET.Element,
+        ancestor_prose: str = "",
+    ) -> SectionReference | None:
+        """Refine *parent_ref* using ancestor and leaf text.
+
+        For a leaf like ``(A) in subparagraph (B), by striking...`` whose
+        ancestor prose is ``in paragraph (3)—``, this produces § 1839(3)(B).
+        """
+        if parent_ref is None:
+            return self._extract_section_ref(leaf)
+
+        if parent_ref.subsection_path is not None:
+            return parent_ref
+
+        # Combine ancestor context ("in paragraph (3)—") with the leaf's
+        # own prose ("in subparagraph (B), by striking...").
+        leaf_prose = _instruction_text(leaf)
+        combined = ancestor_prose + " " + leaf_prose
+
+        path_parts = self._extract_subsection_parts(combined)
+        if not path_parts:
+            return parent_ref
+
+        return SectionReference(
+            title=parent_ref.title,
+            section=parent_ref.section,
+            subsection_path="".join(path_parts),
+        )
+
+    @staticmethod
+    def _extract_subsection_parts(prose: str) -> list[str]:
+        """Extract subsection path parts like ``(3)(B)`` from instruction prose.
+
+        Looks for patterns like "in paragraph (3)", "in subparagraph (B)",
+        "subsection (b)(1)".  Returns path components in order found.
+        """
+        parts: list[str] = []
+        for m in re.finditer(
+            r"(?:subsection|paragraph|subparagraph)" r"((?:\s*\([a-zA-Z0-9]+\))+)",
+            prose,
+        ):
+            parts.append(m.group(1).strip())
+        return parts
 
     @staticmethod
     def _augment_subsection(
