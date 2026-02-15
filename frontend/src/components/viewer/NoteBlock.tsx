@@ -13,15 +13,20 @@ function NoteLine({
   lineNumber: number;
   line: CodeLine;
 }) {
-  const indent = '\u00a0'.repeat(line.indent_level * 4);
+  const indent = line.indent_level > 0 ? '\t'.repeat(line.indent_level) : '';
+  const isListItem = line.marker !== null;
   return (
-    <div className="flex font-mono text-sm leading-relaxed">
+    <div className="flex items-start font-mono text-sm leading-relaxed">
       <span className="w-10 shrink-0 select-none text-right text-gray-400">
         {lineNumber}
       </span>
       <span className="mx-2 select-none text-gray-400">|</span>
-      <span className="text-gray-800">
-        {indent}
+      {indent && (
+        <span className="shrink-0 whitespace-pre text-gray-800">{indent}</span>
+      )}
+      <span
+        className={`min-w-0 whitespace-pre-wrap text-gray-800${isListItem ? ' pl-[4ch] -indent-[4ch]' : ''}`}
+      >
         {line.is_header ? (
           <span className="font-semibold">{line.content}</span>
         ) : (
