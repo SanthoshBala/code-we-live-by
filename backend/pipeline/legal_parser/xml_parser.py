@@ -67,6 +67,49 @@ def _element_text(elem: ET.Element) -> str:
     return "".join(elem.itertext()).strip()
 
 
+# Characters to strip from quoted content boundaries.
+_QUOTE_CHARS = '"\u201c\u201d\u2018\u2019\u0060\u00b4'
+
+
+def _quoted_element_text(elem: ET.Element) -> str:
+    """Get text of a ``<quotedText>`` or ``<quotedContent>`` element.
+
+    Strips typographic quote characters from every text fragment, not just
+    the outer boundary.  USLM XML often has ``"(1) ...`` inside child
+    elements of ``<quotedContent>`` blocks.
+    """
+    parts: list[str] = []
+    for fragment in elem.itertext():
+        parts.append(fragment.lstrip(_QUOTE_CHARS))
+    return "".join(parts).strip().rstrip(_QUOTE_CHARS)
+
+
+# Tags whose text content should be excluded when extracting instruction prose.
+_QUOTED_TAGS = frozenset({_tag("quotedText"), _tag("quotedContent")})
+
+
+def _instruction_text(elem: ET.Element) -> str:
+    """Get instruction prose, excluding ``<quotedText>`` / ``<quotedContent>``.
+
+    This prevents subsection/paragraph mentions inside inserted or struck
+    text from being mistaken for the amendment's target reference.
+    """
+    parts: list[str] = []
+
+    def _walk(el: ET.Element) -> None:
+        if el.tag in _QUOTED_TAGS:
+            return
+        if el.text:
+            parts.append(el.text)
+        for child in el:
+            _walk(child)
+            if child.tail:
+                parts.append(child.tail)
+
+    _walk(elem)
+    return "".join(parts).strip()
+
+
 def _parse_ref_href(href: str) -> SectionReference | None:
     """Parse a USLM ``<ref href="...">`` into a SectionReference.
 
@@ -140,21 +183,23 @@ class XMLAmendmentParser:
 
         amendments: list[ParsedAmendment] = []
 
-        # Find all <section role="instruction"> elements (recursive)
-        for section_elem in root.iter(_tag("section")):
-            if section_elem.get("role") != "instruction":
+        # Find ALL elements with role="instruction" (section, subsection,
+        # paragraph, etc.).  USLM places the attribute on whichever
+        # structural element contains the amending instruction.
+        for elem in root.iter():
+            if elem.get("role") != "instruction":
                 continue
 
-            amendment = self._parse_section(section_elem, xml_text)
+            amendment = self._parse_instruction(elem, xml_text)
             if amendment is not None:
                 amendments.append(amendment)
 
         return amendments
 
-    def _parse_section(
+    def _parse_instruction(
         self, section: ET.Element, xml_text: str
     ) -> ParsedAmendment | None:
-        """Parse a single ``<section role="instruction">`` into a ParsedAmendment."""
+        """Parse an element with ``role="instruction"`` into a ParsedAmendment."""
         # Collect all text for full_match / context
         content_text = _element_text(section)
 
@@ -175,8 +220,7 @@ class XMLAmendmentParser:
         pattern_type, change_type = _classify_actions(action_types)
 
         # --- Quoted text ---
-        quoted_texts = self._extract_quoted_texts(section)
-        old_text, new_text = self._assign_old_new(quoted_texts, action_types)
+        quoted_texts, old_text, new_text = self._extract_old_new(section)
 
         # --- Position in source XML (byte-level approximation) ---
         # Use the section's identifier or find its position in the raw XML
@@ -222,76 +266,130 @@ class XMLAmendmentParser:
             if "/us/usc/" in href:
                 ref = _parse_ref_href(href)
                 if ref is not None:
+                    if ref.subsection_path is None:
+                        ref = self._augment_subsection(ref, section)
                     return ref
 
         # Fallback: parse plain text content
         content_text = _element_text(section)
         return _parse_section_from_text(content_text, self.default_title)
 
+    @staticmethod
+    def _augment_subsection(
+        ref: SectionReference, section: ET.Element
+    ) -> SectionReference:
+        """Try to fill in ``subsection_path`` from the instruction text.
+
+        Common legislative patterns:
+        - "is amended by striking subsection (b)"
+        - "in subsection (c)(1), by striking..."
+        - "in paragraph (3)(A), by striking..."
+
+        Searches only the instruction's own prose (excluding quoted content)
+        to avoid picking up subsection mentions from inserted text.
+
+        For multi-part amendments ("is amended— (1) ... (2) ..."), the
+        individual sub-targets are too granular — the section-level
+        reference is kept instead.
+        """
+        prose = _instruction_text(section)
+
+        # Find "is amended" anchor
+        amended_pos = prose.find("is amended")
+        if amended_pos < 0:
+            return ref
+
+        # Text after "is amended" — stop at a list marker like "—(1)" or
+        # em-dash + parenthetical which signals a multi-part amendment.
+        after = prose[amended_pos:]
+        list_marker = re.search(r"\u2014\s*\(\d+\)", after)
+        if list_marker:
+            after = after[: list_marker.start()]
+
+        m = re.search(
+            r"(?:subsection|paragraph|subparagraph)" r"((?:\s*\([a-zA-Z0-9]+\))+)",
+            after,
+        )
+        if m:
+            return SectionReference(
+                title=ref.title,
+                section=ref.section,
+                subsection_path=m.group(1).strip(),
+            )
+        return ref
+
     def _extract_quoted_texts(self, section: ET.Element) -> list[str]:
         """Collect text from all ``<quotedText>`` and ``<quotedContent>`` elements.
 
         Strips leading/trailing typographic quote characters that appear as
-        formatting artifacts inside the XML (the tags themselves already
-        mark the semantic boundary of the quoted content).
+        formatting artifacts inside the XML.  For ``<quotedContent>`` blocks,
+        inner child elements may also carry leading quote characters (e.g.
+        ``"(1) ...``), so all text within the block is cleaned.
         """
         texts: list[str] = []
         for tag_name in ("quotedText", "quotedContent"):
             for elem in section.iter(_tag(tag_name)):
-                text = _element_text(elem)
+                text = _quoted_element_text(elem)
                 if text:
-                    text = text.strip('"\u201c\u201d\u2018\u2019\u0060\u00b4')
-                    if text:
-                        texts.append(text)
+                    texts.append(text)
         return texts
 
-    def _assign_old_new(
-        self, quoted_texts: list[str], action_types: set[str]
-    ) -> tuple[str | None, str | None]:
-        """Assign quoted texts to old_text / new_text based on action types.
+    def _extract_old_new(
+        self, section: ET.Element
+    ) -> tuple[list[str], str | None, str | None]:
+        """Walk the element tree in document order to pair quoted texts with
+        the preceding ``<amendingAction>`` type.
 
-        For strike-and-insert (delete + insert), the first quoted text is
-        the old text and the second is the new text.
+        Returns ``(all_quoted_texts, old_text, new_text)``.
         """
+        action_tag = _tag("amendingAction")
+        quoted_tags = {_tag("quotedText"), _tag("quotedContent")}
+
+        # Collect (action_context, text) pairs in document order.
+        last_action: str | None = None
+        pairs: list[tuple[str | None, str]] = []
+
+        for elem in section.iter():
+            if elem.tag == action_tag:
+                atype = elem.get("type")
+                if atype:
+                    last_action = atype
+            elif elem.tag in quoted_tags:
+                text = _quoted_element_text(elem)
+                if text:
+                    pairs.append((last_action, text))
+
+        all_texts = [text for _, text in pairs]
+        if not pairs:
+            return all_texts, None, None
+
+        # Assign old/new based on action context of each quoted text.
         old_text: str | None = None
         new_text: str | None = None
+        for action, text in pairs:
+            if action in ("delete", "substitute") and old_text is None:
+                old_text = text
+            elif (
+                action in ("insert", "add", "enact", "substitute") and new_text is None
+            ):
+                new_text = text
 
-        specific = action_types - {"amend"}
-        if {"delete", "insert"} <= specific:
-            # Strike and insert: first = old, second = new
-            if len(quoted_texts) >= 2:
-                old_text = quoted_texts[0]
-                new_text = quoted_texts[1]
-            elif len(quoted_texts) == 1:
-                old_text = quoted_texts[0]
-        elif "delete" in specific:
-            if quoted_texts:
-                old_text = quoted_texts[0]
-        elif "insert" in specific or "add" in specific or "enact" in specific:
-            if quoted_texts:
-                new_text = quoted_texts[0]
-        elif "substitute" in specific:
-            if len(quoted_texts) >= 2:
-                old_text = quoted_texts[0]
-                new_text = quoted_texts[1]
-            elif len(quoted_texts) == 1:
-                new_text = quoted_texts[0]
-        else:
-            # Generic: best guess
-            if len(quoted_texts) >= 2:
-                old_text = quoted_texts[0]
-                new_text = quoted_texts[1]
-            elif len(quoted_texts) == 1:
-                old_text = quoted_texts[0]
+        # Fallback: if action context didn't resolve, use positional logic.
+        if old_text is None and new_text is None:
+            if len(pairs) >= 2:
+                old_text = pairs[0][1]
+                new_text = pairs[1][1]
+            elif len(pairs) == 1:
+                old_text = pairs[0][1]
 
-        return old_text, new_text
+        return all_texts, old_text, new_text
 
     def _find_section_positions(
         self, section: ET.Element, xml_text: str
     ) -> tuple[int, int]:
-        """Approximate the start/end positions of a section in the raw XML.
+        """Approximate the start/end positions of an instruction element in the raw XML.
 
-        Uses the section's ``identifier`` attribute to locate it.
+        Uses the element's ``identifier`` attribute to locate it.
         Falls back to 0-based positions if not found.
         """
         identifier = section.get("identifier", "")
@@ -303,10 +401,13 @@ class XMLAmendmentParser:
                 start = xml_text.rfind("<", 0, idx)
                 if start < 0:
                     start = idx
-                # Walk forward to find the closing '</section>'
-                end_marker = "</section>"
-                # Use namespace-qualified end tag as well
-                ns_end = f"</{_tag('section')}"
+                # Derive end tag from the element's actual tag name
+                # (may be section, subsection, paragraph, etc.)
+                local_name = (
+                    section.tag.split("}")[-1] if "}" in section.tag else section.tag
+                )
+                end_marker = f"</{local_name}>"
+                ns_end = f"</{section.tag}>"
                 end = xml_text.find(end_marker, idx)
                 if end < 0:
                     end = xml_text.find(ns_end, idx)

@@ -13,18 +13,20 @@ from pipeline.legal_parser.xml_parser import (
     _parse_ref_href,
 )
 
-# Path to the cached PL 113-22 XML fixture
-_PL113_22_XML = (
-    Path(__file__).resolve().parents[2]
-    / "data"
-    / "govinfo"
-    / "plaw"
-    / "PLAW-113publ22.xml"
-)
+# Path to cached XML fixtures
+_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "govinfo" / "plaw"
 
-_skip_no_fixture = pytest.mark.skipif(
+_PL113_22_XML = _DATA_DIR / "PLAW-113publ22.xml"
+_PL114_153_XML = _DATA_DIR / "PLAW-114publ153.xml"
+
+_skip_no_113_22 = pytest.mark.skipif(
     not _PL113_22_XML.exists(),
     reason="Cached PL 113-22 XML not available (run seed-laws first)",
+)
+
+_skip_no_114_153 = pytest.mark.skipif(
+    not _PL114_153_XML.exists(),
+    reason="Cached PL 114-153 XML not available (run seed-laws first)",
 )
 
 
@@ -32,12 +34,16 @@ def _load_pl113_22() -> str:
     return _PL113_22_XML.read_text(encoding="utf-8")
 
 
+def _load_pl114_153() -> str:
+    return _PL114_153_XML.read_text(encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Full-law integration test
 # ---------------------------------------------------------------------------
 
 
-@_skip_no_fixture
+@_skip_no_113_22
 class TestParsePL113_22:
     """Integration tests using cached PL 113-22 XML."""
 
@@ -92,6 +98,40 @@ class TestParsePL113_22:
         parser = XMLAmendmentParser(default_title=26)
         amendments = parser.parse(_load_pl113_22())
         assert amendments[0].needs_review is False
+
+
+@_skip_no_114_153
+class TestParsePL114_153:
+    """Integration tests using cached PL 114-153 XML.
+
+    PL 114-153 (Defend Trade Secrets Act) uses ``role="instruction"`` on
+    ``<subsection>`` and ``<paragraph>`` elements — not ``<section>``.
+    """
+
+    def test_parse_finds_nine_amendments(self) -> None:
+        parser = XMLAmendmentParser(default_title=18)
+        amendments = parser.parse(_load_pl114_153())
+        assert len(amendments) == 9
+
+    def test_amendments_reference_title_18(self) -> None:
+        parser = XMLAmendmentParser(default_title=18)
+        amendments = parser.parse(_load_pl114_153())
+        for a in amendments:
+            assert a.section_ref is not None
+            assert a.section_ref.title == 18
+
+    def test_all_xml_source(self) -> None:
+        parser = XMLAmendmentParser(default_title=18)
+        amendments = parser.parse(_load_pl114_153())
+        for a in amendments:
+            assert a.metadata["source"] == "xml"
+            assert a.pattern_name.startswith("xml_")
+
+    def test_high_confidence(self) -> None:
+        parser = XMLAmendmentParser(default_title=18)
+        amendments = parser.parse(_load_pl114_153())
+        for a in amendments:
+            assert a.confidence >= 0.95
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +266,149 @@ class TestEdgeCases:
         parser = XMLAmendmentParser()
         result = parser.parse(xml)
         assert result == []
+
+    def test_subsection_role_instruction(self) -> None:
+        """role=instruction on <subsection> should be found."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            "<main><section><num>2</num>"
+            '<subsection role="instruction">'
+            "<num>(a)</num>"
+            "<content>Section 101 of title 42 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            '"<quotedText>old phrase</quotedText>" and '
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>new phrase</quotedText>".'
+            "</content></subsection>"
+            "</section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=42)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].old_text == "old phrase"
+        assert result[0].new_text == "new phrase"
+        assert result[0].pattern_type == PatternType.STRIKE_INSERT
+
+    def test_subsection_augmented_from_text(self) -> None:
+        """When <ref> has no subsection, text like 'subsection (b)' fills it in."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>"
+            '<ref href="/us/usc/t18/s1836">Section 1836 of title 18</ref>, '
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            "subsection (b) and "
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>new subsection text</quotedText>".'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        ref = result[0].section_ref
+        assert ref is not None
+        assert ref.section == "1836"
+        assert ref.subsection_path == "(b)"
+
+    def test_no_subsection_for_multipart_amendment(self) -> None:
+        """Multi-part amendments ('is amended—(1)...') keep section-level ref."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>"
+            '<ref href="/us/usc/t18/s1839">Section 1839 of title 18</ref>, '
+            '<amendingAction type="amend">is amended</amendingAction>'
+            "\u2014(1) in paragraph (3), by "
+            '<amendingAction type="delete">striking</amendingAction> '
+            '"<quotedText>old</quotedText>".'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        ref = result[0].section_ref
+        assert ref is not None
+        assert ref.section == "1839"
+        assert ref.subsection_path is None
+
+    def test_paragraph_role_instruction(self) -> None:
+        """role=instruction on <paragraph> should be found."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            "<main><section><num>2</num>"
+            "<subsection><num>(d)</num>"
+            '<paragraph role="instruction">'
+            "<num>(1)</num>"
+            "<content>Section 200 of title 18 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="insert">inserting</amendingAction> '
+            '"<quotedText>added text</quotedText>".'
+            "</content></paragraph>"
+            "</subsection></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].new_text == "added text"
+        assert result[0].pattern_type == PatternType.INSERT_NEW_TEXT
+        assert result[0].change_type == ChangeType.ADD
+
+    def test_insert_only_quoted_text_assigned_as_new(self) -> None:
+        """When strike-and-insert has only one quotedContent after 'insert',
+        it should be new_text, not old_text."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>"
+            '<ref href="/us/usc/t18/s1836">Section 1836 of title 18</ref>, '
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            "subsection (b) and "
+            '<amendingAction type="insert">inserting</amendingAction> '
+            "the following:"
+            '<quotedContent>"(b) New subsection text.</quotedContent>.'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].old_text is None
+        assert result[0].new_text is not None
+        assert "New subsection text" in result[0].new_text
+
+    def test_inner_quotes_stripped_from_quoted_content(self) -> None:
+        """Typographic quotes inside child elements of quotedContent are stripped."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>"
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="insert">inserting</amendingAction> '
+            "the following:"
+            "<quotedContent>"
+            '<paragraph>"(1) First paragraph.</paragraph>'
+            '<paragraph>"(2) Second paragraph.</paragraph>'
+            "</quotedContent>."
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=18)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].new_text is not None
+        assert result[0].new_text.startswith("(1)")
+        assert '"' not in result[0].new_text
 
     def test_default_title_used_as_fallback(self) -> None:
         """When no <ref> tag is present, fallback uses default_title."""
