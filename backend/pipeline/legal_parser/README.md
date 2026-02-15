@@ -208,6 +208,71 @@ Some patterns cannot be fully automated:
 
 These are flagged with `needs_review=True` for human verification.
 
+## XML-Native Parser (`xml_parser.py`)
+
+Starting with the 113th Congress, GovInfo provides Public Laws in
+[USLM XML](https://uscode.house.gov/download/resources/USLM-User-Guide.pdf)
+with semantic markup.  Instead of regex-matching plain text, `XMLAmendmentParser`
+reads the structured tags directly:
+
+| XML Tag | What it tells us |
+|---------|-----------------|
+| `<section role="instruction">` | Container for one amending instruction |
+| `<amendingAction type="delete">` | The operation (delete, insert, add, substitute, repeal, ...) |
+| `<ref href="/us/usc/t18/s1836">` | Explicit US Code target (title + section) |
+| `<quotedText>` / `<quotedContent>` | The old or new text being struck/inserted |
+
+### Why leaf decomposition?
+
+A single instruction element can contain **multiple sub-amendments**.
+For example, PL 114-153 § 2(b) (Defend Trade Secrets Act) reads:
+
+```
+(b) Definitions.--Section 1839 of title 18 is amended--
+    (1) on paragraph (3)--
+            (A) in subparagraph (B), by striking "the public" and
+                inserting "another person who can obtain economic
+                value from the disclosure or use of the information";
+                and
+            (B) by striking "and" at the end;
+    (2) on paragraph (4), by striking the period at the end and
+        inserting a semicolon; and
+    (3) by adding at the end the following:
+            "(5) the term 'misappropriation' means-- ..."
+```
+
+In USLM XML this is one `<subsection role="instruction">` whose children
+are `<paragraph>` and `<subparagraph>` elements, each carrying their own
+`<amendingAction>` tags.  The parser **recursively decomposes** the
+instruction into its leaf amendment groups:
+
+```
+<subsection role="instruction">          ← top-level: § 1839, "is amended"
+  ├─ <paragraph>(1)
+  │   ├─ <subparagraph>(A)               ← LEAF: strike "the public", insert ...
+  │   └─ <subparagraph>(B)               ← LEAF: strike "and"
+  ├─ <paragraph>(2)                      ← LEAF: strike period, insert semicolon
+  └─ <paragraph>(3)                      ← LEAF: add definitions (5)-(7)
+```
+
+Each leaf inherits the section reference from the top-level `<ref>` tag
+and refines it with subsection context from ancestor `<chapeau>` elements
+(e.g. "in paragraph (3)" → `§ 1839(3)`).
+
+### Old/new text assignment
+
+Quoted text is paired with the **preceding** `<amendingAction>` type
+rather than positional order.  This matters when only one quoted block
+exists — e.g. "by striking subsection (b) and inserting the following:
+\<quotedContent\>..." — the single block follows the `insert` action and
+is correctly assigned as `new_text`.
+
+### Routing
+
+`parsing_modes.py` auto-detects USLM XML (checks for `<?xml` +
+`schemas.gpo.gov/xml/uslm` namespace) and routes to `XMLAmendmentParser`.
+Plain-text laws fall back to the regex `AmendmentParser`.
+
 ## Module Architecture
 
 ```
@@ -254,7 +319,8 @@ These are flagged with `needs_review=True` for human verification.
 | Module | Purpose |
 |--------|---------|
 | **patterns.py** | Defines 26 regex patterns for amendment detection with confidence scores |
-| **amendment_parser.py** | `AmendmentParser` class that applies patterns to extract structured amendments |
+| **amendment_parser.py** | `AmendmentParser` class that applies regex patterns to extract structured amendments |
+| **xml_parser.py** | `XMLAmendmentParser` for USLM XML; uses semantic tags instead of regex; decomposes multi-part instructions |
 | **text_accounting.py** | `TextAccountant` tracks which text was claimed by patterns vs. unclaimed gaps |
 | **parsing_modes.py** | Orchestrates parsing sessions (RegEx/LLM/Human+LLM modes), generates reports |
 | **graduation.py** | Decides when to escalate to human review, evaluates pattern graduation criteria |
@@ -353,6 +419,5 @@ uv run python -m pipeline.cli cross-ref-law 113 22
 
 - **LLM parsing mode**: Use an LLM to parse amendments when regex patterns fail
 - **Human+LLM mode**: Interactive interface for human reviewers working with an LLM
-- USLM XML parsing for structured amendments (113th Congress+)
 - Cross-reference resolution ("as defined in section X")
 - Confidence calibration based on manual review feedback
