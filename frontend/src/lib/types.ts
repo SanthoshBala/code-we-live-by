@@ -144,6 +144,11 @@ export interface LawText {
   official_title: string | null;
   short_title: string | null;
   enacted_date: string | null;
+  introduced_date: string | null;
+  house_passed_date: string | null;
+  senate_passed_date: string | null;
+  presented_to_president_date: string | null;
+  effective_date: string | null;
   htm_content: string | null;
   xml_content: string | null;
 }

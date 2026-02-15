@@ -43,7 +43,14 @@ async def get_laws_list(session: AsyncSession) -> list[LawSummarySchema]:
     ]
 
 
-async def get_law_text(congress: int, law_number: int) -> LawTextSchema | None:
+def _date_str(d: Any) -> str | None:
+    """Convert a date to ISO string, or None."""
+    return d.isoformat() if d else None
+
+
+async def get_law_text(
+    session: AsyncSession, congress: int, law_number: int
+) -> LawTextSchema | None:
     """Fetch raw HTM and XML text for a law, using cache or GovInfo API."""
     # Dynamic import to keep pipeline/ out of mypy's module graph
     try:
@@ -72,9 +79,27 @@ async def get_law_text(congress: int, law_number: int) -> LawTextSchema | None:
     if htm_content is None and xml_content is None:
         return None
 
+    # Query DB for metadata
+    stmt = select(PublicLaw).where(
+        PublicLaw.congress == congress,
+        PublicLaw.law_number == str(law_number),
+    )
+    result = await session.execute(stmt)
+    law = result.scalar_one_or_none()
+
     return LawTextSchema(
         congress=congress,
         law_number=str(law_number),
+        official_title=law.official_title if law else None,
+        short_title=law.short_title if law else None,
+        enacted_date=_date_str(law.enacted_date) if law else None,
+        introduced_date=_date_str(law.introduced_date) if law else None,
+        house_passed_date=_date_str(law.house_passed_date) if law else None,
+        senate_passed_date=_date_str(law.senate_passed_date) if law else None,
+        presented_to_president_date=(
+            _date_str(law.presented_to_president_date) if law else None
+        ),
+        effective_date=_date_str(law.effective_date) if law else None,
         htm_content=htm_content,
         xml_content=xml_content,
     )
@@ -115,13 +140,13 @@ def _amendment_to_schema(amendment: Any) -> ParsedAmendmentSchema:
 
 
 async def parse_law_amendments(
-    congress: int, law_number: int
+    session: AsyncSession, congress: int, law_number: int
 ) -> list[ParsedAmendmentSchema]:
     """Parse amendments from a law's text on-the-fly for QC.
 
     Tries XML parsing first (higher fidelity), falls back to text parsing.
     """
-    law_text = await get_law_text(congress, law_number)
+    law_text = await get_law_text(session, congress, law_number)
     if not law_text:
         return []
 

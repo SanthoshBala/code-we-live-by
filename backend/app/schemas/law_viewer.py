@@ -26,6 +26,11 @@ class LawTextSchema(BaseModel):
     official_title: str | None = None
     short_title: str | None = None
     enacted_date: str | None = None
+    introduced_date: str | None = None
+    house_passed_date: str | None = None
+    senate_passed_date: str | None = None
+    presented_to_president_date: str | None = None
+    effective_date: str | None = None
     htm_content: str | None = Field(None, description="HTML text of the law")
     xml_content: str | None = Field(None, description="USLM XML text of the law")
 

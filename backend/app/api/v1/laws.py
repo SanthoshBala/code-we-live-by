@@ -26,9 +26,10 @@ async def list_laws(
 async def read_law_text(
     congress: int,
     law_number: int,
+    session: AsyncSession = Depends(get_async_session),
 ) -> LawTextSchema:
     """Get raw HTM and XML text for a public law."""
-    result = await get_law_text(congress, law_number)
+    result = await get_law_text(session, congress, law_number)
     if result is None:
         raise HTTPException(
             status_code=404,
@@ -41,6 +42,7 @@ async def read_law_text(
 async def read_law_amendments(
     congress: int,
     law_number: int,
+    session: AsyncSession = Depends(get_async_session),
 ) -> list[ParsedAmendmentSchema]:
     """Parse amendments from a law's text on-the-fly for QC."""
-    return await parse_law_amendments(congress, law_number)
+    return await parse_law_amendments(session, congress, law_number)

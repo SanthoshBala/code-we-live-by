@@ -37,18 +37,44 @@ export default function LawViewerPage() {
   if (textError || !lawText)
     return <p className="text-red-600">Failed to load law text.</p>;
 
-  const title = lawText.short_title || lawText.official_title;
+  const shortTitle = lawText.short_title || lawText.official_title;
+  const title = shortTitle
+    ? `PL ${congress}-${lawNumber} — ${shortTitle}`
+    : `PL ${congress}-${lawNumber}`;
+
+  const dateBadges: { label: string; date: string }[] = [];
+  if (lawText.introduced_date)
+    dateBadges.push({ label: 'Introduced', date: lawText.introduced_date });
+  if (lawText.house_passed_date)
+    dateBadges.push({ label: 'House', date: lawText.house_passed_date });
+  if (lawText.senate_passed_date)
+    dateBadges.push({ label: 'Senate', date: lawText.senate_passed_date });
+  if (lawText.presented_to_president_date)
+    dateBadges.push({
+      label: 'Presented',
+      date: lawText.presented_to_president_date,
+    });
+  if (lawText.enacted_date)
+    dateBadges.push({ label: 'Enacted', date: lawText.enacted_date });
+  if (lawText.effective_date)
+    dateBadges.push({ label: 'Effective', date: lawText.effective_date });
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
-        title={`PL ${congress}-${lawNumber}`}
-        subtitle={title}
+        title={title}
         badges={
-          lawText.enacted_date ? (
-            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-              Enacted {lawText.enacted_date}
-            </span>
+          dateBadges.length > 0 ? (
+            <>
+              {dateBadges.map(({ label, date }) => (
+                <span
+                  key={label}
+                  className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600"
+                >
+                  {label} {date}
+                </span>
+              ))}
+            </>
           ) : undefined
         }
       />
