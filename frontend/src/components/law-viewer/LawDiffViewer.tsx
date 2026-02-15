@@ -73,6 +73,7 @@ export default function LawDiffViewer({
 }: LawDiffViewerProps) {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const mainPanelRef = useRef<HTMLDivElement>(null);
 
   if (isLoading) {
     return <p className="text-gray-500">Parsing amendments...</p>;
@@ -91,29 +92,34 @@ export default function LawDiffViewer({
   function handleSectionClick(sectionKey: string) {
     setActiveSection(sectionKey);
     const el = sectionRefs.current.get(sectionKey);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const container = mainPanelRef.current;
+    if (el && container) {
+      container.scrollTo({
+        top: el.offsetTop - container.offsetTop,
+        behavior: 'smooth',
+      });
     }
   }
 
   return (
-    <div className="flex gap-6">
-      {/* Left sidebar — affected sections tree */}
-      <div className="hidden w-72 shrink-0 lg:block">
-        <div className="sticky top-4">
-          <h2 className="mb-2 px-3 text-sm font-semibold text-gray-900">
-            Affected Sections
-          </h2>
-          <AffectedSectionsTree
-            amendments={amendments}
-            activeSection={activeSection}
-            onSectionClick={handleSectionClick}
-          />
-        </div>
+    <div className="flex h-[calc(100vh-14rem)] gap-6">
+      {/* Left sidebar — affected sections tree (independently scrollable) */}
+      <div className="hidden w-72 shrink-0 overflow-y-auto lg:block">
+        <h2 className="sticky top-0 z-10 mb-2 bg-white px-3 pb-1 text-sm font-semibold text-gray-900">
+          Affected Sections
+        </h2>
+        <AffectedSectionsTree
+          amendments={amendments}
+          activeSection={activeSection}
+          onSectionClick={handleSectionClick}
+        />
       </div>
 
-      {/* Main panel — amendment cards grouped by section */}
-      <div className="min-w-0 flex-1 space-y-6">
+      {/* Main panel — amendment cards grouped by section (independently scrollable) */}
+      <div
+        ref={mainPanelRef}
+        className="min-w-0 flex-1 space-y-6 overflow-y-auto"
+      >
         {Array.from(grouped.entries()).map(
           ([sectionKey, sectionAmendments]) => (
             <div
