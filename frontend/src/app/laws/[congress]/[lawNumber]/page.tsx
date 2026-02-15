@@ -63,6 +63,7 @@ export default function LawViewerPage() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title={title}
+        subtitle={lawText.official_title}
         badges={
           dateBadges.length > 0 ? (
             <>
