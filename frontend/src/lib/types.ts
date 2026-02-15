@@ -125,6 +125,59 @@ export interface SectionNotes {
   renumbered_from: string | null;
 }
 
+// --- Law viewer types ---
+
+/** Summary of a Public Law for index listing. */
+export interface LawSummary {
+  congress: number;
+  law_number: string;
+  official_title: string | null;
+  short_title: string | null;
+  enacted_date: string;
+  sections_affected: number;
+}
+
+/** Raw text content of a Public Law. */
+export interface LawText {
+  congress: number;
+  law_number: string;
+  official_title: string | null;
+  short_title: string | null;
+  enacted_date: string | null;
+  htm_content: string | null;
+  xml_content: string | null;
+}
+
+/** A reference to a US Code section within a parsed amendment. */
+export interface SectionReference {
+  title: number | null;
+  section: string;
+  subsection_path: string | null;
+  display: string;
+}
+
+/** Positional context for an amendment. */
+export interface PositionQualifier {
+  type: string;
+  anchor_text: string | null;
+  target_text: string | null;
+}
+
+/** A parsed amendment extracted from Public Law text. */
+export interface ParsedAmendment {
+  pattern_name: string;
+  pattern_type: string;
+  change_type: string;
+  section_ref: SectionReference | null;
+  old_text: string | null;
+  new_text: string | null;
+  full_match: string;
+  confidence: number;
+  needs_review: boolean;
+  context: string;
+  position_qualifier: PositionQualifier | null;
+}
+
 /** Full section view returned by the section detail endpoint. */
 export interface SectionView {
   title_number: number;
