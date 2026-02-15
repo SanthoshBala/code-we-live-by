@@ -110,4 +110,97 @@ describe('SectionNotes', () => {
     expect(container.querySelector('details')).toBeNull();
     expect(container.querySelector('summary')).toBeNull();
   });
+
+  it('applies hanging indent to note lines with markers', () => {
+    const notesWithMarkers: SectionNote[] = [
+      {
+        header: 'Amendments',
+        content: '',
+        lines: [
+          {
+            line_number: 1,
+            content: '(a) First amendment text that could wrap to multiple lines.',
+            indent_level: 0,
+            marker: '(a)',
+            is_header: false,
+          },
+        ],
+        category: 'editorial',
+      },
+    ];
+    const { container } = render(
+      <SectionNotes
+        notes={notesWithMarkers}
+        fullCitation="17 U.S.C. § 602"
+        heading="Infringing importation or exportation"
+        categoryLabel="Editorial Notes"
+      />
+    );
+    const contentSpan = container.querySelector(
+      '.whitespace-pre-wrap.pl-\\[4ch\\].-indent-\\[4ch\\]'
+    );
+    expect(contentSpan).toBeInTheDocument();
+    expect(contentSpan).toHaveClass('min-w-0');
+  });
+
+  it('does not apply hanging indent to note lines without markers', () => {
+    const notesWithoutMarkers: SectionNote[] = [
+      {
+        header: 'Amendments',
+        content: '',
+        lines: [
+          {
+            line_number: 1,
+            content: 'Plain text without a marker.',
+            indent_level: 0,
+            marker: null,
+            is_header: false,
+          },
+        ],
+        category: 'editorial',
+      },
+    ];
+    const { container } = render(
+      <SectionNotes
+        notes={notesWithoutMarkers}
+        fullCitation="17 U.S.C. § 602"
+        heading="Infringing importation or exportation"
+        categoryLabel="Editorial Notes"
+      />
+    );
+    const contentSpan = screen.getByText('Plain text without a marker.');
+    expect(contentSpan).not.toHaveClass('pl-[4ch]');
+    expect(contentSpan).not.toHaveClass('-indent-[4ch]');
+    expect(contentSpan).toHaveClass('min-w-0', 'whitespace-pre-wrap');
+  });
+
+  it('splits indentation into a separate span for indented note lines', () => {
+    const notesWithIndent: SectionNote[] = [
+      {
+        header: 'Amendments',
+        content: '',
+        lines: [
+          {
+            line_number: 1,
+            content: 'Indented content.',
+            indent_level: 2,
+            marker: null,
+            is_header: false,
+          },
+        ],
+        category: 'editorial',
+      },
+    ];
+    const { container } = render(
+      <SectionNotes
+        notes={notesWithIndent}
+        fullCitation="17 U.S.C. § 602"
+        heading="Infringing importation or exportation"
+        categoryLabel="Editorial Notes"
+      />
+    );
+    const indentSpan = container.querySelector('.whitespace-pre.shrink-0');
+    expect(indentSpan).toBeInTheDocument();
+    expect(indentSpan!.textContent).toBe('\t\t');
+  });
 });
