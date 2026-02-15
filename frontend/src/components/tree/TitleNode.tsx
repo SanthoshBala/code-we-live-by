@@ -48,7 +48,7 @@ export default function TitleNode({ title, activePath }: TitleNodeProps) {
       </div>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
-          <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
+          <p className="py-0.5 pl-3 pr-2 font-mono text-xs text-gray-400">
             Title {title.title_number}
           </p>
           {isLoading && (
