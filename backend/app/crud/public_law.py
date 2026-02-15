@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -44,11 +45,10 @@ async def get_laws_list(session: AsyncSession) -> list[LawSummarySchema]:
 
 async def get_law_text(congress: int, law_number: int) -> LawTextSchema | None:
     """Fetch raw HTM and XML text for a law, using cache or GovInfo API."""
-    # Lazy import to avoid pulling pipeline/ into mypy's scope
+    # Dynamic import to keep pipeline/ out of mypy's module graph
     try:
-        from pipeline.govinfo.client import GovInfoClient
-
-        client: Any = GovInfoClient()
+        govinfo_mod = importlib.import_module("pipeline.govinfo.client")
+        client: Any = govinfo_mod.GovInfoClient()
     except (ValueError, ImportError):
         logger.warning("GovInfo API key not configured, reading from cache only")
         client = None
@@ -127,12 +127,11 @@ async def parse_law_amendments(
 
     amendments: list[Any] = []
 
-    # Lazy imports to avoid pulling pipeline/ into mypy's scope
+    # Dynamic imports to keep pipeline/ out of mypy's module graph
     if law_text.xml_content:
         try:
-            from pipeline.legal_parser.xml_parser import XMLAmendmentParser
-
-            xml_parser = XMLAmendmentParser()
+            xml_mod = importlib.import_module("pipeline.legal_parser.xml_parser")
+            xml_parser = xml_mod.XMLAmendmentParser()
             amendments = xml_parser.parse(law_text.xml_content)
         except Exception:
             logger.exception(
@@ -144,9 +143,8 @@ async def parse_law_amendments(
 
     # Fall back to text parser if XML produced nothing
     if not amendments and law_text.htm_content:
-        from pipeline.legal_parser.amendment_parser import AmendmentParser
-
-        text_parser = AmendmentParser()
+        text_mod = importlib.import_module("pipeline.legal_parser.amendment_parser")
+        text_parser = text_mod.AmendmentParser()
         amendments = text_parser.parse(law_text.htm_content)
 
     return [_amendment_to_schema(a) for a in amendments]
