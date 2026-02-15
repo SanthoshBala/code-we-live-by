@@ -1,6 +1,10 @@
 """CRUD operations for the Law Viewer QC tool."""
 
+from __future__ import annotations
+
 import logging
+from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,9 +17,6 @@ from app.schemas.law_viewer import (
     PositionQualifierSchema,
     SectionReferenceSchema,
 )
-from pipeline.govinfo.client import GovInfoClient
-from pipeline.legal_parser.amendment_parser import AmendmentParser, ParsedAmendment
-from pipeline.legal_parser.xml_parser import XMLAmendmentParser
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +44,12 @@ async def get_laws_list(session: AsyncSession) -> list[LawSummarySchema]:
 
 async def get_law_text(congress: int, law_number: int) -> LawTextSchema | None:
     """Fetch raw HTM and XML text for a law, using cache or GovInfo API."""
+    # Lazy import to avoid pulling pipeline/ into mypy's scope
     try:
-        client = GovInfoClient()
-    except ValueError:
+        from pipeline.govinfo.client import GovInfoClient
+
+        client: Any = GovInfoClient()
+    except (ValueError, ImportError):
         logger.warning("GovInfo API key not configured, reading from cache only")
         client = None
 
@@ -57,8 +61,6 @@ async def get_law_text(congress: int, law_number: int) -> LawTextSchema | None:
         xml_content = await client.get_law_text(congress, law_number, format="xml")
     else:
         # Try reading from cache directly
-        from pathlib import Path
-
         cache_dir = Path("data/govinfo/plaw")
         htm_file = cache_dir / f"PLAW-{congress}publ{law_number}.htm"
         xml_file = cache_dir / f"PLAW-{congress}publ{law_number}.xml"
@@ -78,7 +80,7 @@ async def get_law_text(congress: int, law_number: int) -> LawTextSchema | None:
     )
 
 
-def _amendment_to_schema(amendment: ParsedAmendment) -> ParsedAmendmentSchema:
+def _amendment_to_schema(amendment: Any) -> ParsedAmendmentSchema:
     """Convert a ParsedAmendment dataclass to its API schema."""
     section_ref = None
     if amendment.section_ref:
@@ -123,11 +125,13 @@ async def parse_law_amendments(
     if not law_text:
         return []
 
-    amendments: list[ParsedAmendment] = []
+    amendments: list[Any] = []
 
-    # Try XML parser first
+    # Lazy imports to avoid pulling pipeline/ into mypy's scope
     if law_text.xml_content:
         try:
+            from pipeline.legal_parser.xml_parser import XMLAmendmentParser
+
             xml_parser = XMLAmendmentParser()
             amendments = xml_parser.parse(law_text.xml_content)
         except Exception:
@@ -140,6 +144,8 @@ async def parse_law_amendments(
 
     # Fall back to text parser if XML produced nothing
     if not amendments and law_text.htm_content:
+        from pipeline.legal_parser.amendment_parser import AmendmentParser
+
         text_parser = AmendmentParser()
         amendments = text_parser.parse(law_text.htm_content)
 
