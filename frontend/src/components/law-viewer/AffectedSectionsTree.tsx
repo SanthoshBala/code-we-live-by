@@ -192,7 +192,9 @@ function TitleTreeNode({
           expanded={expanded}
           onToggle={() => setExpanded((prev) => !prev)}
         />
-        <span className="min-w-0 truncate">Title {titleNumber}</span>
+        <span className="min-w-0 truncate">
+          {structure?.title_name ?? `Title ${titleNumber}`}
+        </span>
       </div>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
