@@ -22,9 +22,7 @@ function NoteLine({
       </span>
       <span className="mx-2 select-none text-gray-400">|</span>
       {indent && (
-        <span className="shrink-0 whitespace-pre text-gray-800">
-          {indent}
-        </span>
+        <span className="shrink-0 whitespace-pre text-gray-800">{indent}</span>
       )}
       <span
         className={`min-w-0 whitespace-pre-wrap text-gray-800${isListItem ? ' pl-[4ch] -indent-[4ch]' : ''}`}

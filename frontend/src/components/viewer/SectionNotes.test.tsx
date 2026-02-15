@@ -119,7 +119,8 @@ describe('SectionNotes', () => {
         lines: [
           {
             line_number: 1,
-            content: '(a) First amendment text that could wrap to multiple lines.',
+            content:
+              '(a) First amendment text that could wrap to multiple lines.',
             indent_level: 0,
             marker: '(a)',
             is_header: false,
