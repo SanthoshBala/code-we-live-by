@@ -112,6 +112,14 @@ CWLB treats federal legislation as version control:
 ### Phase 1 Titles (from Task 0.8):
 10, 17, 18, 20, 22, 26, 42, 50
 
+## Plan Artifacts
+
+When implementation plans are created during planning:
+- **PR body / comments**: Include the plan's Context (why) and a summary of Changes (what). For the initial PR, this goes in the body. As a branch evolves through multiple plans, add subsequent plan summaries as PR comments rather than rewriting the body.
+- **Directory READMEs**: Add architectural decisions and design rationale that explain non-obvious patterns or structures. Update when the design changes.
+- **Code comments**: Only for non-obvious implementation details that would confuse a future reader.
+- Plans themselves (in `~/.claude/plans/`) are ephemeral working documents — don't commit them as-is.
+
 ## Working with Tasks
 
 Tasks are tracked in `TASKS.md`. Format: `Task X.Y` where X is phase (0-3 or M).

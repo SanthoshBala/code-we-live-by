@@ -110,6 +110,50 @@ async with AsyncSession(engine) as session:
 - Creates `DataIngestionLog` records for audit trail
 - Supports `force_download` and `force_parse` flags for re-ingestion
 
+### 4. Release Point Registry (`release_point.py`)
+
+Discovers and manages OLRC release points — snapshots of the US Code published after each Public Law is incorporated.
+
+**Key class:** `ReleasePointRegistry`
+
+```python
+from pipeline.olrc.release_point import ReleasePointRegistry
+
+registry = ReleasePointRegistry()
+await registry.fetch_release_points()
+
+# Get all release points for a congress
+rps = registry.get_for_congress(118)
+
+# Get consecutive pairs for validation
+pairs = registry.get_adjacent_pairs(congress=118)
+# [(RP 118-22, RP 118-30), (RP 118-30, RP 118-34), ...]
+
+# Find laws enacted between two release points
+laws = registry.get_laws_in_range("118-22", "118-30")
+# [(118, 23), (118, 24), ..., (118, 30)]
+```
+
+**Helper:** `parse_release_point_identifier("118-158")` → `(118, "158")`
+
+### 5. Initial Commit Service (`initial_commit.py`)
+
+Establishes the base state of the US Code by loading the first OLRC release point as an "initial commit."
+
+**Key class:** `InitialCommitService`
+
+```python
+from pipeline.olrc.initial_commit import InitialCommitService
+
+service = InitialCommitService(session)
+rp = await service.create_initial_commit(
+    release_point="113-21",
+    titles=[10, 17, 18, 20, 22, 26, 42, 50],
+)
+```
+
+Creates `OLRCReleasePoint` (with `is_initial=True`) and `SectionHistory` version 1 records for all sections in the specified titles.
+
 ## CLI Usage
 
 A command-line interface is available for manual operations:
@@ -126,6 +170,9 @@ uv run python -m pipeline.cli parse 17
 
 # List downloaded titles
 uv run python -m pipeline.cli list
+
+# Establish initial commit from first release point
+uv run python -m pipeline.cli initial-commit 113-21 --titles 10 17 18
 ```
 
 ## Data Flow Example
@@ -169,6 +216,8 @@ The ingestion service populates these SQLAlchemy models:
 - `USCodeChapter` - Chapters within titles
 - `USCodeSubchapter` - Subchapters within chapters
 - `USCodeSection` - Individual sections with full text
+- `OLRCReleasePoint` - Release point metadata (identifier, congress, dates, parent chain)
+- `SectionHistory` - Version snapshots at each commit point
 - `DataIngestionLog` - Audit trail of ingestion operations
 
 ## References

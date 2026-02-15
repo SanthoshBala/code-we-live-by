@@ -3,11 +3,12 @@
 from pipeline.legal_parser.amendment_parser import (
     AmendmentParser,
     ParsedAmendment,
+    PositionQualifier,
+    PositionType,
     SectionReference,
 )
 from pipeline.legal_parser.patterns import AMENDMENT_PATTERNS, PatternType
 from pipeline.legal_parser.text_accounting import (
-    AMENDMENT_KEYWORDS,
     ClaimedSpan,
     CoverageReport,
     TextAccountant,
@@ -17,7 +18,10 @@ from pipeline.legal_parser.text_accounting import (
 __all__ = [
     # Parser
     "AmendmentParser",
+    "XMLAmendmentParser",
     "ParsedAmendment",
+    "PositionQualifier",
+    "PositionType",
     "SectionReference",
     "AMENDMENT_PATTERNS",
     "PatternType",
@@ -26,5 +30,34 @@ __all__ = [
     "ClaimedSpan",
     "UnclaimedSpan",
     "CoverageReport",
-    "AMENDMENT_KEYWORDS",
+    # Law Change Pipeline (Task 1.12-1.13)
+    "SectionResolver",
+    "TextExtractor",
+    "DiffGenerator",
+    "LawChangeService",
 ]
+
+
+# Lazy imports for Task 1.12-1.13 modules (avoid circular imports)
+def __getattr__(name: str):
+    if name == "SectionResolver":
+        from pipeline.legal_parser.section_resolver import SectionResolver
+
+        return SectionResolver
+    elif name == "TextExtractor":
+        from pipeline.legal_parser.text_extractor import TextExtractor
+
+        return TextExtractor
+    elif name == "DiffGenerator":
+        from pipeline.legal_parser.diff_generator import DiffGenerator
+
+        return DiffGenerator
+    elif name == "LawChangeService":
+        from pipeline.legal_parser.law_change_service import LawChangeService
+
+        return LawChangeService
+    elif name == "XMLAmendmentParser":
+        from pipeline.legal_parser.xml_parser import XMLAmendmentParser
+
+        return XMLAmendmentParser
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

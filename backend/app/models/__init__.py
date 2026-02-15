@@ -28,6 +28,7 @@ from app.models.legislator import (
     Vote,
 )
 from app.models.public_law import Bill, LawChange, ProposedChange, PublicLaw
+from app.models.release_point import OLRCReleasePoint
 from app.models.supporting import (
     Amendment,
     BillCommitteeAssignment,
@@ -89,6 +90,8 @@ __all__ = [
     # History
     "SectionHistory",
     "LineHistory",
+    # Release Points (Task 1.12)
+    "OLRCReleasePoint",
     # Supporting
     "SectionReference",
     "Committee",

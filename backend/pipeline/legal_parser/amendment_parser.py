@@ -5,6 +5,7 @@ structured amendment information from the text of Public Laws.
 """
 
 import contextlib
+import enum
 import logging
 import re
 from dataclasses import dataclass, field
@@ -58,6 +59,34 @@ class SectionReference:
         )
 
 
+class PositionType(enum.StrEnum):
+    """Type of positional qualifier on an amendment."""
+
+    AT_END = "at_end"
+    BEFORE = "before"
+    AFTER = "after"
+    EACH_PLACE = "each_place"
+    UNQUOTED_TARGET = "unquoted_target"
+
+
+@dataclass
+class PositionQualifier:
+    """Positional context for an amendment.
+
+    Captures where in a section the amendment applies, e.g.
+    "at the end", "after 'prohibit'", "each place such term appears".
+
+    Attributes:
+        type: The kind of positional qualifier.
+        anchor_text: For BEFORE/AFTER: the reference text.
+        target_text: For UNQUOTED_TARGET: e.g. "the period".
+    """
+
+    type: PositionType
+    anchor_text: str | None = None
+    target_text: str | None = None
+
+
 @dataclass
 class ParsedAmendment:
     """A parsed amendment extracted from Public Law text.
@@ -89,6 +118,7 @@ class ParsedAmendment:
     end_pos: int = 0
     needs_review: bool = False
     context: str = ""
+    position_qualifier: PositionQualifier | None = None
     metadata: dict = field(default_factory=dict)
 
     def __str__(self) -> str:

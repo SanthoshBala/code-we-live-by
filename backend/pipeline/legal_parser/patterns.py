@@ -65,8 +65,8 @@ SECTION_REF_WITH_TITLE = (
 # Subsection path pattern (e.g., "(a)(1)(A)(i)")
 SUBSECTION_PATH = r"(?:\s*\([a-zA-Z0-9]+\))+"
 
-# Text in quotes - handles both single and double quotes
-QUOTED_TEXT = r'["\']([^"\']+)["\']'
+# Text in quotes - handles standard quotes and GovInfo backtick-style (``text'')
+QUOTED_TEXT = r'(?:``|["\'])([^"\']+?)(?:\'\'|["\'])'
 
 # Comprehensive amendment patterns
 AMENDMENT_PATTERNS: list[AmendmentPattern] = [

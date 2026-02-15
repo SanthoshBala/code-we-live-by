@@ -167,6 +167,82 @@ async def ingest_phase1(
 
 
 # =============================================================================
+# Seed laws for local development
+# =============================================================================
+
+# Curated set of Public Laws spanning Phase 1 titles with varying complexity.
+# Each entry: (congress, law_number, default_title, short_name)
+SEED_LAWS: list[tuple[int, int, int | None, str]] = [
+    # Simple (1-3 amendments)
+    (113, 22, 26, "Kay Bailey Hutchison Spousal IRA"),
+    (117, 107, 18, "Emmett Till Antilynching Act"),
+    (117, 224, None, "Speak Out Act"),
+    # Small-medium (4-6 amendments)
+    (114, 153, 18, "Defend Trade Secrets Act"),
+    (116, 128, 42, "PPP Flexibility Act"),
+    # Medium (7-20 amendments)
+    (115, 264, 17, "Music Modernization Act"),
+    (115, 118, 50, "FISA Amendments Reauthorization"),
+    (118, 49, 50, "Reforming Intelligence and Securing America Act"),
+    # Large (many amendments)
+    (115, 97, 26, "Tax Cuts and Jobs Act"),
+    (117, 169, 26, "Inflation Reduction Act"),
+]
+
+
+async def seed_laws_command() -> int:
+    """Ingest the curated set of seed laws into the database.
+
+    Returns:
+        0 on success, 1 if any law failed.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+    print(f"\nSeeding {len(SEED_LAWS)} Public Laws...")
+    print()
+
+    failed = 0
+    async with async_session_maker() as session:
+        service = PublicLawIngestionService(session)
+        for congress, law_number, _default_title, short_name in SEED_LAWS:
+            label = f"PL {congress}-{law_number}"
+            try:
+                log = await service.ingest_law(congress, law_number, force=False)
+                if log.status in ("completed", "skipped"):
+                    status = "ok" if log.status == "completed" else "exists"
+                    print(f"  [{status:<6}] {label:<14} {short_name}")
+                else:
+                    print(f"  [FAIL  ] {label:<14} {short_name}: {log.error_message}")
+                    failed += 1
+            except Exception as exc:
+                print(f"  [ERROR ] {label:<14} {short_name}: {exc}")
+                failed += 1
+
+    print()
+    if failed:
+        print(
+            f"  {len(SEED_LAWS) - failed}/{len(SEED_LAWS)} succeeded, {failed} failed"
+        )
+    else:
+        print(f"  All {len(SEED_LAWS)} laws seeded successfully.")
+
+    # Print parse-law quick-reference
+    print()
+    print("Try parsing with:")
+    for congress, law_number, default_title, _short_name in SEED_LAWS[:3]:
+        cmd = f"  uv run python -m pipeline.cli parse-law {congress} {law_number}"
+        if default_title:
+            cmd += f" --default-title {default_title}"
+        cmd += " --dry-run"
+        print(cmd)
+    print("  ...")
+    print()
+
+    return 1 if failed else 0
+
+
+# =============================================================================
 # GovInfo Public Law functions
 # =============================================================================
 
@@ -1044,6 +1120,35 @@ def normalize_text_command(
 # =============================================================================
 
 
+def _extract_short_title(law_text: str) -> str | None:
+    """Extract the short title from law text.
+
+    Looks for the common pattern: "may be cited as the '<short title>'"
+    in both plain text and XML (where quotes may be inside <quotedText> tags).
+    """
+    import re
+
+    # Plain text: "may be cited as the 'Foo Bar Act of 2023'"
+    m = re.search(
+        r"""may be cited as (?:the\s+)?["\u2018\u201c'`]+([^"'\u2019\u201d`]+)""",
+        law_text,
+    )
+    if m:
+        return m.group(1).strip().rstrip(".")
+
+    # XML: may be cited as ... <quotedText>Foo Bar Act</quotedText>
+    m = re.search(
+        r"may be cited as.*?<quotedText[^>]*>(.*?)</quotedText>",
+        law_text,
+        re.DOTALL,
+    )
+    if m:
+        # Strip any nested XML tags from inside the quotedText
+        return re.sub(r"<[^>]+>", "", m.group(1)).strip().rstrip(".")
+
+    return None
+
+
 async def parse_law_command(
     congress: int,
     law_number: int,
@@ -1051,7 +1156,6 @@ async def parse_law_command(
     default_title: int | None = None,
     min_confidence: float = 0.0,
     dry_run: bool = False,
-    validate: bool = True,
 ) -> int:
     """Parse a Public Law for amendments.
 
@@ -1062,7 +1166,6 @@ async def parse_law_command(
         default_title: Default US Code title.
         min_confidence: Minimum confidence threshold.
         dry_run: If True, parse without saving.
-        validate: If True, validate against GovInfo metadata.
 
     Returns:
         0 on success, 1 on failure.
@@ -1070,10 +1173,7 @@ async def parse_law_command(
     from app.models.base import async_session_maker
     from app.models.enums import ParsingMode
     from pipeline.govinfo.client import GovInfoClient
-    from pipeline.legal_parser.parsing_modes import (
-        RegExParsingSession,
-        validate_against_govinfo,
-    )
+    from pipeline.legal_parser.parsing_modes import RegExParsingSession
 
     # Map mode string to enum
     mode_map = {
@@ -1100,15 +1200,15 @@ async def parse_law_command(
         logger.error(f"Could not retrieve text for PL {congress}-{law_number}")
         return 1
 
-    print(f"\nParsing PL {congress}-{law_number}")
-    print(
-        f"  Title: {law_info.title[:70]}..."
-        if len(law_info.title) > 70
-        else f"  Title: {law_info.title}"
+    from pipeline.olrc.title_lookup import lookup_public_law_title
+
+    # Look up short title: GovInfo API > text extraction > DB field
+    title_info = await lookup_public_law_title(congress, law_number)
+    short_title = (
+        title_info.short_title if title_info and title_info.short_title else None
     )
-    print(f"  Text length: {len(law_text):,} characters")
-    print(f"  Mode: {parsing_mode.value}")
-    print()
+    if not short_title:
+        short_title = _extract_short_title(law_text)
 
     async with async_session_maker() as session:
         # Get or create law_id
@@ -1131,6 +1231,44 @@ async def parse_law_command(
             )
             return 1
 
+        # Use DB short_title if available, else use extracted
+        if law.short_title:
+            short_title = law.short_title
+
+        # --- METADATA section ---
+        print()
+        print("=" * 72)
+        print("METADATA")
+        print("=" * 72)
+        print(f"  Law:            PL {congress}-{law_number}")
+        if short_title:
+            print(f"  Short title:    {short_title}")
+        if title_info and title_info.short_title_aliases:
+            for alias in title_info.short_title_aliases:
+                print(f"                  aka {alias}")
+        official = law.official_title or law_info.title
+        if official:
+            if len(official) > 100:
+                official = official[:97] + "..."
+            print(f"  Official title: {official}")
+        if law.enacted_date:
+            print(f"  Enacted:        {law.enacted_date}")
+        if law_info.bill_id:
+            print(f"  Bill:           {law_info.bill_id}")
+        if law_info.committees:
+            names = [
+                c.get("committeeName", "")
+                for c in law_info.committees
+                if c.get("committeeName")
+            ]
+            if names:
+                print(f"  Committees:     {names[0]}")
+                for name in names[1:]:
+                    print(f"                  {name}")
+        if default_title:
+            print(f"  Default title:  {default_title}")
+        print(f"  Parse mode:     {parsing_mode.value}")
+
         # Parse the law
         parser_session = RegExParsingSession(
             session,
@@ -1143,64 +1281,71 @@ async def parse_law_command(
             save_to_db=not dry_run,
         )
 
-        # Validate against GovInfo metadata
-        govinfo_mismatch = None
-        if validate and not dry_run and result.ingestion_report_id:
-            from sqlalchemy import select
-
-            from app.models.validation import IngestionReport
-
-            report_result = await session.execute(
-                select(IngestionReport).where(
-                    IngestionReport.report_id == result.ingestion_report_id
-                )
-            )
-            report = report_result.scalar_one_or_none()
-            if report:
-                has_mismatch, mismatch_desc = await validate_against_govinfo(
-                    report, congress, law_number, session
-                )
-                if has_mismatch:
-                    govinfo_mismatch = mismatch_desc
-
-        # Display results
-        print(
-            f"Parsing {'completed' if result.status.value == 'Completed' else result.status.value}"
+        # --- RESULTS summary ---
+        status_label = (
+            "completed" if result.status.value == "Completed" else result.status.value
         )
-        print(f"  Session ID: {result.session_id}")
-        print(f"  Amendments found: {len(result.amendments)}")
-        print(f"  Coverage: {result.coverage_report.coverage_percentage:.1f}%")
+        print()
+        print("=" * 72)
+        print("RESULTS")
+        print("=" * 72)
+        print(f"  Status:         {status_label}")
+        print(f"  Amendments:     {len(result.amendments)}")
         print(
-            f"    Claimed: {result.coverage_report.claimed_length:,} / {result.coverage_report.total_length:,} chars"
+            f"  Coverage:       {result.coverage_report.coverage_percentage:.1f}% "
+            f"({result.coverage_report.claimed_length:,} / "
+            f"{result.coverage_report.total_length:,} chars)"
         )
-        print(f"    Flagged unclaimed: {len(result.coverage_report.flagged_unclaimed)}")
-        print(f"    Ignored unclaimed: {len(result.coverage_report.ignored_unclaimed)}")
 
         if result.amendments:
-            # Show amendment stats
             stats = parser_session.parser.get_statistics(result.amendments)
-            print("\n  Amendment statistics:")
-            print(f"    High confidence (>=90%): {stats['high_confidence']}")
-            print(f"    Needs review: {stats['needs_review']}")
-            print(f"    Average confidence: {stats['avg_confidence']:.2%}")
-
+            print(f"  Avg confidence: {stats['avg_confidence']:.0%}")
             if stats.get("by_change_type"):
-                print(f"    By type: {stats['by_change_type']}")
+                print(f"  By type:        {stats['by_change_type']}")
 
-        # Show GovInfo validation results
-        if validate and not dry_run:
-            print("\n  GovInfo validation:")
-            if govinfo_mismatch:
-                print(f"    WARNING: {govinfo_mismatch}")
-            else:
-                print("    Amendment count appears reasonable")
+        # --- AMENDMENTS detail ---
+        if result.amendments:
+            print()
+            print("=" * 72)
+            print("AMENDMENTS")
+            print("=" * 72)
+            for i, a in enumerate(result.amendments, 1):
+                section_str = str(a.section_ref) if a.section_ref else "??"
+                review_flag = " [REVIEW]" if a.needs_review else ""
+                source = a.metadata.get("source", "regex")
+                print()
+                print(f"  #{i}  {a.change_type.value:<10}  {section_str}")
+                print(f"      Pattern:    {a.pattern_name} ({source})")
+                print(f"      Confidence: {a.confidence:.0%}{review_flag}")
+                if a.old_text:
+                    old_preview = a.old_text[:120]
+                    if len(a.old_text) > 120:
+                        old_preview += "..."
+                    print(f"      Old text:   {old_preview}")
+                if a.new_text:
+                    new_preview = a.new_text[:120]
+                    if len(a.new_text) > 120:
+                        new_preview += "..."
+                    print(f"      New text:   {new_preview}")
+                if a.position_qualifier:
+                    pq = a.position_qualifier
+                    print(f"      Position:   {pq.type.value}", end="")
+                    if pq.anchor_text:
+                        print(f' (anchor: "{pq.anchor_text[:60]}")', end="")
+                    if pq.target_text:
+                        print(f' (target: "{pq.target_text}")', end="")
+                    print()
+                if not a.old_text and not a.new_text:
+                    # Show a snippet of the full match for context
+                    snippet = a.full_match[:140]
+                    if len(a.full_match) > 140:
+                        snippet += "..."
+                    print(f"      Context:    {snippet}")
+            print()
+            print("-" * 72)
 
-        if result.escalation_recommended or govinfo_mismatch:
-            reason = result.escalation_reason or govinfo_mismatch
-            print(f"\n  ESCALATION RECOMMENDED: {reason}")
-
-        if result.ingestion_report_id:
-            print(f"\n  Ingestion report ID: {result.ingestion_report_id}")
+        if result.escalation_recommended:
+            print(f"\n  ESCALATION RECOMMENDED: {result.escalation_reason}")
 
         if dry_run:
             print("\n  [DRY RUN - results not saved to database]")
@@ -1478,6 +1623,234 @@ async def ingest_house_votes(
             return 1
 
 
+# =============================================================================
+# Law Change Pipeline functions (Task 1.12-1.13)
+# =============================================================================
+
+
+async def initial_commit_command(
+    release_point: str,
+    titles: list[int] | None = None,
+    download_dir: Path = Path("data/olrc"),
+) -> int:
+    """Create initial commit from an OLRC release point.
+
+    Args:
+        release_point: Release point identifier (e.g., "113-21").
+        titles: Title numbers to process (default: Phase 1 titles).
+        download_dir: Directory for OLRC XML files.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.olrc.initial_commit import InitialCommitService
+
+    async with async_session_maker() as session:
+        service = InitialCommitService(session, download_dir=str(download_dir))
+        try:
+            rp = await service.create_initial_commit(
+                release_point=release_point,
+                titles=titles,
+            )
+            logger.info(
+                f"Initial commit created from {rp.full_identifier} "
+                f"(titles: {rp.titles_updated})"
+            )
+            return 0
+        except Exception as e:
+            logger.error(f"Failed to create initial commit: {e}")
+            return 1
+
+
+async def process_law_command(
+    congress: int,
+    law_number: int,
+    default_title: int | None = None,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> int:
+    """Process a Public Law to generate LawChange records.
+
+    Args:
+        congress: Congress number.
+        law_number: Law number.
+        default_title: Default US Code title.
+        dry_run: If True, don't persist changes.
+        verbose: If True, show detailed progress.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.legal_parser.law_change_service import LawChangeService
+
+    async with async_session_maker() as session:
+        service = LawChangeService(session)
+        result = await service.process_law(
+            congress=congress,
+            law_number=law_number,
+            default_title=default_title,
+            dry_run=dry_run,
+            verbose=verbose,
+        )
+
+        print(f"\nPL {congress}-{law_number} Processing Results:")
+        print(f"  Amendments found: {len(result.amendments)}")
+        print(f"  Diffs generated: {len(result.diffs)}")
+        print(f"  LawChange records: {len(result.changes)}")
+
+        if result.report:
+            report = result.report
+            print("\n  Diff Report:")
+            print(f"    Unresolved: {report.unresolved}")
+            print(f"    Skipped: {report.diffs_skipped}")
+            print(f"    Validation failures: {report.validation_failures}")
+            if report.by_type:
+                print(f"    By type: {report.by_type}")
+
+        if result.errors:
+            print("\n  Errors:")
+            for error in result.errors:
+                print(f"    - {error}")
+            return 1
+
+        if dry_run:
+            print("\n  [DRY RUN - changes not persisted]")
+
+        return 0
+
+
+async def validate_release_point_command(
+    release_point: str,
+    titles: list[int] | None = None,
+    download_dir: Path = Path("data/olrc"),
+    verbose: bool = False,
+) -> int:
+    """Validate database state against an OLRC release point.
+
+    Args:
+        release_point: Release point identifier (e.g., "113-22").
+        titles: Title numbers to validate (default: Phase 1 titles).
+        download_dir: Directory for OLRC XML files.
+        verbose: If True, show per-section results.
+
+    Returns:
+        0 on success/valid, 1 on failure/invalid.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.legal_parser.release_point_validator import ReleasePointValidator
+
+    titles = titles or PHASE_1_TITLES
+
+    async with async_session_maker() as session:
+        validator = ReleasePointValidator(session, download_dir=download_dir)
+        report = await validator.validate_against_release_point(
+            release_point=release_point,
+            titles=titles,
+            verbose=verbose,
+        )
+
+        print(f"\nValidation Report: {release_point}")
+        print(f"  Titles checked: {report.titles_checked}")
+        print(f"  Total sections: {report.total_sections}")
+        print(f"  Matches: {report.matches} ({report.match_rate:.1%})")
+        print(f"  Mismatches: {report.mismatches}")
+        print(f"  Only in DB: {report.only_in_db}")
+        print(f"  Only in RP: {report.only_in_rp}")
+
+        if report.comparisons:
+            print("\n  Mismatched sections (first 10):")
+            for comp in report.comparisons[:10]:
+                print(
+                    f"    {comp.title_number} USC {comp.section_number}: "
+                    f"{comp.diff_summary}"
+                )
+
+        if report.errors:
+            print("\n  Errors:")
+            for error in report.errors:
+                print(f"    - {error}")
+
+        print(f"\n  Valid: {'YES' if report.is_valid else 'NO'}")
+
+        return 0 if report.is_valid else 1
+
+
+async def cross_ref_law_command(
+    congress: int,
+    law_number: int,
+    verbose: bool = False,
+) -> int:
+    """Cross-reference a law's changes against OLRC amendment notes.
+
+    Args:
+        congress: Congress number.
+        law_number: Law number.
+        verbose: If True, show detailed results.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.public_law import LawChange, PublicLaw
+    from pipeline.legal_parser.release_point_validator import AmendmentCrossReferencer
+
+    async with async_session_maker() as session:
+        # Get law
+        result = await session.execute(
+            select(PublicLaw).where(
+                PublicLaw.congress == congress,
+                PublicLaw.law_number == str(law_number),
+            )
+        )
+        law = result.scalar_one_or_none()
+        if not law:
+            logger.error(f"PL {congress}-{law_number} not in database")
+            return 1
+
+        # Get generated changes
+        changes_result = await session.execute(
+            select(LawChange).where(LawChange.law_id == law.law_id)
+        )
+        changes = changes_result.scalars().all()
+
+        if not changes:
+            print(f"No LawChange records for PL {congress}-{law_number}")
+            print("Run 'process-law' first to generate changes.")
+            return 1
+
+        cross_ref = AmendmentCrossReferencer(session)
+        xref = await cross_ref.cross_reference(
+            congress=congress,
+            law_number=law_number,
+            generated_changes=changes,
+        )
+
+        print(f"\nCross-Reference: PL {congress}-{law_number}")
+        print(f"  Sections in OLRC notes: {len(xref.sections_in_notes)}")
+        print(f"  Sections in our changes: {len(xref.sections_in_changes)}")
+        print(f"  Matched: {len(xref.matched)}")
+        print(f"  Only in notes (parser missed): {len(xref.only_in_notes)}")
+        print(f"  Only in changes (possible FP): {len(xref.only_in_changes)}")
+        print(f"  Precision: {xref.precision:.1%}")
+        print(f"  Recall: {xref.recall:.1%}")
+
+        if verbose and xref.only_in_notes:
+            print("\n  Sections in notes but NOT in changes:")
+            for title, section in xref.only_in_notes:
+                print(f"    {title} USC {section}")
+
+        if verbose and xref.only_in_changes:
+            print("\n  Sections in changes but NOT in notes:")
+            for title, section in xref.only_in_changes:
+                print(f"    {title} USC {section}")
+
+        return 0
+
+
 def main() -> int:
     """Main entry point for CLI."""
     parser = argparse.ArgumentParser(description="US Code data ingestion pipeline CLI")
@@ -1571,6 +1944,12 @@ def main() -> int:
         "--force-parse",
         action="store_true",
         help="Re-parse and update existing records",
+    )
+
+    # seed-laws command
+    subparsers.add_parser(
+        "seed-laws",
+        help="Ingest curated seed laws for local development and parse-law testing",
     )
 
     # =========================================================================
@@ -1925,12 +2304,6 @@ Examples:
         action="store_true",
         help="Parse without saving to database",
     )
-    parse_law_parser.add_argument(
-        "--no-validate",
-        action="store_true",
-        help="Skip GovInfo metadata validation",
-    )
-
     # show-ingestion-report command
     show_report_parser = subparsers.add_parser(
         "show-ingestion-report", help="Display an ingestion report"
@@ -1971,6 +2344,116 @@ Examples:
         "--pattern-name",
         type=str,
         help="Name for the new pattern",
+    )
+
+    # =========================================================================
+    # Law Change Pipeline commands (Task 1.12-1.13)
+    # =========================================================================
+
+    # initial-commit command
+    initial_commit_parser = subparsers.add_parser(
+        "initial-commit",
+        help="Create initial commit from an OLRC release point",
+    )
+    initial_commit_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier (e.g., '113-21')",
+    )
+    initial_commit_parser.add_argument(
+        "--titles",
+        type=int,
+        nargs="+",
+        help="Title numbers to process (default: Phase 1 titles)",
+    )
+    initial_commit_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
+    # process-law command
+    process_law_parser = subparsers.add_parser(
+        "process-law",
+        help="Process a Public Law to generate LawChange records",
+    )
+    process_law_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 113)",
+    )
+    process_law_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 22 for PL 113-22)",
+    )
+    process_law_parser.add_argument(
+        "--default-title",
+        type=int,
+        help="Default US Code title when not specified in text",
+    )
+    process_law_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate diffs without persisting to database",
+    )
+    process_law_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed progress",
+    )
+
+    # validate-release-point command
+    validate_rp_parser = subparsers.add_parser(
+        "validate-release-point",
+        help="Validate database state against an OLRC release point",
+    )
+    validate_rp_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier (e.g., '113-22')",
+    )
+    validate_rp_parser.add_argument(
+        "--titles",
+        type=int,
+        nargs="+",
+        help="Title numbers to validate (default: Phase 1 titles)",
+    )
+    validate_rp_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+    validate_rp_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show per-section comparison results",
+    )
+
+    # cross-ref-law command
+    cross_ref_parser = subparsers.add_parser(
+        "cross-ref-law",
+        help="Cross-reference a law's changes against OLRC amendment notes",
+    )
+    cross_ref_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 113)",
+    )
+    cross_ref_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 22)",
+    )
+    cross_ref_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed section-level results",
     )
 
     args = parser.parse_args()
@@ -2024,6 +2507,9 @@ Examples:
                 force_parse=args.force_parse,
             )
         )
+
+    elif args.command == "seed-laws":
+        return asyncio.run(seed_laws_command())
 
     # =========================================================================
     # GovInfo command handlers
@@ -2165,7 +2651,6 @@ Examples:
                 default_title=args.default_title,
                 min_confidence=args.min_confidence,
                 dry_run=args.dry_run,
-                validate=not args.no_validate,
             )
         )
 
@@ -2189,6 +2674,49 @@ Examples:
             promote_pattern_command(
                 discovery_id=args.discovery_id,
                 pattern_name=args.pattern_name,
+            )
+        )
+
+    # =========================================================================
+    # Law Change Pipeline command handlers (Task 1.12-1.13)
+    # =========================================================================
+
+    elif args.command == "initial-commit":
+        return asyncio.run(
+            initial_commit_command(
+                release_point=args.release_point,
+                titles=args.titles,
+                download_dir=args.dir,
+            )
+        )
+
+    elif args.command == "process-law":
+        return asyncio.run(
+            process_law_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                default_title=args.default_title,
+                dry_run=args.dry_run,
+                verbose=args.verbose,
+            )
+        )
+
+    elif args.command == "validate-release-point":
+        return asyncio.run(
+            validate_release_point_command(
+                release_point=args.release_point,
+                titles=args.titles,
+                download_dir=args.dir,
+                verbose=args.verbose,
+            )
+        )
+
+    elif args.command == "cross-ref-law":
+        return asyncio.run(
+            cross_ref_law_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                verbose=args.verbose,
             )
         )
 

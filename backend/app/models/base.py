@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from datetime import datetime
 
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -19,6 +20,16 @@ convention = {
 }
 
 metadata = MetaData(naming_convention=convention)
+
+
+def enum_column(enum_class: type, pg_name: str, **kwargs: object) -> SAEnum:
+    """Create an Enum column that uses Python enum .value (not .name) for DB storage."""
+    return SAEnum(
+        enum_class,
+        name=pg_name,
+        values_callable=lambda x: [e.value for e in x],
+        **kwargs,
+    )
 
 
 class Base(DeclarativeBase):

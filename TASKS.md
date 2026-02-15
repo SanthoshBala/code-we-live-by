@@ -284,6 +284,12 @@ This document translates the CWLB specification into an actionable backlog of im
   - Calculate line-by-line diffs
   - Store in LawChange table
 
+- [ ] **Task 1.13b**: OLRC reconciliation for parsed amendments
+  - Validate parsed amendments against actual US Code content from OLRC
+  - For each amendment, verify old text exists in prior release point and/or new text exists in next release point
+  - Design for robustness: support forward validation (new text in next RP), backward validation (old text in prior RP), or both
+  - Replace the removed GovInfo XML keyword-counting heuristic with real cross-referencing
+
 - [ ] **Task 1.13**: Build manual review interface for complex amendments
   - Flag ambiguous legal language for human review
   - UI for reviewing and correcting parsed changes
