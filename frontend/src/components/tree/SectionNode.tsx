@@ -49,7 +49,7 @@ export default function SectionNode({
       </div>
       {expanded && (
         <div className="ml-4 border-l border-gray-300 pl-2">
-          <p className="px-2 py-0.5 font-mono text-xs text-gray-400">
+          <p className="py-0.5 pl-3 pr-2 font-mono text-xs text-gray-400">
             &sect;&thinsp;{section.section_number}
           </p>
           <Link
