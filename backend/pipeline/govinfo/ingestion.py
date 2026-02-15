@@ -271,6 +271,7 @@ class PublicLawIngestionService:
             # Update existing record
             existing.law_type = law_type
             existing.official_title = detail.title
+            existing.short_title = detail.short_title
             existing.enacted_date = enacted_date
             existing.govinfo_url = govinfo_url
             existing.statutes_at_large_citation = detail.statutes_at_large_citation
@@ -282,6 +283,7 @@ class PublicLawIngestionService:
             congress=detail.congress,
             law_type=law_type,
             official_title=detail.title,
+            short_title=detail.short_title,
             enacted_date=enacted_date,
             govinfo_url=govinfo_url,
             statutes_at_large_citation=detail.statutes_at_large_citation,
