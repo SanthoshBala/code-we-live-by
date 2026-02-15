@@ -106,7 +106,7 @@ export default function LawDiffViewer({
       {/* Left sidebar — affected sections tree (independently scrollable) */}
       <div className="hidden w-72 shrink-0 overflow-y-auto lg:block">
         <h2 className="sticky top-0 z-10 mb-2 bg-white px-3 pb-1 text-sm font-semibold text-gray-900">
-          Affected Sections
+          Amended Sections
         </h2>
         <AffectedSectionsTree
           amendments={amendments}

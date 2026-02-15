@@ -240,7 +240,7 @@ export default function AffectedSectionsTree({
   );
 
   return (
-    <nav aria-label="Affected USC sections">
+    <nav aria-label="Amended USC sections">
       <div className="space-y-0.5">
         {sortedTitles.map(([titleNumber, sections]) => (
           <TitleTreeNode
