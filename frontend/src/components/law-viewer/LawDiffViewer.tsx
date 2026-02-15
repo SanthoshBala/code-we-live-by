@@ -145,28 +145,36 @@ export default function LawDiffViewer({
 
                     {/* Card body — diff panels */}
                     <div className="px-4 py-3">
-                      {a.old_text || a.new_text ? (
+                      {a.old_text != null || a.new_text != null ? (
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          {a.old_text != null && (
-                            <div className="rounded bg-red-50 p-3">
-                              <div className="mb-1 text-xs font-medium text-red-700">
-                                Old Text
-                              </div>
+                          <div className="rounded bg-red-50 p-3">
+                            <div className="mb-1 text-xs font-medium text-red-700">
+                              Old Text
+                            </div>
+                            {a.old_text != null ? (
                               <pre className="whitespace-pre-wrap font-mono text-xs text-red-900">
                                 {a.old_text}
                               </pre>
+                            ) : (
+                              <p className="text-xs italic text-gray-400">
+                                (none)
+                              </p>
+                            )}
+                          </div>
+                          <div className="rounded bg-green-50 p-3">
+                            <div className="mb-1 text-xs font-medium text-green-700">
+                              New Text
                             </div>
-                          )}
-                          {a.new_text != null && (
-                            <div className="rounded bg-green-50 p-3">
-                              <div className="mb-1 text-xs font-medium text-green-700">
-                                New Text
-                              </div>
+                            {a.new_text != null ? (
                               <pre className="whitespace-pre-wrap font-mono text-xs text-green-900">
                                 {a.new_text}
                               </pre>
-                            </div>
-                          )}
+                            ) : (
+                              <p className="text-xs italic text-gray-400">
+                                (none)
+                              </p>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <p className="text-xs italic text-gray-400">
