@@ -93,7 +93,7 @@ class PLAWPackageInfo:
         return cls(
             package_id=package_id,
             last_modified=last_modified,
-            title=data.get("title", ""),
+            title=data.get("title", "").rstrip("."),
             congress=congress,
             law_number=law_number,
             law_type=law_type,
@@ -106,6 +106,7 @@ class PLAWPackageDetail:
 
     package_id: str
     title: str
+    short_title: str | None
     congress: int
     law_number: int
     law_type: str
@@ -167,9 +168,26 @@ class PLAWPackageDetail:
         if "billId" in related:
             bill_id = related["billId"]
 
+        # Strip trailing period from official title (GovInfo convention)
+        raw_title = data.get("title", "")
+        title = raw_title.rstrip(".")
+
+        # Extract short title from shortTitle array
+        short_title_list = data.get("shortTitle", [])
+        short_title: str | None = None
+        if short_title_list and isinstance(short_title_list, list):
+            first = short_title_list[0]
+            if isinstance(first, dict):
+                short_title = first.get("title")
+            elif isinstance(first, str):
+                short_title = first
+        if short_title:
+            short_title = short_title.rstrip(".")
+
         return cls(
             package_id=package_id,
-            title=data.get("title", ""),
+            title=title,
+            short_title=short_title,
             congress=congress,
             law_number=law_number,
             law_type=law_type,

@@ -65,7 +65,10 @@ class TestPLAWPackageDetail:
         """Test parsing full package detail from API response."""
         data = {
             "packageId": "PLAW-119publ60",
-            "title": "National Defense Authorization Act for Fiscal Year 2026",
+            "title": "An act to authorize appropriations for fiscal year 2026.",
+            "shortTitle": [
+                {"title": "National Defense Authorization Act for Fiscal Year 2026"}
+            ],
             "dateIssued": "2025-12-18",
             "governmentAuthor1": "Congress",
             "publisher": "Government Publishing Office",
@@ -88,7 +91,11 @@ class TestPLAWPackageDetail:
         assert detail.congress == 119
         assert detail.law_number == 60
         assert detail.law_type == "public"
-        assert detail.title == "National Defense Authorization Act for Fiscal Year 2026"
+        assert detail.title == "An act to authorize appropriations for fiscal year 2026"
+        assert (
+            detail.short_title
+            == "National Defense Authorization Act for Fiscal Year 2026"
+        )
         assert detail.date_issued == datetime(2025, 12, 18)
         assert detail.government_author == "Congress"
         assert detail.pdf_url is not None
@@ -101,7 +108,7 @@ class TestPLAWPackageDetail:
         """Test parsing with minimal fields."""
         data = {
             "packageId": "PLAW-118publ1",
-            "title": "Test Law",
+            "title": "Test Law.",
         }
 
         detail = PLAWPackageDetail.from_api_response(data)
@@ -109,6 +116,8 @@ class TestPLAWPackageDetail:
         assert detail.package_id == "PLAW-118publ1"
         assert detail.congress == 118
         assert detail.law_number == 1
+        assert detail.title == "Test Law"
+        assert detail.short_title is None
         assert detail.pdf_url is None
         assert detail.xml_url is None
         assert detail.bill_id is None
