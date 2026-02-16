@@ -59,6 +59,7 @@ def _build_section_summary(section: USCodeSection) -> SectionSummarySchema:
         section_number=section.section_number,
         heading=section.heading,
         sort_order=section.sort_order,
+        is_repealed=section.is_repealed,
         last_amendment_year=year,
         last_amendment_law=law,
         note_categories=_extract_note_categories(section),

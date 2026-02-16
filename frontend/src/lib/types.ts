@@ -16,6 +16,7 @@ export interface SectionSummary {
   section_number: string;
   heading: string;
   sort_order: number;
+  is_repealed?: boolean;
   last_amendment_year?: number | null;
   last_amendment_law?: string | null;
   note_categories?: string[];
@@ -56,6 +57,7 @@ export interface DirectoryItem {
   name: string;
   href: string;
   kind: 'folder' | 'file';
+  isRepealed?: boolean;
   sectionCount?: number | null;
   lastAmendmentLaw?: string | null;
   lastAmendmentYear?: number | null;

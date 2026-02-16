@@ -343,6 +343,7 @@ class SectionSummarySchema(BaseModel):
     section_number: str
     heading: str
     sort_order: int
+    is_repealed: bool = False
     last_amendment_year: int | None = None
     last_amendment_law: str | None = None  # e.g. "PL 118-50"
     note_categories: list[str] = []  # e.g. ["editorial", "statutory"]

@@ -30,11 +30,12 @@ export default function SectionNode({
   const noteFiles = NOTE_FILES.filter(({ category }) =>
     noteCategories.includes(category)
   );
+  const muted = section.is_repealed === true;
 
   return (
     <div>
       <div
-        className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 ${isActive ? 'bg-primary-50' : ''}`}
+        className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-gray-100 ${isActive ? 'bg-primary-50' : ''} ${muted ? 'text-gray-400' : 'text-gray-700'}`}
       >
         <TreeIndicator
           expanded={expanded}

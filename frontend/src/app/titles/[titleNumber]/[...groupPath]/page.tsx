@@ -127,11 +127,17 @@ export default function GroupDirectoryPage() {
   for (const child of group.children) {
     const allSections = collectAllSections(child);
     const amendment = latestAmendment(allSections);
+    const nameHint = child.name.toLowerCase();
+    const groupRepealed =
+      /\brepealed\b/.test(nameHint) ||
+      /\breserved\b/.test(nameHint) ||
+      /\btransferred\b/.test(nameHint);
     items.push({
       id: `${capitalizeGroupType(child.group_type)} ${child.number}`,
       name: child.name,
       href: `${pathSoFar}/${child.group_type}/${child.number}`,
       kind: 'folder' as const,
+      isRepealed: groupRepealed,
       sectionCount: allSections.length,
       lastAmendmentLaw: amendment.law,
       lastAmendmentYear: amendment.year,
@@ -145,6 +151,7 @@ export default function GroupDirectoryPage() {
       name: s.heading,
       href: `/sections/${titleNumber}/${s.section_number}`,
       kind: 'file' as const,
+      isRepealed: s.is_repealed === true,
       lastAmendmentLaw: s.last_amendment_law ?? null,
       lastAmendmentYear: s.last_amendment_year ?? null,
     });

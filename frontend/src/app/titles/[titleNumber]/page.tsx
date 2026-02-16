@@ -51,11 +51,17 @@ function groupToItem(
 ): DirectoryItem {
   const allSections = collectAllSections(group);
   const amendment = latestAmendment(allSections);
+  const nameHint = group.name.toLowerCase();
+  const groupRepealed =
+    /\brepealed\b/.test(nameHint) ||
+    /\breserved\b/.test(nameHint) ||
+    /\btransferred\b/.test(nameHint);
   return {
     id: `${capitalizeGroupType(group.group_type)} ${group.number}`,
     name: group.name,
     href: `${parentPath}/${group.group_type}/${group.number}`,
     kind: 'folder' as const,
+    isRepealed: groupRepealed,
     sectionCount: allSections.length,
     lastAmendmentLaw: amendment.law,
     lastAmendmentYear: amendment.year,
@@ -97,6 +103,7 @@ export default function TitleDirectoryPage() {
       name: s.heading,
       href: `/sections/${titleNumber}/${s.section_number}`,
       kind: 'file' as const,
+      isRepealed: s.is_repealed === true,
       lastAmendmentLaw: s.last_amendment_law ?? null,
       lastAmendmentYear: s.last_amendment_year ?? null,
     });
