@@ -223,6 +223,10 @@ export default function SectionProvisions({
     if (isSection(node)) {
       const pl = node.header;
       const topOffset = node.depth * 1.625;
+      // Parent headers need higher z-index so they render above child
+      // headers during sticky transitions (prevents visual gap when a
+      // child header unsticks and scrolls past its parent).
+      const zIndex = 20 - node.depth;
       return (
         <div key={`section-${pl.lineIndex}`}>
           <div
@@ -232,8 +236,8 @@ export default function SectionProvisions({
           />
           <div
             data-sticky-header={pl.lineIndex}
-            className={`sticky z-10 flex items-start bg-gray-100${stuckHeaders.has(pl.lineIndex) ? ' border-b border-gray-200' : ''}`}
-            style={{ top: `${topOffset}em` }}
+            className={`sticky flex items-start bg-gray-100${stuckHeaders.has(pl.lineIndex) ? ' border-b border-gray-200' : ''}`}
+            style={{ top: `${topOffset}em`, zIndex }}
           >
             {renderLineContent(pl)}
           </div>

@@ -162,10 +162,11 @@ describe('SectionProvisions', () => {
     const outerSpan = markerSpan!.closest('.whitespace-pre-wrap');
     expect(outerSpan).toHaveClass('pl-[4ch]', '-indent-[4ch]');
 
-    // Header row should be sticky with top set via inline style
+    // Header row should be sticky with top and z-index set via inline style
     const headerRow = markerSpan!.closest('.flex');
-    expect(headerRow).toHaveClass('sticky', 'z-10', 'bg-gray-100');
+    expect(headerRow).toHaveClass('sticky', 'bg-gray-100');
     expect((headerRow as HTMLElement).style.top).toBe('0em');
+    expect((headerRow as HTMLElement).style.zIndex).toBe('20');
 
     // Border only appears when stuck (via IntersectionObserver), not by default
     expect(headerRow).not.toHaveClass('border-b');
@@ -213,10 +214,13 @@ describe('SectionProvisions', () => {
     expect((headers[1] as HTMLElement).style.top).toBe('1.625em');
     expect((headers[2] as HTMLElement).style.top).toBe('3.25em');
 
-    // All are sticky
+    // All are sticky with decreasing z-index (parents above children)
     expect(headers[0]).toHaveClass('sticky');
     expect(headers[1]).toHaveClass('sticky');
     expect(headers[2]).toHaveClass('sticky');
+    expect((headers[0] as HTMLElement).style.zIndex).toBe('20');
+    expect((headers[1] as HTMLElement).style.zIndex).toBe('19');
+    expect((headers[2] as HTMLElement).style.zIndex).toBe('18');
   });
 
   it('wraps sections so nested headers unstick with their parent', () => {
