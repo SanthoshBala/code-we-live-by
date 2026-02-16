@@ -220,25 +220,11 @@ describe('SectionProvisions', () => {
     expect(headerRow).not.toHaveClass('border-b');
   });
 
-  it('renders sentinel elements before sticky headers', () => {
+  it('does not render sentinel elements', () => {
     const { container } = render(
       <SectionProvisions
         {...defaultProps}
         textContent="(a) In General"
-        status={null}
-      />
-    );
-    const sentinel = container.querySelector('[data-sticky-sentinel]');
-    expect(sentinel).toBeInTheDocument();
-    expect(sentinel).toHaveClass('h-0');
-    expect(sentinel).toHaveAttribute('aria-hidden', 'true');
-  });
-
-  it('does not render sentinels for non-header lines', () => {
-    const { container } = render(
-      <SectionProvisions
-        {...defaultProps}
-        textContent="(1) forcibly assaults, resists, opposes, impedes;"
         status={null}
       />
     );
