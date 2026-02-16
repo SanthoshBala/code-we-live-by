@@ -1276,8 +1276,10 @@ class USLMParser:
                     # Italic text might be a sub-header if followed by ".—"
                     # But NOT if it's a case citation (contains " v. ")
                     # or other inline emphasis (Latin terms, etc.)
-                    if " v. " in text:
-                        # Case citation - keep as inline italic text
+                    inline_latin = {"et seq", "et al", "supra", "infra", "id"}
+                    stripped_text = text.strip().rstrip(".")
+                    if " v. " in text or stripped_text.lower() in inline_latin:
+                        # Case citation or Latin phrase - keep as inline text
                         parts.append(text)
                     else:
                         # Mark as potential sub-header for normalizer

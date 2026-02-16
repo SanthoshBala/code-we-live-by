@@ -103,6 +103,14 @@ LEGAL_ABBREVIATIONS = {
     "subch.",
     "Pt.",
     "pt.",
+    "Ex.",
+    "Ord.",
+    "Proc.",
+    "proc.",
+    "Eff.",
+    "eff.",
+    "Mem.",
+    "mem.",
 }
 
 # Pattern for list item markers: (a), (1), (A), (i), (I), etc.
@@ -630,6 +638,15 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
         # Single uppercase letter followed by period - likely abbreviation
         # unless it's the end of a sentence like "Plan B."
         pass  # Allow this for now, common abbreviations are in the list
+
+    # In amendment citations, a period after a parenthetical reference like
+    # "(a)(2)." followed by "Pub. L." is not a sentence boundary.
+    # Pattern: closing paren + period + spaces + known abbreviation start
+    if pos >= 1 and text[pos - 1] == ")":
+        after_stripped = remaining.lstrip()
+        for abbrev in LEGAL_ABBREVIATIONS:
+            if after_stripped.startswith(abbrev[:-1]):  # Match without trailing .
+                return False
 
     return True
 

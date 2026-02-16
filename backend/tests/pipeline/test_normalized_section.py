@@ -96,6 +96,18 @@ class TestSentenceBoundaryDetection:
         text = "The amount is $1.5 million."
         assert _is_sentence_boundary(text, 16) is False
 
+    def test_ex_ord_abbreviation(self) -> None:
+        """Ex. and Ord. in 'Ex. Ord. No.' are not sentence boundaries."""
+        text = "Ex. Ord. No. 12504, Jan. 31, 1985."
+        assert _is_sentence_boundary(text, 2) is False  # Ex.
+        assert _is_sentence_boundary(text, 7) is False  # Ord.
+
+    def test_period_after_paren_ref_before_pub_l(self) -> None:
+        """Period after (a)(2) before Pub. L. is not a sentence boundary."""
+        text = "Subsec. (a)(2). Pub. L. 100-159 inserted provision."
+        pos = text.index("). P") + 1  # period after )
+        assert _is_sentence_boundary(text, pos) is False
+
 
 class TestNormalizeSectionBasic:
     """Basic tests for section normalization."""
@@ -986,6 +998,22 @@ class TestNormalizeNoteContent:
         assert lines[3].content == "The exclusive right."
         assert lines[3].indent_level == 3
 
+    def test_ex_ord_not_split_into_sentences(self) -> None:
+        """Test that 'Ex. Ord. No. 12504' is not split into separate lines."""
+        text = "Ex. Ord. No. 12504, Jan. 31, 1985, 50 F.R. 4849, provided:"
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 1
+        assert "Ex. Ord. No. 12504" in lines[0].content
+
+    def test_amendment_subsec_ref_not_split(self) -> None:
+        """Test that 'Subsec. (a)(2). Pub. L.' stays on one line."""
+        text = "1987—Subsec. (a)(2). Pub. L. 100–159 inserted provision."
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 1
+        assert "Subsec. (a)(2). Pub. L. 100–159" in lines[0].content
+
 
 class TestSentenceSplittingWithParagraphs:
     """Tests for sentence splitting with paragraph break detection."""
@@ -1163,6 +1191,23 @@ class TestParserNotesContent:
         # Paragraph content should NOT be wrapped in [NH]
         assert "[NH]Memorandum" not in content
         assert "Memorandum of President" in content
+
+    def test_et_seq_italic_not_marked_as_header(self) -> None:
+        """Test that 'et seq' in italic is kept inline, not marked as H2."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = "<notes><p>( 17 U.S.C. 901 <i>et seq</i>.)</p></notes>"
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Should NOT contain [H2] marker for "et seq"
+        assert "[H2]" not in content
+        assert "et seq" in content
 
 
 class TestStripNoteMarkers:
