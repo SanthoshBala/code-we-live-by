@@ -1,6 +1,11 @@
+import type { ItemStatus } from '@/lib/types';
+import { statusIconColor } from '@/lib/statusStyles';
+
 /** Document icon representing a code section (page with folded corner). */
-export default function FileIcon({ muted = false }: { muted?: boolean } = {}) {
-  const color = muted ? 'text-gray-300' : 'text-gray-400';
+export default function FileIcon({
+  status = null,
+}: { status?: ItemStatus } = {}) {
+  const color = statusIconColor(status, 'text-gray-400');
   return (
     <svg
       className={`h-4 w-4 shrink-0 ${color}`}

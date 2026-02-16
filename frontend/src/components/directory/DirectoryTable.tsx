@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import type { DirectoryItem } from '@/lib/types';
+import type { DirectoryItem, ItemStatus } from '@/lib/types';
 import FolderIcon from '@/components/tree/icons/FolderIcon';
 import FileIcon from '@/components/tree/icons/FileIcon';
 
@@ -119,10 +119,7 @@ export default function DirectoryTable({ items }: DirectoryTableProps) {
       </thead>
       <tbody>
         {sorted.map((item) => {
-          const muted = item.isRepealed === true;
-          const textColor = muted
-            ? 'text-gray-400'
-            : 'text-gray-800 hover:text-primary-700';
+          const status: ItemStatus = item.status ?? null;
           return (
             <tr
               key={item.href}
@@ -131,18 +128,21 @@ export default function DirectoryTable({ items }: DirectoryTableProps) {
               <td className="whitespace-nowrap py-2 pr-2">
                 <Link
                   href={item.href}
-                  className={`flex items-center gap-2 ${textColor}`}
+                  className="flex items-center gap-2 text-gray-800 hover:text-primary-700"
                 >
                   {item.kind === 'folder' ? (
-                    <FolderIcon open={false} muted={muted} />
+                    <FolderIcon open={false} status={status} />
                   ) : (
-                    <FileIcon muted={muted} />
+                    <FileIcon status={status} />
                   )}
                   <span className="font-mono text-xs">{item.id}</span>
                 </Link>
               </td>
               <td className="max-w-0 truncate py-2 pr-2">
-                <Link href={item.href} className={textColor}>
+                <Link
+                  href={item.href}
+                  className="text-gray-800 hover:text-primary-700"
+                >
                   {item.name}
                 </Link>
               </td>

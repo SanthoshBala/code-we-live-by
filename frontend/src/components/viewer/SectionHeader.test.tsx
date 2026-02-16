@@ -25,7 +25,7 @@ describe('SectionHeader', () => {
         enactedDate={null}
         lastModifiedDate={null}
         isPositiveLaw={false}
-        isRepealed={false}
+        status={null}
       />
     );
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
@@ -45,7 +45,7 @@ describe('SectionHeader', () => {
         enactedDate={null}
         lastModifiedDate={null}
         isPositiveLaw={false}
-        isRepealed={false}
+        status={null}
       />
     );
     expect(screen.getByRole('link', { name: 'Title 17' })).toHaveAttribute(
@@ -66,23 +66,92 @@ describe('SectionHeader', () => {
         enactedDate={null}
         lastModifiedDate={null}
         isPositiveLaw={true}
-        isRepealed={false}
+        status={null}
       />
     );
     expect(screen.getByText('Positive Law')).toBeInTheDocument();
   });
 
-  it('shows Repealed badge when isRepealed is true', () => {
+  it('shows Repealed badge when status is repealed', () => {
     render(
       <SectionHeader
         heading="Test"
         enactedDate={null}
         lastModifiedDate={null}
         isPositiveLaw={false}
-        isRepealed={true}
+        status="repealed"
       />
     );
     expect(screen.getByText('Repealed')).toBeInTheDocument();
+  });
+
+  it('shows Reserved badge when status is reserved', () => {
+    render(
+      <SectionHeader
+        heading="Test"
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        status="reserved"
+      />
+    );
+    expect(screen.getByText('Reserved')).toBeInTheDocument();
+  });
+
+  it('shows Transferred badge when status is transferred', () => {
+    render(
+      <SectionHeader
+        heading="Test"
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        status="transferred"
+      />
+    );
+    expect(screen.getByText('Transferred')).toBeInTheDocument();
+  });
+
+  it('shows Renumbered badge when status is renumbered', () => {
+    render(
+      <SectionHeader
+        heading="Test"
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        status="renumbered"
+      />
+    );
+    expect(screen.getByText('Renumbered')).toBeInTheDocument();
+  });
+
+  it('shows Omitted badge when status is omitted', () => {
+    render(
+      <SectionHeader
+        heading="Test"
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        status="omitted"
+      />
+    );
+    expect(screen.getByText('Omitted')).toBeInTheDocument();
+  });
+
+  it('shows no status badge when status is null', () => {
+    render(
+      <SectionHeader
+        heading="Test"
+        enactedDate={null}
+        lastModifiedDate={null}
+        isPositiveLaw={false}
+        status={null}
+      />
+    );
+    expect(screen.queryByText('Repealed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reserved')).not.toBeInTheDocument();
+    expect(screen.queryByText('Transferred')).not.toBeInTheDocument();
+    expect(screen.queryByText('Renumbered')).not.toBeInTheDocument();
+    expect(screen.queryByText('Omitted')).not.toBeInTheDocument();
   });
 
   it('shows enacted and last modified dates when provided', () => {
@@ -92,7 +161,7 @@ describe('SectionHeader', () => {
         enactedDate="1976-10-19"
         lastModifiedDate="2020-01-01"
         isPositiveLaw={false}
-        isRepealed={false}
+        status={null}
       />
     );
     expect(screen.getByText('Enacted 1976-10-19')).toBeInTheDocument();
@@ -106,7 +175,7 @@ describe('SectionHeader', () => {
         enactedDate={null}
         lastModifiedDate={null}
         isPositiveLaw={false}
-        isRepealed={false}
+        status={null}
       />
     );
     expect(screen.queryByText(/Enacted/)).not.toBeInTheDocument();
@@ -120,7 +189,7 @@ describe('SectionHeader', () => {
         enactedDate={null}
         lastModifiedDate={null}
         isPositiveLaw={false}
-        isRepealed={false}
+        status={null}
         latestAmendment={{ publicLawId: 'PL 116-283', year: 2021 }}
       />
     );

@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { CodeLine } from '@/lib/types';
+import type { CodeLine, ItemStatus } from '@/lib/types';
+import { statusMessage } from '@/lib/statusStyles';
 
 interface SectionProvisionsProps {
   fullCitation: string;
   heading: string;
   textContent: string | null;
   provisions: CodeLine[] | null;
-  isRepealed: boolean;
+  status: ItemStatus;
 }
 
 // Legacy heuristic fallback — used when structured provisions are not available.
@@ -105,7 +106,7 @@ export default function SectionProvisions({
   heading,
   textContent,
   provisions,
-  isRepealed,
+  status,
 }: SectionProvisionsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [stuckHeaders, setStuckHeaders] = useState<Set<number>>(new Set());
@@ -158,9 +159,7 @@ export default function SectionProvisions({
   if (!textContent) {
     return (
       <div className="rounded border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-        {isRepealed
-          ? 'This section has been repealed.'
-          : 'No text content available for this section.'}
+        {statusMessage(status)}
       </div>
     );
   }

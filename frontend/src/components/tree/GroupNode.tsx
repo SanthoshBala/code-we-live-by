@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { SectionGroupTree, TreeActivePath } from '@/lib/types';
+import { detectStatus } from '@/lib/statusStyles';
 import TreeIndicator from './TreeIndicator';
 import SectionNode from './SectionNode';
 
@@ -55,6 +56,8 @@ export default function GroupNode({
     if (groupContainsActive(group, activePath)) setExpanded(true);
   }, [group, activePath]);
 
+  const status = detectStatus(group.name);
+
   const isActive =
     activePath?.groupPath?.length &&
     activePath.groupPath[activePath.groupPath.length - 1].type ===
@@ -71,6 +74,7 @@ export default function GroupNode({
         <TreeIndicator
           expanded={expanded}
           onToggle={() => setExpanded((prev) => !prev)}
+          status={status}
         />
         <Link
           href={groupHref}

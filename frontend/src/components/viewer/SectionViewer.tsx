@@ -55,7 +55,7 @@ export default function SectionViewer({
         enactedDate={data.enacted_date}
         lastModifiedDate={data.last_modified_date}
         isPositiveLaw={data.is_positive_law}
-        isRepealed={data.is_repealed}
+        status={data.is_repealed ? 'repealed' : null}
         latestAmendment={latestAmendment}
       />
       {hasHistory && (
@@ -67,7 +67,7 @@ export default function SectionViewer({
           heading={data.heading}
           textContent={data.text_content}
           provisions={data.provisions}
-          isRepealed={data.is_repealed}
+          status={data.is_repealed ? 'repealed' : null}
         />
       ) : (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">

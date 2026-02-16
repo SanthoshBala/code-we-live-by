@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { SectionSummary } from '@/lib/types';
+import { detectStatus } from '@/lib/statusStyles';
 import TreeIndicator from './TreeIndicator';
 import FileIcon from './icons/FileIcon';
 
@@ -30,16 +31,17 @@ export default function SectionNode({
   const noteFiles = NOTE_FILES.filter(({ category }) =>
     noteCategories.includes(category)
   );
-  const muted = section.is_repealed === true;
+  const status = section.status ?? detectStatus(section.heading);
 
   return (
     <div>
       <div
-        className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-xs hover:bg-gray-100 ${isActive ? 'bg-primary-50' : ''} ${muted ? 'text-gray-400' : 'text-gray-700'}`}
+        className={`flex w-full items-center gap-1 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-100 ${isActive ? 'bg-primary-50' : ''}`}
       >
         <TreeIndicator
           expanded={expanded}
           onToggle={() => setExpanded((prev) => !prev)}
+          status={status}
         />
         <Link
           href={basePath}
@@ -57,7 +59,7 @@ export default function SectionNode({
             href={`${basePath}/CODE`}
             className="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-primary-50 hover:text-primary-700"
           >
-            <FileIcon />
+            <FileIcon status={status} />
             <span className="truncate">{section.heading}</span>
           </Link>
           {noteFiles.map(({ file }) => (
@@ -66,7 +68,7 @@ export default function SectionNode({
               href={`${basePath}/${file}`}
               className="flex items-center gap-1.5 rounded px-2 py-0.5 text-xs text-gray-700 hover:bg-primary-50 hover:text-primary-700"
             >
-              <FileIcon />
+              <FileIcon status={status} />
               <span className="font-mono">{file}</span>
             </Link>
           ))}

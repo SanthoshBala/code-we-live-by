@@ -8,6 +8,7 @@ import type {
   SectionSummary,
   BreadcrumbSegment,
 } from '@/lib/types';
+import { detectStatus } from '@/lib/statusStyles';
 import DirectoryView from '@/components/directory/DirectoryView';
 
 function latestAmendment(sections: SectionSummary[]): {
@@ -51,17 +52,12 @@ function groupToItem(
 ): DirectoryItem {
   const allSections = collectAllSections(group);
   const amendment = latestAmendment(allSections);
-  const nameHint = group.name.toLowerCase();
-  const groupRepealed =
-    /\brepealed\b/.test(nameHint) ||
-    /\breserved\b/.test(nameHint) ||
-    /\btransferred\b/.test(nameHint);
   return {
     id: `${capitalizeGroupType(group.group_type)} ${group.number}`,
     name: group.name,
     href: `${parentPath}/${group.group_type}/${group.number}`,
     kind: 'folder' as const,
-    isRepealed: groupRepealed,
+    status: detectStatus(group.name),
     sectionCount: allSections.length,
     lastAmendmentLaw: amendment.law,
     lastAmendmentYear: amendment.year,
@@ -96,14 +92,14 @@ export default function TitleDirectoryPage() {
     items.push(groupToItem(g, titleNumber, basePath));
   }
 
-  // Direct sections as files
+  // Direct sections as folders (sections expand into CODE + notes sub-files)
   for (const s of structure.sections ?? []) {
     items.push({
       id: `\u00A7\u2009${s.section_number}`,
       name: s.heading,
       href: `/sections/${titleNumber}/${s.section_number}`,
-      kind: 'file' as const,
-      isRepealed: s.is_repealed === true,
+      kind: 'folder' as const,
+      status: s.status ?? detectStatus(s.heading),
       lastAmendmentLaw: s.last_amendment_law ?? null,
       lastAmendmentYear: s.last_amendment_year ?? null,
     });

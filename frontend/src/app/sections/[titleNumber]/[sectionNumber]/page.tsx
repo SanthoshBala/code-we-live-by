@@ -9,10 +9,12 @@ import { useTitleStructure } from '@/hooks/useTitleStructure';
 import type {
   BreadcrumbSegment,
   DirectoryItem,
+  ItemStatus,
   SectionGroupTree,
   SectionSummary,
   TitleStructure,
 } from '@/lib/types';
+import { detectStatus } from '@/lib/statusStyles';
 
 const NOTE_FILES: { file: string; category: string; label: string }[] = [
   { file: 'EDITORIAL_NOTES', category: 'editorial', label: 'Editorial Notes' },
@@ -113,6 +115,7 @@ export default function SectionDirectoryPage() {
 
   const heading = path?.section.heading ?? `Section ${sectionNumber}`;
   const noteCategories = path?.section.note_categories ?? [];
+  const status: ItemStatus = path?.section.status ?? detectStatus(heading);
 
   const items: DirectoryItem[] = [
     {
@@ -120,6 +123,7 @@ export default function SectionDirectoryPage() {
       name: heading,
       href: `${basePath}/CODE`,
       kind: 'file' as const,
+      status,
       lastAmendmentLaw: path?.section.last_amendment_law ?? null,
       lastAmendmentYear: path?.section.last_amendment_year ?? null,
     },
@@ -130,6 +134,7 @@ export default function SectionDirectoryPage() {
       name: label,
       href: `${basePath}/${file}`,
       kind: 'file' as const,
+      status,
     })),
   ];
 
