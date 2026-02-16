@@ -61,6 +61,8 @@ export default function DirectoryTable({ items }: DirectoryTableProps) {
   }
 
   const sorted = [...items].sort((a, b) => {
+    // Always show folders before files
+    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
     const cmp = compareItems(a, b, sortKey);
     return sortDir === 'asc' ? cmp : -cmp;
   });
