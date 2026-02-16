@@ -932,7 +932,11 @@ class USLMParser:
         # collapse runs of whitespace to a single space.  Using "".join
         # (instead of " ".join) avoids inserting extra spaces at inline
         # element boundaries like <date> or <ref>.
-        return re.sub(r"\s+", " ", "".join(elem.itertext())).strip()
+        text = re.sub(r"\s+", " ", "".join(elem.itertext())).strip()
+        # Remove stray spaces before punctuation that arise from inline
+        # element boundaries (e.g. "<ref>Pub. L. 94–455</ref> ;")
+        text = re.sub(r" ([;,.])", r"\1", text)
+        return text
 
     def _extract_section_text(self, section_elem: etree._Element) -> str:
         """Extract the full text content of a section."""
@@ -1261,7 +1265,13 @@ class USLMParser:
                 # Convert to double newline for paragraph break
                 result.append("\n\n")
             elif result and result[-1] != "\n\n":
-                result.append(" " + part)
+                # Don't prepend space before punctuation (tail text of
+                # inline elements like <ref> often starts with , or ;)
+                stripped = part.lstrip()
+                if stripped and stripped[0] in ";,.":
+                    result.append(stripped)
+                else:
+                    result.append(" " + part)
             else:
                 result.append(part)
         return "".join(result).strip()
