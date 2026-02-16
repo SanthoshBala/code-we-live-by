@@ -911,46 +911,76 @@ class USLMParser:
         return ""
 
     def _get_heading(self, elem: etree._Element) -> str:
-        """Extract the heading text from an element."""
+        """Extract the heading text from an element, stripping footnotes."""
         heading_elem = elem.find("heading") or elem.find("{*}heading")
         if heading_elem is not None:
-            return self._get_text_content(heading_elem)
+            return self._get_text_content(heading_elem, strip_footnotes=True)
 
         # Fall back to title element
         title_elem = elem.find("title") or elem.find("{*}title")
         if title_elem is not None:
-            return self._get_text_content(title_elem)
+            return self._get_text_content(title_elem, strip_footnotes=True)
 
         return ""
 
-    def _get_text_content(self, elem: etree._Element) -> str:
-        """Get all text content from an element, including nested elements."""
+    def _get_text_content(
+        self, elem: etree._Element, strip_footnotes: bool = False
+    ) -> str:
+        """Get all text content from an element, including nested elements.
+
+        Args:
+            elem: The XML element to extract text from.
+            strip_footnotes: If True, skip <ref class="footnoteRef"> and
+                <note type="footnote"> elements.  Useful for headings and
+                provision text where footnote content should not appear inline.
+        """
         if elem is None:
             return ""
+
+        if strip_footnotes:
+            parts = list(self._itertext_skip_footnotes(elem))
+        else:
+            parts = list(elem.itertext())
 
         # Concatenate text fragments preserving original whitespace, then
         # collapse runs of whitespace to a single space.  Using "".join
         # (instead of " ".join) avoids inserting extra spaces at inline
         # element boundaries like <date> or <ref>.
-        text = re.sub(r"\s+", " ", "".join(elem.itertext())).strip()
+        text = re.sub(r"\s+", " ", "".join(parts)).strip()
         # Remove stray spaces before punctuation that arise from inline
         # element boundaries (e.g. "<ref>Pub. L. 94–455</ref> ;")
         text = re.sub(r" ([;,.])", r"\1", text)
         return text
+
+    @staticmethod
+    def _itertext_skip_footnotes(elem: etree._Element):
+        """Like elem.itertext() but skips footnote refs and notes."""
+        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        # Skip footnote reference links and footnote note bodies
+        if tag == "ref" and elem.get("class", "") == "footnoteRef":
+            return
+        if tag == "note" and elem.get("type", "") == "footnote":
+            return
+        if elem.text:
+            yield elem.text
+        for child in elem:
+            yield from USLMParser._itertext_skip_footnotes(child)
+            if child.tail:
+                yield child.tail
 
     def _extract_section_text(self, section_elem: etree._Element) -> str:
         """Extract the full text content of a section."""
         # Find content element
         content = section_elem.find("content") or section_elem.find("{*}content")
         if content is not None:
-            return self._get_text_content(content)
+            return self._get_text_content(content, strip_footnotes=True)
 
         # Fall back to getting all text except heading and metadata
         parts = []
         for child in section_elem:
             tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
             if tag not in ("heading", "num", "title", "sourceCredit", "notes"):
-                parts.append(self._get_text_content(child))
+                parts.append(self._get_text_content(child, strip_footnotes=True))
 
         return " ".join(parts).strip()
 
@@ -969,7 +999,9 @@ class USLMParser:
         if heading_elem is None:
             heading_elem = elem.find("heading")
         heading = (
-            self._get_text_content(heading_elem) if heading_elem is not None else None
+            self._get_text_content(heading_elem, strip_footnotes=True)
+            if heading_elem is not None
+            else None
         )
 
         # Get content (may be in <content> or <chapeau> or directly in element)
@@ -982,9 +1014,13 @@ class USLMParser:
 
         content_parts = []
         if chapeau_elem is not None:
-            content_parts.append(self._get_text_content(chapeau_elem))
+            content_parts.append(
+                self._get_text_content(chapeau_elem, strip_footnotes=True)
+            )
         if content_elem is not None:
-            content_parts.append(self._get_text_content(content_elem))
+            content_parts.append(
+                self._get_text_content(content_elem, strip_footnotes=True)
+            )
 
         content = " ".join(content_parts).strip()
 
