@@ -1,69 +1,12 @@
 # CWLB Implementation Tasks
 
-This document translates the CWLB specification into an actionable backlog of implementation tasks, organized by phase and feature area.
+This document tracks the remaining implementation backlog, organized by phase and feature area. Completed tasks have been removed for clarity.
+
+**Completed milestones**: Phase 0 research (0.1-0.8, 0.11-0.14), infrastructure (1.1-1.2), core data pipeline (1.6-1.10), Milestone 1A (US Code Viewer).
 
 ---
 
-## Phase 0: Research & Validation (2-3 months)
-
-### Data Source Assessment
-- [x] **Task 0.1**: Evaluate US House Office of Law Revision Counsel API/data formats ✅
-  - Test XML/JSON structure for US Code sections
-  - Assess completeness and update frequency
-  - Document data schema and available metadata
-  - **Completed**: See [research/TASK-0.1-OLRC-Data-Evaluation.md](research/TASK-0.1-OLRC-Data-Evaluation.md)
-
-- [x] **Task 0.2**: Evaluate GovInfo.gov API for Public Laws ✅
-  - Test API endpoints for Public Law documents
-  - Assess historical coverage (how far back does structured data go?)
-  - Document required API keys and rate limits
-  - **Completed**: See [research/TASK-0.2-GovInfo-API-Evaluation.md](research/TASK-0.2-GovInfo-API-Evaluation.md)
-
-- [x] **Task 0.3**: Evaluate Congress.gov API for bill information ✅
-  - Test bill metadata endpoints
-  - Assess legislator data availability
-  - Document sponsor, co-sponsor, and vote record access
-  - **Completed**: See [research/TASK-0.3-Congress-API-Evaluation.md](research/TASK-0.3-Congress-API-Evaluation.md)
-
-- [x] **Task 0.4**: Research ProPublica Congress API for legislator details ✅
-  - Test endpoints for legislator photos, party, state
-  - Assess historical legislator data coverage
-  - Document data freshness and update schedule
-  - **Completed**: See [research/TASK-0.4-ProPublica-API-Evaluation.md](research/TASK-0.4-ProPublica-API-Evaluation.md)
-  - **Note**: ProPublica API discontinued July 2024. Congress.gov API (Task 0.3) is superior alternative.
-
-### Prototype Parser Development
-- [x] **Task 0.5**: Build prototype parser for single Public Law (e.g., PL 94-553) ✅
-  - Parse law metadata (number, date, sponsors)
-  - Extract section changes from legal language
-  - Generate diff between old and new text
-  - **Completed**: See [research/TASK-0.5-Prototype-Parser.md](research/TASK-0.5-Prototype-Parser.md)
-  - **Deliverables**: Jupyter notebook and Python script in `/prototypes` and `/notebooks`
-  - **Key Finding**: Automated parsing feasible with 80% accuracy; recommend hybrid approach with manual review
-
-- [x] **Task 0.6**: Build prototype line-level parser for one section (e.g., 17 USC § 106) ✅
-  - Parse section into individual lines
-  - Build parent/child tree structure
-  - Extract subsection paths (e.g., "(1)", "(c)(1)(A)")
-  - Calculate depth levels
-  - **Completed**: See [research/TASK-0.6-0.7-Line-Level-Parser.md](research/TASK-0.6-0.7-Line-Level-Parser.md)
-  - **Deliverables**: Python script in `/prototypes/line_level_parser_prototype.py`
-
-- [x] **Task 0.7**: Test parser on complex nested section (e.g., 17 USC § 512(c)) ✅
-  - Validate tree structure for deeply nested subsections
-  - Test edge cases (multi-paragraph list items, ambiguous nesting)
-  - Document parsing challenges and heuristics
-  - **Completed**: See [research/TASK-0.6-0.7-Line-Level-Parser.md](research/TASK-0.6-0.7-Line-Level-Parser.md)
-  - **Key Finding**: Parser correctly handles 4+ depth levels of nesting
-
-### Title Selection
-- [x] **Task 0.8**: Finalize 5-10 titles for Phase 1 based on: ✅
-  - Public interest and relevance
-  - Data availability and quality
-  - Legislative activity volume (balance stable vs frequently updated)
-  - **Completed**: See [research/TASK-0.8-Title-Selection.md](research/TASK-0.8-Title-Selection.md)
-  - **Final Selection (8 titles)**: 10 (Armed Forces), 17 (Copyright), 18 (Crimes), 20 (Education), 22 (Foreign Relations), 26 (Tax), 42 (Health/Welfare), 50 (War/Defense)
-  - **Key Decision**: 3 positive law + 5 non-positive law titles; balances data quality with public interest
+## Phase 0: Remaining Research
 
 ### User Research
 - [ ] **Task 0.9**: Conduct user interviews with target audience segments
@@ -77,38 +20,7 @@ This document translates the CWLB specification into an actionable backlog of im
   - Prioritize features based on user needs
   - Define success criteria from user perspective
 
-### Technical Architecture Design
-- [x] **Task 0.11**: Design database schema (see Section 6 of spec) ✅
-  - Define tables: USCodeSection, PublicLaw, LawChange, USCodeLine, etc.
-  - Document relationships and foreign keys
-  - Plan indexing strategy for performance
-  - **Completed**: See [research/TASK-0.11-Database-Schema-Design.md](research/TASK-0.11-Database-Schema-Design.md)
-  - **Deliverables**: SQL schema in `/prototypes/database_schema.sql` (22 tables, 85+ indexes, 3 materialized views)
-  - **Key Decisions**: PostgreSQL 15+, Alembic migrations, version tables for temporal data
-
-- [x] **Task 0.12**: Design API architecture ✅
-  - RESTful or GraphQL decision
-  - Define key endpoints (browse code, view law, search, analytics)
-  - Document request/response formats
-  - **Completed**: See [research/TASK-0.12-API-Architecture-Design.md](research/TASK-0.12-API-Architecture-Design.md)
-  - **Key Decisions**: RESTful API (better caching, simpler), 27 endpoints across 6 API areas, JSON responses
-  - **Deliverables**: Full endpoint specifications with request/response examples, OpenAPI schema outline
-
-- [x] **Task 0.13**: Select technology stack ✅
-  - Frontend: React/Next.js vs alternatives
-  - Backend: Node.js/Python decision
-  - Database: PostgreSQL + Elasticsearch setup
-  - Hosting platform: AWS/GCP/Azure decision
-  - **Completed**: See [research/TASK-0.13-Technology-Stack-Selection.md](research/TASK-0.13-Technology-Stack-Selection.md)
-  - **Key Decisions**: Monolith architecture, React + Python/FastAPI, PostgreSQL (Cloud SQL), GCP Cloud Run (scales to zero)
-  - **Cost**: ~$10/month idle, ~$30-40/month with moderate traffic
-
-- [x] **Task 0.14**: Design data pipeline architecture ✅
-  - ETL process flow diagram
-  - Ingestion frequency and update strategy
-  - Error handling and data validation approach
-  - **Completed**: See [research/TASK-0.14-Data-Pipeline-Architecture.md](research/TASK-0.14-Data-Pipeline-Architecture.md)
-
+### Technical Research
 - [ ] **Task 0.15**: Research congressional committee jurisdiction mapping
   - Map House/Senate committees to US Code titles and chapters
   - Determine appropriate granularity for OWNERS files (Title vs Chapter level)
@@ -129,19 +41,7 @@ This document translates the CWLB specification into an actionable backlog of im
 
 ## Phase 1: MVP (6-9 months)
 
-### Infrastructure Setup
-- [x] **Task 1.1**: Set up development environment ✅
-  - Initialize Git repository
-  - Configure linting, formatting, testing tools
-  - Set up CI/CD pipeline (GitHub Actions or equivalent)
-  - **Completed**: Backend (Python/FastAPI with ruff, black, pytest) + Frontend (Next.js with ESLint, Prettier, Vitest)
-
-- [x] **Task 1.2**: Set up PostgreSQL database ✅
-  - Provision database instance
-  - Create initial schema (core tables)
-  - Set up migration tooling (e.g., Prisma, Alembic)
-  - **Completed**: SQLAlchemy models (23 tables) + Alembic configuration
-
+### Infrastructure Setup (Remaining)
 - [ ] **Task 1.3**: Set up Elasticsearch for full-text search *(Deferred to Phase 2)*
   - Provision Elasticsearch instance
   - Configure indices for sections and laws
@@ -158,110 +58,16 @@ This document translates the CWLB specification into an actionable backlog of im
   - Configure CDN for static assets
   - Set up monitoring and logging (e.g., Datadog, Sentry)
 
-### Data Pipeline - Core Implementation
-- [x] **Task 1.6**: Implement US Code section ingestion ✅
-  - Fetch current US Code data for selected titles
-  - Parse XML/JSON into database format
-  - Store in USCodeSection table
-  - **Completed**: OLRC pipeline (downloader, parser, ingestion service, CLI)
-
-- [x] **Task 1.7**: Implement Public Law ingestion ✅
-  - Fetch Public Law documents from GovInfo
-  - Parse law metadata (number, date, sponsors, president)
-  - Store in PublicLaw table
-  - **Completed**: GovInfo API client, ingestion service, CLI commands
-
-- [x] **Task 1.8**: Implement legislator data ingestion ✅
-  - Fetch legislator data from Congress.gov API
-  - Parse legislator details (name, party, state, photo)
-  - Store in Legislator and LegislatorTerm tables
-  - **Completed**: Congress.gov API client, ingestion service, CLI commands
-
-- [x] **Task 1.9**: Implement vote record ingestion ✅
-  - Fetch House roll call votes from Congress.gov API (118th Congress+)
-  - Parse votes by legislator (Yea, Nay, Present, Not Voting)
-  - Store in Vote and IndividualVote tables
-  - **Note**: Senate votes require XML parsing (deferred to future task)
-  - **Completed**: House vote API client, ingestion service, CLI commands
-
 ### Data Pipeline - Section Parsing (In Progress)
-- [x] **Task 1.10**: Build legal language parser for common amendment patterns ✅
-  - "Section X is amended by striking Y and inserting Z"
-  - "Section X is amended by adding at the end the following"
-  - "Section X is repealed"
-  - Document supported patterns and limitations
-  - **Completed**: 23 amendment patterns, confidence scoring, section reference parsing
-
 - [ ] **Task 1.11**: Iterate on US Code section parsing
   - Manual validation of parser output for sample sections across titles
   - Fix edge cases discovered during validation (test-driven)
   - Track validation progress in `pipeline/PARSER_TESTING.md`
-  - **In Progress**: 17 USC 106 ✅, 10 USC 494 ✅
-
----
-
-### Milestone 1A: US Code Viewer (Tip of Trunk)
-
-**Goal**: Enable end-to-end visualization of parsed US Code sections to iterate on parser design choices with real UI feedback. This milestone focuses on viewing the *current* state of the code ("tip of trunk") before tackling historical versioning and law diffs.
-
-#### Database Integration
-- [x] **Task 1A.1**: Write parsed sections to database
-  - Implement ingestion service to populate `USCodeSection` table from parsed OLRC XML
-  - Store section metadata (title, chapter, heading, provisions text)
-  - Store normalized notes (statutory, editorial, historical) in appropriate tables
-  - Store source laws and amendments metadata
-  - Handle incremental updates (upsert logic)
-
-- [x] **Task 1A.2**: Populate US Code structure tables
-  - Write `Title` records with metadata (name, positive law status)
-  - Write `Chapter` and `Subchapter` records with hierarchy
-  - Ensure proper foreign key relationships
-
-#### Minimal Backend API
-- [x] **Task 1A.3**: Implement tree navigation API
-  - `GET /api/v1/titles/` - List all titles with metadata
-  - `GET /api/v1/titles/{title_number}/structure` - Get chapters/subchapters/sections tree
-  - Return hierarchical structure for UI navigation
-
-- [x] **Task 1A.4**: Implement section viewer API
-  - `GET /api/sections/:title/:section` - Get full section content
-  - Return provisions, notes, source laws, amendments in structured format
-  - Match the `NormalizedSection` schema from parser
-
-#### Minimal Frontend UI
-- [x] **Task 1A.5**: Set up Next.js project with basic layout ✅
-  - Initialize Next.js with TypeScript and Tailwind CSS
-  - Create header with navigation
-  - Create responsive layout shell
-
-- [x] **Task 1A.6**: Build US Code tree navigator ✅
-  - Collapsible tree view showing Title → Chapter → Subchapter → Section hierarchy
-  - Click section to navigate to `/sections/{title}/{section}` viewer
-  - Lazy-loads title structure on expand via React Query
-  - Supports `compact` prop for sidebar mode
-
-- [ ] **Task 1A.7**: Build section viewer page
-  - Display section heading and provisions with proper indentation
-  - Display notes sections (statutory, editorial, historical)
-  - Display source laws and amendments
-  - Display references (inline citations)
-  - Clean, readable formatting matching `DISPLAY_CONVENTIONS.md`
-
-- [ ] **Task 1A.8**: Add URL routing for deep linking
-  - Routes like `/title/17/section/106` or `/17/106`
-  - Breadcrumb navigation showing current location
-
-**Success Criteria**:
-- [ ] Can browse US Code structure in tree view
-- [ ] Can view any section with provisions and notes
-- [ ] Parser output is accurately reflected in UI
-- [ ] Can iterate on parser fixes and see results in UI
-
----
+  - **In Progress**: 17 USC 106, 10 USC 494 validated
 
 ### Data Pipeline - Law Change Parsing (Deferred)
 
-*Note: These tasks are deferred until Milestone 1A is complete and section parsing has been validated through the UI.*
+*Note: These tasks were deferred until Milestone 1A was complete. Milestone 1A is now complete — these are unblocked.*
 
 - [ ] **Task 1.12**: Build ingestion validation and graduated trust system
   - **Text accounting**: Track which spans of bill text are "claimed" by parsed amendments
@@ -290,7 +96,7 @@ This document translates the CWLB specification into an actionable backlog of im
   - Design for robustness: support forward validation (new text in next RP), backward validation (old text in prior RP), or both
   - Replace the removed GovInfo XML keyword-counting heuristic with real cross-referencing
 
-- [ ] **Task 1.13**: Build manual review interface for complex amendments
+- [ ] **Task 1.13c**: Build manual review interface for complex amendments
   - Flag ambiguous legal language for human review
   - UI for reviewing and correcting parsed changes
   - Approval workflow before committing to database
@@ -381,22 +187,6 @@ This document translates the CWLB specification into an actionable backlog of im
   - `GET /api/sections/:title/:section/blame` - Get line-by-line attribution
   - Include law metadata (PL number, Congress, President, date) for each line
   - Support deep linking to specific lines
-
-### Frontend Development - Core UI
-- [ ] **Task 1.26**: Set up Next.js project structure
-  - Initialize Next.js with TypeScript
-  - Configure Tailwind CSS for styling
-  - Set up component library structure
-
-- [ ] **Task 1.27**: Build main navigation and layout
-  - Header with logo and main nav (Explore Code, View Laws, Analytics, About)
-  - Footer with disclaimers and links
-  - Responsive design for mobile/tablet/desktop
-
-- [ ] **Task 1.28**: Build Title/Chapter/Section navigation tree
-  - Hierarchical navigation component (collapsible tree)
-  - Breadcrumb trail showing current location
-  - File path-style display (USC/Title-17/Chapter-1/Section-106)
 
 ### Frontend Development - Code Browser
 - [ ] **Task 1.29**: Build Section Viewer component
@@ -935,19 +725,19 @@ This document translates the CWLB specification into an actionable backlog of im
 ## Priority & Sequencing Notes
 
 ### Critical Path (Must complete for MVP)
-1. Tasks 0.1-0.14 (Phase 0 foundation) ✅
-2. Tasks 1.1-1.2, 1.6-1.9 (Infrastructure and core ingestion) ✅
-3. Tasks 1.10-1.11 (Section parsing iteration) ← **Current**
-4. **Milestone 1A** (US Code Viewer - tip of trunk) ← **Next**
-5. Tasks 1.12-1.20 (Law change parsing and historical depth)
+1. ~~Phase 0 foundation (0.1-0.14)~~ ✅
+2. ~~Infrastructure and core ingestion (1.1-1.2, 1.6-1.9)~~ ✅
+3. ~~Milestone 1A (US Code Viewer)~~ ✅
+4. Task 1.11 (Section parsing iteration) + open bug/UX issues ← **Current**
+5. Tasks 1.12-1.20 (Law change parsing and historical depth) ← **Next**
 6. Tasks 1.21-1.25 (Full APIs including blame/time travel)
-7. Tasks 1.26-1.36 (Full UI)
+7. Tasks 1.29-1.36 (Full UI: code browser, law viewer)
 8. Tasks 1.47-1.50 (Deployment)
 
 ### High Priority (MVP-adjacent)
-- Task 1.36-1.37 (Search)
-- Task 1.38-1.40 (Basic analytics)
-- Tasks 1.41-1.45 (Testing & QA)
+- Tasks 1.37-1.38 (Search)
+- Tasks 1.39-1.41 (Basic analytics)
+- Tasks 1.42-1.46 (Testing & QA)
 
 ### Medium Priority (Phase 2)
 - Tasks 2.1-2.6 (Enhanced time travel and search)
@@ -961,31 +751,14 @@ This document translates the CWLB specification into an actionable backlog of im
 - Tasks 3.28-3.32 (Advanced features)
 
 ### Dependencies
-- **Milestone 1A** requires Task 1.11 (section parsing) to be stable
-- Milestone 1A (US Code Viewer) enables iteration on parser before law diff parsing
-- Law change parsing (Task 1.12-1.13) deferred until Milestone 1A validates section parsing
+- Law change parsing (Task 1.12-1.13) was deferred until Milestone 1A validated section parsing — **now unblocked**
 - Line-level parsing (Task 1.14-1.17) is prerequisite for blame view (Task 1.30-1.31)
 - Historical data (Task 1.18-1.20) is prerequisite for time travel (Task 1.24, 1.32)
-- Full APIs (Task 1.21-1.25) must be complete before full frontend work (Task 1.26+)
 - Analytics queries (Task 2.7, 2.9, 2.11, 2.13) must be complete before visualizations (Task 2.8, 2.10, 2.12, 2.14)
 
 ---
 
 ## Success Criteria by Phase
-
-### Phase 0 Success
-- [ ] Confirmed data availability for 5-10 selected titles
-- [ ] Working prototype parser for at least 2 Public Laws
-- [ ] Validated technical architecture with stakeholders
-- [ ] User research completed with key findings documented
-
-### Milestone 1A (US Code Viewer) Success
-- [ ] 8 Phase 1 titles parsed and written to database
-- [ ] Tree navigation UI functional (browse Title → Chapter → Section)
-- [ ] Section viewer displays provisions with correct indentation
-- [ ] Section viewer displays all note types (statutory, editorial, historical)
-- [ ] Source laws and amendments displayed for each section
-- [ ] Parser issues identifiable and fixable through visual inspection
 
 ### Phase 1 (MVP) Success
 - [ ] 5-10 titles ingested with 20 years of history
@@ -1044,9 +817,6 @@ This document translates the CWLB specification into an actionable backlog of im
 ---
 
 ## Estimated Effort (Person-Months)
-
-**Phase 0**: 2-3 months (1-2 people)
-- Research, prototyping, architecture design
 
 **Phase 1 (MVP)**: 6-9 months (3-5 people)
 - Backend: 3-4 months (2 engineers)
