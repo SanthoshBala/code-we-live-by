@@ -1308,6 +1308,12 @@ class USLMParser:
                 stripped = part.lstrip()
                 if stripped and stripped[0] in ";,.":
                     result.append(stripped)
+                elif result[-1].endswith((" ", "\t")) or part.startswith(
+                    (" ", "\t")
+                ):
+                    # Avoid double whitespace: use existing space from
+                    # either the previous part's tail or this part's lead
+                    result.append(stripped)
                 else:
                     result.append(" " + part)
             else:
