@@ -911,10 +911,17 @@ class USLMParser:
         return ""
 
     def _get_heading(self, elem: etree._Element) -> str:
-        """Extract the heading text from an element, stripping footnotes."""
+        """Extract the heading text from an element, stripping footnotes.
+
+        For repealed/renumbered sections the USLM XML wraps the num+heading
+        in editorial brackets, e.g. ``[§ 4. Repealed. ... 90 Stat. 1558]``.
+        The opening ``[`` lives on the ``<num>`` element, while the closing
+        ``]`` lands on the ``<heading>``.  We strip the dangling ``]`` here.
+        """
         heading_elem = elem.find("heading") or elem.find("{*}heading")
         if heading_elem is not None:
-            return self._get_text_content(heading_elem, strip_footnotes=True)
+            text = self._get_text_content(heading_elem, strip_footnotes=True)
+            return text.rstrip("]").rstrip()
 
         # Fall back to title element
         title_elem = elem.find("title") or elem.find("{*}title")
