@@ -635,8 +635,8 @@ class TestNormalizeParsedSection:
         assert result.provisions[2].content == "(1) Child item."
         assert result.provisions[2].indent_level == 2
 
-    def test_empty_subsections(self) -> None:
-        """Section with no subsections returns empty lines."""
+    def test_empty_subsections_falls_back_to_text(self) -> None:
+        """Section with no subsections falls back to sentence-based normalization."""
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection
 
@@ -644,7 +644,26 @@ class TestNormalizeParsedSection:
             section_number="104",
             heading="Empty Section",
             full_citation="17 U.S.C. § 104",
-            text_content="Some text",
+            text_content="First sentence. Second sentence.",
+            subsections=[],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.provision_count == 2
+        assert result.provisions[0].content == "First sentence."
+        assert result.provisions[1].content == "Second sentence."
+
+    def test_empty_subsections_no_text(self) -> None:
+        """Section with no subsections and no text returns empty lines."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection
+
+        section = ParsedSection(
+            section_number="104",
+            heading="Empty Section",
+            full_citation="17 U.S.C. § 104",
+            text_content="",
             subsections=[],
         )
 

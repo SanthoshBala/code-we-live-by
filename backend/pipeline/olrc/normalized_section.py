@@ -1856,6 +1856,12 @@ def normalize_parsed_section(
     for subsection in parsed_section.subsections:
         _normalize_subsection_recursive(subsection, lines, line_counter, char_pos)
 
+    # Fall back to sentence-based normalization when the XML had no
+    # subsections (e.g. flat definition sections like 17 USC §101).
+    if not lines and parsed_section.text_content:
+        fallback = normalize_section(parsed_section.text_content)
+        lines = fallback.provisions
+
     # Build normalized text
     normalized_lines = [
         line.to_display(use_tabs=use_tabs, indent_width=indent_width) for line in lines
