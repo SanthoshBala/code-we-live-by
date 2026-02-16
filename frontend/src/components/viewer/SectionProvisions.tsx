@@ -15,7 +15,7 @@ interface SectionProvisionsProps {
 // Will be removed after all sections are re-ingested with normalized_provisions.
 function isHeaderLine(text: string): boolean {
   if (!/^\([a-zA-Z0-9]+\)/.test(text)) return false;
-  if (text.length > 80) return false;
+  if (text.length > 200) return false;
   if (/[.;,:—]$/.test(text)) return false;
   if (/\b(or|and)$/.test(text)) return false;
   return true;
