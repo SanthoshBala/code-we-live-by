@@ -1303,28 +1303,22 @@ class USLMParser:
                 parts.append(el.tail)
 
         process_element(elem)
-        # Join parts, converting [PARA] markers to double newlines
-        result = []
+        # Join parts, converting [PARA] markers to double newlines.
+        # Always strip whitespace from each part and join with a single
+        # space so that inconsistent leading/trailing spaces in XML
+        # text/tail never produce double-spaces or missing separators.
+        result: list[str] = []
         for part in parts:
             if part == "[PARA]":
-                # Convert to double newline for paragraph break
                 result.append("\n\n")
-            elif result and result[-1] != "\n\n":
-                # Don't prepend space before punctuation (tail text of
-                # inline elements like <ref> often starts with , or ;)
-                stripped = part.lstrip()
-                if stripped and stripped[0] in ";,.":
-                    result.append(stripped)
-                elif result[-1].endswith((" ", "\t")) or part.startswith(
-                    (" ", "\t")
-                ):
-                    # Avoid double whitespace: use existing space from
-                    # either the previous part's tail or this part's lead
-                    result.append(stripped)
-                else:
-                    result.append(" " + part)
+                continue
+            stripped = part.strip()
+            if not stripped:
+                continue
+            if not result or result[-1] == "\n\n" or stripped[0] in ";,.":
+                result.append(stripped)
             else:
-                result.append(part)
+                result.append(" " + stripped)
         return "".join(result).strip()
 
     def _extract_source_credit_refs(
