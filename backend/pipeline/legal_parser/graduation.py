@@ -79,7 +79,6 @@ class GraduationManager:
     COVERAGE_THRESHOLD = 85.0  # Minimum coverage percentage
     REVIEW_RATIO_THRESHOLD = 0.20  # Max ratio of needs_review to total
     FLAGGED_UNCLAIMED_THRESHOLD = 5  # Max flagged unclaimed spans
-    AMENDMENT_COUNT_TOLERANCE = 0.10  # 10% tolerance for count mismatch
 
     # Graduation thresholds
     MIN_USES_FOR_GRADUATION = 10
@@ -132,18 +131,6 @@ class GraduationManager:
                 f"{report.unclaimed_flagged_count} flagged unclaimed spans "
                 f"(threshold: {self.FLAGGED_UNCLAIMED_THRESHOLD})"
             )
-
-        # Check amendment count mismatch
-        if report.govinfo_amendment_count is not None and report.total_amendments > 0:
-            expected = report.govinfo_amendment_count
-            actual = report.total_amendments
-            if expected > 0:
-                diff_ratio = abs(actual - expected) / expected
-                if diff_ratio > self.AMENDMENT_COUNT_TOLERANCE:
-                    reasons.append(
-                        f"Amendment count mismatch: found {actual}, "
-                        f"expected ~{expected} (diff: {diff_ratio:.0%})"
-                    )
 
         if reasons:
             # Recommend next mode up

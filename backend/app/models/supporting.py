@@ -8,7 +8,6 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
-    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -18,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, enum_column
 from app.models.enums import Chamber, ReferenceType
 
 if TYPE_CHECKING:
@@ -39,7 +38,7 @@ class SectionReference(Base, TimestampMixin):
         ForeignKey("us_code_section.section_id", ondelete="CASCADE"), nullable=False
     )
     reference_type: Mapped[ReferenceType] = mapped_column(
-        Enum(ReferenceType, name="reference_type"), nullable=False
+        enum_column(ReferenceType, "reference_type"), nullable=False
     )
     source_subsection_path: Mapped[str | None] = mapped_column(
         String(100), nullable=True
@@ -89,7 +88,7 @@ class Committee(Base, TimestampMixin):
     committee_id: Mapped[int] = mapped_column(primary_key=True)
     committee_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     chamber: Mapped[Chamber] = mapped_column(
-        Enum(Chamber, name="chamber"), nullable=False
+        enum_column(Chamber, "chamber"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(300), nullable=False)
     parent_committee_id: Mapped[int | None] = mapped_column(
@@ -153,7 +152,7 @@ class Amendment(Base, TimestampMixin):
     )
     amendment_number: Mapped[str] = mapped_column(String(50), nullable=False)
     chamber: Mapped[Chamber] = mapped_column(
-        Enum(Chamber, name="chamber"), nullable=False
+        enum_column(Chamber, "chamber"), nullable=False
     )
     congress: Mapped[int] = mapped_column(Integer, nullable=False)
     purpose: Mapped[str | None] = mapped_column(Text, nullable=True)

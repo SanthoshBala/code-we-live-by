@@ -21,8 +21,8 @@ function isHeaderLine(text: string): boolean {
   return true;
 }
 
-const headerMarkerClass = 'text-blue-600';
-const headerTitleClass = 'font-bold text-blue-700';
+const headerMarkerClass = 'text-primary-600';
+const headerTitleClass = 'font-bold text-primary-700';
 
 function provisionsToParseLines(provisions: CodeLine[]): ParsedLine[] {
   return provisions.map((line) => ({
@@ -165,7 +165,7 @@ export default function SectionProvisions({
     );
   }
 
-  const docstring = [fullCitation, heading];
+  const docstring = [fullCitation, heading, 'Provisions'];
   const blankLineNumber = docstring.length + 1;
   const lines = textContent.split('\n');
 

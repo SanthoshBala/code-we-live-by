@@ -28,6 +28,7 @@ from app.models.legislator import (
     Vote,
 )
 from app.models.public_law import Bill, LawChange, ProposedChange, PublicLaw
+from app.models.release_point import OLRCReleasePoint
 from app.models.supporting import (
     Amendment,
     BillCommitteeAssignment,
@@ -37,11 +38,9 @@ from app.models.supporting import (
     SectionReference,
 )
 from app.models.us_code import (
-    USCodeChapter,
+    SectionGroup,
     USCodeLine,
     USCodeSection,
-    USCodeSubchapter,
-    USCodeTitle,
 )
 from app.models.validation import (
     IngestionReport,
@@ -74,9 +73,7 @@ __all__ = [
     "SponsorshipRole",
     "VoteType",
     # US Code
-    "USCodeTitle",
-    "USCodeChapter",
-    "USCodeSubchapter",
+    "SectionGroup",
     "USCodeSection",
     "USCodeLine",
     # Public Law
@@ -93,6 +90,8 @@ __all__ = [
     # History
     "SectionHistory",
     "LineHistory",
+    # Release Points (Task 1.12)
+    "OLRCReleasePoint",
     # Supporting
     "SectionReference",
     "Committee",

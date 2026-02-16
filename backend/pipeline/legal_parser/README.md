@@ -160,17 +160,25 @@ The translation process:
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Section Lookup (future: Task 1.11)                         │
+│  Section Resolution (section_resolver.py)                    │
 │  - Fetch current text of 17 USC § 106(3) from database     │
-│  - Locate "X" within the section text                       │
+│  - Normalize section numbers (hyphen ↔ en-dash)            │
+│  - Cache resolved sections for batch efficiency             │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Diff Generation (future: Task 1.11)                        │
-│  - old_text → new_text replacement                          │
-│  - Generate unified diff                                    │
-│  - Store in LawChange table                                 │
+│  Text Extraction (text_extractor.py)                         │
+│  - Extract "the following" content for ADD/INSERT patterns  │
+│  - Handle colon-delimited, quoted, and paragraph formats    │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Diff Generation (diff_generator.py)                         │
+│  - old_text → new_text per change type                      │
+│  - Validate diffs against section content                   │
+│  - Persist LawChange records                                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -199,6 +207,71 @@ Some patterns cannot be fully automated:
 4. **Cross-references** — "as amended by section 3 of this Act"
 
 These are flagged with `needs_review=True` for human verification.
+
+## XML-Native Parser (`xml_parser.py`)
+
+Starting with the 113th Congress, GovInfo provides Public Laws in
+[USLM XML](https://uscode.house.gov/download/resources/USLM-User-Guide.pdf)
+with semantic markup.  Instead of regex-matching plain text, `XMLAmendmentParser`
+reads the structured tags directly:
+
+| XML Tag | What it tells us |
+|---------|-----------------|
+| `<section role="instruction">` | Container for one amending instruction |
+| `<amendingAction type="delete">` | The operation (delete, insert, add, substitute, repeal, ...) |
+| `<ref href="/us/usc/t18/s1836">` | Explicit US Code target (title + section) |
+| `<quotedText>` / `<quotedContent>` | The old or new text being struck/inserted |
+
+### Why leaf decomposition?
+
+A single instruction element can contain **multiple sub-amendments**.
+For example, PL 114-153 § 2(b) (Defend Trade Secrets Act) reads:
+
+```
+(b) Definitions.--Section 1839 of title 18 is amended--
+    (1) on paragraph (3)--
+            (A) in subparagraph (B), by striking "the public" and
+                inserting "another person who can obtain economic
+                value from the disclosure or use of the information";
+                and
+            (B) by striking "and" at the end;
+    (2) on paragraph (4), by striking the period at the end and
+        inserting a semicolon; and
+    (3) by adding at the end the following:
+            "(5) the term 'misappropriation' means-- ..."
+```
+
+In USLM XML this is one `<subsection role="instruction">` whose children
+are `<paragraph>` and `<subparagraph>` elements, each carrying their own
+`<amendingAction>` tags.  The parser **recursively decomposes** the
+instruction into its leaf amendment groups:
+
+```
+<subsection role="instruction">          ← top-level: § 1839, "is amended"
+  ├─ <paragraph>(1)
+  │   ├─ <subparagraph>(A)               ← LEAF: strike "the public", insert ...
+  │   └─ <subparagraph>(B)               ← LEAF: strike "and"
+  ├─ <paragraph>(2)                      ← LEAF: strike period, insert semicolon
+  └─ <paragraph>(3)                      ← LEAF: add definitions (5)-(7)
+```
+
+Each leaf inherits the section reference from the top-level `<ref>` tag
+and refines it with subsection context from ancestor `<chapeau>` elements
+(e.g. "in paragraph (3)" → `§ 1839(3)`).
+
+### Old/new text assignment
+
+Quoted text is paired with the **preceding** `<amendingAction>` type
+rather than positional order.  This matters when only one quoted block
+exists — e.g. "by striking subsection (b) and inserting the following:
+\<quotedContent\>..." — the single block follows the `insert` action and
+is correctly assigned as `new_text`.
+
+### Routing
+
+`parsing_modes.py` auto-detects USLM XML (checks for `<?xml` +
+`schemas.gpo.gov/xml/uslm` namespace) and routes to `XMLAmendmentParser`.
+Plain-text laws fall back to the regex `AmendmentParser`.
 
 ## Module Architecture
 
@@ -246,14 +319,22 @@ These are flagged with `needs_review=True` for human verification.
 | Module | Purpose |
 |--------|---------|
 | **patterns.py** | Defines 26 regex patterns for amendment detection with confidence scores |
-| **amendment_parser.py** | `AmendmentParser` class that applies patterns to extract structured amendments |
+| **amendment_parser.py** | `AmendmentParser` class that applies regex patterns to extract structured amendments |
+| **xml_parser.py** | `XMLAmendmentParser` for USLM XML; uses semantic tags instead of regex; decomposes multi-part instructions |
 | **text_accounting.py** | `TextAccountant` tracks which text was claimed by patterns vs. unclaimed gaps |
 | **parsing_modes.py** | Orchestrates parsing sessions (RegEx/LLM/Human+LLM modes), generates reports |
 | **graduation.py** | Decides when to escalate to human review, evaluates pattern graduation criteria |
 | **verification.py** | Records verifications of parsing sessions; quality measured by verification count |
 | **pattern_learning.py** | Captures unmatched text with amendment keywords for future pattern development |
+| **section_resolver.py** | Maps `SectionReference` to `USCodeSection` in the database with normalization |
+| **text_extractor.py** | Extracts "the following" content for ADD/INSERT/SUBSTITUTE patterns |
+| **diff_generator.py** | Generates validated `DiffResult` objects and persists `LawChange` records |
+| **law_change_service.py** | Orchestrates the full pipeline: fetch → parse → resolve → extract → diff → persist |
+| **release_point_validator.py** | Validates DB state against OLRC release points; cross-references OLRC notes |
 
 ### Data Flow
+
+**Parsing stage** (existing):
 
 1. **Input**: Raw Public Law text
 2. **AmendmentParser** applies patterns → list of `ParsedAmendment`
@@ -261,6 +342,22 @@ These are flagged with `needs_review=True` for human verification.
 4. **GraduationManager** checks thresholds → escalation decision
 5. **Output**: `IngestionReport` with coverage stats, confidence scores, approval status
 6. **VerificationManager** records human/automated verifications → quality signal
+
+**Diff generation stage** (Tasks 1.12-1.13):
+
+1. **LawChangeService** orchestrates the full pipeline
+2. **SectionResolver** maps section references to database records (with caching)
+3. **TextExtractor** extracts "the following" content for ADD/INSERT patterns
+4. **DiffGenerator** produces validated diffs per change type:
+    - STRIKE_INSERT: old_text + new_text from parser; validated against section
+    - STRIKE: old_text from parser
+    - ADD: new_text from TextExtractor
+    - REPEAL: old_text = entire section content
+    - SUBSTITUTE: old_text from section, new_text from TextExtractor
+    - REDESIGNATE/TRANSFER: descriptive record
+5. **DiffGenerator.persist_law_changes()** creates `LawChange` records
+6. **ReleasePointValidator** validates results against OLRC release point snapshots
+7. **AmendmentCrossReferencer** computes precision/recall against OLRC amendment notes
 
 ## Usage
 
@@ -302,10 +399,25 @@ Currently supported (26 patterns):
 - [Deschler's Precedents: Motions to Strike](https://govinfo.gov/content/pkg/GPO-HPREC-DESCHLERS-V9/html/GPO-HPREC-DESCHLERS-V9-1-4-3.htm)
 - [OLRC USLM Schema](https://uscode.house.gov/download/resources/USLM-User-Guide.pdf) — XML markup for US Code
 
+## CLI Commands
+
+```bash
+# Process a single law (generate LawChange records)
+uv run python -m pipeline.cli process-law 113 22 --default-title 17 --verbose
+
+# Dry run (generate diffs without persisting)
+uv run python -m pipeline.cli process-law 113 22 --dry-run --verbose
+
+# Validate against a release point
+uv run python -m pipeline.cli validate-release-point 113-22 --titles 17 18
+
+# Cross-reference a law against OLRC notes
+uv run python -m pipeline.cli cross-ref-law 113 22
+```
+
 ## Future Enhancements
 
 - **LLM parsing mode**: Use an LLM to parse amendments when regex patterns fail
 - **Human+LLM mode**: Interactive interface for human reviewers working with an LLM
-- USLM XML parsing for structured amendments (113th Congress+)
 - Cross-reference resolution ("as defined in section X")
 - Confidence calibration based on manual review feedback

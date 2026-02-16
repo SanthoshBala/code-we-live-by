@@ -17,15 +17,69 @@ Using familiar version control metaphors (commits, pull requests, diffs, blame v
 - [Research](research/) - Completed research and design documents
 - [Display Conventions](DISPLAY_CONVENTIONS.md) - How CWLB renders the US Code
 
-## Setup
+## Quick Start
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (for Postgres)
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- [Node.js](https://nodejs.org/) / npm
+
+### Development Environment
 
 ```bash
-pip install -r requirements.txt
-jupyter notebook
+# Start Postgres, run migrations, launch backend + frontend
+./dev.sh
+
+# Start with data seeding (Phase 1 titles + sample Public Laws)
+./dev.sh --seed
+
+# Stop all services
+./dev.sh stop
+
+# Full reset (destroy DB, re-migrate, re-ingest)
+./dev.sh reset
+```
+
+Once running:
+- **Frontend**: http://localhost:3000
+- **Backend**: http://localhost:8000
+- **API docs**: http://localhost:8000/docs
+- **Postgres**: localhost:5432 (cwlb/cwlb_dev)
+
+### Manual Setup
+
+```bash
+# Backend
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload --port 8000
+
+# Frontend
+cd frontend
+npm install
+npm run dev
+```
+
+### Running Tests
+
+```bash
+# Backend
+cd backend
+uv run pytest
+
+# Frontend
+cd frontend
+npm run test
 ```
 
 ## Status
 
-Currently in **Phase 0: Research & Validation**
+Currently in **Phase 1: MVP** — building the US Code Viewer (Milestone 1A).
 
-See [TASKS.md](TASKS.md) for current progress.
+- **Phase 0**: Research & Validation — complete
+- **Phase 1**: Infrastructure, data pipeline, and core ingestion — complete
+- **Milestone 1A**: US Code Viewer (tip of trunk) — in progress
+- **Tasks 1.12-1.13**: Law ingestion diff framework — in progress
+
+See [TASKS.md](TASKS.md) for full progress details.

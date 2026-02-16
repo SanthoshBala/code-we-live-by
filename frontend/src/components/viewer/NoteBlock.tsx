@@ -5,24 +5,28 @@ interface NoteBlockProps {
   lineNumberOffset?: number;
 }
 
-/** Renders a single comment-styled line with line number and # prefix. */
-function CommentLine({
+/** Renders a single line with line number and optional indent. */
+function NoteLine({
   lineNumber,
   line,
 }: {
   lineNumber: number;
   line: CodeLine;
 }) {
-  const indent = '\u00a0'.repeat(line.indent_level * 4);
+  const indent = line.indent_level > 0 ? '\t'.repeat(line.indent_level) : '';
+  const isListItem = line.marker !== null;
   return (
-    <div className="flex font-mono text-sm leading-relaxed text-green-700">
+    <div className="flex items-start font-mono text-sm leading-relaxed">
       <span className="w-10 shrink-0 select-none text-right text-gray-400">
         {lineNumber}
       </span>
-      <span className="mx-2 select-none text-gray-400">│</span>
-      <span>
-        <span className="select-none"># </span>
-        {indent}
+      <span className="mx-2 select-none text-gray-400">|</span>
+      {indent && (
+        <span className="shrink-0 whitespace-pre text-gray-800">{indent}</span>
+      )}
+      <span
+        className={`min-w-0 whitespace-pre-wrap text-gray-800${isListItem ? ' pl-[4ch] -indent-[4ch]' : ''}`}
+      >
         {line.is_header ? (
           <span className="font-semibold">{line.content}</span>
         ) : (
@@ -33,7 +37,7 @@ function CommentLine({
   );
 }
 
-/** Renders a single structured note as a comment block with line numbers. */
+/** Renders a single structured note as a block with line numbers. */
 export default function NoteBlock({
   note,
   lineNumberOffset = 1,
@@ -42,7 +46,7 @@ export default function NoteBlock({
     return (
       <div className="mb-2">
         {note.lines.map((line, i) => (
-          <CommentLine
+          <NoteLine
             key={line.line_number}
             lineNumber={lineNumberOffset + i}
             line={line}
@@ -52,12 +56,12 @@ export default function NoteBlock({
     );
   }
 
-  // Fallback: split content into lines and render each as a comment
+  // Fallback: split content into lines and render each
   const contentLines = note.content.split('\n');
   return (
     <div className="mb-2">
       {contentLines.map((text, i) => (
-        <CommentLine
+        <NoteLine
           key={i}
           lineNumber={lineNumberOffset + i}
           line={{

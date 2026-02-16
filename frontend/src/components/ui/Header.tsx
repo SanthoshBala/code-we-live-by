@@ -7,12 +7,18 @@ export default function Header() {
         <Link href="/" className="text-xl font-bold text-primary-700">
           The Code We Live By
         </Link>
-        <nav>
+        <nav className="flex items-center gap-4">
           <Link
             href="/titles"
             className="text-sm font-medium text-gray-600 hover:text-primary-600"
           >
             Browse Titles
+          </Link>
+          <Link
+            href="/laws"
+            className="text-sm font-medium text-gray-600 hover:text-primary-600"
+          >
+            Laws
           </Link>
         </nav>
       </div>

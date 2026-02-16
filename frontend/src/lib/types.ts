@@ -21,20 +21,14 @@ export interface SectionSummary {
   note_categories?: string[];
 }
 
-/** Subchapter node in the title structure tree. */
-export interface SubchapterTree {
-  subchapter_number: string;
-  subchapter_name: string;
+/** Recursive structural grouping node (title, subtitle, part, chapter, subchapter, division, etc.). */
+export interface SectionGroupTree {
+  group_type: string;
+  number: string;
+  name: string;
   sort_order: number;
-  sections: SectionSummary[];
-}
-
-/** Chapter node in the title structure tree. */
-export interface ChapterTree {
-  chapter_number: string;
-  chapter_name: string;
-  sort_order: number;
-  subchapters: SubchapterTree[];
+  is_positive_law?: boolean;
+  children: SectionGroupTree[];
   sections: SectionSummary[];
 }
 
@@ -43,7 +37,34 @@ export interface TitleStructure {
   title_number: number;
   title_name: string;
   is_positive_law: boolean;
-  chapters: ChapterTree[];
+  children: SectionGroupTree[];
+  sections: SectionSummary[];
+}
+
+// --- Tree navigator types ---
+
+/** Identifies the active item in the tree so ancestors auto-expand and the node highlights. */
+export interface TreeActivePath {
+  titleNumber?: number;
+  sectionNumber?: string;
+  groupPath?: { type: string; number: string }[];
+}
+
+/** An item displayed in a directory table row. */
+export interface DirectoryItem {
+  id: string;
+  name: string;
+  href: string;
+  kind: 'folder' | 'file';
+  sectionCount?: number | null;
+  lastAmendmentLaw?: string | null;
+  lastAmendmentYear?: number | null;
+}
+
+/** A breadcrumb segment with label and optional link. */
+export interface BreadcrumbSegment {
+  label: string;
+  href?: string;
 }
 
 // --- Section viewer types ---
@@ -102,6 +123,64 @@ export interface SectionNotes {
   transferred_to: string | null;
   omitted: boolean;
   renumbered_from: string | null;
+}
+
+// --- Law viewer types ---
+
+/** Summary of a Public Law for index listing. */
+export interface LawSummary {
+  congress: number;
+  law_number: string;
+  official_title: string | null;
+  short_title: string | null;
+  enacted_date: string;
+  sections_affected: number;
+}
+
+/** Raw text content of a Public Law. */
+export interface LawText {
+  congress: number;
+  law_number: string;
+  official_title: string | null;
+  short_title: string | null;
+  enacted_date: string | null;
+  introduced_date: string | null;
+  house_passed_date: string | null;
+  senate_passed_date: string | null;
+  presented_to_president_date: string | null;
+  effective_date: string | null;
+  htm_content: string | null;
+  xml_content: string | null;
+}
+
+/** A reference to a US Code section within a parsed amendment. */
+export interface SectionReference {
+  title: number | null;
+  section: string;
+  subsection_path: string | null;
+  display: string;
+}
+
+/** Positional context for an amendment. */
+export interface PositionQualifier {
+  type: string;
+  anchor_text: string | null;
+  target_text: string | null;
+}
+
+/** A parsed amendment extracted from Public Law text. */
+export interface ParsedAmendment {
+  pattern_name: string;
+  pattern_type: string;
+  change_type: string;
+  section_ref: SectionReference | null;
+  old_text: string | null;
+  new_text: string | null;
+  full_match: string;
+  confidence: number;
+  needs_review: boolean;
+  context: string;
+  position_qualifier: PositionQualifier | null;
 }
 
 /** Full section view returned by the section detail endpoint. */

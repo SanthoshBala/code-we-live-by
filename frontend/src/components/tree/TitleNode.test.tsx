@@ -32,17 +32,19 @@ const structure = {
   title_number: 17,
   title_name: 'Copyrights',
   is_positive_law: true,
-  chapters: [
+  children: [
     {
-      chapter_number: '1',
-      chapter_name: 'Subject Matter',
+      group_type: 'chapter',
+      number: '1',
+      name: 'Subject Matter',
       sort_order: 1,
-      subchapters: [],
+      children: [],
       sections: [
         { section_number: '101', heading: 'Definitions', sort_order: 1 },
       ],
     },
   ],
+  sections: [],
 };
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -72,20 +74,37 @@ describe('TitleNode', () => {
     expect(screen.getByText('50')).toBeInTheDocument();
   });
 
+  it('renders the title name as a link', () => {
+    render(<TitleNode title={title} />, { wrapper });
+    const link = screen.getByRole('link', { name: /Copyrights/ });
+    expect(link).toHaveAttribute('href', '/titles/17');
+  });
+
   it('does not fetch structure until expanded', () => {
     render(<TitleNode title={title} />, { wrapper });
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('fetches and renders structure on expand', async () => {
+  it('icon click expands and fetches structure', async () => {
     const user = userEvent.setup();
     render(<TitleNode title={title} />, { wrapper });
-    await user.click(screen.getByText(/Copyrights/));
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
     await waitFor(() => {
       expect(screen.getByText(/Subject Matter/)).toBeInTheDocument();
     });
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/api/v1/titles/17/structure'
     );
+  });
+
+  it('icon click collapses expanded tree', async () => {
+    const user = userEvent.setup();
+    render(<TitleNode title={title} />, { wrapper });
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    await waitFor(() => {
+      expect(screen.getByText(/Subject Matter/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: 'Collapse' }));
+    expect(screen.queryByText(/Subject Matter/)).not.toBeInTheDocument();
   });
 });

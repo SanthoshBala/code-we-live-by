@@ -11,7 +11,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum,
     Float,
     ForeignKey,
     Index,
@@ -22,7 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, enum_column
 from app.models.enums import (
     AmendmentReviewStatus,
     ChangeType,
@@ -53,10 +52,10 @@ class ParsingSession(Base, TimestampMixin):
         ForeignKey("public_law.law_id", ondelete="CASCADE"), nullable=False
     )
     mode: Mapped[ParsingMode] = mapped_column(
-        Enum(ParsingMode, name="parsing_mode"), nullable=False
+        enum_column(ParsingMode, "parsing_mode"), nullable=False
     )
     status: Mapped[ParsingSessionStatus] = mapped_column(
-        Enum(ParsingSessionStatus, name="parsing_session_status"), nullable=False
+        enum_column(ParsingSessionStatus, "parsing_session_status"), nullable=False
     )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
@@ -126,7 +125,7 @@ class TextSpan(Base):
     start_pos: Mapped[int] = mapped_column(Integer, nullable=False)
     end_pos: Mapped[int] = mapped_column(Integer, nullable=False)
     span_type: Mapped[SpanType] = mapped_column(
-        Enum(SpanType, name="span_type"), nullable=False
+        enum_column(SpanType, "span_type"), nullable=False
     )
 
     # For claimed spans
@@ -180,7 +179,7 @@ class ParsedAmendmentRecord(Base, TimestampMixin):
         String(50), nullable=False
     )  # PatternType value
     change_type: Mapped[ChangeType] = mapped_column(
-        Enum(ChangeType, name="change_type"), nullable=False
+        enum_column(ChangeType, "change_type"), nullable=False
     )
 
     # Section reference
@@ -203,7 +202,7 @@ class ParsedAmendmentRecord(Base, TimestampMixin):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     review_status: Mapped[AmendmentReviewStatus] = mapped_column(
-        Enum(AmendmentReviewStatus, name="amendment_review_status"),
+        enum_column(AmendmentReviewStatus, "amendment_review_status"),
         default=AmendmentReviewStatus.PENDING,
         nullable=False,
     )
@@ -292,12 +291,6 @@ class IngestionReport(Base, TimestampMixin):
     )
     escalation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # External validation
-    govinfo_amendment_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    amendment_count_mismatch: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True
-    )
-
     # Relationships
     session: Mapped["ParsingSession"] = relationship(back_populates="ingestion_report")
     law: Mapped["PublicLaw"] = relationship()
@@ -354,7 +347,7 @@ class PatternDiscovery(Base, TimestampMixin):
 
     # Review workflow
     status: Mapped[PatternDiscoveryStatus] = mapped_column(
-        Enum(PatternDiscoveryStatus, name="pattern_discovery_status"),
+        enum_column(PatternDiscoveryStatus, "pattern_discovery_status"),
         default=PatternDiscoveryStatus.NEW,
         nullable=False,
     )
@@ -400,10 +393,10 @@ class ParsingVerification(Base, TimestampMixin):
 
     # How and result
     method: Mapped["VerificationMethod"] = mapped_column(
-        Enum(VerificationMethod, name="verification_method"), nullable=False
+        enum_column(VerificationMethod, "verification_method"), nullable=False
     )
     result: Mapped["VerificationResult"] = mapped_column(
-        Enum(VerificationResult, name="verification_result"), nullable=False
+        enum_column(VerificationResult, "verification_result"), nullable=False
     )
 
     # Details

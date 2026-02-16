@@ -92,6 +92,23 @@ def title_case_heading(text: str) -> str:
     return " ".join(result)
 
 
+def _clean_bracket_heading(text: str) -> str:
+    """Strip orphaned brackets from heading text.
+
+    OLRC XML splits bracket-enclosed status markers across <num> and <heading>
+    elements, e.g. ``<num>[CHAPTER 5—</num><heading>REPEALED]</heading>``.
+    This produces headings like ``REPEALED]`` (trailing bracket, missing opening
+    bracket) or ``[Reserved]`` (fully bracketed). Strip leading ``[`` and
+    trailing ``]`` so downstream title-casing works on clean text.
+    """
+    text = text.strip()
+    if text.startswith("["):
+        text = text[1:]
+    if text.endswith("]"):
+        text = text[:-1]
+    return text.strip()
+
+
 # Alias for backward compatibility
 to_title_case = title_case_heading
 
@@ -106,33 +123,32 @@ NAMESPACES = {
 
 
 @dataclass
-class ParsedTitle:
-    """Parsed US Code Title data."""
+class ParsedGroup:
+    """A unified structural node in the US Code hierarchy.
 
-    title_number: int
-    title_name: str
+    Replaces ParsedTitle, ParsedChapterGroup, ParsedChapter, and
+    ParsedSubchapter.  The ``group_type`` field discriminates level
+    (title, subtitle, part, division, chapter, subchapter, etc.) and
+    ``parent_key`` / ``key`` form the tree.
+    """
+
+    group_type: str  # "title", "subtitle", "part", "division", "chapter", "subchapter"
+    number: str
+    name: str
+    sort_order: int = 0
+    parent_key: str | None = None  # Key of parent group, None for root (title)
+    key: str = ""  # Unique path key, e.g. "title:26/subtitle:A/chapter:1"
+
+    # Title-specific (only set when group_type == "title")
     is_positive_law: bool = False
     positive_law_date: str | None = None
     positive_law_citation: str | None = None
 
-
-@dataclass
-class ParsedChapter:
-    """Parsed US Code Chapter data."""
-
-    chapter_number: str
-    chapter_name: str
-    sort_order: int = 0
-
-
-@dataclass
-class ParsedSubchapter:
-    """Parsed US Code Subchapter data."""
-
-    subchapter_number: str
-    subchapter_name: str
-    chapter_number: str  # Parent chapter
-    sort_order: int = 0
+    @property
+    def title_number(self) -> int:
+        """Extract title number from key (convenience for backward compat)."""
+        root = self.key.split("/")[0]  # "title:26"
+        return int(root.split(":")[1])
 
 
 @dataclass
@@ -202,8 +218,7 @@ class ParsedSection:
     heading: str
     full_citation: str
     text_content: str  # Flattened text (for backwards compatibility)
-    chapter_number: str | None = None
-    subchapter_number: str | None = None
+    parent_group_key: str | None = None  # Key of immediate parent group
     notes: str | None = None  # Raw notes from XML
     sort_order: int = 0
     subsections: list[ParsedSubsection] = field(
@@ -255,9 +270,8 @@ class ParsedSection:
 class USLMParseResult:
     """Result of parsing a USLM XML file."""
 
-    title: ParsedTitle
-    chapters: list[ParsedChapter] = field(default_factory=list)
-    subchapters: list[ParsedSubchapter] = field(default_factory=list)
+    title: ParsedGroup  # Root group (group_type == "title")
+    groups: list[ParsedGroup] = field(default_factory=list)  # All groups incl. title
     sections: list[ParsedSection] = field(default_factory=list)
 
 
@@ -317,13 +331,15 @@ class USLMParser:
         54,
     }
 
+    # Structural elements that can appear between title and chapter
+    _GROUP_ELEMENTS = ("subtitle", "part", "division")
+
     def __init__(self):
         """Initialize the parser."""
-        self._current_chapter: str | None = None
-        self._current_subchapter: str | None = None
-        self._chapter_order = 0
-        self._subchapter_order = 0
+        self._current_group_key: str | None = None
         self._section_order = 0
+        self._group_order = 0
+        self._groups: list[ParsedGroup] = []
 
     def parse_file(self, xml_path: Path | str) -> USLMParseResult:
         """Parse a USLM XML file.
@@ -332,53 +348,47 @@ class USLMParser:
             xml_path: Path to the XML file.
 
         Returns:
-            Parsed result containing title, chapters, subchapters, and sections.
+            Parsed result containing groups and sections.
         """
         xml_path = Path(xml_path)
         logger.info(f"Parsing USLM XML file: {xml_path}")
 
         # Reset state
-        self._current_chapter = None
-        self._current_subchapter = None
-        self._chapter_order = 0
-        self._subchapter_order = 0
+        self._current_group_key = None
         self._section_order = 0
+        self._group_order = 0
+        self._groups = []
 
         # Parse XML
         tree = etree.parse(str(xml_path))
         root = tree.getroot()
 
-        # Extract title information
-        title = self._parse_title(root)
+        # Extract title information and create root group
+        title_group = self._parse_title(root)
+        self._groups.append(title_group)
+        self._current_group_key = title_group.key
 
         # Parse hierarchical structure
-        chapters: list[ParsedChapter] = []
-        subchapters: list[ParsedSubchapter] = []
         sections: list[ParsedSection] = []
 
         # Find main content - try different possible root structures
         main = self._find_main_content(root)
         if main is None:
             logger.warning("Could not find main content element")
-            return USLMParseResult(title=title)
+            return USLMParseResult(title=title_group, groups=self._groups)
 
         # Parse all levels
-        for chapter, subchs, sects in self._parse_levels(main, title.title_number):
-            if chapter:
-                chapters.append(chapter)
-            subchapters.extend(subchs)
+        for sects in self._parse_levels(main, title_group):
             sections.extend(sects)
 
         logger.info(
-            f"Parsed Title {title.title_number}: "
-            f"{len(chapters)} chapters, {len(subchapters)} subchapters, "
-            f"{len(sections)} sections"
+            f"Parsed Title {title_group.title_number}: "
+            f"{len(self._groups)} groups, {len(sections)} sections"
         )
 
         return USLMParseResult(
-            title=title,
-            chapters=chapters,
-            subchapters=subchapters,
+            title=title_group,
+            groups=self._groups,
             sections=sections,
         )
 
@@ -402,8 +412,8 @@ class USLMParser:
 
         return root
 
-    def _parse_title(self, root: etree._Element) -> ParsedTitle:
-        """Extract title information from the root element."""
+    def _parse_title(self, root: etree._Element) -> ParsedGroup:
+        """Extract title information from the root element and return as a ParsedGroup."""
         # Try to find title number and name from various locations
         title_number = 0
         title_name = ""
@@ -469,118 +479,308 @@ class USLMParser:
         if not is_positive_law:
             is_positive_law = title_number in self.POSITIVE_LAW_TITLES
 
-        return ParsedTitle(
-            title_number=title_number,
-            title_name=title_name,
+        return ParsedGroup(
+            group_type="title",
+            number=str(title_number),
+            name=title_name,
+            sort_order=0,
+            parent_key=None,
+            key=f"title:{title_number}",
             is_positive_law=is_positive_law,
         )
 
+    def _find_group_elements(
+        self, parent: etree._Element
+    ) -> list[tuple[etree._Element, str]]:
+        """Find direct structural children (subtitle, part, division).
+
+        Checks direct children of *parent* first, then children of any
+        <title> wrapper (since USLM often nests <subtitle>/<part> under
+        <main>/<title> rather than directly under <main>).
+
+        Returns a list of (element, group_type) tuples.
+        """
+        results: list[tuple[etree._Element, str]] = []
+        ns = NAMESPACES["uslm"]
+
+        # Build list of containers to search: parent itself, plus any <title> child
+        containers = [parent]
+        title_child = parent.find(f"./{{{ns}}}title")
+        if title_child is None:
+            title_child = parent.find("./title")
+        if title_child is not None:
+            containers.append(title_child)
+
+        for container in containers:
+            for tag in self._GROUP_ELEMENTS:
+                for elem in container.findall(f"./{tag}"):
+                    results.append((elem, tag))
+                for elem in container.findall(f"./{{{ns}}}{tag}"):
+                    results.append((elem, tag))
+                # Also check <level> elements with matching type
+                for lvl in container.findall("./level"):
+                    if self._get_level_type(lvl) == tag:
+                        results.append((lvl, tag))
+                for lvl in container.findall(f"./{{{ns}}}level"):
+                    if self._get_level_type(lvl) == tag:
+                        results.append((lvl, tag))
+        return results
+
+    def _parse_group(
+        self,
+        elem: etree._Element,
+        group_type: str,
+        title_number: int,
+        parent_key: str,
+    ) -> Iterator[list[ParsedSection]]:
+        """Parse a structural group element, recursing into nested groups."""
+        self._group_order += 1
+        number = self._get_number(elem)
+        name = title_case_heading(_clean_bracket_heading(self._get_heading(elem)))
+        key = f"{parent_key}/{group_type}:{number}"
+
+        group = ParsedGroup(
+            group_type=group_type,
+            number=number,
+            name=name,
+            sort_order=self._group_order,
+            parent_key=parent_key,
+            key=key,
+        )
+        self._groups.append(group)
+
+        # Look for nested structural children first
+        nested_groups = self._find_group_elements(elem)
+        if nested_groups:
+            for child_elem, child_type in nested_groups:
+                yield from self._parse_group(
+                    child_elem, child_type, title_number, parent_key=key
+                )
+        else:
+            # Look for chapters within this group
+            chapters = elem.findall("./chapter") + elem.findall(
+                f"./{{{NAMESPACES['uslm']}}}chapter"
+            )
+            if not chapters:
+                chapters = [
+                    lvl
+                    for lvl in elem.findall("./level")
+                    + elem.findall(f"./{{{NAMESPACES['uslm']}}}level")
+                    if self._get_level_type(lvl) == "chapter"
+                ]
+            if chapters:
+                for chapter_elem in chapters:
+                    yield from self._parse_chapter(
+                        chapter_elem, title_number, parent_key=key
+                    )
+            else:
+                # No chapters found — parse sections directly under this group
+                prev_key = self._current_group_key
+                self._current_group_key = key
+                sections = self._parse_sections_in_element(elem, title_number)
+                self._current_group_key = prev_key
+                yield sections
+
     def _parse_levels(
-        self, parent: etree._Element, title_number: int
-    ) -> Iterator[
-        tuple[ParsedChapter | None, list[ParsedSubchapter], list[ParsedSection]]
-    ]:
+        self, parent: etree._Element, title_group: ParsedGroup
+    ) -> Iterator[list[ParsedSection]]:
         """Recursively parse hierarchical levels.
 
+        First checks for structural group elements (subtitle, part, division)
+        between title and chapter level. If found, descends recursively.
+        Otherwise falls through to direct chapter/section parsing.
+
         Yields:
-            Tuple of (chapter, subchapters, sections) for each top-level structure.
+            Lists of ParsedSection for each structural branch.
         """
-        # Look for chapter elements
-        chapters = parent.findall(".//chapter") + parent.findall(".//{*}chapter")
-        if not chapters:
-            # Try level elements with chapter identifier
-            chapters = [
+        title_key = title_group.key
+        title_number = title_group.title_number
+
+        # Check for structural groups above chapter level
+        groups = self._find_group_elements(parent)
+        if groups:
+            for group_elem, group_type in groups:
+                yield from self._parse_group(
+                    group_elem, group_type, title_number, parent_key=title_key
+                )
+            return
+
+        # Look for chapter elements (check parent and any <title> child wrapper)
+        ns = NAMESPACES["uslm"]
+        containers = [parent]
+        title_child = parent.find(f"./{{{ns}}}title")
+        if title_child is None:
+            title_child = parent.find("./title")
+        if title_child is not None:
+            containers.append(title_child)
+
+        chapters: list[etree._Element] = []
+        for container in containers:
+            chapters.extend(container.findall("./chapter"))
+            chapters.extend(container.findall(f"./{{{ns}}}chapter"))
+            chapters.extend(
                 lvl
-                for lvl in parent.findall(".//level") + parent.findall(".//{*}level")
+                for lvl in container.findall("./level")
+                + container.findall(f"./{{{ns}}}level")
                 if self._get_level_type(lvl) == "chapter"
-            ]
+            )
 
         if chapters:
             for chapter_elem in chapters:
-                yield self._parse_chapter(chapter_elem, title_number)
+                yield from self._parse_chapter(
+                    chapter_elem, title_number, parent_key=title_key
+                )
         else:
-            # No chapters - parse sections directly
+            # No chapters - parse sections directly under title
             sections = self._parse_sections_in_element(parent, title_number)
-            yield (None, [], sections)
+            yield sections
 
     def _parse_chapter(
-        self, chapter_elem: etree._Element, title_number: int
-    ) -> tuple[ParsedChapter, list[ParsedSubchapter], list[ParsedSection]]:
-        """Parse a chapter element and its contents."""
-        self._chapter_order += 1
-        self._subchapter_order = 0
+        self,
+        chapter_elem: etree._Element,
+        title_number: int,
+        parent_key: str,
+    ) -> Iterator[list[ParsedSection]]:
+        """Parse a chapter element and its contents as a ParsedGroup."""
+        self._group_order += 1
         self._section_order = 0
 
         # Extract chapter number and name (convert ALL-CAPS to Title Case)
         chapter_number = self._get_number(chapter_elem)
-        chapter_name = title_case_heading(self._get_heading(chapter_elem))
-
-        if not chapter_number:
-            chapter_number = str(self._chapter_order)
-
-        self._current_chapter = chapter_number
-        self._current_subchapter = None
-
-        chapter = ParsedChapter(
-            chapter_number=chapter_number,
-            chapter_name=chapter_name,
-            sort_order=self._chapter_order,
+        chapter_name = title_case_heading(
+            _clean_bracket_heading(self._get_heading(chapter_elem))
         )
 
-        # Parse subchapters and sections within chapter
-        subchapters: list[ParsedSubchapter] = []
-        sections: list[ParsedSection] = []
+        if not chapter_number:
+            chapter_number = str(self._group_order)
+
+        key = f"{parent_key}/chapter:{chapter_number}"
+
+        chapter_group = ParsedGroup(
+            group_type="chapter",
+            number=chapter_number,
+            name=chapter_name,
+            sort_order=self._group_order,
+            parent_key=parent_key,
+            key=key,
+        )
+        self._groups.append(chapter_group)
 
         # Look for subchapters
-        subchapter_elems = chapter_elem.findall(".//subchapter") + chapter_elem.findall(
-            ".//{*}subchapter"
+        subchapter_elems = chapter_elem.findall("./subchapter") + chapter_elem.findall(
+            "./{*}subchapter"
         )
         if not subchapter_elems:
             subchapter_elems = [
                 lvl
-                for lvl in chapter_elem.findall(".//level")
-                + chapter_elem.findall(".//{*}level")
+                for lvl in chapter_elem.findall("./level")
+                + chapter_elem.findall("./{*}level")
                 if self._get_level_type(lvl) == "subchapter"
             ]
 
         if subchapter_elems:
             for subch_elem in subchapter_elems:
-                subch, subch_sections = self._parse_subchapter(
-                    subch_elem, title_number, chapter_number
-                )
-                subchapters.append(subch)
-                sections.extend(subch_sections)
+                yield from self._parse_subchapter(subch_elem, title_number, key)
         else:
             # No subchapters - parse sections directly in chapter
+            prev_key = self._current_group_key
+            self._current_group_key = key
             sections = self._parse_sections_in_element(chapter_elem, title_number)
-
-        return chapter, subchapters, sections
+            self._current_group_key = prev_key
+            yield sections
 
     def _parse_subchapter(
-        self, subch_elem: etree._Element, title_number: int, chapter_number: str
-    ) -> tuple[ParsedSubchapter, list[ParsedSection]]:
-        """Parse a subchapter element and its sections."""
-        self._subchapter_order += 1
+        self,
+        subch_elem: etree._Element,
+        title_number: int,
+        chapter_key: str,
+    ) -> Iterator[list[ParsedSection]]:
+        """Parse a subchapter element as a ParsedGroup.
+
+        Also detects <part> children within the subchapter — this is the
+        fix for issue #69 (parts within subchapters).
+        """
+        self._group_order += 1
         self._section_order = 0
 
         subch_number = self._get_number(subch_elem)
-        subch_name = title_case_heading(self._get_heading(subch_elem))
-
-        if not subch_number:
-            subch_number = str(self._subchapter_order)
-
-        self._current_subchapter = subch_number
-
-        subchapter = ParsedSubchapter(
-            subchapter_number=subch_number,
-            subchapter_name=subch_name,
-            chapter_number=chapter_number,
-            sort_order=self._subchapter_order,
+        subch_name = title_case_heading(
+            _clean_bracket_heading(self._get_heading(subch_elem))
         )
 
-        sections = self._parse_sections_in_element(subch_elem, title_number)
+        if not subch_number:
+            subch_number = str(self._group_order)
 
-        return subchapter, sections
+        key = f"{chapter_key}/subchapter:{subch_number}"
+
+        subchapter_group = ParsedGroup(
+            group_type="subchapter",
+            number=subch_number,
+            name=subch_name,
+            sort_order=self._group_order,
+            parent_key=chapter_key,
+            key=key,
+        )
+        self._groups.append(subchapter_group)
+
+        # Check for parts within subchapter (issue #69)
+        ns = NAMESPACES["uslm"]
+        part_elems = subch_elem.findall(f"./{{{ns}}}part") + subch_elem.findall(
+            "./part"
+        )
+        if not part_elems:
+            part_elems = [
+                lvl
+                for lvl in subch_elem.findall(f"./{{{ns}}}level")
+                + subch_elem.findall("./level")
+                if self._get_level_type(lvl) == "part"
+            ]
+
+        if part_elems:
+            for part_elem in part_elems:
+                yield from self._parse_subchapter_part(part_elem, title_number, key)
+        else:
+            prev_key = self._current_group_key
+            self._current_group_key = key
+            sections = self._parse_sections_in_element(subch_elem, title_number)
+            self._current_group_key = prev_key
+            yield sections
+
+    def _parse_subchapter_part(
+        self,
+        part_elem: etree._Element,
+        title_number: int,
+        subchapter_key: str,
+    ) -> Iterator[list[ParsedSection]]:
+        """Parse a part element nested within a subchapter."""
+        self._group_order += 1
+        self._section_order = 0
+
+        part_number = self._get_number(part_elem)
+        part_name = title_case_heading(
+            _clean_bracket_heading(self._get_heading(part_elem))
+        )
+
+        if not part_number:
+            part_number = str(self._group_order)
+
+        key = f"{subchapter_key}/part:{part_number}"
+
+        part_group = ParsedGroup(
+            group_type="part",
+            number=part_number,
+            name=part_name,
+            sort_order=self._group_order,
+            parent_key=subchapter_key,
+            key=key,
+        )
+        self._groups.append(part_group)
+
+        prev_key = self._current_group_key
+        self._current_group_key = key
+        sections = self._parse_sections_in_element(part_elem, title_number)
+        self._current_group_key = prev_key
+        yield sections
 
     def _parse_sections_in_element(
         self, parent: etree._Element, title_number: int
@@ -588,12 +788,12 @@ class USLMParser:
         """Parse all section elements within a parent element."""
         sections: list[ParsedSection] = []
 
-        # Find section elements
-        section_elems = parent.findall(".//section") + parent.findall(".//{*}section")
+        # Find direct child section elements only (not nested in notes/quotedContent)
+        section_elems = parent.findall("./section") + parent.findall("./{*}section")
         if not section_elems:
             section_elems = [
                 lvl
-                for lvl in parent.findall(".//level") + parent.findall(".//{*}level")
+                for lvl in parent.findall("./level") + parent.findall("./{*}level")
                 if self._get_level_type(lvl) == "section"
             ]
 
@@ -639,8 +839,7 @@ class USLMParser:
             heading=heading,
             full_citation=full_citation,
             text_content=text_content,
-            chapter_number=self._current_chapter,
-            subchapter_number=self._current_subchapter,
+            parent_group_key=self._current_group_key,
             notes=notes,
             sort_order=self._section_order,
             subsections=subsections,
@@ -661,7 +860,15 @@ class USLMParser:
 
         # Check role attribute
         role = elem.get("role", "").lower()
-        if role in ("chapter", "subchapter", "section"):
+        valid_types = {
+            "chapter",
+            "subchapter",
+            "section",
+            "subtitle",
+            "part",
+            "division",
+        }
+        if role in valid_types:
             return role
 
         return None

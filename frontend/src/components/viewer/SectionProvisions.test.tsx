@@ -21,9 +21,10 @@ describe('SectionProvisions', () => {
     expect(
       screen.getByText('Exclusive rights in copyrighted works')
     ).toBeInTheDocument();
+    expect(screen.getByText('Provisions')).toBeInTheDocument();
   });
 
-  it('numbers docstring as lines 1–2, blank line 3, provisions from line 4', () => {
+  it('numbers docstring as lines 1–3, blank line 4, provisions from line 5', () => {
     render(
       <SectionProvisions
         {...defaultProps}
@@ -35,6 +36,7 @@ describe('SectionProvisions', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
   });
 
   it('renders text content with line numbers', () => {
@@ -82,9 +84,9 @@ describe('SectionProvisions', () => {
         isRepealed={false}
       />
     );
-    // Lines 1–2 are docstring, 3 is blank, 4–5 are provisions
-    expect(screen.getByText('4')).toBeInTheDocument();
+    // Lines 1–3 are docstring, 4 is blank, 5–6 are provisions
     expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('6')).toBeInTheDocument();
     expect(screen.getByText('(a) First provision;')).toBeInTheDocument();
     expect(screen.getByText('(1) Nested item;')).toBeInTheDocument();
   });
@@ -148,13 +150,13 @@ describe('SectionProvisions', () => {
       />
     );
     // Marker and title are split into separate spans
-    const markerSpan = container.querySelector('.text-blue-600');
+    const markerSpan = container.querySelector('.text-primary-600');
     expect(markerSpan).toBeInTheDocument();
     expect(markerSpan!.textContent).toBe('(a) ');
     expect(markerSpan).not.toHaveClass('font-bold');
 
     const titleSpan = screen.getByText('In General');
-    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+    expect(titleSpan).toHaveClass('font-bold', 'text-primary-700');
 
     // Outer span should still have hanging indent (it's also a list item)
     const outerSpan = markerSpan!.closest('.whitespace-pre-wrap');
@@ -342,7 +344,7 @@ describe('SectionProvisions', () => {
     );
     // Legacy heuristic should still detect header
     const titleSpan = screen.getByText('In General');
-    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+    expect(titleSpan).toHaveClass('font-bold', 'text-primary-700');
   });
 });
 
@@ -377,7 +379,7 @@ describe('SectionProvisions with structured provisions', () => {
       />
     );
     const titleSpan = screen.getByText('In General');
-    expect(titleSpan).toHaveClass('font-bold', 'text-blue-700');
+    expect(titleSpan).toHaveClass('font-bold', 'text-primary-700');
   });
 
   it('does not apply header styling when is_header is false even for short marker lines', () => {

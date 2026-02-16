@@ -81,6 +81,9 @@ if [[ "${1:-}" == "reset" ]]; then
     log "Ingesting Phase 1 titles (this may take a few minutes)..."
     uv run python -m pipeline.cli ingest-phase1
 
+    log "Seeding sample Public Laws..."
+    uv run python -m pipeline.cli seed-laws
+
     log "Reset complete."
     exit 0
 fi
@@ -126,6 +129,8 @@ uv run python -m alembic upgrade head
 if [[ "$SEED" == true ]]; then
     log "Seeding Phase 1 titles (this may take a few minutes)..."
     uv run python -m pipeline.cli ingest-phase1
+    log "Seeding sample Public Laws for parse-law testing..."
+    uv run python -m pipeline.cli seed-laws
     log "Seeding complete."
 fi
 

@@ -8,7 +8,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
-    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -18,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, enum_column
 from app.models.enums import Chamber, PoliticalParty, SponsorshipRole, VoteType
 
 if TYPE_CHECKING:
@@ -43,12 +42,12 @@ class Legislator(Base, TimestampMixin):
     nickname: Mapped[str | None] = mapped_column(String(100), nullable=True)
     full_name: Mapped[str] = mapped_column(String(300), nullable=False)
     party: Mapped[PoliticalParty | None] = mapped_column(
-        Enum(PoliticalParty, name="political_party"), nullable=True
+        enum_column(PoliticalParty, "political_party"), nullable=True
     )
     state: Mapped[str | None] = mapped_column(CHAR(2), nullable=True)
     district: Mapped[str | None] = mapped_column(String(10), nullable=True)
     current_chamber: Mapped[Chamber | None] = mapped_column(
-        Enum(Chamber, name="chamber"), nullable=True
+        enum_column(Chamber, "chamber"), nullable=True
     )
     is_current_member: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
@@ -97,12 +96,12 @@ class LegislatorTerm(Base, TimestampMixin):
         ForeignKey("legislator.legislator_id", ondelete="CASCADE"), nullable=False
     )
     chamber: Mapped[Chamber] = mapped_column(
-        Enum(Chamber, name="chamber"), nullable=False
+        enum_column(Chamber, "chamber"), nullable=False
     )
     state: Mapped[str] = mapped_column(CHAR(2), nullable=False)
     district: Mapped[str | None] = mapped_column(String(10), nullable=True)
     party: Mapped[PoliticalParty] = mapped_column(
-        Enum(PoliticalParty, name="political_party"), nullable=False
+        enum_column(PoliticalParty, "political_party"), nullable=False
     )
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -141,7 +140,7 @@ class Sponsorship(Base, TimestampMixin):
         ForeignKey("legislator.legislator_id", ondelete="RESTRICT"), nullable=False
     )
     role: Mapped[SponsorshipRole] = mapped_column(
-        Enum(SponsorshipRole, name="sponsorship_role"), nullable=False
+        enum_column(SponsorshipRole, "sponsorship_role"), nullable=False
     )
     sponsorship_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     withdrawn_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -190,7 +189,7 @@ class Vote(Base, TimestampMixin):
         ForeignKey("bill.bill_id", ondelete="CASCADE"), nullable=True
     )
     chamber: Mapped[Chamber] = mapped_column(
-        Enum(Chamber, name="chamber"), nullable=False
+        enum_column(Chamber, "chamber"), nullable=False
     )
     vote_date: Mapped[date] = mapped_column(Date, nullable=False)
     vote_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -239,7 +238,7 @@ class IndividualVote(Base):
         ForeignKey("legislator.legislator_id", ondelete="RESTRICT"), nullable=False
     )
     vote_cast: Mapped[VoteType] = mapped_column(
-        Enum(VoteType, name="vote_type"), nullable=False
+        enum_column(VoteType, "vote_type"), nullable=False
     )
 
     # Relationships
