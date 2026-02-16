@@ -109,7 +109,7 @@ describe('SectionProvisions', () => {
 
     // Docstring content spans also have hanging indent
     const docstringSpan = screen.getByText('17 U.S.C. § 106').closest('span');
-    expect(docstringSpan).toHaveClass('pl-[4ch]', '-indent-[4ch]', 'min-w-0');
+    expect(docstringSpan).toHaveClass('pl-[2ch]', '-indent-[2ch]', 'min-w-0');
   });
 
   it('splits leading whitespace into a separate indent span', () => {
