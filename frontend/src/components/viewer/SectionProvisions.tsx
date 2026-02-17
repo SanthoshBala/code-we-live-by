@@ -235,8 +235,11 @@ export default function SectionProvisions({
 
       // Use measured pixel offsets when available; fall back to em
       // estimates (one line-height per depth level) in jsdom / SSR.
+      // Offset depth-0 headers 1px above the scroll edge to seal
+      // any sub-pixel gap between the header and the container top.
+      const topPx = node.depth === 0 ? parentTopPx - 1 : parentTopPx;
       const topStyle = hasMeasuredHeights
-        ? `${parentTopPx}px`
+        ? `${topPx}px`
         : `${node.depth * 1.625}em`;
       const childTopPx = parentTopPx + measuredH;
 
