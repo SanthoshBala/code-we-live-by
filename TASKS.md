@@ -142,21 +142,55 @@ This document tracks the remaining implementation backlog, organized by phase an
   - **Scale**: 426 occurrences across Phase 1 titles (Title 42: 122, Title 26: 77)
   - **Context**: Currently these are skipped by the parser (XPath changed to `./section` to avoid treating them as real code sections). They contain the actual statutory text of amendments and should be rendered as quoted blocks in the notes display.
 
-### Data Pipeline - Historical Depth
-- [ ] **Task 1.18**: Ingest historical Public Laws (last 20 years as MVP scope)
-  - Fetch laws from ~2004 to present for selected titles
-  - Parse and store in chronological order
-  - Build historical versions incrementally
+### Data Pipeline - Chronological Ingestion Pipeline
 
-- [ ] **Task 1.19**: Build SectionHistory records
-  - For each law that modifies a section, create snapshot
-  - Store full text at that point in time
-  - Link to law_id and effective_date
+*Replaces the original Tasks 1.18-1.20. The play-forward architecture maintains a PostgreSQL-based revision history where each revision is either an OLRC release point (ground truth) or a Public Law (derived). See plan: `mighty-exploring-hoare.md`.*
 
-- [ ] **Task 1.20**: Build LineHistory records
-  - For each law that modifies specific lines, create version records
-  - Store historical text_content, parent relationships
-  - Enable time-travel at line granularity
+- [x] **Task 1.18**: Foundation — Timeline builder + Revision/Snapshot models (Phase 1)
+  - `TimelineBuilder` merges OLRC release points and Public Laws chronologically
+  - `CodeRevision` model (the "commit" concept) + `SectionSnapshot` model (changed-sections-only)
+  - `SnapshotService` query helpers (parent-chain traversal, section history)
+  - CLI commands: `chrono-timeline`, `chrono-status`
+  - PR #84
+
+- [ ] **Task 1.19**: Bootstrap — Load earliest OLRC release point as initial commit (Phase 2)
+  - `BootstrapService.create_initial_commit(rp_identifier)`
+  - Download + parse OLRC XML for all titles at a release point
+  - Create `SectionSnapshot` records for every section
+  - CLI: `chrono bootstrap <rp_identifier>` (e.g., `chrono bootstrap 113-21`)
+  - Idempotent and resumable with progress logging
+
+- [ ] **Task 1.20**: RP-to-RP diffing + law attribution (Phase 3)
+  - `RevisionDiffEngine.diff(rev_before, rev_after)` — classify sections as added/removed/modified/unchanged
+  - Compare `text_hash` and `notes_hash` for change detection
+  - Attribute section changes to specific Public Laws using OLRC source credits
+  - Update `DiffGenerator` to accept optional `base_revision_id` for historical base
+  - CLI: `chrono diff <revision>`
+
+- [ ] **Task 1.20b**: Amendment application engine (Phase 4)
+  - `AmendmentApplicator.apply(provisions, diff)` — apply parsed amendments to section provisions
+  - Provision matcher, modifier, renumbering engine
+  - Section-level orchestrator (sort diffs bottom-up, apply sequentially)
+  - Revision-level orchestrator (create derived `CodeRevision` + snapshots per law)
+  - Builds on existing `AmendmentParser` → `SectionResolver` → `DiffGenerator` pipeline
+
+- [ ] **Task 1.20c**: Play-forward engine + checkpoint validation (Phase 5)
+  - `PlayForwardEngine.advance()` — process next timeline event (RP or law)
+  - RP events: download XML, create ground-truth snapshots
+  - Law events: apply amendments, create derived snapshots
+  - Checkpoint validation: compare derived state against RP ground truth at each release point
+  - CLI: `chrono advance`, `chrono validate <rp>`, `chrono section <title> <section> --at <revision>`
+
+- [ ] **Task 1.20d**: Chronological pipeline web visualization (Phase 6)
+  - API endpoints: timeline, revisions, diffs, section history, section-at-revision
+  - Frontend: timeline page, revision detail, section diff viewer, section history viewer
+
+- [ ] **Task 1.20e**: Pre-2013 historical coverage (Backlog)
+  - Extend coverage back from 113th Congress (2013) toward 1994 using OLRC annual XHTML archives
+  - 2003-2013: Use Statutes at Large USLM XML for per-law diffs
+  - 1994-2003: Year-over-year diffs only (no structured amendment text available)
+  - Requires: XHTML parser for annual archives, Statutes at Large parser, `AnnualEdition` revision type
+  - **Priority**: Low — revisit after play-forward engine is working end-to-end
 
 ### Backend API Development
 - [ ] **Task 1.21**: Implement Code Browsing API endpoints
@@ -729,10 +763,11 @@ This document tracks the remaining implementation backlog, organized by phase an
 2. ~~Infrastructure and core ingestion (1.1-1.2, 1.6-1.9)~~ ✅
 3. ~~Milestone 1A (US Code Viewer)~~ ✅
 4. Task 1.11 (Section parsing iteration) + open bug/UX issues ← **Current**
-5. Tasks 1.12-1.20 (Law change parsing and historical depth) ← **Next**
-6. Tasks 1.21-1.25 (Full APIs including blame/time travel)
-7. Tasks 1.29-1.36 (Full UI: code browser, law viewer)
-8. Tasks 1.47-1.50 (Deployment)
+5. Task 1.18 (Chrono pipeline foundation) ← **Done** (PR #84)
+6. Tasks 1.12-1.13 (Law change parsing) + Tasks 1.19-1.20c (Chrono pipeline phases 2-5) ← **Next**
+7. Tasks 1.21-1.25 (Full APIs including blame/time travel)
+8. Tasks 1.29-1.36 (Full UI: code browser, law viewer)
+9. Tasks 1.47-1.50 (Deployment)
 
 ### High Priority (MVP-adjacent)
 - Tasks 1.37-1.38 (Search)
@@ -753,7 +788,8 @@ This document tracks the remaining implementation backlog, organized by phase an
 ### Dependencies
 - Law change parsing (Task 1.12-1.13) was deferred until Milestone 1A validated section parsing — **now unblocked**
 - Line-level parsing (Task 1.14-1.17) is prerequisite for blame view (Task 1.30-1.31)
-- Historical data (Task 1.18-1.20) is prerequisite for time travel (Task 1.24, 1.32)
+- Chrono pipeline: 1.18 (foundation) ✅ → 1.19 (bootstrap) → 1.20 (RP diffing) → 1.20b (amendment application) → 1.20c (play-forward) → 1.20d (web viz)
+- Task 1.20e (pre-2013 coverage) is a backlog item — not blocking any current work
 - Analytics queries (Task 2.7, 2.9, 2.11, 2.13) must be complete before visualizations (Task 2.8, 2.10, 2.12, 2.14)
 
 ---
