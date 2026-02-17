@@ -7,10 +7,11 @@ Each release point identifies the US Code "through" a specific Public Law,
 sometimes excluding certain laws that haven't yet been codified.
 """
 
+import contextlib
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 import httpx
 from lxml import html
@@ -102,7 +103,7 @@ class ReleasePointRegistry:
         """Fetch the list of prior release points from the OLRC website.
 
         Scrapes the prior release points page to build a registry of available
-        release points with their metadata.
+        release points with their metadata (date, affected titles).
 
         Returns:
             List of ReleasePointInfo objects, sorted chronologically.
@@ -114,12 +115,15 @@ class ReleasePointRegistry:
         tree = html.fromstring(response.content)
         release_points = []
 
-        # The page has links to release point download pages
-        # Look for links containing "releasepoints" in the href
-        links = tree.xpath("//a[contains(@href, 'releasepoint')]/@href")
+        # Each release point is an <a> inside an <li>. The link text contains
+        # the date and affected titles:
+        #   "Public Law 119-72 (01/20/2026), except 119-60, affecting titles 38, 42."
+        links = tree.xpath("//a[contains(@href, 'releasepoint')]")
 
-        for link in links:
-            rp_info = self._parse_release_point_link(link)
+        for link_elem in links:
+            href = link_elem.get("href", "")
+            link_text = link_elem.text_content().strip()
+            rp_info = self._parse_release_point_link(href, link_text)
             if rp_info:
                 release_points.append(rp_info)
 
@@ -138,11 +142,14 @@ class ReleasePointRegistry:
         logger.debug(f"Fetched {len(unique_rps)} total release points from OLRC")
         return unique_rps
 
-    def _parse_release_point_link(self, href: str) -> ReleasePointInfo | None:
-        """Parse a release point from a download page link.
+    def _parse_release_point_link(
+        self, href: str, link_text: str = ""
+    ) -> ReleasePointInfo | None:
+        """Parse a release point from a download page link and its text.
 
         Args:
             href: Link href from the prior release points page.
+            link_text: The visible text of the link, containing date and titles.
 
         Returns:
             ReleasePointInfo or None if the link doesn't match expected pattern.
@@ -159,10 +166,33 @@ class ReleasePointRegistry:
         law_identifier = match.group(2)
         full_identifier = f"{congress}-{law_identifier}"
 
+        # Parse date from link text: "Public Law 119-72 (01/20/2026) ..."
+        publication_date = None
+        date_match = re.search(r"\((\d{2}/\d{2}/\d{4})\)", link_text)
+        if date_match:
+            with contextlib.suppress(ValueError):
+                publication_date = datetime.strptime(
+                    date_match.group(1), "%m/%d/%Y"
+                ).date()
+
+        # Parse affected titles: "affecting title(s) 2, 16, 26, 33, 43."
+        titles_available: list[int] = []
+        titles_match = re.search(r"affecting titles?\s+(.+?)\.?\s*$", link_text)
+        if titles_match:
+            titles_text = titles_match.group(1).rstrip(".")
+            for part in titles_text.split(","):
+                part = part.strip()
+                # Handle "11A" style titles by stripping letter suffix
+                num_match = re.match(r"(\d+)", part)
+                if num_match:
+                    titles_available.append(int(num_match.group(1)))
+
         return ReleasePointInfo(
             full_identifier=full_identifier,
             congress=congress,
             law_identifier=law_identifier,
+            publication_date=publication_date,
+            titles_available=sorted(set(titles_available)),
         )
 
     def get_release_points(self) -> list[ReleasePointInfo]:

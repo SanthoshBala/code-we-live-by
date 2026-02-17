@@ -1,5 +1,7 @@
 """Tests for OLRC release point infrastructure."""
 
+from datetime import date
+
 import pytest
 
 from pipeline.olrc.downloader import OLRCDownloader
@@ -238,6 +240,54 @@ class TestReleasePointRegistry:
         registry = ReleasePointRegistry()
         rp = registry._parse_release_point_link("/some/other/path")
         assert rp is None
+
+    def test_parse_link_with_date_and_titles(self) -> None:
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/119/72not60/usc-rp@119-72not60.htm",
+            "Public Law 119-72 (01/20/2026) , except 119-60, "
+            "affecting titles 38, 42.",
+        )
+        assert rp is not None
+        assert rp.full_identifier == "119-72not60"
+        assert rp.publication_date == date(2026, 1, 20)
+        assert rp.titles_available == [38, 42]
+
+    def test_parse_link_single_title(self) -> None:
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/119/59/usc-rp@119-59.htm",
+            "Public Law 119-59 (12/18/2025), affecting title 16.",
+        )
+        assert rp is not None
+        assert rp.publication_date == date(2025, 12, 18)
+        assert rp.titles_available == [16]
+
+    def test_parse_link_many_titles_with_letter_suffix(self) -> None:
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/119/43/usc-rp@119-43.htm",
+            "Public Law 119-43 (12/01/2025), affecting titles "
+            "1, 2, 5, 7, 10, 11A, 12, 16, 18, 18A, 21, 22, 26, "
+            "28, 28A, 38, 42, 49, 54.",
+        )
+        assert rp is not None
+        assert rp.publication_date == date(2025, 12, 1)
+        assert 11 in rp.titles_available
+        assert 18 in rp.titles_available
+        assert 28 in rp.titles_available
+        assert 54 in rp.titles_available
+
+    def test_parse_link_no_text(self) -> None:
+        """Backwards compatibility: no link text still works."""
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/118/158/xml_usc17@118-158.zip",
+        )
+        assert rp is not None
+        assert rp.full_identifier == "118-158"
+        assert rp.publication_date is None
+        assert rp.titles_available == []
 
 
 class TestOLRCDownloaderReleasePoints:

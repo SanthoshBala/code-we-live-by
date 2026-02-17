@@ -2871,9 +2871,14 @@ async def chrono_rps_only_command(
     else:
         displayed = rps[:limit]
         for rp in displayed:
-            excluded = f" (excludes PL {rp.excluded_laws})" if rp.excluded_laws else ""
-            pub_date = f" [{rp.publication_date}]" if rp.publication_date else ""
-            print(f"  [RP] {rp.full_identifier}{pub_date}{excluded}")
+            parts = [f"[RP] {rp.full_identifier}"]
+            if rp.publication_date:
+                parts.append(f"({rp.publication_date})")
+            if rp.excluded_laws:
+                parts.append(f"excludes PL {rp.excluded_laws}")
+            if rp.titles_available:
+                parts.append(f"titles: {rp.titles_available}")
+            print(f"  {' '.join(parts)}")
         if len(rps) > limit:
             print(f"  ... and {len(rps) - limit} more release points")
 
