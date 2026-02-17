@@ -13,6 +13,8 @@ from app.models.enums import (
     PatternDiscoveryStatus,
     PoliticalParty,
     ReferenceType,
+    RevisionStatus,
+    RevisionType,
     SpanType,
     SponsorshipRole,
     VerificationMethod,
@@ -29,6 +31,8 @@ from app.models.legislator import (
 )
 from app.models.public_law import Bill, LawChange, ProposedChange, PublicLaw
 from app.models.release_point import OLRCReleasePoint
+from app.models.revision import CodeRevision
+from app.models.snapshot import SectionSnapshot
 from app.models.supporting import (
     Amendment,
     BillCommitteeAssignment,
@@ -92,6 +96,11 @@ __all__ = [
     "LineHistory",
     # Release Points (Task 1.12)
     "OLRCReleasePoint",
+    # Chronological Pipeline (Revision System)
+    "CodeRevision",
+    "SectionSnapshot",
+    "RevisionType",
+    "RevisionStatus",
     # Supporting
     "SectionReference",
     "Committee",

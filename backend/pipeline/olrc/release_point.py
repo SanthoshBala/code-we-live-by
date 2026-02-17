@@ -218,7 +218,12 @@ class ReleasePointRegistry:
             pairs.append((rps[i], rps[i + 1]))
         return pairs
 
-    def get_laws_in_range(self, rp_before: str, rp_after: str) -> list[tuple[int, int]]:
+    def get_laws_in_range(
+        self,
+        rp_before: str,
+        rp_after: str,
+        last_law_of_congress: dict[int, int] | None = None,
+    ) -> list[tuple[int, int]]:
         """Return (congress, law_number) pairs enacted between two release points.
 
         This identifies which Public Laws were enacted between two release
@@ -227,6 +232,8 @@ class ReleasePointRegistry:
         Args:
             rp_before: Identifier of the earlier release point (e.g., "118-22").
             rp_after: Identifier of the later release point (e.g., "118-30").
+            last_law_of_congress: Optional mapping of congress -> last law number
+                for cross-congress boundary handling.
 
         Returns:
             List of (congress, law_number) tuples for laws in the range.
@@ -251,10 +258,33 @@ class ReleasePointRegistry:
             for law_num in range(before_num + 1, after_num + 1):
                 laws.append((before_congress, law_num))
         else:
-            # Cross-congress boundary — we'd need to know the last law
-            # of the earlier congress. For now, return empty and log a warning.
-            logger.warning(
-                f"Cross-congress range ({rp_before} -> {rp_after}) not yet supported"
-            )
+            # Cross-congress boundary
+            if last_law_of_congress and before_congress in last_law_of_congress:
+                # Finish out the earlier congress
+                last_law = last_law_of_congress[before_congress]
+                for law_num in range(before_num + 1, last_law + 1):
+                    laws.append((before_congress, law_num))
+                # Start the new congress up to the target law
+                for law_num in range(1, after_num + 1):
+                    laws.append((after_congress, law_num))
+            else:
+                logger.warning(
+                    f"Cross-congress range ({rp_before} -> {rp_after}): "
+                    "provide last_law_of_congress for accurate enumeration"
+                )
 
         return laws
+
+    def get_titles_at_release_point(self, identifier: str) -> list[int]:
+        """Get the list of available titles at a release point.
+
+        Args:
+            identifier: Release point identifier (e.g., "118-158").
+
+        Returns:
+            List of title numbers available, or empty if unknown.
+        """
+        rp = self.get_by_identifier(identifier)
+        if rp is None:
+            return []
+        return rp.titles_available

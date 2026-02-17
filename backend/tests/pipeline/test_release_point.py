@@ -179,6 +179,41 @@ class TestReleasePointRegistry:
         laws = registry_with_data.get_laws_in_range("113-21", "113-22")
         assert laws == [(113, 22)]
 
+    def test_get_laws_in_range_cross_congress(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        """Cross-congress range with last_law_of_congress provided."""
+        laws = registry_with_data.get_laws_in_range(
+            "113-50",
+            "118-22",
+            last_law_of_congress={113: 52},
+        )
+        # 113-51, 113-52, then 118-1 through 118-22
+        assert laws[0] == (113, 51)
+        assert laws[1] == (113, 52)
+        assert laws[2] == (118, 1)
+        assert laws[-1] == (118, 22)
+        assert len(laws) == 2 + 22
+
+    def test_get_laws_in_range_cross_congress_no_lookup(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        """Cross-congress range without lookup returns empty with warning."""
+        laws = registry_with_data.get_laws_in_range("113-50", "118-22")
+        assert laws == []
+
+    def test_get_titles_at_release_point(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        titles = registry_with_data.get_titles_at_release_point("113-21")
+        assert titles == []  # No titles set in test data
+
+    def test_get_titles_at_release_point_not_found(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        titles = registry_with_data.get_titles_at_release_point("999-999")
+        assert titles == []
+
     def test_parse_link_simple(self) -> None:
         registry = ReleasePointRegistry()
         rp = registry._parse_release_point_link(

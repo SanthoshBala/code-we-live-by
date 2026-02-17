@@ -195,3 +195,28 @@ class VerificationMethod(enum.StrEnum):
     MANUAL_REVIEW = "Manual_Review"  # Human reviewed the results
     AUTOMATED_COMPARISON = "Automated_Comparison"  # Compared against known source
     THIRD_PARTY_AUDIT = "Third_Party_Audit"  # External reviewer
+
+
+# =============================================================================
+# Chronological Pipeline Enums (Revision System)
+# =============================================================================
+
+
+class RevisionType(enum.StrEnum):
+    """Type of code revision in the chronological pipeline.
+
+    A revision is either a ground-truth OLRC release point or a derived
+    snapshot from applying a public law's amendments.
+    """
+
+    RELEASE_POINT = "Release_Point"  # OLRC XML is source of truth
+    PUBLIC_LAW = "Public_Law"  # Derived by applying amendments
+
+
+class RevisionStatus(enum.StrEnum):
+    """Ingestion status of a code revision."""
+
+    PENDING = "Pending"  # Created but not yet ingested
+    INGESTING = "Ingesting"  # Currently being processed
+    INGESTED = "Ingested"  # Successfully ingested
+    FAILED = "Failed"  # Ingestion failed
