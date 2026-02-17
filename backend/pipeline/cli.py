@@ -2874,7 +2874,7 @@ async def chrono_rps_only_command(
             d = rp.publication_date
             date_str = f"{d.year}.{d.month:02d}.{d.day:02d}" if d else "????.??.??"
             titles_str = ", ".join(str(t) for t in rp.titles_available)
-            print(f"  [RP] {date_str} {rp.full_identifier}: [{titles_str}]")
+            print(f"  [RP] {date_str} - {rp.full_identifier}: [{titles_str}]")
         if len(rps) > limit:
             print(f"  ... and {len(rps) - limit} more release points")
 
