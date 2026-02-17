@@ -1250,6 +1250,16 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
+            # Handle signature blocks (presidential/official signatures)
+            if tag == "signature":
+                sig_text = "".join(el.itertext()).strip()
+                if sig_text:
+                    sig_text = sig_text.rstrip(".")
+                    parts.append(f"[PARA][SIG]\u2014 {sig_text}[/SIG]")
+                if el.tail:
+                    parts.append(el.tail)
+                return
+
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n
             if tag == "p" and parts:

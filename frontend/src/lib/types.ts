@@ -87,6 +87,7 @@ export interface CodeLine {
   indent_level: number;
   marker: string | null;
   is_header: boolean;
+  is_signature?: boolean;
 }
 
 /** A structured note attached to a section. */

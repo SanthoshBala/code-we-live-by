@@ -735,7 +735,10 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
     lines: list[ParsedLine] = []
     line_number = 0
 
-    # Clean up the text
+    # Clean up the text — strip note header markers and convert [PARA]
+    text = re.sub(r"\[NH\].*?\[/NH\]", "", text, flags=re.DOTALL)
+    text = re.sub(r"\[/NH\]", "", text)
+    text = re.sub(r"\[PARA\]", "\n\n", text)
     text = text.strip()
     if not text:
         return lines
@@ -787,9 +790,12 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
         text = "\n".join(new_text_parts)
 
     # Pattern to split text into header and non-header segments
-    # Matches [H1]...[/H1] or [H2]...[/H2] or [QCLINE:...] or regular text
+    # Matches [H1]...[/H1] or [H2]...[/H2] or [QCLINE:...] or [SIG]...[/SIG]
+    # or regular text
     header_pattern = re.compile(
-        r"\[H1\](.*?)\[/H1\]|\[H2\](.*?)\[/H2\]|\[QCLINE:(\d+):([^\]]*)\](.*?)\[/QCLINE\]",
+        r"\[H1\](.*?)\[/H1\]|\[H2\](.*?)\[/H2\]"
+        r"|\[QCLINE:(\d+):([^\]]*)\](.*?)\[/QCLINE\]"
+        r"|\[SIG\](.*?)\[/SIG\]",
         re.DOTALL,
     )
 
@@ -885,6 +891,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
             qc_level = match.group(3)
             qc_marker = match.group(4)
             qc_content = match.group(5)
+            sig_text = match.group(6)
 
             if qc_level is not None:
                 level = int(qc_level)
@@ -903,6 +910,23 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
                             indent_level=indent,
                             marker=marker,
                             is_header=False,
+                            start_char=match.start(),
+                            end_char=match.end(),
+                        )
+                    )
+
+            elif sig_text is not None:
+                sig_content = sig_text.strip()
+                if sig_content:
+                    line_number += 1
+                    lines.append(
+                        ParsedLine(
+                            line_number=line_number,
+                            content=sig_content,
+                            indent_level=current_indent,
+                            marker=None,
+                            is_header=False,
+                            is_signature=True,
                             start_char=match.start(),
                             end_char=match.end(),
                         )
@@ -949,7 +973,74 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
                     )
                 )
 
+    # Post-process: when a line ends with a block-quote introducer
+    # (e.g. "provided:", "follows:"), remove the blank line after it
+    # and indent subsequent content one level deeper until the next
+    # blank line or header.
+    _BLOCK_QUOTE_RE = re.compile(
+        r"(?:provided|provides|follows|following|read as follows|amended to read"
+        r"|to read|is as follows|reads as follows|as follows|ordered as follows"
+        r"|hereby ordered|the following)[:\u2014]\s*$"
+    )
+    lines = _indent_block_quotes(lines, _BLOCK_QUOTE_RE)
+
     return lines
+
+
+def _indent_block_quotes(
+    lines: list[ParsedLine], introducer_re: re.Pattern[str]
+) -> list[ParsedLine]:
+    """Indent block-quoted paragraphs following an introducer line.
+
+    When a content line ends with a phrase like "provided:" and is followed
+    by a blank line, the blank line is removed and subsequent content lines
+    are indented one level deeper until the next blank line or header.
+    """
+    result: list[ParsedLine] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Check if this non-empty, non-header line ends with a block-quote
+        # introducer and the next line is a blank separator.
+        if (
+            line.content
+            and not line.is_header
+            and introducer_re.search(line.content)
+            and i + 1 < len(lines)
+            and lines[i + 1].content == ""
+        ):
+            result.append(line)
+            # Skip the blank line
+            i += 2
+            extra_indent = 1
+            # Indent subsequent lines until next blank line or header
+            while i < len(lines):
+                bl = lines[i]
+                if bl.content == "" or bl.is_header:
+                    # End of block quote — emit remaining lines normally
+                    break
+                result.append(
+                    ParsedLine(
+                        line_number=bl.line_number,
+                        content=bl.content,
+                        indent_level=bl.indent_level + extra_indent,
+                        marker=bl.marker,
+                        is_header=bl.is_header,
+                        is_signature=bl.is_signature,
+                        start_char=bl.start_char,
+                        end_char=bl.end_char,
+                    )
+                )
+                i += 1
+        else:
+            result.append(line)
+            i += 1
+
+    # Renumber lines sequentially
+    for idx, ln in enumerate(result):
+        ln.line_number = idx + 1
+
+    return result
 
 
 def _parse_amendments(text: str) -> list[Amendment]:
@@ -1202,6 +1293,9 @@ def _strip_note_markers(text: str) -> str:
     text = re.sub(r"\[H1\].*?\[/H1\]", "", text, flags=re.DOTALL)
     text = re.sub(r"\[/NH\]", "", text)
     text = re.sub(r"\[/H1\]", "", text)
+    # Clean up remaining inline markers for display
+    text = re.sub(r"\[SIG\](.*?)\[/SIG\]", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"\[PARA\]", "\n\n", text)
     return text.strip()
 
 
@@ -1235,7 +1329,7 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
             SectionNote(
                 header="Historical and Revision Notes",
                 content=cleaned_hist,
-                lines=normalize_note_content(cleaned_hist),
+                lines=normalize_note_content(hist_text),
                 category=NoteCategory.HISTORICAL,
             )
         )
@@ -1252,14 +1346,15 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
         # Content runs from end of this header to start of next header (or end)
         content_start = match.end()
         content_end = matches[i + 1].start() if i + 1 < len(matches) else len(hist_text)
-        content = _strip_note_markers(hist_text[content_start:content_end])
+        raw_content = hist_text[content_start:content_end]
+        content = _strip_note_markers(raw_content)
 
         if content:
             notes.notes.append(
                 SectionNote(
                     header=header,
                     content=content,
-                    lines=normalize_note_content(content),
+                    lines=normalize_note_content(raw_content),
                     category=NoteCategory.HISTORICAL,
                 )
             )
@@ -1305,7 +1400,8 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
             if i + 1 < len(header_positions)
             else len(editorial_text)
         )
-        content = _strip_note_markers(editorial_text[end:content_end])
+        raw_content = editorial_text[end:content_end]
+        content = _strip_note_markers(raw_content)
 
         if content:
             # Special handling for Amendments - also populate structured field
@@ -1316,7 +1412,7 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
                 SectionNote(
                     header=header,
                     content=content,
-                    lines=normalize_note_content(content),
+                    lines=normalize_note_content(raw_content),
                     category=NoteCategory.EDITORIAL,
                 )
             )
@@ -1376,14 +1472,15 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
             if i + 1 < len(header_positions)
             else len(statutory_text)
         )
-        content = _strip_note_markers(statutory_text[end:content_end])
+        raw_content = statutory_text[end:content_end]
+        content = _strip_note_markers(raw_content)
 
         if content and len(content) > 30:
             notes.notes.append(
                 SectionNote(
                     header=header,
                     content=content,
-                    lines=normalize_note_content(content),
+                    lines=normalize_note_content(raw_content),
                     category=NoteCategory.STATUTORY,
                 )
             )

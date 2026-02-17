@@ -33,6 +33,7 @@ class CodeLineSchema(BaseModel):
     indent_level: int = Field(..., ge=0, description="Nesting depth")
     marker: str | None = Field(None, description="List item marker (e.g., '(a)')")
     is_header: bool = Field(False, description="Whether this is a header line")
+    is_signature: bool = Field(False, description="Whether this is a signature line")
     start_char: int = Field(..., ge=0, description="Start position in original text")
     end_char: int = Field(..., ge=0, description="End position in original text")
 

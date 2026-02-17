@@ -982,6 +982,36 @@ class TestNormalizeNoteContent:
         assert lines[1].content == ""  # Blank line
         assert lines[2].content == "Second paragraph."
 
+    def test_block_quote_after_provided(self) -> None:
+        """Block-quoted text after 'provided:' is indented without blank line."""
+        text = (
+            "Ex. Ord. No. 12504, Jan. 31, 1985, 50 F.R. 4849, provided:"
+            "\n\n"
+            "By the authority vested in me as President. Ronald Reagan."
+        )
+        lines = normalize_note_content(text)
+
+        assert (
+            lines[0].content
+            == "Ex. Ord. No. 12504, Jan. 31, 1985, 50 F.R. 4849, provided:"
+        )
+        assert lines[0].indent_level == 1
+        # No blank line — block quote follows directly
+        assert lines[1].content == "By the authority vested in me as President."
+        assert lines[1].indent_level == 2
+        assert lines[2].content == "Ronald Reagan."
+        assert lines[2].indent_level == 2
+
+    def test_block_quote_after_as_follows(self) -> None:
+        """Block-quoted text after 'as follows:' is indented without blank line."""
+        text = "it is hereby ordered as follows:\n\nSection 1. The Secretary shall act."
+        lines = normalize_note_content(text)
+
+        assert lines[0].content == "it is hereby ordered as follows:"
+        assert lines[0].indent_level == 1
+        assert lines[1].content == "Section 1."
+        assert lines[1].indent_level == 2
+
     def test_quoted_content_markers(self) -> None:
         """Test that [QC:level]...[/QC] markers create indented lines."""
         text = 'Provided that:\n[QC:1]"(a)" Definition.— The term means.[/QC]\n[QC:2]"(1)" In general.— More detail.[/QC]'
