@@ -2846,14 +2846,16 @@ async def chrono_rps_only_command(
     from pipeline.olrc.release_point import ReleasePointRegistry
 
     registry = ReleasePointRegistry()
-    all_rps = await registry.fetch_release_points()
+    await registry.fetch_release_points()
 
     rps = [
         rp
-        for rp in all_rps
+        for rp in registry.get_release_points()
         if rp.congress >= start_congress
         and (end_congress is None or rp.congress <= end_congress)
     ]
+
+    logger.info(f"Found {len(rps)} release points")
 
     if summary:
         by_congress: dict[int, int] = {}

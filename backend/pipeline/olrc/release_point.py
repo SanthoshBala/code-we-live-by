@@ -135,7 +135,7 @@ class ReleasePointRegistry:
         unique_rps.sort(key=lambda rp: (rp.congress, rp.primary_law_number or 0))
 
         self._release_points = unique_rps
-        logger.info(f"Found {len(unique_rps)} release points")
+        logger.debug(f"Fetched {len(unique_rps)} total release points from OLRC")
         return unique_rps
 
     def _parse_release_point_link(self, href: str) -> ReleasePointInfo | None:
