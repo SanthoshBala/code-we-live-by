@@ -62,7 +62,14 @@ class SectionSnapshot(Base, TimestampMixin):
         doc="Structured notes (SectionNotesSchema) for rendering",
     )
     text_hash: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, doc="SHA-256 for fast change detection"
+        String(64),
+        nullable=True,
+        doc="SHA-256 of text_content for provision change detection",
+    )
+    notes_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        doc="SHA-256 of notes for notes change detection",
     )
     full_citation: Mapped[str | None] = mapped_column(
         String(200), nullable=True, doc='e.g., "17 USC 106"'

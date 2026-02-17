@@ -18,6 +18,7 @@ class TestSectionState:
             normalized_provisions={"type": "section"},
             notes="(Pub. L. 94-553, title I, Oct. 19, 1976, 90 Stat. 2546)",
             normalized_notes={"citations": [], "amendments": []},
+            notes_hash="def456",
             full_citation="17 USC 106",
             snapshot_id=1,
             revision_id=1,
@@ -27,6 +28,7 @@ class TestSectionState:
         assert state.section_number == "106"
         assert state.notes is not None
         assert state.normalized_notes is not None
+        assert state.notes_hash == "def456"
         assert not state.is_deleted
 
     def test_deleted_state(self) -> None:
@@ -39,6 +41,7 @@ class TestSectionState:
             normalized_provisions=None,
             notes=None,
             normalized_notes=None,
+            notes_hash=None,
             full_citation="17 USC 106",
             snapshot_id=1,
             revision_id=1,
@@ -61,6 +64,7 @@ class TestSnapshotServiceHelpers:
         mock_snap.normalized_provisions = {"type": "section"}
         mock_snap.notes = "Raw notes text"
         mock_snap.normalized_notes = {"citations": [], "amendments": []}
+        mock_snap.notes_hash = "def456"
         mock_snap.full_citation = "17 USC 106"
         mock_snap.snapshot_id = 42
         mock_snap.revision_id = 7
@@ -75,6 +79,7 @@ class TestSnapshotServiceHelpers:
         assert state.text_hash == "abc123"
         assert state.notes == "Raw notes text"
         assert state.normalized_notes == {"citations": [], "amendments": []}
+        assert state.notes_hash == "def456"
         assert state.snapshot_id == 42
         assert state.revision_id == 7
         assert not state.is_deleted

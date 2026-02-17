@@ -117,6 +117,7 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("normalized_notes", postgresql.JSONB(), nullable=True),
         sa.Column("text_hash", sa.String(64), nullable=True),
+        sa.Column("notes_hash", sa.String(64), nullable=True),
         sa.Column("full_citation", sa.String(200), nullable=True),
         sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column(

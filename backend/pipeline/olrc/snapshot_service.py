@@ -30,6 +30,7 @@ class SectionState:
     normalized_provisions: dict | None
     notes: str | None
     normalized_notes: dict | None
+    notes_hash: str | None
     full_citation: str | None
     snapshot_id: int
     revision_id: int
@@ -217,6 +218,7 @@ class SnapshotService:
             normalized_provisions=snapshot.normalized_provisions,
             notes=snapshot.notes,
             normalized_notes=snapshot.normalized_notes,
+            notes_hash=snapshot.notes_hash,
             full_citation=snapshot.full_citation,
             snapshot_id=snapshot.snapshot_id,
             revision_id=snapshot.revision_id,
