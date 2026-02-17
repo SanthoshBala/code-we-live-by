@@ -37,10 +37,12 @@ export default function LawViewerPage() {
   if (textError || !lawText)
     return <p className="text-red-600">Failed to load law text.</p>;
 
-  const shortTitle = lawText.short_title || lawText.official_title;
-  const title = shortTitle
-    ? `PL ${congress}-${lawNumber} — ${shortTitle}`
+  // Title line: PL number + short title (if available)
+  const title = lawText.short_title
+    ? `PL ${congress}-${lawNumber} — ${lawText.short_title}`
     : `PL ${congress}-${lawNumber}`;
+  // Official title always goes in subtitle
+  const subtitle = lawText.official_title;
 
   const dateBadges: { label: string; date: string }[] = [];
   if (lawText.introduced_date)
@@ -63,7 +65,7 @@ export default function LawViewerPage() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title={title}
-        subtitle={lawText.official_title}
+        subtitle={subtitle}
         badges={
           dateBadges.length > 0 ? (
             <>

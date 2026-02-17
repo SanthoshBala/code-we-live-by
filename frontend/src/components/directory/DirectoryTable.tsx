@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import type { DirectoryItem } from '@/lib/types';
+import type { DirectoryItem, ItemStatus } from '@/lib/types';
 import FolderIcon from '@/components/tree/icons/FolderIcon';
 import FileIcon from '@/components/tree/icons/FileIcon';
 
@@ -61,6 +61,8 @@ export default function DirectoryTable({ items }: DirectoryTableProps) {
   }
 
   const sorted = [...items].sort((a, b) => {
+    // Always show folders before files
+    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
     const cmp = compareItems(a, b, sortKey);
     return sortDir === 'asc' ? cmp : -cmp;
   });
@@ -116,45 +118,48 @@ export default function DirectoryTable({ items }: DirectoryTableProps) {
         </tr>
       </thead>
       <tbody>
-        {sorted.map((item) => (
-          <tr
-            key={item.href}
-            className="border-b border-gray-100 hover:bg-gray-50"
-          >
-            <td className="whitespace-nowrap py-2 pr-2">
-              <Link
-                href={item.href}
-                className="flex items-center gap-2 text-gray-800 hover:text-primary-700"
-              >
-                {item.kind === 'folder' ? (
-                  <FolderIcon open={false} />
-                ) : (
-                  <FileIcon />
-                )}
-                <span className="font-mono text-xs">{item.id}</span>
-              </Link>
-            </td>
-            <td className="max-w-0 truncate py-2 pr-2">
-              <Link
-                href={item.href}
-                className="text-gray-800 hover:text-primary-700"
-              >
-                {item.name}
-              </Link>
-            </td>
-            {hasSectionCounts && (
-              <td className="whitespace-nowrap py-2 pr-2 text-right text-xs text-gray-500">
-                {item.sectionCount ?? ''}
+        {sorted.map((item) => {
+          const status: ItemStatus = item.status ?? null;
+          return (
+            <tr
+              key={item.href}
+              className="border-b border-gray-100 hover:bg-gray-50"
+            >
+              <td className="whitespace-nowrap py-2 pr-2">
+                <Link
+                  href={item.href}
+                  className="flex items-center gap-2 text-gray-800 hover:text-primary-700"
+                >
+                  {item.kind === 'folder' ? (
+                    <FolderIcon open={false} status={status} />
+                  ) : (
+                    <FileIcon status={status} />
+                  )}
+                  <span className="font-mono text-xs">{item.id}</span>
+                </Link>
               </td>
-            )}
-            <td className="whitespace-nowrap py-2 pr-2 text-right font-mono text-xs text-gray-500">
-              {item.lastAmendmentLaw ?? ''}
-            </td>
-            <td className="whitespace-nowrap py-2 text-right font-mono text-xs text-gray-500">
-              {item.lastAmendmentYear ?? ''}
-            </td>
-          </tr>
-        ))}
+              <td className="max-w-0 truncate py-2 pr-2">
+                <Link
+                  href={item.href}
+                  className="text-gray-800 hover:text-primary-700"
+                >
+                  {item.name}
+                </Link>
+              </td>
+              {hasSectionCounts && (
+                <td className="whitespace-nowrap py-2 pr-2 text-right text-xs text-gray-500">
+                  {item.sectionCount ?? ''}
+                </td>
+              )}
+              <td className="whitespace-nowrap py-2 pr-2 text-right font-mono text-xs text-gray-500">
+                {item.lastAmendmentLaw ?? ''}
+              </td>
+              <td className="whitespace-nowrap py-2 text-right font-mono text-xs text-gray-500">
+                {item.lastAmendmentYear ?? ''}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

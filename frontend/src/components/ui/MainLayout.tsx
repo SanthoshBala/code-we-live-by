@@ -8,7 +8,7 @@ export default function MainLayout({
   return (
     <div className="flex h-[calc(100vh-57px)]">
       {sidebar}
-      <main className="flex-1 overflow-y-auto px-6 pb-6">
+      <main className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         <div className="pt-6">{children}</div>
       </main>
     </div>

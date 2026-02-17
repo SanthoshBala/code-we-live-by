@@ -1,21 +1,28 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import type { CodeLine } from '@/lib/types';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import type { CodeLine, ItemStatus } from '@/lib/types';
+import { statusMessage } from '@/lib/statusStyles';
 
 interface SectionProvisionsProps {
   fullCitation: string;
   heading: string;
   textContent: string | null;
   provisions: CodeLine[] | null;
-  isRepealed: boolean;
+  status: ItemStatus;
 }
 
 // Legacy heuristic fallback — used when structured provisions are not available.
 // Will be removed after all sections are re-ingested with normalized_provisions.
 function isHeaderLine(text: string): boolean {
   if (!/^\([a-zA-Z0-9]+\)/.test(text)) return false;
-  if (text.length > 80) return false;
+  if (text.length > 200) return false;
   if (/[.;,:—]$/.test(text)) return false;
   if (/\b(or|and)$/.test(text)) return false;
   return true;
@@ -105,62 +112,52 @@ export default function SectionProvisions({
   heading,
   textContent,
   provisions,
-  isRepealed,
+  status,
 }: SectionProvisionsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [stuckHeaders, setStuckHeaders] = useState<Set<number>>(new Set());
+  const headerRefs = useRef(new Map<number, HTMLDivElement>());
+  const [headerHeights, setHeaderHeights] = useState(new Map<number, number>());
 
+  // Measure actual header heights so sub-headers stack below parents
+  // regardless of text wrapping.
+  const measureHeaders = useCallback(() => {
+    setHeaderHeights((prev) => {
+      const next = new Map<number, number>();
+      headerRefs.current.forEach((el, key) => {
+        next.set(key, Math.round(el.getBoundingClientRect().height));
+      });
+      if (next.size === prev.size) {
+        let same = true;
+        for (const [key, value] of next) {
+          if (prev.get(key) !== value) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  // Measure before first paint so offsets are correct immediately.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(measureHeaders, [textContent, provisions]);
+
+  // Re-measure when the container resizes (viewport width changes
+  // cause header text to re-wrap).
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || typeof IntersectionObserver === 'undefined') return;
-
-    setStuckHeaders(new Set());
-
-    // Find the nearest scrollable ancestor for the IO root
-    let scrollParent: Element | null = container.parentElement;
-    while (scrollParent) {
-      const { overflowY } = getComputedStyle(scrollParent);
-      if (overflowY === 'auto' || overflowY === 'scroll') break;
-      scrollParent = scrollParent.parentElement;
-    }
-
-    const sentinels = container.querySelectorAll<HTMLElement>(
-      '[data-sticky-sentinel]'
-    );
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        setStuckHeaders((prev) => {
-          const next = new Set(prev);
-          for (const entry of entries) {
-            const index = Number(
-              (entry.target as HTMLElement).dataset.stickySentinel
-            );
-            if (
-              !entry.isIntersecting &&
-              entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0)
-            ) {
-              next.add(index);
-            } else {
-              next.delete(index);
-            }
-          }
-          return next;
-        });
-      },
-      { root: scrollParent, threshold: 0 }
-    );
-
-    sentinels.forEach((s) => observer.observe(s));
-    return () => observer.disconnect();
-  }, [textContent]);
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measureHeaders);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [measureHeaders]);
 
   if (!textContent) {
     return (
       <div className="rounded border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-        {isRepealed
-          ? 'This section has been repealed.'
-          : 'No text content available for this section.'}
+        {statusMessage(status)}
       </div>
     );
   }
@@ -219,25 +216,62 @@ export default function SectionProvisions({
     );
   }
 
-  function renderNode(node: TreeNode): React.ReactNode {
+  // Whether we have real pixel measurements (false in jsdom / SSR).
+  const hasMeasuredHeights = Array.from(headerHeights.values()).some(
+    (h) => h > 0
+  );
+
+  function renderNode(
+    node: TreeNode,
+    parentTopPx: number = 0
+  ): React.ReactNode {
     if (isSection(node)) {
       const pl = node.header;
-      const topOffset = node.depth * 1.625;
+      const measuredH = headerHeights.get(pl.lineIndex) ?? 0;
+      // Parent headers need higher z-index so they render above child
+      // headers during sticky transitions (prevents visual gap when a
+      // child header unsticks and scrolls past its parent).
+      const zIndex = 20 - node.depth;
+
+      // Use measured pixel offsets when available; fall back to em
+      // estimates (one line-height per depth level) in jsdom / SSR.
+      // Offset depth-0 headers 1px above the scroll edge to seal
+      // any sub-pixel gap between the header and the container top.
+      const topPx = node.depth === 0 ? parentTopPx - 1 : parentTopPx;
+      const topStyle = hasMeasuredHeights
+        ? `${topPx}px`
+        : `${node.depth * 1.625}em`;
+      const childTopPx = parentTopPx + measuredH;
+
       return (
         <div key={`section-${pl.lineIndex}`}>
           <div
-            data-sticky-sentinel={pl.lineIndex}
-            className="h-0"
-            aria-hidden="true"
-          />
-          <div
+            ref={(el) => {
+              if (el) headerRefs.current.set(pl.lineIndex, el);
+              else headerRefs.current.delete(pl.lineIndex);
+            }}
             data-sticky-header={pl.lineIndex}
-            className={`sticky z-10 flex items-start bg-gray-100${stuckHeaders.has(pl.lineIndex) ? ' border-b border-gray-200' : ''}`}
-            style={{ top: `${topOffset}em` }}
+            className="sticky flex items-start bg-gray-100"
+            style={{
+              top: topStyle,
+              zIndex,
+              // Extend bg to fully occlude content scrolling behind
+              // this header. Negative margins offset the layout impact.
+              // Sub-headers use less top padding so they sit closer to
+              // their parent.
+              paddingTop: node.depth === 0 ? 4 : 1,
+              marginTop: node.depth === 0 ? -4 : -1,
+              paddingBottom: 4,
+              marginBottom: -4,
+              boxShadow:
+                node.depth === 0
+                  ? '0 -4px 0 0 rgb(243 244 246)'
+                  : '0 -1px 0 0 rgb(243 244 246)',
+            }}
           >
             {renderLineContent(pl)}
           </div>
-          {node.children.map(renderNode)}
+          {node.children.map((child) => renderNode(child, childTopPx))}
         </div>
       );
     }
@@ -260,7 +294,7 @@ export default function SectionProvisions({
               {i + 1}
             </span>
             <span className="mx-2 select-none text-gray-400">│</span>
-            <span className="min-w-0 pl-[4ch] -indent-[4ch]">
+            <span className="min-w-0 pl-[2ch] -indent-[2ch]">
               <span className="select-none"># </span>
               {text}
             </span>

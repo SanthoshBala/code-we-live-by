@@ -8,6 +8,7 @@ import type {
   SectionSummary,
   BreadcrumbSegment,
 } from '@/lib/types';
+import { detectStatus } from '@/lib/statusStyles';
 import DirectoryView from '@/components/directory/DirectoryView';
 
 function latestAmendment(sections: SectionSummary[]): {
@@ -132,19 +133,21 @@ export default function GroupDirectoryPage() {
       name: child.name,
       href: `${pathSoFar}/${child.group_type}/${child.number}`,
       kind: 'folder' as const,
+      status: detectStatus(child.name),
       sectionCount: allSections.length,
       lastAmendmentLaw: amendment.law,
       lastAmendmentYear: amendment.year,
     });
   }
 
-  // Direct sections as files
+  // Direct sections as folders (sections expand into CODE + notes sub-files)
   for (const s of group.sections) {
     items.push({
       id: `\u00A7\u2009${s.section_number}`,
       name: s.heading,
       href: `/sections/${titleNumber}/${s.section_number}`,
-      kind: 'file' as const,
+      kind: 'folder' as const,
+      status: s.status ?? detectStatus(s.heading),
       lastAmendmentLaw: s.last_amendment_law ?? null,
       lastAmendmentYear: s.last_amendment_year ?? null,
     });

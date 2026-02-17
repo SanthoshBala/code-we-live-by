@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import type { BreadcrumbSegment } from '@/lib/types';
+import type { BreadcrumbSegment, ItemStatus } from '@/lib/types';
+import { statusBadge } from '@/lib/statusStyles';
 import PageHeader from '@/components/ui/PageHeader';
 
 interface SectionHeaderProps {
@@ -8,7 +9,7 @@ interface SectionHeaderProps {
   enactedDate: string | null;
   lastModifiedDate: string | null;
   isPositiveLaw: boolean;
-  isRepealed: boolean;
+  status: ItemStatus;
   latestAmendment?: { publicLawId: string; year: number } | null;
 }
 
@@ -38,9 +39,10 @@ export default function SectionHeader({
   enactedDate,
   lastModifiedDate,
   isPositiveLaw,
-  isRepealed,
+  status,
   latestAmendment,
 }: SectionHeaderProps) {
+  const badge = statusBadge(status);
   return (
     <PageHeader
       title={heading}
@@ -51,9 +53,11 @@ export default function SectionHeader({
       }
       badges={
         <>
-          {isRepealed && (
-            <span className="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-700">
-              Repealed
+          {badge && (
+            <span
+              className={`rounded-full px-2.5 py-0.5 font-medium ${badge.className}`}
+            >
+              {badge.label}
             </span>
           )}
           {isPositiveLaw && (

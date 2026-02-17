@@ -1,8 +1,18 @@
+import type { ItemStatus } from '@/lib/types';
+import { statusIconColor } from '@/lib/statusStyles';
+
 /** Folder icon that switches between open and closed states. */
-export default function FolderIcon({ open }: { open: boolean }) {
+export default function FolderIcon({
+  open,
+  status = null,
+}: {
+  open: boolean;
+  status?: ItemStatus;
+}) {
+  const color = statusIconColor(status, 'text-amber-500');
   return open ? (
     <svg
-      className="h-4 w-4 shrink-0 text-amber-500"
+      className={`h-4 w-4 shrink-0 ${color}`}
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden="true"
@@ -16,7 +26,7 @@ export default function FolderIcon({ open }: { open: boolean }) {
     </svg>
   ) : (
     <svg
-      className="h-4 w-4 shrink-0 text-amber-500"
+      className={`h-4 w-4 shrink-0 ${color}`}
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden="true"

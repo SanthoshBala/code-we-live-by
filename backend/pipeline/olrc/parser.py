@@ -911,42 +911,83 @@ class USLMParser:
         return ""
 
     def _get_heading(self, elem: etree._Element) -> str:
-        """Extract the heading text from an element."""
+        """Extract the heading text from an element, stripping footnotes.
+
+        For repealed/renumbered sections the USLM XML wraps the num+heading
+        in editorial brackets, e.g. ``[§ 4. Repealed. ... 90 Stat. 1558]``.
+        The opening ``[`` lives on the ``<num>`` element, while the closing
+        ``]`` lands on the ``<heading>``.  We strip the dangling ``]`` here.
+        """
         heading_elem = elem.find("heading") or elem.find("{*}heading")
         if heading_elem is not None:
-            return self._get_text_content(heading_elem)
+            text = self._get_text_content(heading_elem, strip_footnotes=True)
+            return text.rstrip("]").rstrip()
 
         # Fall back to title element
         title_elem = elem.find("title") or elem.find("{*}title")
         if title_elem is not None:
-            return self._get_text_content(title_elem)
+            return self._get_text_content(title_elem, strip_footnotes=True)
 
         return ""
 
-    def _get_text_content(self, elem: etree._Element) -> str:
-        """Get all text content from an element, including nested elements."""
+    def _get_text_content(
+        self, elem: etree._Element, strip_footnotes: bool = False
+    ) -> str:
+        """Get all text content from an element, including nested elements.
+
+        Args:
+            elem: The XML element to extract text from.
+            strip_footnotes: If True, skip <ref class="footnoteRef"> and
+                <note type="footnote"> elements.  Useful for headings and
+                provision text where footnote content should not appear inline.
+        """
         if elem is None:
             return ""
+
+        if strip_footnotes:
+            parts = list(self._itertext_skip_footnotes(elem))
+        else:
+            parts = list(elem.itertext())
 
         # Concatenate text fragments preserving original whitespace, then
         # collapse runs of whitespace to a single space.  Using "".join
         # (instead of " ".join) avoids inserting extra spaces at inline
         # element boundaries like <date> or <ref>.
-        return re.sub(r"\s+", " ", "".join(elem.itertext())).strip()
+        text = re.sub(r"\s+", " ", "".join(parts)).strip()
+        # Remove stray spaces before punctuation that arise from inline
+        # element boundaries (e.g. "<ref>Pub. L. 94–455</ref> ;")
+        text = re.sub(r" ([;,.])", r"\1", text)
+        return text
+
+    @staticmethod
+    def _itertext_skip_footnotes(elem: etree._Element):
+        """Like elem.itertext() but skips footnote refs and notes."""
+        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        # Skip footnote reference links and footnote note bodies
+        if tag == "ref" and elem.get("class", "") == "footnoteRef":
+            return
+        if tag == "note" and elem.get("type", "") == "footnote":
+            return
+        if elem.text:
+            yield elem.text
+        for child in elem:
+            yield from USLMParser._itertext_skip_footnotes(child)
+            if child.tail:
+                yield child.tail
 
     def _extract_section_text(self, section_elem: etree._Element) -> str:
         """Extract the full text content of a section."""
         # Find content element
         content = section_elem.find("content") or section_elem.find("{*}content")
         if content is not None:
-            return self._get_text_content(content)
+            return self._get_text_content(content, strip_footnotes=True)
 
         # Fall back to getting all text except heading and metadata
         parts = []
         for child in section_elem:
             tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
             if tag not in ("heading", "num", "title", "sourceCredit", "notes"):
-                parts.append(self._get_text_content(child))
+                parts.append(self._get_text_content(child, strip_footnotes=True))
 
         return " ".join(parts).strip()
 
@@ -965,7 +1006,9 @@ class USLMParser:
         if heading_elem is None:
             heading_elem = elem.find("heading")
         heading = (
-            self._get_text_content(heading_elem) if heading_elem is not None else None
+            self._get_text_content(heading_elem, strip_footnotes=True)
+            if heading_elem is not None
+            else None
         )
 
         # Get content (may be in <content> or <chapeau> or directly in element)
@@ -978,9 +1021,13 @@ class USLMParser:
 
         content_parts = []
         if chapeau_elem is not None:
-            content_parts.append(self._get_text_content(chapeau_elem))
+            content_parts.append(
+                self._get_text_content(chapeau_elem, strip_footnotes=True)
+            )
         if content_elem is not None:
-            content_parts.append(self._get_text_content(content_elem))
+            content_parts.append(
+                self._get_text_content(content_elem, strip_footnotes=True)
+            )
 
         content = " ".join(content_parts).strip()
 
@@ -1203,6 +1250,16 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
+            # Handle signature blocks (presidential/official signatures)
+            if tag == "signature":
+                sig_text = "".join(el.itertext()).strip()
+                if sig_text:
+                    sig_text = sig_text.rstrip(".")
+                    parts.append(f"[PARA][SIG]\u2014 {sig_text}[/SIG]")
+                if el.tail:
+                    parts.append(el.tail)
+                return
+
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n
             if tag == "p" and parts:
@@ -1236,8 +1293,10 @@ class USLMParser:
                     # Italic text might be a sub-header if followed by ".—"
                     # But NOT if it's a case citation (contains " v. ")
                     # or other inline emphasis (Latin terms, etc.)
-                    if " v. " in text:
-                        # Case citation - keep as inline italic text
+                    inline_latin = {"et seq", "et al", "supra", "infra", "id"}
+                    stripped_text = text.strip().rstrip(".")
+                    if " v. " in text or stripped_text.lower() in inline_latin:
+                        # Case citation or Latin phrase - keep as inline text
                         parts.append(text)
                     else:
                         # Mark as potential sub-header for normalizer
@@ -1254,16 +1313,22 @@ class USLMParser:
                 parts.append(el.tail)
 
         process_element(elem)
-        # Join parts, converting [PARA] markers to double newlines
-        result = []
+        # Join parts, converting [PARA] markers to double newlines.
+        # Always strip whitespace from each part and join with a single
+        # space so that inconsistent leading/trailing spaces in XML
+        # text/tail never produce double-spaces or missing separators.
+        result: list[str] = []
         for part in parts:
             if part == "[PARA]":
-                # Convert to double newline for paragraph break
                 result.append("\n\n")
-            elif result and result[-1] != "\n\n":
-                result.append(" " + part)
+                continue
+            stripped = part.strip()
+            if not stripped:
+                continue
+            if not result or result[-1] == "\n\n" or stripped[0] in ";,.":
+                result.append(stripped)
             else:
-                result.append(part)
+                result.append(" " + stripped)
         return "".join(result).strip()
 
     def _extract_source_credit_refs(

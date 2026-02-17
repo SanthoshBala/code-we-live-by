@@ -35,7 +35,7 @@ export default function SectionNotes({
             {i + 1}
           </span>
           <span className="mx-2 select-none text-gray-400">|</span>
-          <span className="min-w-0 pl-[4ch] -indent-[4ch]">
+          <span className="min-w-0 pl-[2ch] -indent-[2ch]">
             <span className="select-none"># </span>
             {text}
           </span>

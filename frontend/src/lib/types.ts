@@ -1,6 +1,15 @@
 // TypeScript interfaces mirroring backend Pydantic schemas
 // for the US Code tree navigator.
 
+/** Status of a code section or structural group. */
+export type ItemStatus =
+  | 'repealed'
+  | 'reserved'
+  | 'transferred'
+  | 'renumbered'
+  | 'omitted'
+  | null;
+
 /** Summary of a US Code title for list views. */
 export interface TitleSummary {
   title_number: number;
@@ -16,6 +25,7 @@ export interface SectionSummary {
   section_number: string;
   heading: string;
   sort_order: number;
+  status?: ItemStatus;
   last_amendment_year?: number | null;
   last_amendment_law?: string | null;
   note_categories?: string[];
@@ -56,6 +66,7 @@ export interface DirectoryItem {
   name: string;
   href: string;
   kind: 'folder' | 'file';
+  status?: ItemStatus;
   sectionCount?: number | null;
   lastAmendmentLaw?: string | null;
   lastAmendmentYear?: number | null;
@@ -76,6 +87,7 @@ export interface CodeLine {
   indent_level: number;
   marker: string | null;
   is_header: boolean;
+  is_signature?: boolean;
 }
 
 /** A structured note attached to a section. */

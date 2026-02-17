@@ -96,6 +96,18 @@ class TestSentenceBoundaryDetection:
         text = "The amount is $1.5 million."
         assert _is_sentence_boundary(text, 16) is False
 
+    def test_ex_ord_abbreviation(self) -> None:
+        """Ex. and Ord. in 'Ex. Ord. No.' are not sentence boundaries."""
+        text = "Ex. Ord. No. 12504, Jan. 31, 1985."
+        assert _is_sentence_boundary(text, 2) is False  # Ex.
+        assert _is_sentence_boundary(text, 7) is False  # Ord.
+
+    def test_period_after_paren_ref_before_pub_l(self) -> None:
+        """Period after (a)(2) before Pub. L. is not a sentence boundary."""
+        text = "Subsec. (a)(2). Pub. L. 100-159 inserted provision."
+        pos = text.index("). P") + 1  # period after )
+        assert _is_sentence_boundary(text, pos) is False
+
 
 class TestNormalizeSectionBasic:
     """Basic tests for section normalization."""
@@ -623,8 +635,8 @@ class TestNormalizeParsedSection:
         assert result.provisions[2].content == "(1) Child item."
         assert result.provisions[2].indent_level == 2
 
-    def test_empty_subsections(self) -> None:
-        """Section with no subsections returns empty lines."""
+    def test_empty_subsections_falls_back_to_text(self) -> None:
+        """Section with no subsections falls back to sentence-based normalization."""
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection
 
@@ -632,7 +644,26 @@ class TestNormalizeParsedSection:
             section_number="104",
             heading="Empty Section",
             full_citation="17 U.S.C. § 104",
-            text_content="Some text",
+            text_content="First sentence. Second sentence.",
+            subsections=[],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.provision_count == 2
+        assert result.provisions[0].content == "First sentence."
+        assert result.provisions[1].content == "Second sentence."
+
+    def test_empty_subsections_no_text(self) -> None:
+        """Section with no subsections and no text returns empty lines."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection
+
+        section = ParsedSection(
+            section_number="104",
+            heading="Empty Section",
+            full_citation="17 U.S.C. § 104",
+            text_content="",
             subsections=[],
         )
 
@@ -951,6 +982,36 @@ class TestNormalizeNoteContent:
         assert lines[1].content == ""  # Blank line
         assert lines[2].content == "Second paragraph."
 
+    def test_block_quote_after_provided(self) -> None:
+        """Block-quoted text after 'provided:' is indented without blank line."""
+        text = (
+            "Ex. Ord. No. 12504, Jan. 31, 1985, 50 F.R. 4849, provided:"
+            "\n\n"
+            "By the authority vested in me as President. Ronald Reagan."
+        )
+        lines = normalize_note_content(text)
+
+        assert (
+            lines[0].content
+            == "Ex. Ord. No. 12504, Jan. 31, 1985, 50 F.R. 4849, provided:"
+        )
+        assert lines[0].indent_level == 1
+        # No blank line — block quote follows directly
+        assert lines[1].content == "By the authority vested in me as President."
+        assert lines[1].indent_level == 2
+        assert lines[2].content == "Ronald Reagan."
+        assert lines[2].indent_level == 2
+
+    def test_block_quote_after_as_follows(self) -> None:
+        """Block-quoted text after 'as follows:' is indented without blank line."""
+        text = "it is hereby ordered as follows:\n\nSection 1. The Secretary shall act."
+        lines = normalize_note_content(text)
+
+        assert lines[0].content == "it is hereby ordered as follows:"
+        assert lines[0].indent_level == 1
+        assert lines[1].content == "Section 1."
+        assert lines[1].indent_level == 2
+
     def test_quoted_content_markers(self) -> None:
         """Test that [QC:level]...[/QC] markers create indented lines."""
         text = 'Provided that:\n[QC:1]"(a)" Definition.— The term means.[/QC]\n[QC:2]"(1)" In general.— More detail.[/QC]'
@@ -985,6 +1046,22 @@ class TestNormalizeNoteContent:
         # Content after H2
         assert lines[3].content == "The exclusive right."
         assert lines[3].indent_level == 3
+
+    def test_ex_ord_not_split_into_sentences(self) -> None:
+        """Test that 'Ex. Ord. No. 12504' is not split into separate lines."""
+        text = "Ex. Ord. No. 12504, Jan. 31, 1985, 50 F.R. 4849, provided:"
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 1
+        assert "Ex. Ord. No. 12504" in lines[0].content
+
+    def test_amendment_subsec_ref_not_split(self) -> None:
+        """Test that 'Subsec. (a)(2). Pub. L.' stays on one line."""
+        text = "1987—Subsec. (a)(2). Pub. L. 100–159 inserted provision."
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 1
+        assert "Subsec. (a)(2). Pub. L. 100–159" in lines[0].content
 
 
 class TestSentenceSplittingWithParagraphs:
@@ -1163,6 +1240,23 @@ class TestParserNotesContent:
         # Paragraph content should NOT be wrapped in [NH]
         assert "[NH]Memorandum" not in content
         assert "Memorandum of President" in content
+
+    def test_et_seq_italic_not_marked_as_header(self) -> None:
+        """Test that 'et seq' in italic is kept inline, not marked as H2."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = "<notes><p>( 17 U.S.C. 901 <i>et seq</i>.)</p></notes>"
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Should NOT contain [H2] marker for "et seq"
+        assert "[H2]" not in content
+        assert "et seq" in content
 
 
 class TestStripNoteMarkers:
