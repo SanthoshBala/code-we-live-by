@@ -28,6 +28,8 @@ class SectionState:
     text_content: str | None
     text_hash: str | None
     normalized_provisions: dict | None
+    notes: str | None
+    normalized_notes: dict | None
     full_citation: str | None
     snapshot_id: int
     revision_id: int
@@ -213,6 +215,8 @@ class SnapshotService:
             text_content=snapshot.text_content,
             text_hash=snapshot.text_hash,
             normalized_provisions=snapshot.normalized_provisions,
+            notes=snapshot.notes,
+            normalized_notes=snapshot.normalized_notes,
             full_citation=snapshot.full_citation,
             snapshot_id=snapshot.snapshot_id,
             revision_id=snapshot.revision_id,

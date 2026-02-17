@@ -51,6 +51,16 @@ class SectionSnapshot(Base, TimestampMixin):
     normalized_provisions: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Raw notes text (historical, editorial, statutory)",
+    )
+    normalized_notes: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        doc="Structured notes (SectionNotesSchema) for rendering",
+    )
     text_hash: Mapped[str | None] = mapped_column(
         String(64), nullable=True, doc="SHA-256 for fast change detection"
     )

@@ -2488,6 +2488,12 @@ Examples:
         help="Show summary stats instead of event list",
     )
 
+    chrono_timeline_parser.add_argument(
+        "--rps-only",
+        action="store_true",
+        help="Show only OLRC release points (no DB required)",
+    )
+
     subparsers.add_parser(
         "chrono-status",
         help="Show current position in the chronological pipeline",
@@ -2762,6 +2768,15 @@ Examples:
     # =========================================================================
 
     elif args.command == "chrono-timeline":
+        if args.rps_only:
+            return asyncio.run(
+                chrono_rps_only_command(
+                    start_congress=args.congress,
+                    end_congress=args.end_congress,
+                    limit=args.limit,
+                    summary=args.summary,
+                )
+            )
         return asyncio.run(
             chrono_timeline_command(
                 start_congress=args.congress,
@@ -2817,6 +2832,48 @@ async def chrono_timeline_command(
                 print(f"  {event}")
             if len(events) > limit:
                 print(f"  ... and {len(events) - limit} more events")
+
+    return 0
+
+
+async def chrono_rps_only_command(
+    start_congress: int,
+    end_congress: int | None,
+    limit: int,
+    summary: bool,
+) -> int:
+    """Display OLRC release points only (no database required)."""
+    from pipeline.olrc.release_point import ReleasePointRegistry
+
+    registry = ReleasePointRegistry()
+    all_rps = await registry.fetch_release_points()
+
+    rps = [
+        rp
+        for rp in all_rps
+        if rp.congress >= start_congress
+        and (end_congress is None or rp.congress <= end_congress)
+    ]
+
+    if summary:
+        by_congress: dict[int, int] = {}
+        for rp in rps:
+            by_congress[rp.congress] = by_congress.get(rp.congress, 0) + 1
+        print(f"Total release points: {len(rps)}")
+        print()
+        for congress, count in sorted(by_congress.items()):
+            congress_rps = [r for r in rps if r.congress == congress]
+            first = congress_rps[0].full_identifier
+            last = congress_rps[-1].full_identifier
+            print(f"  Congress {congress}: {count} RPs ({first} to {last})")
+    else:
+        displayed = rps[:limit]
+        for rp in displayed:
+            excluded = f" (excludes PL {rp.excluded_laws})" if rp.excluded_laws else ""
+            pub_date = f" [{rp.publication_date}]" if rp.publication_date else ""
+            print(f"  [RP] {rp.full_identifier}{pub_date}{excluded}")
+        if len(rps) > limit:
+            print(f"  ... and {len(rps) - limit} more release points")
 
     return 0
 

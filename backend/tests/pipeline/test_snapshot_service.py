@@ -16,6 +16,8 @@ class TestSectionState:
             text_content="The owner of copyright...",
             text_hash="abc123",
             normalized_provisions={"type": "section"},
+            notes="(Pub. L. 94-553, title I, Oct. 19, 1976, 90 Stat. 2546)",
+            normalized_notes={"citations": [], "amendments": []},
             full_citation="17 USC 106",
             snapshot_id=1,
             revision_id=1,
@@ -23,6 +25,8 @@ class TestSectionState:
         )
         assert state.title_number == 17
         assert state.section_number == "106"
+        assert state.notes is not None
+        assert state.normalized_notes is not None
         assert not state.is_deleted
 
     def test_deleted_state(self) -> None:
@@ -33,6 +37,8 @@ class TestSectionState:
             text_content=None,
             text_hash=None,
             normalized_provisions=None,
+            notes=None,
+            normalized_notes=None,
             full_citation="17 USC 106",
             snapshot_id=1,
             revision_id=1,
@@ -53,6 +59,8 @@ class TestSnapshotServiceHelpers:
         mock_snap.text_content = "Test content"
         mock_snap.text_hash = "abc123"
         mock_snap.normalized_provisions = {"type": "section"}
+        mock_snap.notes = "Raw notes text"
+        mock_snap.normalized_notes = {"citations": [], "amendments": []}
         mock_snap.full_citation = "17 USC 106"
         mock_snap.snapshot_id = 42
         mock_snap.revision_id = 7
@@ -65,6 +73,8 @@ class TestSnapshotServiceHelpers:
         assert state.heading == "Test heading"
         assert state.text_content == "Test content"
         assert state.text_hash == "abc123"
+        assert state.notes == "Raw notes text"
+        assert state.normalized_notes == {"citations": [], "amendments": []}
         assert state.snapshot_id == 42
         assert state.revision_id == 7
         assert not state.is_deleted
