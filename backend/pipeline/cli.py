@@ -2456,6 +2456,49 @@ Examples:
         help="Show detailed section-level results",
     )
 
+    # =========================================================================
+    # Chrono Pipeline commands
+    # =========================================================================
+
+    chrono_timeline_parser = subparsers.add_parser(
+        "chrono-timeline",
+        help="Display the consolidated US Code timeline",
+    )
+    chrono_timeline_parser.add_argument(
+        "--congress",
+        type=int,
+        default=113,
+        help="Starting congress (default: 113)",
+    )
+    chrono_timeline_parser.add_argument(
+        "--end-congress",
+        type=int,
+        default=None,
+        help="Ending congress (default: latest)",
+    )
+    chrono_timeline_parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Maximum events to display (default: 50)",
+    )
+    chrono_timeline_parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Show summary stats instead of event list",
+    )
+
+    chrono_timeline_parser.add_argument(
+        "--rps-only",
+        action="store_true",
+        help="Show only OLRC release points (no DB required)",
+    )
+
+    subparsers.add_parser(
+        "chrono-status",
+        help="Show current position in the chronological pipeline",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2720,9 +2763,168 @@ Examples:
             )
         )
 
+    # =========================================================================
+    # Chrono Pipeline command handlers
+    # =========================================================================
+
+    elif args.command == "chrono-timeline":
+        if args.rps_only:
+            return asyncio.run(
+                chrono_rps_only_command(
+                    start_congress=args.congress,
+                    end_congress=args.end_congress,
+                    limit=args.limit,
+                    summary=args.summary,
+                )
+            )
+        return asyncio.run(
+            chrono_timeline_command(
+                start_congress=args.congress,
+                end_congress=args.end_congress,
+                limit=args.limit,
+                summary=args.summary,
+            )
+        )
+
+    elif args.command == "chrono-status":
+        return asyncio.run(chrono_status_command())
+
     else:
         parser.print_help()
         return 1
+
+
+async def chrono_timeline_command(
+    start_congress: int,
+    end_congress: int | None,
+    limit: int,
+    summary: bool,
+) -> int:
+    """Display the consolidated US Code timeline."""
+    from app.models.base import async_session_maker
+    from pipeline.timeline import TimelineBuilder
+
+    async with async_session_maker() as session:
+        builder = TimelineBuilder(session)
+        events = await builder.build(
+            start_congress=start_congress,
+            end_congress=end_congress,
+        )
+
+        if summary:
+            stats = builder.get_summary(events)
+            print(f"Total events: {stats['total_events']}")
+            print(f"  Release points: {stats['total_rps']}")
+            print(f"  Public laws: {stats['total_laws']}")
+            print()
+            for congress, cstats in sorted(stats["by_congress"].items()):
+                first = cstats["first_date"] or "?"
+                last = cstats["last_date"] or "?"
+                print(
+                    f"  Congress {congress}: "
+                    f"{cstats['rp_count']} RPs, "
+                    f"{cstats['law_count']} laws "
+                    f"({first} to {last})"
+                )
+        else:
+            displayed = events[:limit]
+            for event in displayed:
+                print(f"  {event}")
+            if len(events) > limit:
+                print(f"  ... and {len(events) - limit} more events")
+
+    return 0
+
+
+async def chrono_rps_only_command(
+    start_congress: int,
+    end_congress: int | None,
+    limit: int,
+    summary: bool,
+) -> int:
+    """Display OLRC release points only (no database required)."""
+    from pipeline.olrc.release_point import ReleasePointRegistry
+
+    registry = ReleasePointRegistry()
+    await registry.fetch_release_points()
+
+    rps = [
+        rp
+        for rp in registry.get_release_points()
+        if rp.congress >= start_congress
+        and (end_congress is None or rp.congress <= end_congress)
+    ]
+
+    logger.info(f"Found {len(rps)} release points")
+
+    if summary:
+        by_congress: dict[int, int] = {}
+        for rp in rps:
+            by_congress[rp.congress] = by_congress.get(rp.congress, 0) + 1
+        print(f"Total release points: {len(rps)}")
+        print()
+        for congress, count in sorted(by_congress.items()):
+            congress_rps = [r for r in rps if r.congress == congress]
+            first = congress_rps[0].full_identifier
+            last = congress_rps[-1].full_identifier
+            print(f"  Congress {congress}: {count} RPs ({first} to {last})")
+    else:
+        displayed = rps[:limit]
+        for rp in displayed:
+            d = rp.publication_date
+            date_str = f"{d.year}.{d.month:02d}.{d.day:02d}" if d else "????.??.??"
+            titles_str = ", ".join(str(t) for t in rp.titles_available)
+            print(f"  [RP] {date_str} - {rp.full_identifier}: [{titles_str}]")
+        if len(rps) > limit:
+            print(f"  ... and {len(rps) - limit} more release points")
+
+    return 0
+
+
+async def chrono_status_command() -> int:
+    """Show current position in the chronological pipeline."""
+    from sqlalchemy import func, select
+
+    from app.models.base import async_session_maker
+    from app.models.enums import RevisionStatus
+    from app.models.revision import CodeRevision
+
+    async with async_session_maker() as session:
+        # Get most recent ingested revision
+        latest_stmt = (
+            select(CodeRevision)
+            .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+            .order_by(CodeRevision.sequence_number.desc())
+            .limit(1)
+        )
+        result = await session.execute(latest_stmt)
+        latest = result.scalar_one_or_none()
+
+        # Count total revisions
+        count_stmt = select(func.count(CodeRevision.revision_id))
+        count_result = await session.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        # Count ingested
+        ingested_stmt = select(func.count(CodeRevision.revision_id)).where(
+            CodeRevision.status == RevisionStatus.INGESTED.value
+        )
+        ingested_result = await session.execute(ingested_stmt)
+        ingested = ingested_result.scalar() or 0
+
+        if latest is None:
+            print("No revisions ingested yet.")
+            print("Run 'chrono bootstrap <rp>' to create the initial commit.")
+        else:
+            print(f"Current position: {latest}")
+            print(f"  Effective date: {latest.effective_date}")
+            print(f"  Sequence: {latest.sequence_number}")
+            print(f"  Ground truth: {latest.is_ground_truth}")
+            print(f"  Status: {latest.status}")
+
+        print(f"\nTotal revisions: {total} ({ingested} ingested)")
+
+    return 0
 
 
 if __name__ == "__main__":

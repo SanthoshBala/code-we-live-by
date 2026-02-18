@@ -1,5 +1,7 @@
 """Tests for OLRC release point infrastructure."""
 
+from datetime import date
+
 import pytest
 
 from pipeline.olrc.downloader import OLRCDownloader
@@ -71,6 +73,22 @@ class TestReleasePointInfo:
             law_identifier="158",
         )
         assert rp.excluded_laws == []
+
+    def test_update_number(self) -> None:
+        rp = ReleasePointInfo(
+            full_identifier="113-145not128u1",
+            congress=113,
+            law_identifier="145not128u1",
+        )
+        assert rp.update_number == 1
+
+    def test_update_number_none(self) -> None:
+        rp = ReleasePointInfo(
+            full_identifier="118-158",
+            congress=118,
+            law_identifier="158",
+        )
+        assert rp.update_number == 0
 
     def test_str(self) -> None:
         rp = ReleasePointInfo(
@@ -179,6 +197,41 @@ class TestReleasePointRegistry:
         laws = registry_with_data.get_laws_in_range("113-21", "113-22")
         assert laws == [(113, 22)]
 
+    def test_get_laws_in_range_cross_congress(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        """Cross-congress range with last_law_of_congress provided."""
+        laws = registry_with_data.get_laws_in_range(
+            "113-50",
+            "118-22",
+            last_law_of_congress={113: 52},
+        )
+        # 113-51, 113-52, then 118-1 through 118-22
+        assert laws[0] == (113, 51)
+        assert laws[1] == (113, 52)
+        assert laws[2] == (118, 1)
+        assert laws[-1] == (118, 22)
+        assert len(laws) == 2 + 22
+
+    def test_get_laws_in_range_cross_congress_no_lookup(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        """Cross-congress range without lookup returns empty with warning."""
+        laws = registry_with_data.get_laws_in_range("113-50", "118-22")
+        assert laws == []
+
+    def test_get_titles_at_release_point(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        titles = registry_with_data.get_titles_at_release_point("113-21")
+        assert titles == []  # No titles set in test data
+
+    def test_get_titles_at_release_point_not_found(
+        self, registry_with_data: ReleasePointRegistry
+    ) -> None:
+        titles = registry_with_data.get_titles_at_release_point("999-999")
+        assert titles == []
+
     def test_parse_link_simple(self) -> None:
         registry = ReleasePointRegistry()
         rp = registry._parse_release_point_link(
@@ -203,6 +256,185 @@ class TestReleasePointRegistry:
         registry = ReleasePointRegistry()
         rp = registry._parse_release_point_link("/some/other/path")
         assert rp is None
+
+    def test_parse_link_with_date_and_titles(self) -> None:
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/119/72not60/usc-rp@119-72not60.htm",
+            "Public Law 119-72 (01/20/2026) , except 119-60, "
+            "affecting titles 38, 42.",
+        )
+        assert rp is not None
+        assert rp.full_identifier == "119-72not60"
+        assert rp.publication_date == date(2026, 1, 20)
+        assert rp.titles_available == [38, 42]
+
+    def test_parse_link_single_title(self) -> None:
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/119/59/usc-rp@119-59.htm",
+            "Public Law 119-59 (12/18/2025), affecting title 16.",
+        )
+        assert rp is not None
+        assert rp.publication_date == date(2025, 12, 18)
+        assert rp.titles_available == [16]
+
+    def test_parse_link_many_titles_with_letter_suffix(self) -> None:
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/119/43/usc-rp@119-43.htm",
+            "Public Law 119-43 (12/01/2025), affecting titles "
+            "1, 2, 5, 7, 10, 11A, 12, 16, 18, 18A, 21, 22, 26, "
+            "28, 28A, 38, 42, 49, 54.",
+        )
+        assert rp is not None
+        assert rp.publication_date == date(2025, 12, 1)
+        assert 11 in rp.titles_available
+        assert 18 in rp.titles_available
+        assert 28 in rp.titles_available
+        assert 54 in rp.titles_available
+
+    def test_parse_link_no_text(self) -> None:
+        """Backwards compatibility: no link text still works."""
+        registry = ReleasePointRegistry()
+        rp = registry._parse_release_point_link(
+            "releasepoints/us/pl/118/158/xml_usc17@118-158.zip",
+        )
+        assert rp is not None
+        assert rp.full_identifier == "118-158"
+        assert rp.publication_date is None
+        assert rp.titles_available == []
+
+
+class TestReleasePointSortOrder:
+    """Tests for release point chronological ordering.
+
+    Sort key: (date, congress, primary_law_number, -exclusion_count, update_number)
+    """
+
+    @staticmethod
+    def _sort_key(rp: ReleasePointInfo) -> tuple:
+        return (
+            rp.publication_date or date.min,
+            rp.congress,
+            rp.primary_law_number or 0,
+            -len(rp.excluded_laws),
+            rp.update_number,
+        )
+
+    def test_exclusions_sort_before_no_exclusions(self) -> None:
+        """Same date, same law: more exclusions = earlier state, sorts first."""
+        rps = [
+            ReleasePointInfo(
+                full_identifier="113-296",
+                congress=113,
+                law_identifier="296",
+                publication_date=date(2014, 12, 19),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-296not287",
+                congress=113,
+                law_identifier="296not287",
+                publication_date=date(2014, 12, 19),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-296not287not291not295",
+                congress=113,
+                law_identifier="296not287not291not295",
+                publication_date=date(2014, 12, 19),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-296not287not291",
+                congress=113,
+                law_identifier="296not287not291",
+                publication_date=date(2014, 12, 19),
+            ),
+        ]
+        rps.sort(key=self._sort_key)
+
+        ids = [rp.full_identifier for rp in rps]
+        assert ids == [
+            "113-296not287not291not295",  # 3 exclusions (earliest)
+            "113-296not287not291",  # 2 exclusions
+            "113-296not287",  # 1 exclusion
+            "113-296",  # 0 exclusions (latest, most comprehensive)
+        ]
+
+    def test_date_is_primary_sort_key(self) -> None:
+        """Earlier date sorts before later date, regardless of law number."""
+        rps = [
+            ReleasePointInfo(
+                full_identifier="113-296",
+                congress=113,
+                law_identifier="296",
+                publication_date=date(2014, 12, 19),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-200",
+                congress=113,
+                law_identifier="200",
+                publication_date=date(2014, 9, 1),
+            ),
+        ]
+        rps.sort(key=self._sort_key)
+
+        ids = [rp.full_identifier for rp in rps]
+        assert ids == ["113-200", "113-296"]
+
+    def test_update_suffix_sorts_after_base(self) -> None:
+        """Update suffixes (u1) sort after the base RP by date, then update number."""
+        rps = [
+            ReleasePointInfo(
+                full_identifier="113-145not128u1",
+                congress=113,
+                law_identifier="145not128u1",
+                publication_date=date(2014, 8, 20),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-145not128",
+                congress=113,
+                law_identifier="145not128",
+                publication_date=date(2014, 8, 4),
+            ),
+        ]
+        rps.sort(key=self._sort_key)
+
+        ids = [rp.full_identifier for rp in rps]
+        assert ids == [
+            "113-145not128",  # 2014.08.04 (earlier)
+            "113-145not128u1",  # 2014.08.20 (later update)
+        ]
+
+    def test_same_day_updates_sort_by_update_number(self) -> None:
+        """Multiple updates on the same day sort by update number."""
+        rps = [
+            ReleasePointInfo(
+                full_identifier="113-100u2",
+                congress=113,
+                law_identifier="100u2",
+                publication_date=date(2014, 6, 1),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-100",
+                congress=113,
+                law_identifier="100",
+                publication_date=date(2014, 6, 1),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-100u1",
+                congress=113,
+                law_identifier="100u1",
+                publication_date=date(2014, 6, 1),
+            ),
+        ]
+        rps.sort(key=self._sort_key)
+
+        ids = [rp.full_identifier for rp in rps]
+        assert ids == [
+            "113-100",  # u0 (base)
+            "113-100u1",  # u1
+            "113-100u2",  # u2
+        ]
 
 
 class TestOLRCDownloaderReleasePoints:

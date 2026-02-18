@@ -7,10 +7,11 @@ Each release point identifies the US Code "through" a specific Public Law,
 sometimes excluding certain laws that haven't yet been codified.
 """
 
+import contextlib
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 import httpx
 from lxml import html
@@ -57,6 +58,14 @@ class ReleasePointInfo:
             excluded.append(int(match.group(1)))
         return excluded
 
+    @property
+    def update_number(self) -> int:
+        """Extract update number from 'uN' suffix (e.g., u1, u2). Returns 0 if none."""
+        match = re.search(r"u(\d+)", self.law_identifier)
+        if match:
+            return int(match.group(1))
+        return 0
+
     def __str__(self) -> str:
         return f"PL {self.full_identifier}"
 
@@ -102,7 +111,7 @@ class ReleasePointRegistry:
         """Fetch the list of prior release points from the OLRC website.
 
         Scrapes the prior release points page to build a registry of available
-        release points with their metadata.
+        release points with their metadata (date, affected titles).
 
         Returns:
             List of ReleasePointInfo objects, sorted chronologically.
@@ -114,12 +123,15 @@ class ReleasePointRegistry:
         tree = html.fromstring(response.content)
         release_points = []
 
-        # The page has links to release point download pages
-        # Look for links containing "releasepoints" in the href
-        links = tree.xpath("//a[contains(@href, 'releasepoint')]/@href")
+        # Each release point is an <a> inside an <li>. The link text contains
+        # the date and affected titles:
+        #   "Public Law 119-72 (01/20/2026), except 119-60, affecting titles 38, 42."
+        links = tree.xpath("//a[contains(@href, 'releasepoint')]")
 
-        for link in links:
-            rp_info = self._parse_release_point_link(link)
+        for link_elem in links:
+            href = link_elem.get("href", "")
+            link_text = link_elem.text_content().strip()
+            rp_info = self._parse_release_point_link(href, link_text)
             if rp_info:
                 release_points.append(rp_info)
 
@@ -131,18 +143,34 @@ class ReleasePointRegistry:
                 seen.add(rp.full_identifier)
                 unique_rps.append(rp)
 
-        # Sort by congress then law number
-        unique_rps.sort(key=lambda rp: (rp.congress, rp.primary_law_number or 0))
+        # Sort chronologically:
+        # 1. Publication date (primary ordering)
+        # 2. Congress number (tiebreaker for same-day across congresses)
+        # 3. Primary law number (sequential within a congress)
+        # 4. Exclusion count descending (more exclusions = earlier state)
+        # 5. Update number (u1, u2 — multiple updates on the same day)
+        unique_rps.sort(
+            key=lambda rp: (
+                rp.publication_date or date.min,
+                rp.congress,
+                rp.primary_law_number or 0,
+                -len(rp.excluded_laws),
+                rp.update_number,
+            )
+        )
 
         self._release_points = unique_rps
-        logger.info(f"Found {len(unique_rps)} release points")
+        logger.debug(f"Fetched {len(unique_rps)} total release points from OLRC")
         return unique_rps
 
-    def _parse_release_point_link(self, href: str) -> ReleasePointInfo | None:
-        """Parse a release point from a download page link.
+    def _parse_release_point_link(
+        self, href: str, link_text: str = ""
+    ) -> ReleasePointInfo | None:
+        """Parse a release point from a download page link and its text.
 
         Args:
             href: Link href from the prior release points page.
+            link_text: The visible text of the link, containing date and titles.
 
         Returns:
             ReleasePointInfo or None if the link doesn't match expected pattern.
@@ -159,10 +187,33 @@ class ReleasePointRegistry:
         law_identifier = match.group(2)
         full_identifier = f"{congress}-{law_identifier}"
 
+        # Parse date from link text: "Public Law 119-72 (01/20/2026) ..."
+        publication_date = None
+        date_match = re.search(r"\((\d{2}/\d{2}/\d{4})\)", link_text)
+        if date_match:
+            with contextlib.suppress(ValueError):
+                publication_date = datetime.strptime(
+                    date_match.group(1), "%m/%d/%Y"
+                ).date()
+
+        # Parse affected titles: "affecting title(s) 2, 16, 26, 33, 43."
+        titles_available: list[int] = []
+        titles_match = re.search(r"affecting titles?\s+(.+?)\.?\s*$", link_text)
+        if titles_match:
+            titles_text = titles_match.group(1).rstrip(".")
+            for part in titles_text.split(","):
+                part = part.strip()
+                # Handle "11A" style titles by stripping letter suffix
+                num_match = re.match(r"(\d+)", part)
+                if num_match:
+                    titles_available.append(int(num_match.group(1)))
+
         return ReleasePointInfo(
             full_identifier=full_identifier,
             congress=congress,
             law_identifier=law_identifier,
+            publication_date=publication_date,
+            titles_available=sorted(set(titles_available)),
         )
 
     def get_release_points(self) -> list[ReleasePointInfo]:
@@ -218,7 +269,12 @@ class ReleasePointRegistry:
             pairs.append((rps[i], rps[i + 1]))
         return pairs
 
-    def get_laws_in_range(self, rp_before: str, rp_after: str) -> list[tuple[int, int]]:
+    def get_laws_in_range(
+        self,
+        rp_before: str,
+        rp_after: str,
+        last_law_of_congress: dict[int, int] | None = None,
+    ) -> list[tuple[int, int]]:
         """Return (congress, law_number) pairs enacted between two release points.
 
         This identifies which Public Laws were enacted between two release
@@ -227,6 +283,8 @@ class ReleasePointRegistry:
         Args:
             rp_before: Identifier of the earlier release point (e.g., "118-22").
             rp_after: Identifier of the later release point (e.g., "118-30").
+            last_law_of_congress: Optional mapping of congress -> last law number
+                for cross-congress boundary handling.
 
         Returns:
             List of (congress, law_number) tuples for laws in the range.
@@ -251,10 +309,33 @@ class ReleasePointRegistry:
             for law_num in range(before_num + 1, after_num + 1):
                 laws.append((before_congress, law_num))
         else:
-            # Cross-congress boundary — we'd need to know the last law
-            # of the earlier congress. For now, return empty and log a warning.
-            logger.warning(
-                f"Cross-congress range ({rp_before} -> {rp_after}) not yet supported"
-            )
+            # Cross-congress boundary
+            if last_law_of_congress and before_congress in last_law_of_congress:
+                # Finish out the earlier congress
+                last_law = last_law_of_congress[before_congress]
+                for law_num in range(before_num + 1, last_law + 1):
+                    laws.append((before_congress, law_num))
+                # Start the new congress up to the target law
+                for law_num in range(1, after_num + 1):
+                    laws.append((after_congress, law_num))
+            else:
+                logger.warning(
+                    f"Cross-congress range ({rp_before} -> {rp_after}): "
+                    "provide last_law_of_congress for accurate enumeration"
+                )
 
         return laws
+
+    def get_titles_at_release_point(self, identifier: str) -> list[int]:
+        """Get the list of available titles at a release point.
+
+        Args:
+            identifier: Release point identifier (e.g., "118-158").
+
+        Returns:
+            List of title numbers available, or empty if unknown.
+        """
+        rp = self.get_by_identifier(identifier)
+        if rp is None:
+            return []
+        return rp.titles_available
