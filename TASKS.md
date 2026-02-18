@@ -153,7 +153,7 @@ This document tracks the remaining implementation backlog, organized by phase an
   - CLI commands: `chrono-timeline`, `chrono-status`
   - PR #84
 
-- [ ] **Task 1.19**: Bootstrap — Load earliest OLRC release point as initial commit (Phase 2)
+- [x] **Task 1.19**: Bootstrap — Load earliest OLRC release point as initial commit (Phase 2)
   - `BootstrapService.create_initial_commit(rp_identifier)`
   - Download + parse OLRC XML for all titles at a release point
   - Create `SectionSnapshot` records for every section
@@ -167,12 +167,11 @@ This document tracks the remaining implementation backlog, organized by phase an
   - Update `DiffGenerator` to accept optional `base_revision_id` for historical base
   - CLI: `chrono diff <revision>`
 
-- [ ] **Task 1.20b**: Amendment application engine (Phase 4)
-  - `AmendmentApplicator.apply(provisions, diff)` — apply parsed amendments to section provisions
-  - Provision matcher, modifier, renumbering engine
-  - Section-level orchestrator (sort diffs bottom-up, apply sequentially)
-  - Revision-level orchestrator (create derived `CodeRevision` + snapshots per law)
-  - Builds on existing `AmendmentParser` → `SectionResolver` → `DiffGenerator` pipeline
+- [x] **Task 1.20b**: Amendment application engine (Phase 4) ✅
+  - `pipeline/chrono/amendment_applicator.py` — pure text transforms (MODIFY/DELETE/ADD/REPEAL) with 3-tier matching (exact → whitespace-normalized → case-insensitive)
+  - `pipeline/chrono/notes_updater.py` — updates normalized_notes and raw notes with amendment citations
+  - `pipeline/chrono/revision_builder.py` — orchestrator: groups changes by section, applies sequentially, creates derived `CodeRevision` + `SectionSnapshot` records
+  - CLI: `chrono-apply-law <congress> <law_number> [--dry-run]`, `chrono-show-section <title> <section> [--history] [--notes]`
 
 - [ ] **Task 1.20c**: Play-forward engine + checkpoint validation (Phase 5)
   - `PlayForwardEngine.advance()` — process next timeline event (RP or law)
@@ -788,7 +787,7 @@ This document tracks the remaining implementation backlog, organized by phase an
 ### Dependencies
 - Law change parsing (Task 1.12-1.13) was deferred until Milestone 1A validated section parsing — **now unblocked**
 - Line-level parsing (Task 1.14-1.17) is prerequisite for blame view (Task 1.30-1.31)
-- Chrono pipeline: 1.18 (foundation) ✅ → 1.19 (bootstrap) → 1.20 (RP diffing) → 1.20b (amendment application) → 1.20c (play-forward) → 1.20d (web viz)
+- Chrono pipeline: 1.18 (foundation) ✅ → 1.19 (bootstrap) ✅ → 1.20 (RP diffing) ✅ → 1.20b (amendment application) ✅ → 1.20c (play-forward) → 1.20d (web viz)
 - Task 1.20e (pre-2013 coverage) is a backlog item — not blocking any current work
 - Analytics queries (Task 2.7, 2.9, 2.11, 2.13) must be complete before visualizations (Task 2.8, 2.10, 2.12, 2.14)
 
