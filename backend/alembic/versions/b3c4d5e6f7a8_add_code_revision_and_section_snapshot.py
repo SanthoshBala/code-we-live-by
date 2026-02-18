@@ -21,15 +21,28 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Create revision_type and revision_status enums
-    revision_type_enum = sa.Enum(
-        "Release_Point", "Public_Law", name="revision_type_enum"
+    # Create enum types via raw DDL so we can use IF NOT EXISTS,
+    # which asyncpg handles reliably (sa.Enum checkfirst has issues
+    # with asyncpg, and create_table re-creates enums implicitly).
+    op.execute("CREATE TYPE revision_type_enum AS ENUM ('Release_Point', 'Public_Law')")
+    op.execute(
+        "CREATE TYPE revision_status_enum AS ENUM "
+        "('Pending', 'Ingesting', 'Ingested', 'Failed')"
     )
-    revision_status_enum = sa.Enum(
-        "Pending", "Ingesting", "Ingested", "Failed", name="revision_status_enum"
+
+    # Reference the already-created types via postgresql.ENUM with
+    # create_type=False so create_table doesn't issue a second CREATE TYPE.
+    revision_type_enum = postgresql.ENUM(
+        "Release_Point", "Public_Law", name="revision_type_enum", create_type=False
     )
-    revision_type_enum.create(op.get_bind(), checkfirst=True)
-    revision_status_enum.create(op.get_bind(), checkfirst=True)
+    revision_status_enum = postgresql.ENUM(
+        "Pending",
+        "Ingesting",
+        "Ingested",
+        "Failed",
+        name="revision_status_enum",
+        create_type=False,
+    )
 
     # code_revision table
     op.create_table(
