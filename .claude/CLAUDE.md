@@ -12,7 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **LLM-agnostic code**: Keep comments, variable names, and logic generic to allow for different LLM providers in the future. Use "LLM" instead of specific model names (e.g., "Claude") in code comments and documentation
 - **Directory READMEs**: Every directory should include a README.md explaining the architecture of that sub-directory—what modules exist, how they relate to each other, and the data flow between them
 - **Test-driven parsing fixes**: When user feedback identifies parsing or rendering issues with US Code sections or Public Laws, always add test cases that cover the edge case before or alongside the fix. This ensures the test suite incrementally handles more complex edge cases discovered during manual validation.
-- **CI verification**: After pushing commits, always check CI status with `gh run list --branch <branch> --limit 1` and `gh run view <run-id> --log-failed` to verify all checks pass. Run the full local CI suite before pushing: `uv run ruff check . && uv run ruff format --check . && uv run mypy app --ignore-missing-imports && uv run pytest`
+- **Pre-commit hooks**: Ruff (lint + format) and Prettier run automatically on commit via `.pre-commit-config.yaml`. If not installed, run `cd backend && uv run pre-commit install`.
+- **Before pushing**: Always run `uv run mypy app --ignore-missing-imports && uv run pytest` in the backend directory. After pushing, check CI status with `gh run list --branch <branch> --limit 1` and `gh run view <run-id> --log-failed`.
 
 ## Project Overview
 
