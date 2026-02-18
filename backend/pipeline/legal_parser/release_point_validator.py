@@ -134,7 +134,7 @@ class ReleasePointValidator:
                 await self._validate_title(title_num, release_point, report, verbose)
             except Exception as e:
                 logger.exception(
-                    f"Error validating Title {title_num} " f"at {release_point}"
+                    f"Error validating Title {title_num} at {release_point}"
                 )
                 report.errors.append(f"Title {title_num}: {e}")
 

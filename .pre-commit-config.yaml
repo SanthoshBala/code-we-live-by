@@ -1,0 +1,23 @@
+# Pre-commit hooks — fast, auto-fixable checks only.
+# Install: cd backend && uv run pre-commit install
+# Manual run: cd backend && uv run pre-commit run --all-files
+
+repos:
+    # Backend: ruff (lint + format)
+    - repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.9.7
+      hooks:
+          - id: ruff
+            args: [--fix]
+            files: ^backend/
+          - id: ruff-format
+            files: ^backend/
+
+    # Frontend: prettier (uses project's own prettier to match CI)
+    - repo: local
+      hooks:
+          - id: prettier
+            name: prettier
+            entry: bash -c 'cd frontend && npx prettier --write --ignore-unknown "${@#frontend/}"' --
+            language: system
+            files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md)$

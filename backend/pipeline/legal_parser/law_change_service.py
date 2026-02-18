@@ -144,8 +144,7 @@ class LawChangeService:
 
             if verbose:
                 logger.info(
-                    f"Processing PL {congress}-{law_number} "
-                    f"({len(law_text):,} chars)"
+                    f"Processing PL {congress}-{law_number} ({len(law_text):,} chars)"
                 )
 
             # Step 3: Parse amendments

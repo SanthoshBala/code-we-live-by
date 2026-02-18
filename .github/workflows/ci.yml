@@ -30,8 +30,8 @@ jobs:
       - name: Run linting (ruff)
         run: ruff check .
 
-      - name: Run formatting check (black)
-        run: black --check .
+      - name: Run formatting check (ruff)
+        run: ruff format --check .
 
       - name: Run type checking (mypy)
         run: mypy app --ignore-missing-imports

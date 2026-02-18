@@ -383,7 +383,7 @@ class PatternLearningService:
         pattern_type=PatternType.{discovery.suggested_pattern_type or "AMEND_GENERAL"},
         regex=r"{discovery.suggested_pattern_regex}",
         confidence=0.85,  # Start with lower confidence, raise after validation
-        description="{discovery.review_notes or 'Auto-discovered pattern'}",
+        description="{discovery.review_notes or "Auto-discovered pattern"}",
     ),"""
 
         return code

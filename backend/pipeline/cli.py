@@ -2559,6 +2559,63 @@ Examples:
         help="OLRC XML directory (default: data/olrc)",
     )
 
+    chrono_apply_law_parser = subparsers.add_parser(
+        "chrono-apply-law",
+        help="Apply a law's changes to produce a derived CodeRevision",
+    )
+    chrono_apply_law_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 115)",
+    )
+    chrono_apply_law_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 97)",
+    )
+    chrono_apply_law_parser.add_argument(
+        "--parent-revision",
+        type=int,
+        default=None,
+        help="Parent revision ID (auto-detects latest if omitted)",
+    )
+    chrono_apply_law_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would change without creating a revision",
+    )
+
+    chrono_show_section_parser = subparsers.add_parser(
+        "chrono-show-section",
+        help="Show a section's content at a specific revision",
+    )
+    chrono_show_section_parser.add_argument(
+        "title",
+        type=int,
+        help="US Code title number (e.g., 26)",
+    )
+    chrono_show_section_parser.add_argument(
+        "section",
+        type=str,
+        help="Section number (e.g., '219', '80a-3a')",
+    )
+    chrono_show_section_parser.add_argument(
+        "--revision",
+        type=int,
+        default=None,
+        help="Revision ID (defaults to latest ingested)",
+    )
+    chrono_show_section_parser.add_argument(
+        "--history",
+        action="store_true",
+        help="Show text at every revision in the chain",
+    )
+    chrono_show_section_parser.add_argument(
+        "--notes",
+        action="store_true",
+        help="Include notes content in output",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2876,6 +2933,27 @@ Examples:
             )
         )
 
+    elif args.command == "chrono-apply-law":
+        return asyncio.run(
+            chrono_apply_law_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                parent_revision_id=args.parent_revision,
+                dry_run=args.dry_run,
+            )
+        )
+
+    elif args.command == "chrono-show-section":
+        return asyncio.run(
+            chrono_show_section_command(
+                title_number=args.title,
+                section_number=args.section,
+                revision_id=args.revision,
+                show_history=args.history,
+                show_notes=args.notes,
+            )
+        )
+
     else:
         parser.print_help()
         return 1
@@ -3138,6 +3216,280 @@ async def chrono_ingest_rp_command(
                 print(f"    ... and {len(diff.diffs) - 20} more changes")
 
     return 0
+
+
+async def chrono_apply_law_command(
+    congress: int,
+    law_number: int,
+    parent_revision_id: int | None,
+    dry_run: bool,
+) -> int:
+    """Apply a law's changes to produce a derived CodeRevision."""
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.enums import RevisionStatus
+    from app.models.public_law import PublicLaw
+    from app.models.revision import CodeRevision
+    from pipeline.chrono.amendment_applicator import ApplicationStatus
+    from pipeline.chrono.revision_builder import RevisionBuilder
+
+    async with async_session_maker() as session:
+        # Look up the law
+        law_stmt = select(PublicLaw).where(
+            PublicLaw.congress == congress,
+            PublicLaw.law_number == str(law_number),
+        )
+        law_result = await session.execute(law_stmt)
+        law = law_result.scalar_one_or_none()
+        if law is None:
+            logger.error(f"Public Law {congress}-{law_number} not found.")
+            return 1
+
+        # Auto-detect parent revision if not specified
+        if parent_revision_id is None:
+            stmt = (
+                select(CodeRevision)
+                .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+                .order_by(CodeRevision.sequence_number.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            latest = result.scalar_one_or_none()
+            if latest is None:
+                logger.error(
+                    "No ingested revisions found. "
+                    "Run 'chrono-bootstrap' first to create the initial commit."
+                )
+                return 1
+            parent_revision_id = latest.revision_id
+            sequence_number = latest.sequence_number + 1
+            logger.info(
+                f"Auto-detected parent revision {parent_revision_id} "
+                f"(sequence {latest.sequence_number})"
+            )
+        else:
+            stmt = select(CodeRevision).where(
+                CodeRevision.revision_id == parent_revision_id
+            )
+            result = await session.execute(stmt)
+            parent = result.scalar_one_or_none()
+            if parent is None:
+                logger.error(f"Parent revision {parent_revision_id} not found.")
+                return 1
+            sequence_number = parent.sequence_number + 1
+
+        if dry_run:
+            from sqlalchemy.orm import selectinload
+
+            from app.models.public_law import LawChange
+            from pipeline.chrono.amendment_applicator import apply_text_change
+            from pipeline.olrc.snapshot_service import SnapshotService
+
+            # Fetch changes
+            changes_stmt = (
+                select(LawChange)
+                .where(LawChange.law_id == law.law_id)
+                .options(selectinload(LawChange.section))
+                .order_by(LawChange.change_id)
+            )
+            changes_result = await session.execute(changes_stmt)
+            changes = list(changes_result.scalars().all())
+
+            print(f"\nDry run for PL {congress}-{law_number}:")
+            print(f"  Changes found: {len(changes)}")
+
+            snapshot_svc = SnapshotService(session)
+            for change in changes:
+                section = change.section
+                parent_state = await snapshot_svc.get_section_at_revision(
+                    section.title_number,
+                    section.section_number,
+                    parent_revision_id,
+                )
+                app_result = apply_text_change(
+                    text_content=parent_state.text_content if parent_state else None,
+                    change_type=change.change_type,
+                    old_text=change.old_text,
+                    new_text=change.new_text,
+                    title_number=section.title_number,
+                    section_number=section.section_number,
+                )
+                status_symbol = {
+                    ApplicationStatus.APPLIED: "+",
+                    ApplicationStatus.SKIPPED: "~",
+                    ApplicationStatus.FAILED: "!",
+                    ApplicationStatus.NO_CHANGE: "=",
+                }[app_result.status]
+                print(
+                    f"  [{status_symbol}] {change.change_type.value:12s} "
+                    f"{section.title_number} USC {section.section_number}: "
+                    f"{app_result.description}"
+                )
+            return 0
+
+        builder = RevisionBuilder(session)
+        build_result = await builder.build_revision(
+            law=law,
+            parent_revision_id=parent_revision_id,
+            sequence_number=sequence_number,
+        )
+        await session.commit()
+
+    print(f"\nApply result for PL {congress}-{law_number}:")
+    print(f"  Revision ID:      {build_result.revision_id}")
+    print(f"  Parent revision:  {build_result.parent_revision_id}")
+    print(f"  Sequence:         {build_result.sequence_number}")
+    print(f"  Applied:          {build_result.sections_applied}")
+    print(f"  Added:            {build_result.sections_added}")
+    print(f"  Repealed:         {build_result.sections_repealed}")
+    print(f"  Skipped:          {build_result.sections_skipped}")
+    print(f"  Failed:           {build_result.sections_failed}")
+    print(f"  Elapsed:          {build_result.elapsed_seconds:.1f}s")
+
+    return 0
+
+
+async def chrono_show_section_command(
+    title_number: int,
+    section_number: str,
+    revision_id: int | None,
+    show_history: bool,
+    show_notes: bool,
+) -> int:
+    """Show a section's content at a specific revision (or across all revisions)."""
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.enums import RevisionStatus
+    from app.models.revision import CodeRevision
+    from pipeline.olrc.snapshot_service import SnapshotService
+
+    async with async_session_maker() as session:
+        # Resolve revision_id
+        if revision_id is None:
+            stmt = (
+                select(CodeRevision)
+                .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+                .order_by(CodeRevision.sequence_number.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            latest = result.scalar_one_or_none()
+            if latest is None:
+                logger.error("No ingested revisions found.")
+                return 1
+            revision_id = latest.revision_id
+
+        svc = SnapshotService(session)
+
+        if show_history:
+            return await _show_section_history(
+                session, svc, title_number, section_number, show_notes
+            )
+
+        state = await svc.get_section_at_revision(
+            title_number, section_number, revision_id
+        )
+        if state is None:
+            print(
+                f"Section {title_number} USC {section_number} "
+                f"not found at revision {revision_id}."
+            )
+            return 1
+
+        # Look up the revision for context
+        rev_stmt = select(CodeRevision).where(CodeRevision.revision_id == revision_id)
+        rev_result = await session.execute(rev_stmt)
+        rev = rev_result.scalar_one_or_none()
+
+        _print_section_state(state, rev, show_notes)
+
+    return 0
+
+
+async def _show_section_history(
+    session,  # type: ignore[type-arg]
+    svc,  # type: ignore[type-arg]
+    title_number: int,
+    section_number: str,
+    show_notes: bool,
+) -> int:
+    """Print every snapshot of a section across all revisions."""
+    from sqlalchemy import select
+
+    from app.models.revision import CodeRevision
+
+    states = await svc.get_section_history(title_number, section_number)
+    if not states:
+        print(f"No history found for {title_number} USC {section_number}.")
+        return 1
+
+    print(
+        f"History for {title_number} USC {section_number} "
+        f"({len(states)} revision(s)):\n"
+    )
+
+    for i, state in enumerate(states):
+        # Look up revision for context
+        rev_stmt = select(CodeRevision).where(
+            CodeRevision.revision_id == state.revision_id
+        )
+        rev_result = await session.execute(rev_stmt)
+        rev = rev_result.scalar_one_or_none()
+
+        if i > 0:
+            print("\n" + "=" * 72 + "\n")
+        _print_section_state(state, rev, show_notes)
+
+    return 0
+
+
+def _print_section_state(
+    state,  # type: ignore[type-arg]
+    rev=None,  # type: ignore[type-arg]
+    show_notes: bool = False,
+) -> None:
+    """Print a single SectionState with revision context."""
+    header = f"{state.title_number} USC {state.section_number}"
+    if state.heading:
+        header += f" — {state.heading}"
+    print(header)
+
+    if rev:
+        rev_type = rev.revision_type
+        rev_label = rev.summary or f"revision {rev.revision_id}"
+        print(
+            f"  Revision:  {rev.revision_id} (seq {rev.sequence_number}, "
+            f"{rev_type}, {rev.effective_date})"
+        )
+        print(f"  Summary:   {rev_label}")
+        print(f"  Ground truth: {rev.is_ground_truth}")
+
+    if state.is_deleted:
+        print("  [DELETED/REPEALED]")
+        return
+
+    print(f"  Text hash: {state.text_hash or '(none)'}")
+    if state.text_content:
+        print(f"  Length:    {len(state.text_content)} chars")
+        print()
+        # Print text content with line numbers
+        for i, line in enumerate(state.text_content.split("\n"), 1):
+            print(f"    {i:4d} | {line}")
+    else:
+        print("  [No text content]")
+
+    if show_notes:
+        print()
+        if state.notes:
+            print(f"  Notes hash: {state.notes_hash or '(none)'}")
+            print(f"  Notes length: {len(state.notes)} chars")
+            print()
+            for line in state.notes.split("\n"):
+                print(f"    {line}")
+        else:
+            print("  [No notes]")
 
 
 if __name__ == "__main__":
