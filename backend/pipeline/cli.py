@@ -2585,6 +2585,37 @@ Examples:
         help="Show what would change without creating a revision",
     )
 
+    chrono_show_section_parser = subparsers.add_parser(
+        "chrono-show-section",
+        help="Show a section's content at a specific revision",
+    )
+    chrono_show_section_parser.add_argument(
+        "title",
+        type=int,
+        help="US Code title number (e.g., 26)",
+    )
+    chrono_show_section_parser.add_argument(
+        "section",
+        type=str,
+        help="Section number (e.g., '219', '80a-3a')",
+    )
+    chrono_show_section_parser.add_argument(
+        "--revision",
+        type=int,
+        default=None,
+        help="Revision ID (defaults to latest ingested)",
+    )
+    chrono_show_section_parser.add_argument(
+        "--history",
+        action="store_true",
+        help="Show text at every revision in the chain",
+    )
+    chrono_show_section_parser.add_argument(
+        "--notes",
+        action="store_true",
+        help="Include notes content in output",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2909,6 +2940,17 @@ Examples:
                 law_number=args.law_number,
                 parent_revision_id=args.parent_revision,
                 dry_run=args.dry_run,
+            )
+        )
+
+    elif args.command == "chrono-show-section":
+        return asyncio.run(
+            chrono_show_section_command(
+                title_number=args.title,
+                section_number=args.section,
+                revision_id=args.revision,
+                show_history=args.history,
+                show_notes=args.notes,
             )
         )
 
@@ -3306,6 +3348,148 @@ async def chrono_apply_law_command(
     print(f"  Elapsed:          {build_result.elapsed_seconds:.1f}s")
 
     return 0
+
+
+async def chrono_show_section_command(
+    title_number: int,
+    section_number: str,
+    revision_id: int | None,
+    show_history: bool,
+    show_notes: bool,
+) -> int:
+    """Show a section's content at a specific revision (or across all revisions)."""
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.enums import RevisionStatus
+    from app.models.revision import CodeRevision
+    from pipeline.olrc.snapshot_service import SnapshotService
+
+    async with async_session_maker() as session:
+        # Resolve revision_id
+        if revision_id is None:
+            stmt = (
+                select(CodeRevision)
+                .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+                .order_by(CodeRevision.sequence_number.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            latest = result.scalar_one_or_none()
+            if latest is None:
+                logger.error("No ingested revisions found.")
+                return 1
+            revision_id = latest.revision_id
+
+        svc = SnapshotService(session)
+
+        if show_history:
+            return await _show_section_history(
+                session, svc, title_number, section_number, show_notes
+            )
+
+        state = await svc.get_section_at_revision(
+            title_number, section_number, revision_id
+        )
+        if state is None:
+            print(
+                f"Section {title_number} USC {section_number} "
+                f"not found at revision {revision_id}."
+            )
+            return 1
+
+        # Look up the revision for context
+        rev_stmt = select(CodeRevision).where(CodeRevision.revision_id == revision_id)
+        rev_result = await session.execute(rev_stmt)
+        rev = rev_result.scalar_one_or_none()
+
+        _print_section_state(state, rev, show_notes)
+
+    return 0
+
+
+async def _show_section_history(
+    session,  # type: ignore[type-arg]
+    svc,  # type: ignore[type-arg]
+    title_number: int,
+    section_number: str,
+    show_notes: bool,
+) -> int:
+    """Print every snapshot of a section across all revisions."""
+    from sqlalchemy import select
+
+    from app.models.revision import CodeRevision
+
+    states = await svc.get_section_history(title_number, section_number)
+    if not states:
+        print(f"No history found for {title_number} USC {section_number}.")
+        return 1
+
+    print(
+        f"History for {title_number} USC {section_number} "
+        f"({len(states)} revision(s)):\n"
+    )
+
+    for i, state in enumerate(states):
+        # Look up revision for context
+        rev_stmt = select(CodeRevision).where(
+            CodeRevision.revision_id == state.revision_id
+        )
+        rev_result = await session.execute(rev_stmt)
+        rev = rev_result.scalar_one_or_none()
+
+        if i > 0:
+            print("\n" + "=" * 72 + "\n")
+        _print_section_state(state, rev, show_notes)
+
+    return 0
+
+
+def _print_section_state(
+    state,  # type: ignore[type-arg]
+    rev=None,  # type: ignore[type-arg]
+    show_notes: bool = False,
+) -> None:
+    """Print a single SectionState with revision context."""
+    header = f"{state.title_number} USC {state.section_number}"
+    if state.heading:
+        header += f" — {state.heading}"
+    print(header)
+
+    if rev:
+        rev_type = rev.revision_type
+        rev_label = rev.summary or f"revision {rev.revision_id}"
+        print(
+            f"  Revision:  {rev.revision_id} (seq {rev.sequence_number}, "
+            f"{rev_type}, {rev.effective_date})"
+        )
+        print(f"  Summary:   {rev_label}")
+        print(f"  Ground truth: {rev.is_ground_truth}")
+
+    if state.is_deleted:
+        print("  [DELETED/REPEALED]")
+        return
+
+    print(f"  Text hash: {state.text_hash or '(none)'}")
+    if state.text_content:
+        print(f"  Length:    {len(state.text_content)} chars")
+        print()
+        # Print text content with line numbers
+        for i, line in enumerate(state.text_content.split("\n"), 1):
+            print(f"    {i:4d} | {line}")
+    else:
+        print("  [No text content]")
+
+    if show_notes:
+        print()
+        if state.notes:
+            print(f"  Notes hash: {state.notes_hash or '(none)'}")
+            print(f"  Notes length: {len(state.notes)} chars")
+            print()
+            for line in state.notes.split("\n"):
+                print(f"    {line}")
+        else:
+            print("  [No notes]")
 
 
 if __name__ == "__main__":
