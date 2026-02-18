@@ -74,6 +74,22 @@ class TestReleasePointInfo:
         )
         assert rp.excluded_laws == []
 
+    def test_update_number(self) -> None:
+        rp = ReleasePointInfo(
+            full_identifier="113-145not128u1",
+            congress=113,
+            law_identifier="145not128u1",
+        )
+        assert rp.update_number == 1
+
+    def test_update_number_none(self) -> None:
+        rp = ReleasePointInfo(
+            full_identifier="118-158",
+            congress=118,
+            law_identifier="158",
+        )
+        assert rp.update_number == 0
+
     def test_str(self) -> None:
         rp = ReleasePointInfo(
             full_identifier="118-158",
@@ -291,43 +307,52 @@ class TestReleasePointRegistry:
 
 
 class TestReleasePointSortOrder:
-    """Tests for release point chronological ordering."""
+    """Tests for release point chronological ordering.
+
+    Sort key: (date, congress, primary_law_number, -exclusion_count, update_number)
+    """
+
+    @staticmethod
+    def _sort_key(rp: ReleasePointInfo) -> tuple:
+        return (
+            rp.publication_date or date.min,
+            rp.congress,
+            rp.primary_law_number or 0,
+            -len(rp.excluded_laws),
+            rp.update_number,
+        )
 
     def test_exclusions_sort_before_no_exclusions(self) -> None:
-        """More exclusions = earlier state, should sort first."""
-        registry = ReleasePointRegistry()
-        registry._release_points = [
+        """Same date, same law: more exclusions = earlier state, sorts first."""
+        rps = [
             ReleasePointInfo(
                 full_identifier="113-296",
                 congress=113,
                 law_identifier="296",
+                publication_date=date(2014, 12, 19),
             ),
             ReleasePointInfo(
                 full_identifier="113-296not287",
                 congress=113,
                 law_identifier="296not287",
+                publication_date=date(2014, 12, 19),
             ),
             ReleasePointInfo(
                 full_identifier="113-296not287not291not295",
                 congress=113,
                 law_identifier="296not287not291not295",
+                publication_date=date(2014, 12, 19),
             ),
             ReleasePointInfo(
                 full_identifier="113-296not287not291",
                 congress=113,
                 law_identifier="296not287not291",
+                publication_date=date(2014, 12, 19),
             ),
         ]
-        # Re-sort using the same logic as fetch_release_points
-        registry._release_points.sort(
-            key=lambda rp: (
-                rp.congress,
-                rp.primary_law_number or 0,
-                -len(rp.excluded_laws),
-            )
-        )
+        rps.sort(key=self._sort_key)
 
-        ids = [rp.full_identifier for rp in registry._release_points]
+        ids = [rp.full_identifier for rp in rps]
         assert ids == [
             "113-296not287not291not295",  # 3 exclusions (earliest)
             "113-296not287not291",  # 2 exclusions
@@ -335,46 +360,30 @@ class TestReleasePointSortOrder:
             "113-296",  # 0 exclusions (latest, most comprehensive)
         ]
 
-    def test_exclusions_sort_within_congress(self) -> None:
-        """Normal law progression sorts before exclusion variants."""
-        registry = ReleasePointRegistry()
-        registry._release_points = [
+    def test_date_is_primary_sort_key(self) -> None:
+        """Earlier date sorts before later date, regardless of law number."""
+        rps = [
             ReleasePointInfo(
                 full_identifier="113-296",
                 congress=113,
                 law_identifier="296",
+                publication_date=date(2014, 12, 19),
             ),
             ReleasePointInfo(
                 full_identifier="113-200",
                 congress=113,
                 law_identifier="200",
-            ),
-            ReleasePointInfo(
-                full_identifier="113-296not287",
-                congress=113,
-                law_identifier="296not287",
+                publication_date=date(2014, 9, 1),
             ),
         ]
-        registry._release_points.sort(
-            key=lambda rp: (
-                rp.congress,
-                rp.primary_law_number or 0,
-                -len(rp.excluded_laws),
-            )
-        )
+        rps.sort(key=self._sort_key)
 
-        ids = [rp.full_identifier for rp in registry._release_points]
-        assert ids == [
-            "113-200",
-            "113-296not287",
-            "113-296",
-        ]
+        ids = [rp.full_identifier for rp in rps]
+        assert ids == ["113-200", "113-296"]
 
-
-    def test_update_suffix_sorts_by_date(self) -> None:
-        """Update suffixes (u1) sort after the base RP by publication date."""
-        registry = ReleasePointRegistry()
-        registry._release_points = [
+    def test_update_suffix_sorts_after_base(self) -> None:
+        """Update suffixes (u1) sort after the base RP by date, then update number."""
+        rps = [
             ReleasePointInfo(
                 full_identifier="113-145not128u1",
                 congress=113,
@@ -388,19 +397,43 @@ class TestReleasePointSortOrder:
                 publication_date=date(2014, 8, 4),
             ),
         ]
-        registry._release_points.sort(
-            key=lambda rp: (
-                rp.congress,
-                rp.primary_law_number or 0,
-                -len(rp.excluded_laws),
-                rp.publication_date or date.min,
-            )
-        )
+        rps.sort(key=self._sort_key)
 
-        ids = [rp.full_identifier for rp in registry._release_points]
+        ids = [rp.full_identifier for rp in rps]
         assert ids == [
             "113-145not128",  # 2014.08.04 (earlier)
             "113-145not128u1",  # 2014.08.20 (later update)
+        ]
+
+    def test_same_day_updates_sort_by_update_number(self) -> None:
+        """Multiple updates on the same day sort by update number."""
+        rps = [
+            ReleasePointInfo(
+                full_identifier="113-100u2",
+                congress=113,
+                law_identifier="100u2",
+                publication_date=date(2014, 6, 1),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-100",
+                congress=113,
+                law_identifier="100",
+                publication_date=date(2014, 6, 1),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-100u1",
+                congress=113,
+                law_identifier="100u1",
+                publication_date=date(2014, 6, 1),
+            ),
+        ]
+        rps.sort(key=self._sort_key)
+
+        ids = [rp.full_identifier for rp in rps]
+        assert ids == [
+            "113-100",  # u0 (base)
+            "113-100u1",  # u1
+            "113-100u2",  # u2
         ]
 
 

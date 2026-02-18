@@ -58,6 +58,14 @@ class ReleasePointInfo:
             excluded.append(int(match.group(1)))
         return excluded
 
+    @property
+    def update_number(self) -> int:
+        """Extract update number from 'uN' suffix (e.g., u1, u2). Returns 0 if none."""
+        match = re.search(r"u(\d+)", self.law_identifier)
+        if match:
+            return int(match.group(1))
+        return 0
+
     def __str__(self) -> str:
         return f"PL {self.full_identifier}"
 
@@ -136,16 +144,18 @@ class ReleasePointRegistry:
                 unique_rps.append(rp)
 
         # Sort chronologically:
-        # 1. Congress number
-        # 2. Primary law number (sequential within a congress)
-        # 3. Exclusion count descending (more exclusions = earlier state)
-        # 4. Publication date (tiebreaker for updates like "u1" suffixes)
+        # 1. Publication date (primary ordering)
+        # 2. Congress number (tiebreaker for same-day across congresses)
+        # 3. Primary law number (sequential within a congress)
+        # 4. Exclusion count descending (more exclusions = earlier state)
+        # 5. Update number (u1, u2 — multiple updates on the same day)
         unique_rps.sort(
             key=lambda rp: (
+                rp.publication_date or date.min,
                 rp.congress,
                 rp.primary_law_number or 0,
                 -len(rp.excluded_laws),
-                rp.publication_date or date.min,
+                rp.update_number,
             )
         )
 
