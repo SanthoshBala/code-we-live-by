@@ -80,7 +80,7 @@ def update_notes_for_applied_law(
     raw = raw_notes or ""
     year_str = str(year) if year else "????"
     amendment_line = (
-        f"{year_str}\u2014Pub. L. {law.congress}-{law.law_number} " f"{description}"
+        f"{year_str}\u2014Pub. L. {law.congress}-{law.law_number} {description}"
     )
     if raw and not raw.endswith("\n"):
         raw += "\n"

@@ -430,8 +430,7 @@ class LLMParsingSession:
         self.db = db
         self.default_title = default_title
         raise NotImplementedError(
-            "LLM parsing mode is not yet implemented. "
-            "Use RegExParsingSession for now."
+            "LLM parsing mode is not yet implemented. Use RegExParsingSession for now."
         )
 
 

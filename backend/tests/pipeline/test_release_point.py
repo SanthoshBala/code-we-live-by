@@ -261,8 +261,7 @@ class TestReleasePointRegistry:
         registry = ReleasePointRegistry()
         rp = registry._parse_release_point_link(
             "releasepoints/us/pl/119/72not60/usc-rp@119-72not60.htm",
-            "Public Law 119-72 (01/20/2026) , except 119-60, "
-            "affecting titles 38, 42.",
+            "Public Law 119-72 (01/20/2026) , except 119-60, affecting titles 38, 42.",
         )
         assert rp is not None
         assert rp.full_identifier == "119-72not60"

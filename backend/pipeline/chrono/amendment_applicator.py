@@ -85,8 +85,7 @@ def _find_and_replace(
     match = ci_re.search(text_content)
     if match:
         logger.warning(
-            "Case-insensitive fallback used for text match "
-            "(original: %r, found: %r)",
+            "Case-insensitive fallback used for text match (original: %r, found: %r)",
             old_text[:80],
             match.group()[:80],
         )
