@@ -290,6 +290,87 @@ class TestReleasePointRegistry:
         assert rp.titles_available == []
 
 
+class TestReleasePointSortOrder:
+    """Tests for release point chronological ordering."""
+
+    def test_exclusions_sort_before_no_exclusions(self) -> None:
+        """More exclusions = earlier state, should sort first."""
+        registry = ReleasePointRegistry()
+        registry._release_points = [
+            ReleasePointInfo(
+                full_identifier="113-296",
+                congress=113,
+                law_identifier="296",
+            ),
+            ReleasePointInfo(
+                full_identifier="113-296not287",
+                congress=113,
+                law_identifier="296not287",
+            ),
+            ReleasePointInfo(
+                full_identifier="113-296not287not291not295",
+                congress=113,
+                law_identifier="296not287not291not295",
+            ),
+            ReleasePointInfo(
+                full_identifier="113-296not287not291",
+                congress=113,
+                law_identifier="296not287not291",
+            ),
+        ]
+        # Re-sort using the same logic as fetch_release_points
+        registry._release_points.sort(
+            key=lambda rp: (
+                rp.congress,
+                rp.primary_law_number or 0,
+                -len(rp.excluded_laws),
+            )
+        )
+
+        ids = [rp.full_identifier for rp in registry._release_points]
+        assert ids == [
+            "113-296not287not291not295",  # 3 exclusions (earliest)
+            "113-296not287not291",  # 2 exclusions
+            "113-296not287",  # 1 exclusion
+            "113-296",  # 0 exclusions (latest, most comprehensive)
+        ]
+
+    def test_exclusions_sort_within_congress(self) -> None:
+        """Normal law progression sorts before exclusion variants."""
+        registry = ReleasePointRegistry()
+        registry._release_points = [
+            ReleasePointInfo(
+                full_identifier="113-296",
+                congress=113,
+                law_identifier="296",
+            ),
+            ReleasePointInfo(
+                full_identifier="113-200",
+                congress=113,
+                law_identifier="200",
+            ),
+            ReleasePointInfo(
+                full_identifier="113-296not287",
+                congress=113,
+                law_identifier="296not287",
+            ),
+        ]
+        registry._release_points.sort(
+            key=lambda rp: (
+                rp.congress,
+                rp.primary_law_number or 0,
+                -len(rp.excluded_laws),
+            )
+        )
+
+        ids = [rp.full_identifier for rp in registry._release_points]
+        assert ids == [
+            "113-200",
+            "113-296not287",
+            "113-296",
+        ]
+
+
 class TestOLRCDownloaderReleasePoints:
     """Tests for multi-release-point download support."""
 

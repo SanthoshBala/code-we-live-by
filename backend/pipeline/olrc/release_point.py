@@ -135,8 +135,15 @@ class ReleasePointRegistry:
                 seen.add(rp.full_identifier)
                 unique_rps.append(rp)
 
-        # Sort by congress then law number
-        unique_rps.sort(key=lambda rp: (rp.congress, rp.primary_law_number or 0))
+        # Sort by congress, then law number, then number of exclusions
+        # descending (more exclusions = earlier state, fewer laws incorporated).
+        unique_rps.sort(
+            key=lambda rp: (
+                rp.congress,
+                rp.primary_law_number or 0,
+                -len(rp.excluded_laws),
+            )
+        )
 
         self._release_points = unique_rps
         logger.debug(f"Fetched {len(unique_rps)} total release points from OLRC")
