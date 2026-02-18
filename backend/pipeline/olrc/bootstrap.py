@@ -30,6 +30,109 @@ logger = logging.getLogger(__name__)
 ALL_TITLES = list(range(1, 55))
 
 
+async def ingest_title(
+    session: AsyncSession,
+    downloader: OLRCDownloader,
+    parser: USLMParser,
+    title_num: int,
+    rp_identifier: str,
+    revision_id: int,
+) -> int | None:
+    """Download, parse, and store snapshots for one title.
+
+    Shared helper used by both BootstrapService and RPIngestor.
+
+    Args:
+        session: Database session.
+        downloader: OLRC downloader instance.
+        parser: USLM parser instance.
+        title_num: US Code title number to ingest.
+        rp_identifier: Release point identifier (e.g., "113-21").
+        revision_id: The revision ID to attach snapshots to.
+
+    Returns:
+        Number of sections ingested, or None if the title was skipped.
+    """
+    # Check if this title already has snapshots at this revision
+    stmt = (
+        select(SectionSnapshot.snapshot_id)
+        .where(
+            SectionSnapshot.revision_id == revision_id,
+            SectionSnapshot.title_number == title_num,
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    if result.scalar_one_or_none() is not None:
+        logger.info(f"Title {title_num}: already ingested, skipping")
+        return 0
+
+    # Download
+    try:
+        xml_path = await downloader.download_title_at_release_point(
+            title_num, rp_identifier
+        )
+    except Exception:
+        logger.warning(f"Title {title_num}: download failed, skipping", exc_info=True)
+        return None
+
+    if xml_path is None:
+        logger.info(f"Title {title_num}: not available at {rp_identifier}, skipping")
+        return None
+
+    # Parse
+    try:
+        parse_result = parser.parse_file(xml_path)
+    except Exception:
+        logger.error(f"Title {title_num}: parse failed, skipping", exc_info=True)
+        return None
+
+    # Create snapshots
+    count = 0
+    for section in parse_result.sections:
+        try:
+            normalized = normalize_parsed_section(section)
+        except Exception:
+            logger.warning(
+                f"Title {title_num} § {section.section_number}: "
+                "normalization failed, using raw data",
+                exc_info=True,
+            )
+            normalized = section
+
+        text_content = normalized.normalized_text or section.text_content
+        provisions_json = None
+        if normalized.provisions:
+            provisions_json = [
+                line.model_dump(mode="json") for line in normalized.provisions
+            ]
+
+        notes_json = None
+        if normalized.section_notes is not None:
+            notes_json = normalized.section_notes.model_dump(mode="json")
+
+        snapshot = SectionSnapshot(
+            revision_id=revision_id,
+            title_number=title_num,
+            section_number=section.section_number,
+            heading=section.heading,
+            text_content=text_content,
+            normalized_provisions=provisions_json,
+            notes=section.notes,
+            normalized_notes=notes_json,
+            text_hash=compute_text_hash(text_content) if text_content else None,
+            notes_hash=compute_text_hash(section.notes) if section.notes else None,
+            full_citation=section.full_citation,
+            is_deleted=False,
+        )
+        session.add(snapshot)
+        count += 1
+
+    await session.flush()
+    logger.info(f"Title {title_num}: {count} sections ingested")
+    return count
+
+
 @dataclass
 class BootstrapResult:
     """Summary returned by BootstrapService.create_initial_commit."""
@@ -219,90 +322,12 @@ class BootstrapService:
         rp_identifier: str,
         revision_id: int,
     ) -> int | None:
-        """Download, parse, and store snapshots for one title.
-
-        Returns:
-            Number of sections ingested, or None if skipped.
-        """
-        # Check if this title already has snapshots at this revision
-        stmt = (
-            select(SectionSnapshot.snapshot_id)
-            .where(
-                SectionSnapshot.revision_id == revision_id,
-                SectionSnapshot.title_number == title_num,
-            )
-            .limit(1)
+        """Download, parse, and store snapshots for one title."""
+        return await ingest_title(
+            self.session,
+            self.downloader,
+            self.parser,
+            title_num,
+            rp_identifier,
+            revision_id,
         )
-        result = await self.session.execute(stmt)
-        if result.scalar_one_or_none() is not None:
-            logger.info(f"Title {title_num}: already ingested, skipping")
-            return 0
-
-        # Download
-        try:
-            xml_path = await self.downloader.download_title_at_release_point(
-                title_num, rp_identifier
-            )
-        except Exception:
-            logger.warning(
-                f"Title {title_num}: download failed, skipping", exc_info=True
-            )
-            return None
-
-        if xml_path is None:
-            logger.info(
-                f"Title {title_num}: not available at {rp_identifier}, skipping"
-            )
-            return None
-
-        # Parse
-        try:
-            parse_result = self.parser.parse_file(xml_path)
-        except Exception:
-            logger.error(f"Title {title_num}: parse failed, skipping", exc_info=True)
-            return None
-
-        # Create snapshots
-        count = 0
-        for section in parse_result.sections:
-            try:
-                normalized = normalize_parsed_section(section)
-            except Exception:
-                logger.warning(
-                    f"Title {title_num} § {section.section_number}: "
-                    "normalization failed, using raw data",
-                    exc_info=True,
-                )
-                normalized = section
-
-            text_content = normalized.normalized_text or section.text_content
-            provisions_json = None
-            if normalized.provisions:
-                provisions_json = [
-                    line.model_dump(mode="json") for line in normalized.provisions
-                ]
-
-            notes_json = None
-            if normalized.section_notes is not None:
-                notes_json = normalized.section_notes.model_dump(mode="json")
-
-            snapshot = SectionSnapshot(
-                revision_id=revision_id,
-                title_number=title_num,
-                section_number=section.section_number,
-                heading=section.heading,
-                text_content=text_content,
-                normalized_provisions=provisions_json,
-                notes=section.notes,
-                normalized_notes=notes_json,
-                text_hash=compute_text_hash(text_content) if text_content else None,
-                notes_hash=compute_text_hash(section.notes) if section.notes else None,
-                full_citation=section.full_citation,
-                is_deleted=False,
-            )
-            self.session.add(snapshot)
-            count += 1
-
-        await self.session.flush()
-        logger.info(f"Title {title_num}: {count} sections ingested")
-        return count

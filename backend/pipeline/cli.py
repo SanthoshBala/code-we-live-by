@@ -2526,6 +2526,39 @@ Examples:
         help="OLRC XML directory (default: data/olrc)",
     )
 
+    chrono_ingest_rp_parser = subparsers.add_parser(
+        "chrono-ingest-rp",
+        help="Ingest a subsequent OLRC release point and diff against parent",
+    )
+    chrono_ingest_rp_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier (e.g., '113-37')",
+    )
+    chrono_ingest_rp_parser.add_argument(
+        "--parent-revision",
+        type=int,
+        default=None,
+        help="Parent revision ID (auto-detects latest if omitted)",
+    )
+    chrono_ingest_rp_parser.add_argument(
+        "--titles",
+        type=str,
+        default=None,
+        help="Comma-separated title numbers to ingest (e.g., '10,17,18')",
+    )
+    chrono_ingest_rp_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-ingest even if already completed",
+    )
+    chrono_ingest_rp_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2829,6 +2862,20 @@ Examples:
             )
         )
 
+    elif args.command == "chrono-ingest-rp":
+        title_list = None
+        if args.titles:
+            title_list = [int(t.strip()) for t in args.titles.split(",")]
+        return asyncio.run(
+            chrono_ingest_rp_command(
+                release_point=args.release_point,
+                parent_revision_id=args.parent_revision,
+                titles=title_list,
+                force=args.force,
+                download_dir=args.dir,
+            )
+        )
+
     else:
         parser.print_help()
         return 1
@@ -2992,6 +3039,103 @@ async def chrono_bootstrap_command(
     print(f"  Titles skipped:   {result.titles_skipped}")
     print(f"  Total sections:   {result.total_sections}")
     print(f"  Elapsed:          {result.elapsed_seconds:.1f}s")
+
+    return 0
+
+
+async def chrono_ingest_rp_command(
+    release_point: str,
+    parent_revision_id: int | None,
+    titles: list[int] | None,
+    force: bool,
+    download_dir: Path,
+) -> int:
+    """Ingest a subsequent OLRC release point and diff against parent."""
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.enums import RevisionStatus
+    from app.models.revision import CodeRevision
+    from pipeline.olrc.rp_ingestor import RPIngestor
+
+    downloader = OLRCDownloader(download_dir=download_dir)
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        # Auto-detect parent revision if not specified
+        if parent_revision_id is None:
+            stmt = (
+                select(CodeRevision)
+                .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+                .order_by(CodeRevision.sequence_number.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            latest = result.scalar_one_or_none()
+            if latest is None:
+                logger.error(
+                    "No ingested revisions found. "
+                    "Run 'chrono-bootstrap' first to create the initial commit."
+                )
+                return 1
+            parent_revision_id = latest.revision_id
+            sequence_number = latest.sequence_number + 1
+            logger.info(
+                f"Auto-detected parent revision {parent_revision_id} "
+                f"(sequence {latest.sequence_number})"
+            )
+        else:
+            # Look up the parent to determine sequence number
+            stmt = select(CodeRevision).where(
+                CodeRevision.revision_id == parent_revision_id
+            )
+            result = await session.execute(stmt)
+            parent = result.scalar_one_or_none()
+            if parent is None:
+                logger.error(f"Parent revision {parent_revision_id} not found.")
+                return 1
+            sequence_number = parent.sequence_number + 1
+
+        ingestor = RPIngestor(session, downloader, parser)
+        rp_result = await ingestor.ingest_release_point(
+            release_point,
+            parent_revision_id=parent_revision_id,
+            sequence_number=sequence_number,
+            titles=titles,
+            force=force,
+        )
+
+    print(f"\nIngestion result for {rp_result.rp_identifier}:")
+    print(f"  Revision ID:      {rp_result.revision_id}")
+    print(f"  Parent revision:  {rp_result.parent_revision_id}")
+    print(f"  Titles processed: {rp_result.titles_processed}")
+    print(f"  Titles skipped:   {rp_result.titles_skipped}")
+    print(f"  Total sections:   {rp_result.total_sections}")
+    print(f"  Elapsed:          {rp_result.elapsed_seconds:.1f}s")
+
+    if rp_result.diff_summary:
+        diff = rp_result.diff_summary
+        print("\n  Diff summary:")
+        print(f"    Added:     {diff.sections_added}")
+        print(f"    Modified:  {diff.sections_modified}")
+        print(f"    Deleted:   {diff.sections_deleted}")
+        print(f"    Unchanged: {diff.sections_unchanged}")
+
+        if diff.diffs:
+            print("\n  Changed sections:")
+            for d in diff.diffs[:20]:
+                symbol = {"added": "+", "modified": "~", "deleted": "-"}[d.change_type]
+                flags = []
+                if d.text_changed:
+                    flags.append("text")
+                if d.notes_changed:
+                    flags.append("notes")
+                flag_str = f" ({', '.join(flags)})" if flags else ""
+                print(
+                    f"    [{symbol}] Title {d.title_number} § {d.section_number}{flag_str}"
+                )
+            if len(diff.diffs) > 20:
+                print(f"    ... and {len(diff.diffs) - 20} more changes")
 
     return 0
 
