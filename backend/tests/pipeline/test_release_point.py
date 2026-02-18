@@ -371,6 +371,39 @@ class TestReleasePointSortOrder:
         ]
 
 
+    def test_update_suffix_sorts_by_date(self) -> None:
+        """Update suffixes (u1) sort after the base RP by publication date."""
+        registry = ReleasePointRegistry()
+        registry._release_points = [
+            ReleasePointInfo(
+                full_identifier="113-145not128u1",
+                congress=113,
+                law_identifier="145not128u1",
+                publication_date=date(2014, 8, 20),
+            ),
+            ReleasePointInfo(
+                full_identifier="113-145not128",
+                congress=113,
+                law_identifier="145not128",
+                publication_date=date(2014, 8, 4),
+            ),
+        ]
+        registry._release_points.sort(
+            key=lambda rp: (
+                rp.congress,
+                rp.primary_law_number or 0,
+                -len(rp.excluded_laws),
+                rp.publication_date or date.min,
+            )
+        )
+
+        ids = [rp.full_identifier for rp in registry._release_points]
+        assert ids == [
+            "113-145not128",  # 2014.08.04 (earlier)
+            "113-145not128u1",  # 2014.08.20 (later update)
+        ]
+
+
 class TestOLRCDownloaderReleasePoints:
     """Tests for multi-release-point download support."""
 

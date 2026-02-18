@@ -135,13 +135,17 @@ class ReleasePointRegistry:
                 seen.add(rp.full_identifier)
                 unique_rps.append(rp)
 
-        # Sort by congress, then law number, then number of exclusions
-        # descending (more exclusions = earlier state, fewer laws incorporated).
+        # Sort chronologically:
+        # 1. Congress number
+        # 2. Primary law number (sequential within a congress)
+        # 3. Exclusion count descending (more exclusions = earlier state)
+        # 4. Publication date (tiebreaker for updates like "u1" suffixes)
         unique_rps.sort(
             key=lambda rp: (
                 rp.congress,
                 rp.primary_law_number or 0,
                 -len(rp.excluded_laws),
+                rp.publication_date or date.min,
             )
         )
 
