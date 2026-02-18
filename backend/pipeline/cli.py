@@ -2559,6 +2559,32 @@ Examples:
         help="OLRC XML directory (default: data/olrc)",
     )
 
+    chrono_apply_law_parser = subparsers.add_parser(
+        "chrono-apply-law",
+        help="Apply a law's changes to produce a derived CodeRevision",
+    )
+    chrono_apply_law_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g., 115)",
+    )
+    chrono_apply_law_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Law number (e.g., 97)",
+    )
+    chrono_apply_law_parser.add_argument(
+        "--parent-revision",
+        type=int,
+        default=None,
+        help="Parent revision ID (auto-detects latest if omitted)",
+    )
+    chrono_apply_law_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would change without creating a revision",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2876,6 +2902,16 @@ Examples:
             )
         )
 
+    elif args.command == "chrono-apply-law":
+        return asyncio.run(
+            chrono_apply_law_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                parent_revision_id=args.parent_revision,
+                dry_run=args.dry_run,
+            )
+        )
+
     else:
         parser.print_help()
         return 1
@@ -3136,6 +3172,138 @@ async def chrono_ingest_rp_command(
                 )
             if len(diff.diffs) > 20:
                 print(f"    ... and {len(diff.diffs) - 20} more changes")
+
+    return 0
+
+
+async def chrono_apply_law_command(
+    congress: int,
+    law_number: int,
+    parent_revision_id: int | None,
+    dry_run: bool,
+) -> int:
+    """Apply a law's changes to produce a derived CodeRevision."""
+    from sqlalchemy import select
+
+    from app.models.base import async_session_maker
+    from app.models.enums import RevisionStatus
+    from app.models.public_law import PublicLaw
+    from app.models.revision import CodeRevision
+    from pipeline.chrono.amendment_applicator import ApplicationStatus
+    from pipeline.chrono.revision_builder import RevisionBuilder
+
+    async with async_session_maker() as session:
+        # Look up the law
+        law_stmt = select(PublicLaw).where(
+            PublicLaw.congress == congress,
+            PublicLaw.law_number == str(law_number),
+        )
+        law_result = await session.execute(law_stmt)
+        law = law_result.scalar_one_or_none()
+        if law is None:
+            logger.error(f"Public Law {congress}-{law_number} not found.")
+            return 1
+
+        # Auto-detect parent revision if not specified
+        if parent_revision_id is None:
+            stmt = (
+                select(CodeRevision)
+                .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+                .order_by(CodeRevision.sequence_number.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            latest = result.scalar_one_or_none()
+            if latest is None:
+                logger.error(
+                    "No ingested revisions found. "
+                    "Run 'chrono-bootstrap' first to create the initial commit."
+                )
+                return 1
+            parent_revision_id = latest.revision_id
+            sequence_number = latest.sequence_number + 1
+            logger.info(
+                f"Auto-detected parent revision {parent_revision_id} "
+                f"(sequence {latest.sequence_number})"
+            )
+        else:
+            stmt = select(CodeRevision).where(
+                CodeRevision.revision_id == parent_revision_id
+            )
+            result = await session.execute(stmt)
+            parent = result.scalar_one_or_none()
+            if parent is None:
+                logger.error(f"Parent revision {parent_revision_id} not found.")
+                return 1
+            sequence_number = parent.sequence_number + 1
+
+        if dry_run:
+            from sqlalchemy.orm import selectinload
+
+            from app.models.public_law import LawChange
+            from pipeline.chrono.amendment_applicator import apply_text_change
+            from pipeline.olrc.snapshot_service import SnapshotService
+
+            # Fetch changes
+            changes_stmt = (
+                select(LawChange)
+                .where(LawChange.law_id == law.law_id)
+                .options(selectinload(LawChange.section))
+                .order_by(LawChange.change_id)
+            )
+            changes_result = await session.execute(changes_stmt)
+            changes = list(changes_result.scalars().all())
+
+            print(f"\nDry run for PL {congress}-{law_number}:")
+            print(f"  Changes found: {len(changes)}")
+
+            snapshot_svc = SnapshotService(session)
+            for change in changes:
+                section = change.section
+                parent_state = await snapshot_svc.get_section_at_revision(
+                    section.title_number,
+                    section.section_number,
+                    parent_revision_id,
+                )
+                app_result = apply_text_change(
+                    text_content=parent_state.text_content if parent_state else None,
+                    change_type=change.change_type,
+                    old_text=change.old_text,
+                    new_text=change.new_text,
+                    title_number=section.title_number,
+                    section_number=section.section_number,
+                )
+                status_symbol = {
+                    ApplicationStatus.APPLIED: "+",
+                    ApplicationStatus.SKIPPED: "~",
+                    ApplicationStatus.FAILED: "!",
+                    ApplicationStatus.NO_CHANGE: "=",
+                }[app_result.status]
+                print(
+                    f"  [{status_symbol}] {change.change_type.value:12s} "
+                    f"{section.title_number} USC {section.section_number}: "
+                    f"{app_result.description}"
+                )
+            return 0
+
+        builder = RevisionBuilder(session)
+        build_result = await builder.build_revision(
+            law=law,
+            parent_revision_id=parent_revision_id,
+            sequence_number=sequence_number,
+        )
+        await session.commit()
+
+    print(f"\nApply result for PL {congress}-{law_number}:")
+    print(f"  Revision ID:      {build_result.revision_id}")
+    print(f"  Parent revision:  {build_result.parent_revision_id}")
+    print(f"  Sequence:         {build_result.sequence_number}")
+    print(f"  Applied:          {build_result.sections_applied}")
+    print(f"  Added:            {build_result.sections_added}")
+    print(f"  Repealed:         {build_result.sections_repealed}")
+    print(f"  Skipped:          {build_result.sections_skipped}")
+    print(f"  Failed:           {build_result.sections_failed}")
+    print(f"  Elapsed:          {build_result.elapsed_seconds:.1f}s")
 
     return 0
 
