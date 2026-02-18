@@ -2499,6 +2499,33 @@ Examples:
         help="Show current position in the chronological pipeline",
     )
 
+    chrono_bootstrap_parser = subparsers.add_parser(
+        "chrono-bootstrap",
+        help="Bootstrap the chronological pipeline from an OLRC release point",
+    )
+    chrono_bootstrap_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier (e.g., '113-21')",
+    )
+    chrono_bootstrap_parser.add_argument(
+        "--titles",
+        type=str,
+        default=None,
+        help="Comma-separated title numbers to ingest (e.g., '10,17,18')",
+    )
+    chrono_bootstrap_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-ingest even if already completed",
+    )
+    chrono_bootstrap_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2789,6 +2816,19 @@ Examples:
     elif args.command == "chrono-status":
         return asyncio.run(chrono_status_command())
 
+    elif args.command == "chrono-bootstrap":
+        title_list = None
+        if args.titles:
+            title_list = [int(t.strip()) for t in args.titles.split(",")]
+        return asyncio.run(
+            chrono_bootstrap_command(
+                release_point=args.release_point,
+                titles=title_list,
+                force=args.force,
+                download_dir=args.dir,
+            )
+        )
+
     else:
         parser.print_help()
         return 1
@@ -2923,6 +2963,35 @@ async def chrono_status_command() -> int:
             print(f"  Status: {latest.status}")
 
         print(f"\nTotal revisions: {total} ({ingested} ingested)")
+
+    return 0
+
+
+async def chrono_bootstrap_command(
+    release_point: str,
+    titles: list[int] | None,
+    force: bool,
+    download_dir: Path,
+) -> int:
+    """Bootstrap the chronological pipeline from an OLRC release point."""
+    from app.models.base import async_session_maker
+    from pipeline.olrc.bootstrap import BootstrapService
+
+    downloader = OLRCDownloader(download_dir=download_dir)
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        service = BootstrapService(session, downloader, parser)
+        result = await service.create_initial_commit(
+            release_point, titles=titles, force=force
+        )
+
+    print(f"\nBootstrap result for {result.rp_identifier}:")
+    print(f"  Revision ID:      {result.revision_id}")
+    print(f"  Titles processed: {result.titles_processed}")
+    print(f"  Titles skipped:   {result.titles_skipped}")
+    print(f"  Total sections:   {result.total_sections}")
+    print(f"  Elapsed:          {result.elapsed_seconds:.1f}s")
 
     return 0
 
