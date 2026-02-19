@@ -91,9 +91,26 @@ async def ingest_title(
     # Upsert SectionGroup hierarchy for navigation
     group_lookup = await upsert_groups_from_parse_result(session, parse_result.groups)
 
+    # Deduplicate sections by section_number (some titles emit duplicates;
+    # keep the last occurrence which is typically the most complete).
+    seen_sections: dict[str, int] = {}
+    unique_sections = []
+    for section in parse_result.sections:
+        if section.section_number in seen_sections:
+            logger.debug(
+                f"Title {title_num} § {section.section_number}: "
+                "duplicate section, keeping later occurrence"
+            )
+            # Replace earlier occurrence
+            prev_idx = seen_sections[section.section_number]
+            unique_sections[prev_idx] = section
+        else:
+            seen_sections[section.section_number] = len(unique_sections)
+            unique_sections.append(section)
+
     # Create snapshots with group_id for navigation
     count = 0
-    for section in parse_result.sections:
+    for section in unique_sections:
         try:
             normalized = normalize_parsed_section(section)
         except Exception:
