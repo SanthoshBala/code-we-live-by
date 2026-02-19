@@ -64,6 +64,7 @@ class TestSectionSnapshotModel:
 
         table_args = SectionSnapshot.__table_args__
         constraint_names = {arg.name for arg in table_args if hasattr(arg, "name")}
-        assert "uq_section_snapshot_revision_section" in constraint_names
+        # No unique constraint — duplicate section numbers are legitimate in the US Code
+        assert "uq_section_snapshot_revision_section" not in constraint_names
         assert "idx_section_snapshot_title_section" in constraint_names
         assert "idx_section_snapshot_text_hash" in constraint_names

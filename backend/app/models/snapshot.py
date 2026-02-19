@@ -12,7 +12,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -103,12 +102,10 @@ class SectionSnapshot(Base, TimestampMixin):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "revision_id",
-            "title_number",
-            "section_number",
-            name="uq_section_snapshot_revision_section",
-        ),
+        # No unique constraint on (revision_id, title_number, section_number):
+        # the US Code contains legitimate duplicate section numbers where
+        # Congress enacted two provisions with the same number (e.g. two
+        # § 4781 in Title 10). See pipeline/olrc/README.md for details.
         Index(
             "idx_section_snapshot_title_section",
             "title_number",
