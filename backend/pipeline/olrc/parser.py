@@ -6,7 +6,7 @@ import contextlib
 import hashlib
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -334,7 +334,7 @@ class USLMParser:
     # Structural elements that can appear between title and chapter
     _GROUP_ELEMENTS = ("subtitle", "part", "division")
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the parser."""
         self._current_group_key: str | None = None
         self._section_order = 0
@@ -869,7 +869,7 @@ class USLMParser:
             "division",
         }
         if role in valid_types:
-            return role
+            return str(role)
 
         return None
 
@@ -877,7 +877,7 @@ class USLMParser:
         """Extract the number/identifier from an element."""
         # Check number attribute on element
         if "number" in elem.attrib:
-            return elem.attrib["number"]
+            return str(elem.attrib["number"])
 
         # Look for <num> child element with value attribute (OLRC format)
         num_elem = elem.find("{*}num")
@@ -886,7 +886,7 @@ class USLMParser:
         if num_elem is not None:
             # Prefer value attribute (contains clean number)
             if "value" in num_elem.attrib:
-                return num_elem.attrib["value"]
+                return str(num_elem.attrib["value"])
             # Fall back to text content
             if num_elem.text:
                 # Clean up the number (remove "§", "Chapter", etc.)
@@ -960,7 +960,7 @@ class USLMParser:
         return text
 
     @staticmethod
-    def _itertext_skip_footnotes(elem: etree._Element):
+    def _itertext_skip_footnotes(elem: etree._Element) -> Generator[str, None, None]:
         """Like elem.itertext() but skips footnote refs and notes."""
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
         # Skip footnote reference links and footnote note bodies
@@ -1236,7 +1236,9 @@ class USLMParser:
         """
         parts = []
 
-        def process_element(el, in_bold=False, in_italic=False):
+        def process_element(
+            el: etree._Element, in_bold: bool = False, in_italic: bool = False
+        ) -> None:
             """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
 
@@ -1396,14 +1398,14 @@ class USLMParser:
                     href,
                 )
                 if match:
-                    ref = ActRef(
+                    act_ref = ActRef(
                         date=match.group(1),  # e.g., "1935-08-14"
                         chapter=int(match.group(2)),
                         title=match.group(3),
                         section=match.group(4),
                         raw_text=text,
                     )
-                    act_refs.append(ref)
+                    act_refs.append(act_ref)
                     last_ref_type = "act"
 
             # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references

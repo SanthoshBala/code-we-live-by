@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,9 +28,9 @@ class SectionState:
     heading: str | None
     text_content: str | None
     text_hash: str | None
-    normalized_provisions: dict | None
+    normalized_provisions: dict[str, Any] | None
     notes: str | None
-    normalized_notes: dict | None
+    normalized_notes: dict[str, Any] | None
     notes_hash: str | None
     full_citation: str | None
     snapshot_id: int
