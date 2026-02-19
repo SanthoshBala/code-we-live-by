@@ -183,9 +183,9 @@ class LawChangeService:
                 return result
 
             # Step 4: Resolve section references
-            resolver = SectionResolver(self.session)
+            resolver = SectionResolver()
             section_refs = [a.section_ref for a in result.amendments]
-            resolutions = await resolver.resolve_batch(
+            resolutions = resolver.resolve_batch(
                 [ref for ref in section_refs if ref is not None],
                 default_title=default_title,
             )
