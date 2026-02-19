@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.enums import RevisionStatus, RevisionType
 from app.models.public_law import PublicLaw
@@ -212,9 +213,10 @@ class PlayForwardEngine:
         return await self._run_checkpoint(rp_revision, rp_identifier)
 
     async def _get_current_head(self) -> CodeRevision | None:
-        """Get the latest ingested CodeRevision."""
+        """Get the latest ingested CodeRevision (with release_point eager-loaded)."""
         stmt = (
             select(CodeRevision)
+            .options(selectinload(CodeRevision.release_point))
             .where(CodeRevision.status == RevisionStatus.INGESTED.value)
             .order_by(CodeRevision.sequence_number.desc())
             .limit(1)
