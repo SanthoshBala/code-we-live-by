@@ -3,10 +3,11 @@
 #
 # Usage:
 #   ./dev.sh              Start Postgres, backend, and frontend
-#   ./dev.sh --seed       Also ingest all titles, seed laws, bootstrap first RP
-#   ./dev.sh --phase1     Same as --seed but only Phase 1 titles (faster)
+#   ./dev.sh --seed       Also build chronology: ingest titles, load laws, bootstrap
+#                         first RP, apply first law
+#   ./dev.sh --phase1     Same as --seed but Phase 1 titles only (faster)
 #   ./dev.sh stop         Stop Postgres container
-#   ./dev.sh reset        Destroy DB, rebuild, ingest all titles, bootstrap first RP
+#   ./dev.sh reset        Destroy DB and rebuild everything from scratch
 #
 # Prerequisites:
 #   - Docker (for Postgres)
@@ -79,16 +80,16 @@ if [[ "${1:-}" == "reset" ]]; then
     cd "$BACKEND_DIR"
     uv run python -m alembic upgrade head
 
-    log "Ingesting all US Code titles (this may take a while)..."
+    log "Step 1/4: Ingesting all US Code titles (this may take a while)..."
     uv run python -m pipeline.cli ingest-titles
 
-    log "Seeding sample Public Laws..."
+    log "Step 2/4: Loading Public Laws from GovInfo..."
     uv run python -m pipeline.cli seed-laws
 
-    log "Bootstrapping first release point (113-21, all titles)..."
+    log "Step 3/4: Bootstrapping first release point (113-21)..."
     uv run python -m pipeline.cli chrono-bootstrap 113-21
 
-    log "Advancing one event (first law revision)..."
+    log "Step 4/4: Applying first law after RP..."
     uv run python -m pipeline.cli chrono-advance
 
     log "Reset complete. Current state:"
@@ -139,19 +140,19 @@ uv run python -m alembic upgrade head
 
 if [[ "$SEED" == true ]]; then
     if [[ "$PHASE1_ONLY" == true ]]; then
-        log "Ingesting Phase 1 titles only..."
+        log "Step 1/4: Ingesting Phase 1 titles only..."
         uv run python -m pipeline.cli ingest-titles --phase1
     else
-        log "Ingesting all US Code titles (this may take a while)..."
+        log "Step 1/4: Ingesting all US Code titles (this may take a while)..."
         uv run python -m pipeline.cli ingest-titles
     fi
-    log "Seeding sample Public Laws..."
+    log "Step 2/4: Loading Public Laws from GovInfo..."
     uv run python -m pipeline.cli seed-laws
-    log "Bootstrapping first release point (113-21)..."
+    log "Step 3/4: Bootstrapping first release point (113-21)..."
     uv run python -m pipeline.cli chrono-bootstrap 113-21
-    log "Advancing one event (first law revision)..."
+    log "Step 4/4: Applying first law after RP..."
     uv run python -m pipeline.cli chrono-advance
-    log "Seeding complete. Current state:"
+    log "Chronology built. Current state:"
     uv run python -m pipeline.cli chrono-status
 fi
 
