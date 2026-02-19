@@ -20,7 +20,6 @@ from app.models.enums import BillStatus, BillType, ChangeType, LawType
 
 if TYPE_CHECKING:
     from app.models.legislator import Sponsorship, Vote
-    from app.models.us_code import USCodeSection
 
 
 class PublicLaw(Base, TimestampMixin):
@@ -173,9 +172,8 @@ class LawChange(Base, TimestampMixin):
     law_id: Mapped[int] = mapped_column(
         ForeignKey("public_law.law_id", ondelete="CASCADE"), nullable=False
     )
-    section_id: Mapped[int] = mapped_column(
-        ForeignKey("us_code_section.section_id", ondelete="RESTRICT"), nullable=False
-    )
+    title_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    section_number: Mapped[str] = mapped_column(String(100), nullable=False)
     change_type: Mapped[ChangeType] = mapped_column(
         enum_column(ChangeType, "change_type"), nullable=False
     )
@@ -187,12 +185,13 @@ class LawChange(Base, TimestampMixin):
 
     # Relationships
     law: Mapped["PublicLaw"] = relationship(back_populates="changes")
-    section: Mapped["USCodeSection"] = relationship(back_populates="changes")
 
     __table_args__ = (
         Index("idx_change_law", "law_id"),
-        Index("idx_change_section", "section_id"),
-        Index("idx_change_law_section", "law_id", "section_id"),
+        Index("idx_change_title_section", "title_number", "section_number"),
+        Index(
+            "idx_change_law_title_section", "law_id", "title_number", "section_number"
+        ),
     )
 
     def __repr__(self) -> str:

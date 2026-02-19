@@ -36,17 +36,6 @@ def _make_law(
     return law
 
 
-def _make_section_mock(
-    title_number: int = 26,
-    section_number: str = "401",
-) -> MagicMock:
-    """Create a minimal mock USCodeSection."""
-    section = MagicMock()
-    section.title_number = title_number
-    section.section_number = section_number
-    return section
-
-
 def _make_change(
     change_id: int = 1,
     law_id: int = 1,
@@ -57,7 +46,7 @@ def _make_change(
     section_number: str = "401",
     description: str | None = "substituted '10 percent' for '5 percent'",
 ) -> MagicMock:
-    """Create a minimal mock LawChange with section relationship."""
+    """Create a minimal mock LawChange with natural keys."""
     change = MagicMock(spec=LawChange)
     change.change_id = change_id
     change.law_id = law_id
@@ -65,7 +54,8 @@ def _make_change(
     change.old_text = old_text
     change.new_text = new_text
     change.description = description
-    change.section = _make_section_mock(title_number, section_number)
+    change.title_number = title_number
+    change.section_number = section_number
     return change
 
 

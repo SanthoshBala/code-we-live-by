@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.models.enums import ChangeType, RevisionStatus, RevisionType
 from app.models.public_law import LawChange, PublicLaw
@@ -94,11 +93,10 @@ class RevisionBuilder:
                 elapsed_seconds=time.monotonic() - start,
             )
 
-        # 2. Fetch LawChange records, eagerly loading section relationship
+        # 2. Fetch LawChange records
         changes_stmt = (
             select(LawChange)
             .where(LawChange.law_id == law.law_id)
-            .options(selectinload(LawChange.section))
             .order_by(LawChange.change_id)
         )
         changes_result = await self.session.execute(changes_stmt)
@@ -133,8 +131,7 @@ class RevisionBuilder:
         # 4. Group changes by (title_number, section_number)
         section_groups: dict[tuple[int, str], list[LawChange]] = {}
         for change in changes:
-            section = change.section
-            key = (section.title_number, section.section_number)
+            key = (change.title_number, change.section_number)
             section_groups.setdefault(key, []).append(change)
 
         # 5. Process each section group

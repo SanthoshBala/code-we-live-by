@@ -35,6 +35,8 @@ class SectionState:
     snapshot_id: int
     revision_id: int
     is_deleted: bool
+    group_id: int | None = None
+    sort_order: int = 0
 
 
 class SnapshotService:
@@ -223,4 +225,6 @@ class SnapshotService:
             snapshot_id=snapshot.snapshot_id,
             revision_id=snapshot.revision_id,
             is_deleted=snapshot.is_deleted,
+            group_id=snapshot.group_id,
+            sort_order=snapshot.sort_order,
         )

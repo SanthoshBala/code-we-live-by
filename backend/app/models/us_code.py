@@ -21,7 +21,7 @@ from app.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.history import LineHistory, SectionHistory
-    from app.models.public_law import LawChange, PublicLaw
+    from app.models.public_law import PublicLaw
 
 
 class SectionGroup(Base, TimestampMixin):
@@ -137,8 +137,6 @@ class USCodeSection(Base, TimestampMixin):
     history: Mapped[list["SectionHistory"]] = relationship(
         back_populates="section", cascade="all, delete-orphan"
     )
-    changes: Mapped[list["LawChange"]] = relationship(back_populates="section")
-
     __table_args__ = (
         UniqueConstraint(
             "title_number", "section_number", name="uq_section_title_number"
