@@ -124,14 +124,16 @@ async def ingest_title(
             return 1
 
 
-async def ingest_phase1(
+async def ingest_titles_command(
+    title_list: list[int] | None = None,
     download_dir: Path = Path("data/olrc"),
     force_download: bool = False,
     force_parse: bool = False,
 ) -> int:
-    """Ingest all Phase 1 US Code titles into the database.
+    """Ingest US Code titles into the database.
 
     Args:
+        title_list: Specific titles to ingest. None = all 54 titles.
         download_dir: Directory for OLRC XML files.
         force_download: If True, re-download even if files exist.
         force_parse: If True, re-parse and update existing records.
@@ -142,12 +144,21 @@ async def ingest_phase1(
     from app.models.base import async_session_maker
     from pipeline.olrc.ingestion import USCodeIngestionService
 
+    all_titles = title_list or list(range(1, 55))
+    label = f"{len(all_titles)} titles"
+
     async with async_session_maker() as session:
         service = USCodeIngestionService(session, download_dir=download_dir)
-        logs = await service.ingest_phase1_titles(
-            force_download=force_download,
-            force_parse=force_parse,
-        )
+        logs = []
+        for title_number in all_titles:
+            logger.info(f"Ingesting Title {title_number}...")
+            log = await service.ingest_title(
+                title_number,
+                force_download=force_download,
+                force_parse=force_parse,
+            )
+            logs.append(log)
+            logger.info(f"Title {title_number}: {log.status}")
 
         succeeded = sum(1 for log in logs if log.status in ("completed", "skipped"))
         failed = sum(1 for log in logs if log.status == "failed")
@@ -155,7 +166,7 @@ async def ingest_phase1(
         total_updated = sum(log.records_updated or 0 for log in logs)
 
         logger.info(
-            f"Phase 1 ingestion complete: {succeeded} succeeded, {failed} failed, "
+            f"Ingestion complete ({label}): {succeeded} succeeded, {failed} failed, "
             f"{total_created} created, {total_updated} updated"
         )
 
@@ -164,6 +175,22 @@ async def ingest_phase1(
                 logger.error(f"  {log.operation}: {log.error_message}")
 
         return 1 if failed > 0 else 0
+
+
+async def ingest_phase1(
+    download_dir: Path = Path("data/olrc"),
+    force_download: bool = False,
+    force_parse: bool = False,
+) -> int:
+    """Ingest Phase 1 US Code titles (backwards-compatible wrapper)."""
+    from pipeline.olrc.downloader import PHASE_1_TITLES
+
+    return await ingest_titles_command(
+        title_list=PHASE_1_TITLES,
+        download_dir=download_dir,
+        force_download=force_download,
+        force_parse=force_parse,
+    )
 
 
 # =============================================================================
@@ -1925,9 +1952,43 @@ def main() -> int:
         help="Re-parse and update existing records",
     )
 
-    # Ingest-phase1 command
+    # Ingest-titles command
+    ingest_titles_parser = subparsers.add_parser(
+        "ingest-titles",
+        help="Ingest US Code titles into the database (all titles by default)",
+    )
+    ingest_titles_parser.add_argument(
+        "--phase1",
+        action="store_true",
+        help="Only ingest Phase 1 titles (10, 17, 18, 20, 22, 26, 42, 50)",
+    )
+    ingest_titles_parser.add_argument(
+        "--titles",
+        type=str,
+        default=None,
+        help="Comma-separated title numbers to ingest (e.g., '10,17,18')",
+    )
+    ingest_titles_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+    ingest_titles_parser.add_argument(
+        "--force-download",
+        action="store_true",
+        help="Re-download XML even if files exist",
+    )
+    ingest_titles_parser.add_argument(
+        "--force-parse",
+        action="store_true",
+        help="Re-parse and update existing records",
+    )
+
+    # Keep ingest-phase1 as an alias for backwards compatibility
     ingest_phase1_parser = subparsers.add_parser(
-        "ingest-phase1", help="Ingest all Phase 1 US Code titles into the database"
+        "ingest-phase1",
+        help="(Deprecated: use ingest-titles --phase1) Ingest Phase 1 titles",
     )
     ingest_phase1_parser.add_argument(
         "--dir",
@@ -2696,6 +2757,24 @@ Examples:
         return asyncio.run(
             ingest_title(
                 title_number=args.title,
+                download_dir=args.dir,
+                force_download=args.force_download,
+                force_parse=args.force_parse,
+            )
+        )
+
+    elif args.command == "ingest-titles":
+        if args.titles:
+            title_list = [int(t.strip()) for t in args.titles.split(",")]
+        elif args.phase1:
+            from pipeline.olrc.downloader import PHASE_1_TITLES as _p1
+
+            title_list = _p1
+        else:
+            title_list = None  # all titles
+        return asyncio.run(
+            ingest_titles_command(
+                title_list=title_list,
                 download_dir=args.dir,
                 force_download=args.force_download,
                 force_parse=args.force_parse,
