@@ -2567,7 +2567,10 @@ Examples:
     chrono_bootstrap_parser.add_argument(
         "release_point",
         type=str,
-        help="Release point identifier (e.g., '113-21')",
+        nargs="?",
+        default=None,
+        help="Release point identifier (e.g., '113-21'). "
+        "If omitted, uses the oldest available RP.",
     )
     chrono_bootstrap_parser.add_argument(
         "--titles",
@@ -3238,14 +3241,27 @@ async def chrono_status_command() -> int:
 
 
 async def chrono_bootstrap_command(
-    release_point: str,
+    release_point: str | None,
     titles: list[int] | None,
     force: bool,
     download_dir: Path,
 ) -> int:
-    """Bootstrap the chronological pipeline from an OLRC release point."""
+    """Bootstrap the chronological pipeline from an OLRC release point.
+
+    If release_point is None, auto-detects the oldest available RP.
+    """
     from app.models.base import async_session_maker
     from pipeline.olrc.bootstrap import BootstrapService
+    from pipeline.olrc.release_point import ReleasePointRegistry
+
+    if release_point is None:
+        registry = ReleasePointRegistry()
+        rps = await registry.fetch_release_points()
+        if not rps:
+            logger.error("No release points found from OLRC.")
+            return 1
+        release_point = rps[0].full_identifier
+        print(f"Auto-detected oldest release point: {release_point}")
 
     downloader = OLRCDownloader(download_dir=download_dir)
     parser = USLMParser()

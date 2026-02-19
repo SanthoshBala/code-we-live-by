@@ -86,8 +86,8 @@ if [[ "${1:-}" == "reset" ]]; then
     log "Step 2/5: Ingesting all Public Laws for Congress 113..."
     uv run python -m pipeline.cli govinfo-ingest-congress 113
 
-    log "Step 3/5: Bootstrapping first release point (113-21)..."
-    uv run python -m pipeline.cli chrono-bootstrap 113-21
+    log "Step 3/5: Bootstrapping oldest release point..."
+    uv run python -m pipeline.cli chrono-bootstrap
 
     log "Step 4/5: Building chronology..."
     uv run python -m pipeline.cli chrono-status
@@ -151,8 +151,8 @@ if [[ "$SEED" == true ]]; then
     fi
     log "Step 2/5: Ingesting all Public Laws for Congress 113..."
     uv run python -m pipeline.cli govinfo-ingest-congress 113
-    log "Step 3/5: Bootstrapping first release point (113-21)..."
-    uv run python -m pipeline.cli chrono-bootstrap 113-21
+    log "Step 3/5: Bootstrapping oldest release point..."
+    uv run python -m pipeline.cli chrono-bootstrap
     log "Step 4/5: Building chronology..."
     uv run python -m pipeline.cli chrono-status
     log "Step 5/5: Applying first law after RP (auto-fetches and parses)..."
