@@ -80,16 +80,19 @@ if [[ "${1:-}" == "reset" ]]; then
     cd "$BACKEND_DIR"
     uv run python -m alembic upgrade head
 
-    log "Step 1/4: Ingesting all US Code titles (this may take a while)..."
+    log "Step 1/5: Ingesting all US Code titles (this may take a while)..."
     uv run python -m pipeline.cli ingest-titles
 
-    log "Step 2/4: Loading Public Laws from GovInfo..."
-    uv run python -m pipeline.cli seed-laws
+    log "Step 2/5: Ingesting all Public Laws for Congress 113..."
+    uv run python -m pipeline.cli govinfo-ingest-congress 113
 
-    log "Step 3/4: Bootstrapping first release point (113-21)..."
+    log "Step 3/5: Bootstrapping first release point (113-21)..."
     uv run python -m pipeline.cli chrono-bootstrap 113-21
 
-    log "Step 4/4: Applying first law after RP..."
+    log "Step 4/5: Building chronology..."
+    uv run python -m pipeline.cli chrono-status
+
+    log "Step 5/5: Applying first law after RP (auto-fetches and parses)..."
     uv run python -m pipeline.cli chrono-advance
 
     log "Reset complete. Current state:"
@@ -140,17 +143,19 @@ uv run python -m alembic upgrade head
 
 if [[ "$SEED" == true ]]; then
     if [[ "$PHASE1_ONLY" == true ]]; then
-        log "Step 1/4: Ingesting Phase 1 titles only..."
+        log "Step 1/5: Ingesting Phase 1 titles only..."
         uv run python -m pipeline.cli ingest-titles --phase1
     else
-        log "Step 1/4: Ingesting all US Code titles (this may take a while)..."
+        log "Step 1/5: Ingesting all US Code titles (this may take a while)..."
         uv run python -m pipeline.cli ingest-titles
     fi
-    log "Step 2/4: Loading Public Laws from GovInfo..."
-    uv run python -m pipeline.cli seed-laws
-    log "Step 3/4: Bootstrapping first release point (113-21)..."
+    log "Step 2/5: Ingesting all Public Laws for Congress 113..."
+    uv run python -m pipeline.cli govinfo-ingest-congress 113
+    log "Step 3/5: Bootstrapping first release point (113-21)..."
     uv run python -m pipeline.cli chrono-bootstrap 113-21
-    log "Step 4/4: Applying first law after RP..."
+    log "Step 4/5: Building chronology..."
+    uv run python -m pipeline.cli chrono-status
+    log "Step 5/5: Applying first law after RP (auto-fetches and parses)..."
     uv run python -m pipeline.cli chrono-advance
     log "Chronology built. Current state:"
     uv run python -m pipeline.cli chrono-status

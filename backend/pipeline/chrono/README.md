@@ -36,7 +36,7 @@ Phases 4-5 of the chronological pipeline. Phase 4 applies `LawChange` diffs to p
 
 | Module | Purpose | DB Access |
 |--------|---------|-----------|
-| `play_forward.py` | Timeline walker: dispatches law and RP events, runs checkpoint validation | Yes (async) |
+| `play_forward.py` | Timeline walker: dispatches law and RP events, auto-processes laws, runs checkpoint validation | Yes (async) |
 | `checkpoint.py` | Pure comparison of derived state against RP ground truth | None |
 | `revision_builder.py` | Orchestrates revision creation from `LawChange` records | Yes (async) |
 | `amendment_applicator.py` | Pure text transforms (find/replace, add, delete, repeal) | None |
@@ -46,8 +46,19 @@ Phases 4-5 of the chronological pipeline. Phase 4 applies `LawChange` diffs to p
 
 The `PlayForwardEngine` coordinates the chronological pipeline by walking through `TimelineBuilder` events and dispatching each to the appropriate handler:
 
-- **PUBLIC_LAW events** → `RevisionBuilder.build_revision()` (derived revision)
+- **PUBLIC_LAW events** → auto-process law if needed, then `RevisionBuilder.build_revision()` (derived revision)
 - **RELEASE_POINT events** → `RPIngestor.ingest_release_point()` (ground truth)
+
+### Auto-Processing Laws
+
+When advancing through a PUBLIC_LAW event, the engine checks if `LawChange` records exist for the law. If not, it automatically:
+1. Fetches the law text from GovInfo
+2. Parses amendments (via `RegExParsingSession`)
+3. Resolves section references to `USCodeSection` records
+4. Generates validated diffs
+5. Persists `LawChange` records
+
+This is handled by `LawChangeService.process_law()`, making `chrono-advance` fully self-contained — no need to manually run `parse-law` or `process-law` first.
 
 ### Advance Modes
 
@@ -133,5 +144,6 @@ uv run python -m pipeline.cli chrono-apply-law 115 97 --dry-run
 - `pipeline/olrc/snapshot_service.py` — `SnapshotService` for state materialization
 - `pipeline/olrc/downloader.py` — `OLRCDownloader` (passed to RPIngestor)
 - `pipeline/olrc/parser.py` — `USLMParser`, `compute_text_hash()`
+- `pipeline/legal_parser/law_change_service.py` — `LawChangeService` for auto-processing laws
 - `app/models/` — `CodeRevision`, `SectionSnapshot`, `PublicLaw`, `LawChange`
 - `app/schemas/` — `SectionNotesSchema`, `AmendmentSchema`, `SourceLawSchema`
