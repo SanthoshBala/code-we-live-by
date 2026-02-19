@@ -3,9 +3,9 @@
 #
 # Usage:
 #   ./dev.sh          Start Postgres, backend, and frontend
-#   ./dev.sh --seed   Also ingest Phase 1 titles into the database
+#   ./dev.sh --seed   Also bootstrap first RP + apply first law revision
 #   ./dev.sh stop     Stop Postgres container
-#   ./dev.sh reset    Destroy DB volume, recreate, migrate, and re-ingest
+#   ./dev.sh reset    Truncate chrono/law tables and re-seed from scratch
 #
 # Prerequisites:
 #   - Docker (for Postgres)
@@ -57,7 +57,7 @@ fi
 # ── Reset command ────────────────────────────────────────────────────────────
 
 if [[ "${1:-}" == "reset" ]]; then
-    warn "This will destroy all local data and re-ingest from scratch."
+    warn "This will destroy all local data and rebuild from scratch."
     read -rp "Continue? [y/N] " confirm
     if [[ "$confirm" != [yY] ]]; then
         log "Aborted."
@@ -78,13 +78,21 @@ if [[ "${1:-}" == "reset" ]]; then
     cd "$BACKEND_DIR"
     uv run python -m alembic upgrade head
 
-    log "Ingesting Phase 1 titles (this may take a few minutes)..."
+    log "Ingesting Phase 1 titles..."
     uv run python -m pipeline.cli ingest-phase1
 
     log "Seeding sample Public Laws..."
     uv run python -m pipeline.cli seed-laws
 
-    log "Reset complete."
+    log "Bootstrapping first release point (113-21, title 17)..."
+    uv run python -m pipeline.cli chrono-bootstrap 113-21 --titles 17
+
+    log "Advancing one event (first law revision)..."
+    uv run python -m pipeline.cli chrono-advance
+
+    log "Reset complete. Current state:"
+    uv run python -m pipeline.cli chrono-status
+
     exit 0
 fi
 
@@ -127,11 +135,16 @@ uv run python -m alembic upgrade head
 # ── 3. Optionally seed data ──────────────────────────────────────────────────
 
 if [[ "$SEED" == true ]]; then
-    log "Seeding Phase 1 titles (this may take a few minutes)..."
+    log "Seeding Phase 1 titles..."
     uv run python -m pipeline.cli ingest-phase1
-    log "Seeding sample Public Laws for parse-law testing..."
+    log "Seeding sample Public Laws..."
     uv run python -m pipeline.cli seed-laws
-    log "Seeding complete."
+    log "Bootstrapping first release point (113-21, title 17)..."
+    uv run python -m pipeline.cli chrono-bootstrap 113-21 --titles 17
+    log "Advancing one event (first law revision)..."
+    uv run python -m pipeline.cli chrono-advance
+    log "Seeding complete. Current state:"
+    uv run python -m pipeline.cli chrono-status
 fi
 
 # ── 4. Start backend ─────────────────────────────────────────────────────────
