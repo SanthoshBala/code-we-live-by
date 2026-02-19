@@ -2616,6 +2616,49 @@ Examples:
         help="Include notes content in output",
     )
 
+    chrono_advance_parser = subparsers.add_parser(
+        "chrono-advance",
+        help="Advance the timeline by processing the next N events",
+    )
+    chrono_advance_parser.add_argument(
+        "--count",
+        type=int,
+        default=1,
+        help="Number of events to process (default: 1)",
+    )
+    chrono_advance_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
+    chrono_advance_to_parser = subparsers.add_parser(
+        "chrono-advance-to",
+        help="Advance through all events up to a target release point",
+    )
+    chrono_advance_to_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Target release point identifier (e.g., '113-37')",
+    )
+    chrono_advance_to_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
+    chrono_validate_parser = subparsers.add_parser(
+        "chrono-validate",
+        help="Validate derived state against an RP checkpoint (read-only)",
+    )
+    chrono_validate_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier to validate against (e.g., '113-37')",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2951,6 +2994,29 @@ Examples:
                 revision_id=args.revision,
                 show_history=args.history,
                 show_notes=args.notes,
+            )
+        )
+
+    elif args.command == "chrono-advance":
+        return asyncio.run(
+            chrono_advance_command(
+                count=args.count,
+                download_dir=args.dir,
+            )
+        )
+
+    elif args.command == "chrono-advance-to":
+        return asyncio.run(
+            chrono_advance_to_command(
+                release_point=args.release_point,
+                download_dir=args.dir,
+            )
+        )
+
+    elif args.command == "chrono-validate":
+        return asyncio.run(
+            chrono_validate_command(
+                release_point=args.release_point,
             )
         )
 
@@ -3490,6 +3556,126 @@ def _print_section_state(
                 print(f"    {line}")
         else:
             print("  [No notes]")
+
+
+async def chrono_advance_command(
+    count: int,
+    download_dir: Path,
+) -> int:
+    """Advance the timeline by processing the next N events."""
+    from app.models.base import async_session_maker
+    from pipeline.chrono.play_forward import PlayForwardEngine
+
+    downloader = OLRCDownloader(download_dir=download_dir)
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        engine = PlayForwardEngine(session, downloader, parser)
+        try:
+            result = await engine.advance(count=count)
+        except RuntimeError as exc:
+            logger.error(str(exc))
+            return 1
+
+    print(f"\nAdvance result ({result.events_processed} event(s) processed):")
+    print(f"  Laws applied:  {result.laws_applied}")
+    print(f"  Laws skipped:  {result.laws_skipped}")
+    print(f"  Laws failed:   {result.laws_failed}")
+    print(f"  RPs ingested:  {result.rps_ingested}")
+    print(f"  Revisions:     {result.revisions_created}")
+    print(f"  Elapsed:       {result.elapsed_seconds:.1f}s")
+
+    if result.checkpoint_result:
+        _print_checkpoint_result(result.checkpoint_result)
+
+    return 0
+
+
+async def chrono_advance_to_command(
+    release_point: str,
+    download_dir: Path,
+) -> int:
+    """Advance through all events up to a target release point."""
+    from app.models.base import async_session_maker
+    from pipeline.chrono.play_forward import PlayForwardEngine
+
+    downloader = OLRCDownloader(download_dir=download_dir)
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        engine = PlayForwardEngine(session, downloader, parser)
+        try:
+            result = await engine.advance_to(release_point)
+        except (RuntimeError, ValueError) as exc:
+            logger.error(str(exc))
+            return 1
+
+    print(
+        f"\nAdvance-to {release_point} ({result.events_processed} event(s) processed):"
+    )
+    print(f"  Laws applied:  {result.laws_applied}")
+    print(f"  Laws skipped:  {result.laws_skipped}")
+    print(f"  Laws failed:   {result.laws_failed}")
+    print(f"  RPs ingested:  {result.rps_ingested}")
+    print(f"  Revisions:     {result.revisions_created}")
+    print(f"  Elapsed:       {result.elapsed_seconds:.1f}s")
+
+    if result.checkpoint_result:
+        _print_checkpoint_result(result.checkpoint_result)
+
+    return 0
+
+
+async def chrono_validate_command(
+    release_point: str,
+) -> int:
+    """Validate derived state against an RP checkpoint (read-only)."""
+    from app.models.base import async_session_maker
+    from pipeline.chrono.play_forward import PlayForwardEngine
+
+    downloader = OLRCDownloader()
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        engine = PlayForwardEngine(session, downloader, parser)
+        try:
+            checkpoint = await engine.validate_at_rp(release_point)
+        except ValueError as exc:
+            logger.error(str(exc))
+            return 1
+
+    if checkpoint is None:
+        print(f"No derived revisions found before RP {release_point}.")
+        print("Nothing to validate.")
+        return 0
+
+    _print_checkpoint_result(checkpoint)
+    return 0
+
+
+def _print_checkpoint_result(checkpoint) -> None:  # type: ignore[type-arg]
+    """Print checkpoint validation results."""
+    status = "CLEAN" if checkpoint.is_clean else "DIVERGED"
+    print(f"\n  Checkpoint validation: {status}")
+    print(f"    RP:             {checkpoint.rp_identifier}")
+    print(f"    RP revision:    {checkpoint.rp_revision_id}")
+    print(f"    Derived rev:    {checkpoint.derived_revision_id}")
+    print(f"    Sections match: {checkpoint.sections_match}")
+    print(f"    Mismatches:     {checkpoint.sections_mismatch}")
+    print(f"    Only derived:   {checkpoint.sections_only_in_derived}")
+    print(f"    Only RP:        {checkpoint.sections_only_in_rp}")
+
+    if checkpoint.mismatches:
+        print("\n    Mismatched sections:")
+        for m in checkpoint.mismatches[:30]:
+            print(
+                f"      [{m.mismatch_type:18s}] "
+                f"Title {m.title_number} § {m.section_number}  "
+                f"derived={m.derived_hash or '(none)'}  "
+                f"rp={m.rp_hash or '(none)'}"
+            )
+        if len(checkpoint.mismatches) > 30:
+            print(f"      ... and {len(checkpoint.mismatches) - 30} more")
 
 
 if __name__ == "__main__":
