@@ -49,7 +49,9 @@ def upgrade() -> None:
     op.alter_column("law_change", "section_number", nullable=False)
 
     # Drop old FK, index, and column
-    op.drop_constraint("law_change_section_id_fkey", "law_change", type_="foreignkey")
+    op.drop_constraint(
+        "fk_law_change_section_id_us_code_section", "law_change", type_="foreignkey"
+    )
     op.drop_index("idx_change_section", table_name="law_change")
     op.drop_index("idx_change_law_section", table_name="law_change")
     op.drop_column("law_change", "section_id")
@@ -112,7 +114,7 @@ def downgrade() -> None:
 
     op.alter_column("law_change", "section_id", nullable=False)
     op.create_foreign_key(
-        "law_change_section_id_fkey",
+        "fk_law_change_section_id_us_code_section",
         "law_change",
         "us_code_section",
         ["section_id"],
