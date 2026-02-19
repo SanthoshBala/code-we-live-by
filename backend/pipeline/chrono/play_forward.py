@@ -319,6 +319,7 @@ class PlayForwardEngine:
             logger.exception(
                 f"Failed to apply law PL {event.congress}-{event.law_number}"
             )
+            await self.session.rollback()
             result.laws_failed += 1
             result.events_processed += 1
             return parent_revision_id, sequence_number
@@ -351,6 +352,7 @@ class PlayForwardEngine:
             await self.session.commit()
         except Exception:
             logger.exception(f"Failed to ingest RP {event.identifier}")
+            await self.session.rollback()
             result.events_processed += 1
             return parent_revision_id, sequence_number
 
