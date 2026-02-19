@@ -50,6 +50,22 @@ class SnapshotService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def get_head_revision_id(self) -> int | None:
+        """Return the latest INGESTED revision's ID.
+
+        Returns None if no revisions have been ingested yet.
+        """
+        from app.models.enums import RevisionStatus
+
+        stmt = (
+            select(CodeRevision.revision_id)
+            .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+            .order_by(CodeRevision.sequence_number.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_section_at_revision(
         self,
         title_number: int,

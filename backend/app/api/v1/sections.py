@@ -1,6 +1,6 @@
 """Section endpoints for viewing US Code section content."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.us_code import get_section
@@ -14,10 +14,11 @@ router = APIRouter()
 async def read_section(
     title_number: int,
     section_number: str,
+    revision: int | None = Query(None, description="Revision ID (default: HEAD)"),
     session: AsyncSession = Depends(get_async_session),
 ) -> SectionViewerSchema:
     """Get the full content of a US Code section."""
-    result = await get_section(session, title_number, section_number)
+    result = await get_section(session, title_number, section_number, revision)
     if result is None:
         raise HTTPException(
             status_code=404,
