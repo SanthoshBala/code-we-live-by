@@ -3,9 +3,8 @@
 #
 # Usage:
 #   ./dev.sh              Start Postgres, backend, and frontend
-#   ./dev.sh --seed       Also build chronology: ingest titles, load laws, bootstrap
-#                         first RP, apply first law
-#   ./dev.sh --phase1     Same as --seed but Phase 1 titles only (faster)
+#   ./dev.sh --seed       Also build chronology: bootstrap RP, load laws,
+#                         advance chronology
 #   ./dev.sh stop         Stop Postgres container
 #   ./dev.sh reset        Destroy DB and rebuild everything from scratch
 #
@@ -80,19 +79,16 @@ if [[ "${1:-}" == "reset" ]]; then
     cd "$BACKEND_DIR"
     uv run python -m alembic upgrade head
 
-    log "Step 1/5: Ingesting all US Code titles (this may take a while)..."
-    uv run python -m pipeline.cli ingest-titles
-
-    log "Step 2/5: Ingesting all Public Laws for Congress 113..."
-    uv run python -m pipeline.cli govinfo-ingest-congress 113
-
-    log "Step 3/5: Bootstrapping oldest release point..."
+    log "Step 1/4: Bootstrapping oldest release point (downloads all titles)..."
     uv run python -m pipeline.cli chrono-bootstrap
 
-    log "Step 4/5: Building chronology..."
+    log "Step 2/4: Ingesting all Public Laws for Congress 113..."
+    uv run python -m pipeline.cli govinfo-ingest-congress 113
+
+    log "Step 3/4: Checking chronology status..."
     uv run python -m pipeline.cli chrono-status
 
-    log "Step 5/5: Applying first law after RP (auto-fetches and parses)..."
+    log "Step 4/4: Applying first law after RP (auto-fetches and parses)..."
     uv run python -m pipeline.cli chrono-advance
 
     log "Reset complete. Current state:"
@@ -104,11 +100,9 @@ fi
 # ── Parse flags ───────────────────────────────────────────────────────────────
 
 SEED=false
-PHASE1_ONLY=false
 for arg in "$@"; do
     case "$arg" in
         --seed) SEED=true ;;
-        --phase1) SEED=true; PHASE1_ONLY=true ;;
         *) err "Unknown argument: $arg"; exit 1 ;;
     esac
 done
@@ -142,21 +136,18 @@ uv run python -m alembic upgrade head
 # ── 3. Optionally seed data ──────────────────────────────────────────────────
 
 if [[ "$SEED" == true ]]; then
-    if [[ "$PHASE1_ONLY" == true ]]; then
-        log "Step 1/5: Ingesting Phase 1 titles only..."
-        uv run python -m pipeline.cli ingest-titles --phase1
-    else
-        log "Step 1/5: Ingesting all US Code titles (this may take a while)..."
-        uv run python -m pipeline.cli ingest-titles
-    fi
-    log "Step 2/5: Ingesting all Public Laws for Congress 113..."
-    uv run python -m pipeline.cli govinfo-ingest-congress 113
-    log "Step 3/5: Bootstrapping oldest release point..."
+    log "Step 1/4: Bootstrapping oldest release point (downloads all titles)..."
     uv run python -m pipeline.cli chrono-bootstrap
-    log "Step 4/5: Building chronology..."
+
+    log "Step 2/4: Ingesting all Public Laws for Congress 113..."
+    uv run python -m pipeline.cli govinfo-ingest-congress 113
+
+    log "Step 3/4: Checking chronology status..."
     uv run python -m pipeline.cli chrono-status
-    log "Step 5/5: Applying first law after RP (auto-fetches and parses)..."
+
+    log "Step 4/4: Applying first law after RP (auto-fetches and parses)..."
     uv run python -m pipeline.cli chrono-advance
+
     log "Chronology built. Current state:"
     uv run python -m pipeline.cli chrono-status
 fi
