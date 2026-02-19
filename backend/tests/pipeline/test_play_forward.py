@@ -8,7 +8,6 @@ import pytest
 from app.models.enums import RevisionStatus, RevisionType
 from pipeline.chrono.play_forward import AdvanceResult, PlayForwardEngine
 from pipeline.chrono.revision_builder import RevisionBuildResult
-from pipeline.legal_parser.law_change_service import LawChangeResult
 from pipeline.olrc.rp_ingestor import RPIngestResult
 from pipeline.olrc.snapshot_service import SectionState
 from pipeline.timeline import TimelineEvent, TimelineEventType
@@ -177,7 +176,9 @@ class TestAdvanceSingleLaw:
             patch.object(engine, "_get_current_head", return_value=head),
             patch.object(engine.timeline_builder, "build", return_value=events),
             patch.object(engine, "_find_law", return_value=law_mock),
-            patch.object(engine, "_ensure_law_changes", return_value=None),
+            patch.object(
+                engine.law_change_service, "process_law", return_value=MagicMock()
+            ),
             patch.object(
                 engine.revision_builder,
                 "build_revision",
@@ -287,7 +288,9 @@ class TestAdvanceToRP:
             patch.object(engine, "_get_current_head", return_value=head),
             patch.object(engine.timeline_builder, "build", return_value=events),
             patch.object(engine, "_find_law", return_value=law_mock),
-            patch.object(engine, "_ensure_law_changes", return_value=None),
+            patch.object(
+                engine.law_change_service, "process_law", return_value=MagicMock()
+            ),
             patch.object(
                 engine.revision_builder, "build_revision", side_effect=mock_build
             ),
@@ -469,71 +472,43 @@ class TestValidateAtRP:
         assert checkpoint is None
 
 
-class TestEnsureLawChanges:
+class TestAutoProcessLaw:
     @pytest.mark.asyncio
-    async def test_skips_when_changes_exist(self) -> None:
-        """No-op when LawChange records already exist for the law."""
+    async def test_process_law_error_does_not_block_advance(self) -> None:
+        """Auto-processing failure logs error but advance continues."""
         session = AsyncMock()
         engine = _make_engine(session)
+
+        head = _make_revision(revision_id=1, sequence_number=1, release_point_id=10)
+        events = [
+            _make_rp_event("113-21", 113, 21, date(2014, 1, 1)),
+            _make_law_event(113, 22, law_id=100, event_date=date(2014, 6, 1)),
+        ]
 
         law_mock = MagicMock()
         law_mock.law_id = 100
         law_mock.congress = 113
         law_mock.law_number = "22"
 
-        # session.execute returns count > 0
-        session.execute = AsyncMock(
-            return_value=MagicMock(scalar=MagicMock(return_value=5))
-        )
+        build_result = _make_build_result(revision_id=2, law_id=100)
 
-        with patch.object(engine.law_change_service, "process_law") as mock_process:
-            await engine._ensure_law_changes(law_mock)
-
-        mock_process.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_auto_processes_when_no_changes(self) -> None:
-        """Calls LawChangeService.process_law when no LawChange records exist."""
-        session = AsyncMock()
-        engine = _make_engine(session)
-
-        law_mock = MagicMock()
-        law_mock.law_id = 100
-        law_mock.congress = 113
-        law_mock.law_number = "22"
-
-        # session.execute returns count == 0
-        session.execute = AsyncMock(
-            return_value=MagicMock(scalar=MagicMock(return_value=0))
-        )
-
-        lc_result = LawChangeResult(law=law_mock)
-        with patch.object(
-            engine.law_change_service, "process_law", return_value=lc_result
-        ) as mock_process:
-            await engine._ensure_law_changes(law_mock)
-
-        mock_process.assert_called_once_with(congress=113, law_number=22)
-
-    @pytest.mark.asyncio
-    async def test_handles_process_error_gracefully(self) -> None:
-        """Logs and continues if auto-processing fails."""
-        session = AsyncMock()
-        engine = _make_engine(session)
-
-        law_mock = MagicMock()
-        law_mock.law_id = 100
-        law_mock.congress = 113
-        law_mock.law_number = "22"
-
-        session.execute = AsyncMock(
-            return_value=MagicMock(scalar=MagicMock(return_value=0))
-        )
-
-        with patch.object(
-            engine.law_change_service,
-            "process_law",
-            side_effect=RuntimeError("GovInfo unavailable"),
+        with (
+            patch.object(engine, "_get_current_head", return_value=head),
+            patch.object(engine.timeline_builder, "build", return_value=events),
+            patch.object(engine, "_find_law", return_value=law_mock),
+            patch.object(
+                engine.law_change_service,
+                "process_law",
+                side_effect=RuntimeError("GovInfo unavailable"),
+            ),
+            patch.object(
+                engine.revision_builder,
+                "build_revision",
+                return_value=build_result,
+            ),
         ):
-            # Should not raise — logs and continues
-            await engine._ensure_law_changes(law_mock)
+            result = await engine.advance(count=1)
+
+        # Advance still succeeds (build_revision runs with whatever state exists)
+        assert result.events_processed == 1
+        assert result.laws_applied == 1

@@ -15,12 +15,12 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.enums import RevisionStatus, RevisionType
-from app.models.public_law import LawChange, PublicLaw
+from app.models.public_law import PublicLaw
 from app.models.revision import CodeRevision
 from pipeline.chrono.checkpoint import CheckpointResult, validate_checkpoint
 from pipeline.chrono.revision_builder import RevisionBuilder
@@ -314,8 +314,17 @@ class PlayForwardEngine:
             result.events_processed += 1
             return parent_revision_id, sequence_number
 
-        # Auto-process: generate LawChange records if none exist
-        await self._ensure_law_changes(law)
+        # Auto-process: generate LawChange records if none exist (idempotent)
+        try:
+            await self.law_change_service.process_law(
+                congress=law.congress,
+                law_number=int(law.law_number),
+            )
+        except Exception:
+            logger.exception(
+                f"Failed to auto-process PL {event.congress}-{event.law_number}"
+            )
+            await self.session.rollback()
 
         try:
             build_result = await self.revision_builder.build_revision(
@@ -343,48 +352,6 @@ class PlayForwardEngine:
         result.events_processed += 1
         result.revisions_created.append(build_result.revision_id)
         return build_result.revision_id, sequence_number + 1
-
-    async def _ensure_law_changes(self, law: PublicLaw) -> None:
-        """Ensure LawChange records exist for a law, processing it if needed.
-
-        Fetches law text from GovInfo, parses amendments, resolves sections,
-        generates diffs, and persists LawChange records — all automatically.
-        """
-        # Check if LawChange records already exist
-        count_stmt = select(func.count()).where(LawChange.law_id == law.law_id)
-        count_result = await self.session.execute(count_stmt)
-        count = count_result.scalar() or 0
-
-        if count > 0:
-            return
-
-        logger.info(
-            f"No LawChange records for PL {law.congress}-{law.law_number}. "
-            "Auto-processing (fetch, parse, diff)..."
-        )
-
-        try:
-            lc_result = await self.law_change_service.process_law(
-                congress=law.congress,
-                law_number=int(law.law_number),
-            )
-
-            if lc_result.errors:
-                logger.warning(
-                    f"Errors processing PL {law.congress}-{law.law_number}: "
-                    f"{lc_result.errors}"
-                )
-            else:
-                logger.info(
-                    f"Auto-processed PL {law.congress}-{law.law_number}: "
-                    f"{len(lc_result.amendments)} amendments, "
-                    f"{len(lc_result.changes)} LawChange records"
-                )
-        except Exception:
-            logger.exception(
-                f"Failed to auto-process PL {law.congress}-{law.law_number}"
-            )
-            await self.session.rollback()
 
     async def _process_rp(
         self,
