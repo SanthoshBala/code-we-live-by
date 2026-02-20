@@ -6,6 +6,8 @@ import Sidebar from '@/components/ui/Sidebar';
 import TitleList from '@/components/tree/TitleList';
 import DirectoryView from '@/components/directory/DirectoryView';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
+import { useSection } from '@/hooks/useSection';
+import { revisionLabel } from '@/lib/revisionLabel';
 import type {
   BreadcrumbSegment,
   DirectoryItem,
@@ -106,6 +108,7 @@ export default function SectionDirectoryPage() {
   const titleNumber = Number(params.titleNumber);
   const sectionNumber = decodeURIComponent(params.sectionNumber);
   const { data: structure, isLoading } = useTitleStructure(titleNumber, true);
+  const { data: sectionData } = useSection(titleNumber, sectionNumber);
 
   const basePath = `/sections/${titleNumber}/${sectionNumber}`;
   const path = structure ? findSection(structure, sectionNumber) : null;
@@ -158,6 +161,11 @@ export default function SectionDirectoryPage() {
           title={heading}
           breadcrumbs={breadcrumbs}
           items={items}
+          revisionLabel={
+            sectionData?.last_revision
+              ? revisionLabel(sectionData.last_revision)
+              : null
+          }
         />
       )}
     </MainLayout>

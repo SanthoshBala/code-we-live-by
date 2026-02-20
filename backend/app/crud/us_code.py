@@ -11,9 +11,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
-from app.models.revision import CodeRevision
+from app.crud.revision import get_last_changed_revision_for_section
 from app.models.us_code import SectionGroup
-from app.schemas.revision import HeadRevisionSchema
 from app.schemas.us_code import (
     CodeLineSchema,
     SectionGroupTreeSchema,
@@ -355,15 +354,10 @@ async def get_section(
             max_year = max(a["year"] for a in amendments if "year" in a)
             last_modified_date = date(max_year, 1, 1)
 
-    # Load the revision that last touched this section
-    last_revision = None
-    if state.revision_id:
-        rev_result = await session.execute(
-            select(CodeRevision).where(CodeRevision.revision_id == state.revision_id)
-        )
-        rev = rev_result.scalar_one_or_none()
-        if rev:
-            last_revision = HeadRevisionSchema.model_validate(rev)
+    # Find the revision that last *changed* this section's content
+    last_revision = await get_last_changed_revision_for_section(
+        session, title_number, section_number
+    )
 
     return SectionViewerSchema(
         title_number=title_number,
