@@ -7,7 +7,7 @@ SectionGroup (populated by both ingestion and bootstrap).
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
@@ -115,17 +115,41 @@ async def get_all_titles(
     result = await session.execute(stmt)
     title_groups = result.scalars().all()
 
-    # Resolve HEAD revision and load all sections once
+    # Resolve HEAD revision and count sections per title via SQL.
+    # Uses a window function to find the latest snapshot per section across
+    # the revision chain, then counts non-deleted sections per title.
     head_id = await _resolve_head(session, revision_id)
 
     sections_by_title: dict[int, int] = {}
     if head_id is not None:
+        # Build the revision chain IDs
         svc = SnapshotService(session)
-        all_states = await svc.get_all_sections_at_revision(head_id)
-        for s in all_states:
-            sections_by_title[s.title_number] = (
-                sections_by_title.get(s.title_number, 0) + 1
+        chain = await svc._get_revision_chain(head_id)
+
+        if chain:
+            # For each (title_number, section_number), find the snapshot at the
+            # most recent revision in the chain. Use raw SQL with DISTINCT ON
+            # for efficiency — avoids loading 97k+ ORM objects.
+            # Revision chain is ordered newest-first, so we order by
+            # array_position to get the newest snapshot per section.
+            result = await session.execute(
+                text("""
+                    SELECT title_number, count(*) AS sec_count
+                    FROM (
+                        SELECT DISTINCT ON (title_number, section_number)
+                            title_number, section_number, is_deleted
+                        FROM section_snapshot
+                        WHERE revision_id = ANY(:chain)
+                        ORDER BY title_number, section_number,
+                            array_position(:chain, revision_id)
+                    ) latest
+                    WHERE NOT is_deleted
+                    GROUP BY title_number
+                """),
+                {"chain": chain},
             )
+            for row in result:
+                sections_by_title[row[0]] = row[1]
 
     # Count child groups per title in one query
     child_counts_stmt = (
@@ -202,16 +226,54 @@ async def get_title_structure(
         children = children_by_parent.get(g.group_id, [])
         attributes.set_committed_value(g, "children", children)
 
-    # Load sections from snapshots at HEAD
+    # Load sections for this title from snapshots at HEAD.
+    # Uses DISTINCT ON to find the latest snapshot per section across the
+    # revision chain without loading all 97k+ snapshots into Python.
     head_id = await _resolve_head(session, revision_id)
     sections_by_group: dict[int, list[SectionState]] = {}
 
     if head_id is not None:
         svc = SnapshotService(session)
-        all_states = await svc.get_all_sections_at_revision(head_id)
-        for state in all_states:
-            if state.title_number == title_number and state.group_id is not None:
-                sections_by_group.setdefault(state.group_id, []).append(state)
+        chain = await svc._get_revision_chain(head_id)
+
+        if chain:
+            result = await session.execute(
+                text("""
+                    SELECT DISTINCT ON (title_number, section_number)
+                        snapshot_id, revision_id, title_number, section_number,
+                        heading, text_content, normalized_provisions, notes,
+                        normalized_notes, text_hash, notes_hash, full_citation,
+                        is_deleted, group_id, sort_order
+                    FROM section_snapshot
+                    WHERE revision_id = ANY(:chain)
+                      AND title_number = :title
+                    ORDER BY title_number, section_number,
+                        array_position(:chain, revision_id)
+                """),
+                {"chain": chain, "title": title_number},
+            )
+            for row in result:
+                if row.is_deleted:
+                    continue
+                state = SectionState(
+                    title_number=row.title_number,
+                    section_number=row.section_number,
+                    heading=row.heading,
+                    text_content=row.text_content,
+                    text_hash=row.text_hash,
+                    normalized_provisions=row.normalized_provisions,
+                    notes=row.notes,
+                    normalized_notes=row.normalized_notes,
+                    notes_hash=row.notes_hash,
+                    full_citation=row.full_citation,
+                    snapshot_id=row.snapshot_id,
+                    revision_id=row.revision_id,
+                    is_deleted=row.is_deleted,
+                    group_id=row.group_id,
+                    sort_order=row.sort_order,
+                )
+                if state.group_id is not None:
+                    sections_by_group.setdefault(state.group_id, []).append(state)
 
     # Build the tree
     title_obj = all_groups[title_group.group_id]
