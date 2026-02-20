@@ -137,6 +137,17 @@ export interface SectionNotes {
   renumbered_from: string | null;
 }
 
+// --- Revision types ---
+
+/** HEAD revision metadata (latest ingested commit). */
+export interface HeadRevision {
+  revision_id: number;
+  revision_type: string;
+  effective_date: string;
+  summary: string | null;
+  sequence_number: number;
+}
+
 // --- Law viewer types ---
 
 /** Summary of a Public Law for index listing. */

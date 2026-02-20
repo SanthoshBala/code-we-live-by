@@ -5,6 +5,7 @@ import type {
   LawSummary,
   LawText,
   ParsedAmendment,
+  HeadRevision,
 } from './types';
 
 const API_BASE = '/api/v1';
@@ -68,6 +69,15 @@ export async function fetchLawText(
     throw new Error(
       `Failed to fetch law text for PL ${congress}-${lawNumber}: ${res.status}`
     );
+  }
+  return res.json();
+}
+
+/** Fetch the HEAD (latest ingested) revision. */
+export async function fetchHeadRevision(): Promise<HeadRevision> {
+  const res = await fetch(`${API_BASE}/revisions/head`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch head revision: ${res.status}`);
   }
   return res.json();
 }

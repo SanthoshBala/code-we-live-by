@@ -17,6 +17,7 @@ from app.schemas.public_law import (
     PublicLawSchema,
     SourceLawSchema,
 )
+from app.schemas.revision import HeadRevisionSchema
 from app.schemas.us_code import (
     AmendmentSchema,
     CodeLineSchema,
@@ -33,6 +34,8 @@ from app.schemas.us_code import (
 )
 
 __all__ = [
+    # Revision schemas
+    "HeadRevisionSchema",
     # Public Law schemas
     "PublicLawSchema",
     "ActSchema",
