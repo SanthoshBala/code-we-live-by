@@ -115,36 +115,40 @@ async def get_all_titles(
     result = await session.execute(stmt)
     title_groups = result.scalars().all()
 
-    # Resolve HEAD revision for section counts
+    # Resolve HEAD revision and load all sections once
     head_id = await _resolve_head(session, revision_id)
+
+    sections_by_title: dict[int, int] = {}
+    if head_id is not None:
+        svc = SnapshotService(session)
+        all_states = await svc.get_all_sections_at_revision(head_id)
+        for s in all_states:
+            sections_by_title[s.title_number] = (
+                sections_by_title.get(s.title_number, 0) + 1
+            )
+
+    # Count child groups per title in one query
+    child_counts_stmt = (
+        select(SectionGroup.parent_id, func.count(SectionGroup.group_id))
+        .where(SectionGroup.parent_id.in_([tg.group_id for tg in title_groups]))
+        .group_by(SectionGroup.parent_id)
+    )
+    child_counts_result = await session.execute(child_counts_stmt)
+    child_counts: dict[int | None, int] = {
+        row[0]: row[1] for row in child_counts_result.all()
+    }
 
     titles: list[TitleSummarySchema] = []
     for tg in title_groups:
         title_number = int(tg.number)
-
-        # Count sections at HEAD from snapshots
-        sec_count = 0
-        if head_id is not None:
-            svc = SnapshotService(session)
-            states = await svc.get_all_sections_at_revision(head_id)
-            sec_count = sum(1 for s in states if s.title_number == title_number)
-
-        # Count direct child groups
-        ch_count_result = await session.execute(
-            select(func.count(SectionGroup.group_id)).where(
-                SectionGroup.parent_id == tg.group_id
-            )
-        )
-        ch_count = ch_count_result.scalar() or 0
-
         titles.append(
             TitleSummarySchema(
                 title_number=title_number,
                 title_name=tg.name,
                 is_positive_law=tg.is_positive_law,
                 positive_law_date=tg.positive_law_date,
-                chapter_count=ch_count,
-                section_count=sec_count,
+                chapter_count=child_counts.get(tg.group_id, 0),
+                section_count=sections_by_title.get(title_number, 0),
             )
         )
     return titles
