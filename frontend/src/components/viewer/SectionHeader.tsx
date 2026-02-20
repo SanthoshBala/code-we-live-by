@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import type { BreadcrumbSegment, ItemStatus } from '@/lib/types';
+import type { BreadcrumbSegment, HeadRevision, ItemStatus } from '@/lib/types';
 import { statusBadge } from '@/lib/statusStyles';
+import { revisionLabel } from '@/lib/revisionLabel';
 import PageHeader from '@/components/ui/PageHeader';
 
 interface SectionHeaderProps {
@@ -11,6 +12,7 @@ interface SectionHeaderProps {
   isPositiveLaw: boolean;
   status: ItemStatus;
   latestAmendment?: { publicLawId: string; year: number } | null;
+  lastRevision?: HeadRevision | null;
 }
 
 function Breadcrumbs({ segments }: { segments: BreadcrumbSegment[] }) {
@@ -41,6 +43,7 @@ export default function SectionHeader({
   isPositiveLaw,
   status,
   latestAmendment,
+  lastRevision,
 }: SectionHeaderProps) {
   const badge = statusBadge(status);
   return (
@@ -78,6 +81,11 @@ export default function SectionHeader({
               Last amended by{' '}
               <span className="font-mono">{latestAmendment.publicLawId}</span> (
               {latestAmendment.year})
+            </span>
+          )}
+          {lastRevision && (
+            <span className="text-gray-500">
+              Current through: {revisionLabel(lastRevision)}
             </span>
           )}
         </>

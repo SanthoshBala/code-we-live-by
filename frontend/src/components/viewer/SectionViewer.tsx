@@ -57,6 +57,7 @@ export default function SectionViewer({
         isPositiveLaw={data.is_positive_law}
         status={data.is_repealed ? 'repealed' : null}
         latestAmendment={latestAmendment}
+        lastRevision={data.last_revision}
       />
       {hasHistory && (
         <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />

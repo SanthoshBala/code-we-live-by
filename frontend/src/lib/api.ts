@@ -82,6 +82,19 @@ export async function fetchHeadRevision(): Promise<HeadRevision> {
   return res.json();
 }
 
+/** Fetch the most recent revision that affected any section in a title. */
+export async function fetchLatestRevisionForTitle(
+  titleNumber: number
+): Promise<HeadRevision> {
+  const res = await fetch(`${API_BASE}/revisions/latest?title=${titleNumber}`);
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch latest revision for title ${titleNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
 /** Fetch parsed amendments for a public law (live parse). */
 export async function fetchLawAmendments(
   congress: number,

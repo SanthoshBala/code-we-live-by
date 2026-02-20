@@ -219,4 +219,5 @@ export interface SectionView {
   is_positive_law: boolean;
   is_repealed: boolean;
   notes: SectionNotes | null;
+  last_revision?: HeadRevision | null;
 }

@@ -2,27 +2,7 @@
 
 import Link from 'next/link';
 import { useHeadRevision } from '@/hooks/useHeadRevision';
-
-function formatRevisionLabel(
-  revisionType: string,
-  summary: string | null,
-  effectiveDate: string
-): string {
-  const date = new Date(effectiveDate + 'T00:00:00');
-  const formatted = date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
-  if (summary) {
-    return `${summary} · ${formatted}`;
-  }
-
-  const typeLabel =
-    revisionType === 'Release_Point' ? 'Release Point' : 'Public Law';
-  return `${typeLabel} · ${formatted}`;
-}
+import { formatRevisionLabel } from '@/lib/revisionLabel';
 
 export default function Header() {
   const { data: revision } = useHeadRevision();
