@@ -247,7 +247,7 @@ class RevisionBuilder:
         text_hash = compute_text_hash(current_text) if current_text else None
         notes_hash = compute_text_hash(updated_raw_notes) if updated_raw_notes else None
 
-        # Create snapshot
+        # Create snapshot, carrying forward structural metadata from parent
         snapshot = SectionSnapshot(
             revision_id=revision.revision_id,
             title_number=title_number,
@@ -267,5 +267,7 @@ class RevisionBuilder:
                 else f"{title_number} USC {section_number}"
             ),
             is_deleted=is_deleted,
+            group_id=parent_state.group_id if parent_state else None,
+            sort_order=parent_state.sort_order if parent_state else 0,
         )
         self.session.add(snapshot)
