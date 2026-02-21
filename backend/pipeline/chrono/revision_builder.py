@@ -30,15 +30,90 @@ from pipeline.olrc.snapshot_service import SnapshotService
 logger = logging.getLogger(__name__)
 
 
+def _parse_struck_subsections(text: str) -> list[str] | None:
+    """Extract subsection markers from a 'striking subsections (X) and (Y)' instruction.
+
+    Returns a list of single-letter/number markers like ['a', 'b'], or None
+    if the instruction doesn't match this pattern.
+    """
+    import re
+
+    m = re.search(
+        r"striking\s+subsections?\s+"
+        r"((?:\([a-zA-Z0-9]+\)(?:\s*(?:,\s*|\s+and\s+))?)+)",
+        text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    markers = re.findall(r"\(([a-zA-Z0-9]+)\)", m.group(1))
+    return markers if markers else None
+
+
+def _find_subsection_range(
+    provisions: list[dict[str, Any]], markers: list[str]
+) -> tuple[int, int] | None:
+    """Find the contiguous index range of provision lines belonging to
+    the given subsection markers.
+
+    Returns (start_index, end_index) inclusive, stopping at the next
+    top-level subsection that is NOT in the target set.
+
+    "Top-level" means the same marker style as the struck markers.
+    E.g. if striking (a) and (b) (lowercase letters), then (c) is a
+    boundary but (1), (A), (i) are children and should be included.
+    """
+    import re
+
+    marker_set = {f"({m})" for m in markers}
+
+    # Determine what kind of markers we're striking to know what
+    # constitutes a same-level boundary.  E.g. lowercase letters →
+    # only other lowercase-letter markers are boundaries.
+    sample = markers[0]
+    if sample.isdigit():
+        boundary_re = re.compile(r"^\([0-9]+\)$")
+    elif sample.isupper():
+        boundary_re = re.compile(r"^\([A-Z]+\)$")
+    else:
+        # lowercase letters (most common: subsections (a), (b), …)
+        boundary_re = re.compile(r"^\([a-z]+\)$")
+
+    start_idx: int | None = None
+    end_idx: int | None = None
+
+    for i, line in enumerate(provisions):
+        line_marker = line.get("marker", "")
+        if line_marker in marker_set:
+            if start_idx is None:
+                start_idx = i
+            end_idx = i
+        elif start_idx is not None:
+            # Stop at the next same-level marker outside the target set
+            if line_marker and boundary_re.match(line_marker):
+                break
+            end_idx = i
+
+    if start_idx is None:
+        return None
+    assert end_idx is not None
+    return (start_idx, end_idx)
+
+
 def _patch_provisions(
     parent_provisions: Any,
     changes: list[LawChange],
 ) -> Any:
     """Apply text replacements to provision lines, preserving structure.
 
-    For each MODIFY/DELETE change with old_text, replaces occurrences in
-    each provision's ``content`` field.  Returns a new list (or None if
-    the parent had no provisions).
+    Handles two cases:
+    1. Simple text replacement: old_text is found in a provision line's content.
+    2. Structural replacement: old_text is None but the description references
+       subsections to strike (e.g., "striking subsections (a) and (b) and
+       inserting the following"). Identifies the provision lines belonging
+       to those subsections and replaces them with new_text lines.
+
+    Returns a new list (or None if the parent had no provisions).
     """
     if not isinstance(parent_provisions, list):
         return parent_provisions
@@ -49,40 +124,94 @@ def _patch_provisions(
     patched = copy.deepcopy(parent_provisions)
 
     for change in changes:
-        if change.old_text is None:
-            continue
-        replacement = change.new_text or ""
         if change.change_type not in (ChangeType.MODIFY, ChangeType.DELETE):
             continue
 
-        for line in patched:
-            content = line.get("content", "")
-            if not content:
-                continue
+        # Case 1: Simple text replacement (old_text present)
+        if change.old_text is not None:
+            replacement = change.new_text or ""
+            for line in patched:
+                content = line.get("content", "")
+                if not content:
+                    continue
 
-            # Exact match
-            if change.old_text in content:
-                line["content"] = content.replace(change.old_text, replacement)
-                continue
+                # Exact match
+                if change.old_text in content:
+                    line["content"] = content.replace(change.old_text, replacement)
+                    continue
 
-            # Whitespace-normalised match (same strategy as amendment_applicator)
-            parts = change.old_text.split()
-            ws_pattern = r"\s+".join(re.escape(part) for part in parts)
-            ws_re = re.compile(ws_pattern)
-            match = ws_re.search(content)
-            if match:
-                line["content"] = (
-                    content[: match.start()] + replacement + content[match.end() :]
-                )
-                continue
+                # Whitespace-normalised match
+                parts = change.old_text.split()
+                ws_pattern = r"\s+".join(re.escape(part) for part in parts)
+                ws_re = re.compile(ws_pattern)
+                match = ws_re.search(content)
+                if match:
+                    line["content"] = (
+                        content[: match.start()] + replacement + content[match.end() :]
+                    )
+                    continue
 
-            # Case-insensitive fallback
-            ci_re = re.compile(ws_pattern, re.IGNORECASE)
-            match = ci_re.search(content)
-            if match:
-                line["content"] = (
-                    content[: match.start()] + replacement + content[match.end() :]
-                )
+                # Case-insensitive fallback
+                ci_re = re.compile(ws_pattern, re.IGNORECASE)
+                match = ci_re.search(content)
+                if match:
+                    line["content"] = (
+                        content[: match.start()] + replacement + content[match.end() :]
+                    )
+            continue
+
+        # Case 2: Structural replacement (old_text is None, new_text present)
+        if change.new_text is None:
+            continue
+
+        # Parse the instruction from description to find struck subsections
+        instruction = change.description or ""
+        struck = _parse_struck_subsections(instruction)
+        if not struck:
+            continue
+
+        span = _find_subsection_range(patched, struck)
+        if not span:
+            continue
+
+        start_idx, end_idx = span
+
+        # Build replacement lines from new_text with basic marker
+        # detection.  We don't attempt indent inference here because
+        # heuristic-based nesting is unreliable without XML structure;
+        # the next release-point ingestion will supply proper formatting.
+        new_lines_text = change.new_text.split("\n")
+        base_line_number = int(patched[start_idx].get("line_number", start_idx + 1))
+        base_char = int(patched[start_idx].get("start_char", 0))
+        char_offset = base_char
+        line_num = base_line_number
+        replacement_provisions: list[dict[str, Any]] = []
+        for text in new_lines_text:
+            text = text.strip()
+            if not text:
+                continue
+            marker_match = re.match(r"^(\([a-zA-Z0-9]+\)(?:\([A-Z0-9]+\))?)", text)
+            marker = marker_match.group(1) if marker_match else None
+            replacement_provisions.append(
+                {
+                    "line_number": line_num,
+                    "content": text,
+                    "indent_level": 0,
+                    "marker": marker,
+                    "is_header": False,
+                    "start_char": char_offset,
+                    "end_char": char_offset + len(text),
+                }
+            )
+            line_num += 1
+            char_offset += len(text) + 1
+
+        patched[start_idx : end_idx + 1] = replacement_provisions
+
+    # Renumber all lines sequentially so replacements that change the
+    # line count don't leave gaps or duplicates.
+    for i, line in enumerate(patched):
+        line["line_number"] = i + 1
 
     return patched
 
@@ -245,6 +374,8 @@ class RevisionBuilder:
         any_applied = False
         descriptions: list[str] = []
 
+        has_structural_changes = False
+
         for change in section_changes:
             app_result = apply_text_change(
                 text_content=current_text,
@@ -276,14 +407,29 @@ class RevisionBuilder:
                 result.sections_skipped += 1
 
             elif app_result.status == ApplicationStatus.FAILED:
-                result.sections_failed += 1
-                logger.warning(
-                    "Failed to apply %s change to %d USC %s: %s",
-                    change.change_type.value,
-                    title_number,
-                    section_number,
-                    app_result.description,
-                )
+                # Structural amendments (MODIFY with old_text=None) can't be
+                # applied at the text level, but _patch_provisions handles
+                # them at the provision-line level.  Mark as applied so a
+                # snapshot is still created.
+                if (
+                    change.change_type == ChangeType.MODIFY
+                    and change.old_text is None
+                    and change.new_text is not None
+                ):
+                    any_applied = True
+                    has_structural_changes = True
+                    desc = change.description or app_result.description
+                    descriptions.append(desc)
+                    result.sections_applied += 1
+                else:
+                    result.sections_failed += 1
+                    logger.warning(
+                        "Failed to apply %s change to %d USC %s: %s",
+                        change.change_type.value,
+                        title_number,
+                        section_number,
+                        app_result.description,
+                    )
 
         # Only create a snapshot if something changed
         if not any_applied:
@@ -313,6 +459,13 @@ class RevisionBuilder:
             parent_state.normalized_provisions if parent_state else None,
             section_changes,
         )
+
+        # For structural amendments, rebuild text_content from patched
+        # provisions since apply_text_change couldn't handle them.
+        if has_structural_changes and isinstance(provisions_json, list):
+            current_text = "\n".join(
+                line.get("content", "") for line in provisions_json
+            )
 
         # Create snapshot, carrying forward structural metadata from parent
         snapshot = SectionSnapshot(

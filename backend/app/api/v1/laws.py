@@ -3,12 +3,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crud.public_law import get_law_text, get_laws_list, parse_law_amendments
+from app.crud.public_law import (
+    compute_law_diffs,
+    get_law_text,
+    get_laws_list,
+    parse_law_amendments,
+)
 from app.models.base import get_async_session
 from app.schemas.law_viewer import (
     LawSummarySchema,
     LawTextSchema,
     ParsedAmendmentSchema,
+    SectionDiffSchema,
 )
 
 router = APIRouter()
@@ -46,3 +52,13 @@ async def read_law_amendments(
 ) -> list[ParsedAmendmentSchema]:
     """Parse amendments from a law's text on-the-fly for QC."""
     return await parse_law_amendments(session, congress, law_number)
+
+
+@router.get("/{congress}/{law_number}/diffs")
+async def read_law_diffs(
+    congress: int,
+    law_number: int,
+    session: AsyncSession = Depends(get_async_session),
+) -> list[SectionDiffSchema]:
+    """Compute per-section unified diffs for a law's amendments."""
+    return await compute_law_diffs(session, congress, law_number)

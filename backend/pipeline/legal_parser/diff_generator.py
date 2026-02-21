@@ -152,12 +152,17 @@ class DiffGenerator:
 
         # Dispatch based on pattern type
         if amendment.pattern_type == PatternType.STRIKE_INSERT:
-            # Both old and new text should come from the parser
-            if not old_text:
+            if not old_text and not new_text:
                 return None
-            description = f"Strike '{_truncate(old_text)}'"
-            if new_text:
-                description += f" and insert '{_truncate(new_text)}'"
+            if old_text:
+                description = f"Strike '{_truncate(old_text)}'"
+                if new_text:
+                    description += f" and insert '{_truncate(new_text)}'"
+            else:
+                # Structural replacement (e.g., "striking subsections (a) and (b)
+                # and inserting the following"). Preserve the instruction text so
+                # the revision builder can parse which subsections to replace.
+                description = _truncate(amendment.full_match, max_len=200)
 
         elif amendment.pattern_type == PatternType.STRIKE:
             if not old_text:
