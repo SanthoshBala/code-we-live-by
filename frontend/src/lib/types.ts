@@ -214,6 +214,7 @@ export interface ParsedAmendment {
   needs_review: boolean;
   context: string;
   position_qualifier: PositionQualifier | null;
+  start_line: number | null;
 }
 
 /** Full section view returned by the section detail endpoint. */

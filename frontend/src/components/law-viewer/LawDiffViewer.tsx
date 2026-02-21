@@ -15,6 +15,12 @@ interface LawDiffViewerProps {
   isLoading: boolean;
 }
 
+/**
+ * Number of "comment" lines the section viewer injects before provisions:
+ * fullCitation, heading, "Provisions", and a blank separator line.
+ */
+const SECTION_HEADER_LINES = 4;
+
 /** Badge with background color based on change type. */
 function ChangeTypeBadge({ changeType }: { changeType: string }) {
   const colors: Record<string, string> = {
@@ -59,7 +65,7 @@ function DiffBlock({
   const lines = text.split('\n');
   const bg = variant === 'old' ? 'bg-red-100' : 'bg-green-100';
   const textColor = variant === 'old' ? 'text-red-900' : 'text-green-900';
-  const gutterColor = variant === 'old' ? 'text-red-400' : 'text-green-400';
+  const gutterColor = variant === 'old' ? 'text-red-400' : 'text-green-600';
   const prefix = variant === 'old' ? '−' : '+';
 
   return (
@@ -331,12 +337,20 @@ export default function LawDiffViewer({
                             <DiffBlock
                               text={a.old_text ?? ''}
                               variant="old"
-                              startLine={1}
+                              startLine={
+                                a.start_line
+                                  ? a.start_line + SECTION_HEADER_LINES
+                                  : 1
+                              }
                             />
                             <DiffBlock
                               text={a.new_text ?? ''}
                               variant="new"
-                              startLine={1}
+                              startLine={
+                                a.start_line
+                                  ? a.start_line + SECTION_HEADER_LINES
+                                  : 1
+                              }
                             />
                           </div>
                         ) : (

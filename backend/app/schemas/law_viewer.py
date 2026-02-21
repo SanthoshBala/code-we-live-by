@@ -66,3 +66,7 @@ class ParsedAmendmentSchema(BaseModel):
     needs_review: bool = False
     context: str = ""
     position_qualifier: PositionQualifierSchema | None = None
+    start_line: int | None = Field(
+        None,
+        description="1-indexed line number in the target section where old_text starts",
+    )

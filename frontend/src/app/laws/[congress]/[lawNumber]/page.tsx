@@ -10,9 +10,9 @@ import LawDiffViewer from '@/components/law-viewer/LawDiffViewer';
 import LawLine from '@/components/ui/LawLine';
 
 const TABS = [
-  { id: 'htm', label: 'HTM Text' },
-  { id: 'xml', label: 'XML Text' },
-  { id: 'diff', label: 'Diff View' },
+  { id: 'diff', label: 'Amendments' },
+  { id: 'htm', label: 'HTM' },
+  { id: 'xml', label: 'XML' },
 ];
 
 export default function LawViewerPage() {
@@ -20,7 +20,7 @@ export default function LawViewerPage() {
   const congress = Number(params.congress);
   const lawNumber = decodeURIComponent(params.lawNumber);
 
-  const [activeTab, setActiveTab] = useState('htm');
+  const [activeTab, setActiveTab] = useState('diff');
 
   const {
     data: lawText,

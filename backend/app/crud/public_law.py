@@ -139,6 +139,87 @@ def _amendment_to_schema(amendment: Any) -> ParsedAmendmentSchema:
     )
 
 
+def _find_line_number(provisions: list[dict[str, Any]], old_text: str) -> int | None:
+    """Find the 1-indexed line number where old_text starts in provisions.
+
+    Normalises whitespace for matching since amendment text and provision
+    content may differ in spacing.
+    """
+    import re
+
+    def normalise(s: str) -> str:
+        return re.sub(r"\s+", " ", s).strip().lower()
+
+    needle = normalise(old_text)
+    if not needle:
+        return None
+
+    # Try matching against individual lines first (most amendments touch one line)
+    for line in provisions:
+        content = normalise(line.get("content", ""))
+        if not content:
+            continue
+        if needle in content or content in needle:
+            return int(line.get("line_number", 1))
+
+    # Multi-line: concatenate all provision text and find the offset
+    full_text_parts: list[tuple[int, str]] = []
+    for line in provisions:
+        ln = int(line.get("line_number", 1))
+        full_text_parts.append((ln, line.get("content", "")))
+
+    concat = ""
+    line_starts: list[tuple[int, int]] = []  # (char_offset, line_number)
+    for ln, content in full_text_parts:
+        line_starts.append((len(concat), ln))
+        concat += content + " "
+
+    concat_norm = normalise(concat)
+    pos = concat_norm.find(needle)
+    if pos == -1:
+        return None
+
+    # Map char position back to line number
+    for i in range(len(line_starts) - 1, -1, -1):
+        if line_starts[i][0] <= pos:
+            return line_starts[i][1]
+    return None
+
+
+async def _enrich_start_lines(
+    session: AsyncSession, schemas: list[ParsedAmendmentSchema]
+) -> None:
+    """Look up target sections and set start_line on each amendment."""
+    from pipeline.olrc.snapshot_service import SnapshotService
+
+    svc = SnapshotService(session)
+    head_id = await svc.get_head_revision_id()
+    if head_id is None:
+        return
+
+    # Cache provisions by (title, section) to avoid duplicate queries
+    provisions_cache: dict[tuple[int, str], list[dict[str, Any]] | None] = {}
+
+    for schema in schemas:
+        if schema.old_text is None or schema.section_ref is None:
+            continue
+        title = schema.section_ref.title
+        section = schema.section_ref.section
+        if title is None:
+            continue
+
+        cache_key = (title, section)
+        if cache_key not in provisions_cache:
+            state = await svc.get_section_at_revision(title, section, head_id)
+            # normalized_provisions is a list stored as JSONB
+            raw = state.normalized_provisions if state else None
+            provisions_cache[cache_key] = raw if isinstance(raw, list) else None
+
+        provisions = provisions_cache[cache_key]
+        if provisions:
+            schema.start_line = _find_line_number(provisions, schema.old_text)
+
+
 async def parse_law_amendments(
     session: AsyncSession, congress: int, law_number: int
 ) -> list[ParsedAmendmentSchema]:
@@ -172,4 +253,6 @@ async def parse_law_amendments(
         text_parser = text_mod.AmendmentParser()
         amendments = text_parser.parse(law_text.htm_content)
 
-    return [_amendment_to_schema(a) for a in amendments]
+    schemas = [_amendment_to_schema(a) for a in amendments]
+    await _enrich_start_lines(session, schemas)
+    return schemas
