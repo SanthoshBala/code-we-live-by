@@ -50,11 +50,10 @@ function formatDate(raw: string): string {
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw);
   const date = new Date(iso ? raw + 'T00:00:00' : raw);
   if (isNaN(date.getTime())) return raw; // fallback to raw string
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}.${m}.${d}`;
 }
 
 function LawLine({ label, law }: { label: string; law: LawReference }) {
