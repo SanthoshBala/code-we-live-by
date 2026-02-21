@@ -54,33 +54,63 @@ import type { ParsedAmendment } from '@/lib/types';
 const INLINE_DIFF_THRESHOLD = 0.2;
 
 /**
- * Find all occurrences of amendment search texts within content.
- * Returns non-overlapping [start, end) ranges sorted by position.
- * Tries exact match first, then whitespace-normalized match.
+ * Find amendment-changed text within content, narrowed to just the differing
+ * sub-portion when both old_text and new_text exist.
+ *
+ * For example, old_text="subsection (a) of such section 30" /
+ * new_text="subsection (b) of such section 30" highlights only "(a)" or "(b)"
+ * rather than the entire phrase.
  */
 function findAmendmentRanges(
   content: string,
-  searchTexts: (string | null)[]
+  amendments: ParsedAmendment[],
+  side: 'old' | 'new'
 ): [number, number][] {
   const ranges: [number, number][] = [];
 
-  for (const text of searchTexts) {
-    if (!text) continue;
+  for (const a of amendments) {
+    const searchText = side === 'old' ? a.old_text : a.new_text;
+    if (!searchText) continue;
 
-    // Exact substring match
-    const idx = content.indexOf(text);
-    if (idx !== -1) {
-      ranges.push([idx, idx + text.length]);
-      continue;
+    // Find where the amendment text appears in the line
+    let idx = content.indexOf(searchText);
+    if (idx === -1) {
+      // Whitespace-normalized fallback
+      const normContent = content.replace(/\s+/g, ' ');
+      const normText = searchText.replace(/\s+/g, ' ');
+      idx = normContent.indexOf(normText);
+      if (idx === -1) continue;
     }
 
-    // Whitespace-normalized match (amendment text may differ in spacing)
-    const normContent = content.replace(/\s+/g, ' ');
-    const normText = text.replace(/\s+/g, ' ');
-    const normIdx = normContent.indexOf(normText);
-    if (normIdx !== -1) {
-      ranges.push([normIdx, normIdx + normText.length]);
+    // When both old and new text exist, narrow to just the changed sub-portion
+    if (a.old_text && a.new_text) {
+      const thisText = side === 'old' ? a.old_text : a.new_text;
+      const otherText = side === 'old' ? a.new_text : a.old_text;
+
+      let prefix = 0;
+      const minLen = Math.min(thisText.length, otherText.length);
+      while (prefix < minLen && thisText[prefix] === otherText[prefix]) {
+        prefix++;
+      }
+      let suffix = 0;
+      while (
+        suffix < minLen - prefix &&
+        thisText[thisText.length - 1 - suffix] ===
+          otherText[otherText.length - 1 - suffix]
+      ) {
+        suffix++;
+      }
+
+      const start = prefix;
+      const end = thisText.length - suffix;
+      if (start < end) {
+        ranges.push([idx + start, idx + end]);
+        continue;
+      }
     }
+
+    // Full text highlight (for add-only or delete-only amendments)
+    ranges.push([idx, idx + searchText.length]);
   }
 
   // Sort by start position and merge overlapping ranges
@@ -142,24 +172,14 @@ function applyHighlightThreshold(
   return ranges;
 }
 
-/** Collect old_text values from amendments for highlighting removed lines. */
-function getOldTexts(amendments: ParsedAmendment[]): (string | null)[] {
-  return amendments.map((a) => a.old_text);
-}
-
-/** Collect new_text values from amendments for highlighting added lines. */
-function getNewTexts(amendments: ParsedAmendment[]): (string | null)[] {
-  return amendments.map((a) => a.new_text);
-}
-
 /** Renders a single diff line (context, added, or removed) — unified (stacked) mode. */
 function UnifiedDiffLineRow({
   line,
-  amendmentTexts,
+  amendments,
   inlineDiffRange,
 }: {
   line: DiffLine;
-  amendmentTexts: (string | null)[];
+  amendments: ParsedAmendment[];
   inlineDiffRange?: [number, number] | null;
 }) {
   const isAdded = line.type === 'added';
@@ -189,8 +209,9 @@ function UnifiedDiffLineRow({
   // Apply threshold to suppress highlights covering >20% of line length
   let highlights: [number, number][] = [];
   if (isRemoved || isAdded) {
+    const side = isRemoved ? 'old' : 'new';
     const amendmentHits = applyHighlightThreshold(
-      findAmendmentRanges(line.content, amendmentTexts),
+      findAmendmentRanges(line.content, amendments, side),
       line.content.length
     );
     if (amendmentHits.length > 0) {
@@ -251,9 +272,14 @@ function computeInlineDiff(a: string, b: string): [number, number] | null {
   }
 
   const start = prefix;
-  const end = b.length - suffix;
+  let end = b.length - suffix;
 
   if (start >= end) return null;
+
+  // Trim trailing whitespace from highlight range (cosmetic)
+  while (end > start + 1 && b[end - 1] === ' ') {
+    end--;
+  }
 
   // Suppress highlighting when too much of the line changed
   const changedLen = end - start;
@@ -336,12 +362,12 @@ function pairHunkLines(lines: DiffLine[]): PairedRow[] {
 function SideBySideCell({
   line,
   side,
-  amendmentTexts,
+  amendments,
   inlineDiffRange,
 }: {
   line: DiffLine | null;
   side: 'left' | 'right';
-  amendmentTexts: (string | null)[];
+  amendments: ParsedAmendment[];
   inlineDiffRange?: [number, number] | null;
 }) {
   if (!line) {
@@ -375,8 +401,9 @@ function SideBySideCell({
   // Apply threshold to suppress highlights covering >20% of line length
   let highlights: [number, number][] = [];
   if (isRemoved || isAdded) {
+    const amendSide = isRemoved ? 'old' : 'new';
     const amendmentHits = applyHighlightThreshold(
-      findAmendmentRanges(line.content, amendmentTexts),
+      findAmendmentRanges(line.content, amendments, amendSide),
       line.content.length
     );
     if (amendmentHits.length > 0) {
@@ -412,12 +439,10 @@ function SideBySideCell({
 /** Renders a hunk as side-by-side paired columns. */
 function SideBySideHunk({
   hunk,
-  oldTexts,
-  newTexts,
+  amendments,
 }: {
   hunk: DiffHunk;
-  oldTexts: (string | null)[];
-  newTexts: (string | null)[];
+  amendments: ParsedAmendment[];
 }) {
   const rows = pairHunkLines(hunk.lines);
   return (
@@ -427,13 +452,13 @@ function SideBySideHunk({
           <SideBySideCell
             line={row.left}
             side="left"
-            amendmentTexts={oldTexts}
+            amendments={amendments}
             inlineDiffRange={row.leftHighlight}
           />
           <SideBySideCell
             line={row.right}
             side="right"
-            amendmentTexts={newTexts}
+            amendments={amendments}
             inlineDiffRange={row.rightHighlight}
           />
         </div>
@@ -530,9 +555,7 @@ interface UnifiedDiffCardProps {
  * lines, and expandable regions between hunks to reveal the full section.
  */
 export default function UnifiedDiffCard({ diff }: UnifiedDiffCardProps) {
-  // Amendment old/new texts for inline highlighting
-  const oldTexts = getOldTexts(diff.amendments);
-  const newTexts = getNewTexts(diff.amendments);
+  const amendments = diff.amendments;
 
   // Track which collapsed regions are expanded, keyed by region index
   const [expandedRegions, setExpandedRegions] = useState<Set<number>>(
@@ -709,9 +732,7 @@ export default function UnifiedDiffCard({ diff }: UnifiedDiffCardProps) {
                         <UnifiedDiffLineRow
                           key={li}
                           line={item.line}
-                          amendmentTexts={
-                            item.line.type === 'removed' ? oldTexts : newTexts
-                          }
+                          amendments={amendments}
                           inlineDiffRange={item.hl}
                         />
                       ));
@@ -770,8 +791,7 @@ export default function UnifiedDiffCard({ diff }: UnifiedDiffCardProps) {
                     </div>
                     <SideBySideHunk
                       hunk={region.hunk}
-                      oldTexts={oldTexts}
-                      newTexts={newTexts}
+                      amendments={amendments}
                     />
                   </div>
                 );
