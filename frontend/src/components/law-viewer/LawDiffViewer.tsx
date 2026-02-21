@@ -68,7 +68,9 @@ function DiffBlock({
             {startLine + i}
           </span>
           <span className={`mx-2 select-none ${gutterColor}`}>│</span>
-          <span className={`min-w-0 whitespace-pre-wrap ${textColor}`}>
+          <span
+            className={`min-w-0 whitespace-pre-wrap pl-[2ch] -indent-[2ch] ${textColor}`}
+          >
             <span className="select-none">{prefix} </span>
             {line}
           </span>
