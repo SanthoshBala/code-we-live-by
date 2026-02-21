@@ -50,6 +50,9 @@ function displayLineNum(ln: number | null): string {
 
 import type { ParsedAmendment } from '@/lib/types';
 
+/** Suppress word-level highlights when the change exceeds this fraction of line length. */
+const INLINE_DIFF_THRESHOLD = 0.2;
+
 /**
  * Find all occurrences of amendment search texts within content.
  * Returns non-overlapping [start, end) ranges sorted by position.
@@ -125,6 +128,20 @@ function renderHighlightedContent(
   return <>{parts}</>;
 }
 
+/**
+ * Suppress inline highlights when the highlighted portion covers more than
+ * INLINE_DIFF_THRESHOLD of the line — avoids messy full-line highlights.
+ */
+function applyHighlightThreshold(
+  ranges: [number, number][],
+  contentLength: number
+): [number, number][] {
+  if (ranges.length === 0 || contentLength === 0) return ranges;
+  const totalHighlighted = ranges.reduce((sum, [s, e]) => sum + (e - s), 0);
+  if (totalHighlighted / contentLength > INLINE_DIFF_THRESHOLD) return [];
+  return ranges;
+}
+
 /** Collect old_text values from amendments for highlighting removed lines. */
 function getOldTexts(amendments: ParsedAmendment[]): (string | null)[] {
   return amendments.map((a) => a.old_text);
@@ -169,9 +186,13 @@ function UnifiedDiffLineRow({
   }
 
   // Prefer amendment text matches (precise), fall back to inline diff (word-level)
+  // Apply threshold to suppress highlights covering >20% of line length
   let highlights: [number, number][] = [];
   if (isRemoved || isAdded) {
-    const amendmentHits = findAmendmentRanges(line.content, amendmentTexts);
+    const amendmentHits = applyHighlightThreshold(
+      findAmendmentRanges(line.content, amendmentTexts),
+      line.content.length
+    );
     if (amendmentHits.length > 0) {
       highlights = amendmentHits;
     } else if (inlineDiffRange) {
@@ -210,8 +231,6 @@ function UnifiedDiffLineRow({
  * or null if the strings are identical or the change exceeds the
  * highlight threshold (20% of line length, similar to GitHub).
  */
-const INLINE_DIFF_THRESHOLD = 0.2;
-
 function computeInlineDiff(a: string, b: string): [number, number] | null {
   if (a === b) return null;
 
@@ -353,9 +372,13 @@ function SideBySideCell({
   }
 
   // Prefer amendment text matches (precise), fall back to inline diff (word-level)
+  // Apply threshold to suppress highlights covering >20% of line length
   let highlights: [number, number][] = [];
   if (isRemoved || isAdded) {
-    const amendmentHits = findAmendmentRanges(line.content, amendmentTexts);
+    const amendmentHits = applyHighlightThreshold(
+      findAmendmentRanges(line.content, amendmentTexts),
+      line.content.length
+    );
     if (amendmentHits.length > 0) {
       highlights = amendmentHits;
     } else if (inlineDiffRange) {
