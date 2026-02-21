@@ -63,7 +63,7 @@ jobs:
 
   deploy-frontend:
     name: Deploy Frontend
-    needs: ci
+    needs: [ci, deploy-backend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -86,14 +86,13 @@ jobs:
         run: |
           URL=$(gcloud run services describe cwlb-backend \
             --region "$GCP_REGION" \
-            --format "value(status.url)" 2>/dev/null || echo "")
+            --format "value(status.url)")
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
         run: |
           gcloud builds submit frontend/ \
             --tag "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend:$GITHUB_SHA" \
-            --build-arg "BACKEND_URL=${{ steps.backend-url.outputs.url }}" \
             --quiet
 
       - name: Deploy to Cloud Run
@@ -103,6 +102,7 @@ jobs:
             --region "$GCP_REGION" \
             --platform managed \
             --port 3000 \
+            --set-env-vars "BACKEND_URL=${{ steps.backend-url.outputs.url }}" \
             --allow-unauthenticated \
             --min-instances 0 \
             --max-instances 3 \
