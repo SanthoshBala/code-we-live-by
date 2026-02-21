@@ -1,7 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import type { ParsedAmendment } from '@/lib/types';
+import Link from 'next/link';
+import { useMemo, useRef, useState } from 'react';
+import type {
+  ParsedAmendment,
+  SectionGroupTree,
+  TitleStructure,
+} from '@/lib/types';
+import { useTitleStructure } from '@/hooks/useTitleStructure';
 import AffectedSectionsTree from './AffectedSectionsTree';
 
 interface LawDiffViewerProps {
@@ -106,6 +112,115 @@ function groupAmendmentsBySection(
   return groups;
 }
 
+/* ---- Breadcrumb helpers ---- */
+
+interface GroupAncestor {
+  type: string;
+  number: string;
+}
+
+function capitalizeGroupType(type: string): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function findSectionPath(
+  groups: SectionGroupTree[],
+  sectionNumber: string,
+  ancestors: GroupAncestor[] = []
+): GroupAncestor[] | null {
+  for (const g of groups) {
+    const path = [...ancestors, { type: g.group_type, number: g.number }];
+    if (g.sections.some((s) => s.section_number === sectionNumber)) {
+      return path;
+    }
+    const nested = findSectionPath(g.children, sectionNumber, path);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+/** Build breadcrumb segments for a section within a title structure. */
+function buildBreadcrumbSegments(
+  structure: TitleStructure,
+  sectionNumber: string
+): { label: string; href?: string }[] {
+  const titleNumber = structure.title_number;
+  const crumbs: { label: string; href?: string }[] = [
+    { label: `Title ${titleNumber}`, href: `/titles/${titleNumber}` },
+  ];
+
+  const path = findSectionPath(structure.children ?? [], sectionNumber);
+  if (path) {
+    let pathSoFar = `/titles/${titleNumber}`;
+    for (const ancestor of path) {
+      pathSoFar += `/${ancestor.type}/${ancestor.number}`;
+      crumbs.push({
+        label: `${capitalizeGroupType(ancestor.type)} ${ancestor.number}`,
+        href: pathSoFar,
+      });
+    }
+  }
+
+  crumbs.push({
+    label: `\u00A7\u2009${sectionNumber}`,
+    href: `/sections/${titleNumber}/${sectionNumber}/CODE`,
+  });
+  return crumbs;
+}
+
+/** Renders a breadcrumb path for a section, fetching title structure lazily. */
+function SectionBreadcrumb({
+  titleNumber,
+  sectionNumber,
+}: {
+  titleNumber: number;
+  sectionNumber: string;
+}) {
+  const { data: structure } = useTitleStructure(titleNumber, true);
+
+  const segments = useMemo(() => {
+    if (!structure) return null;
+    return buildBreadcrumbSegments(structure, sectionNumber);
+  }, [structure, sectionNumber]);
+
+  if (!segments) {
+    return (
+      <span className="text-sm font-semibold text-gray-900">
+        {titleNumber} U.S.C. § {sectionNumber}
+      </span>
+    );
+  }
+
+  return (
+    <nav className="text-sm font-semibold text-gray-900">
+      {segments.map((seg, i) => (
+        <span key={i}>
+          {i > 0 && <span className="mx-1 text-gray-400">/</span>}
+          {seg.href ? (
+            <Link
+              href={seg.href}
+              className="hover:text-primary-700 hover:underline"
+            >
+              {seg.label}
+            </Link>
+          ) : (
+            seg.label
+          )}
+        </span>
+      ))}
+    </nav>
+  );
+}
+
+/** Parse title and section from a sectionKey like "26 U.S.C. § 219". */
+function parseSectionKey(
+  key: string
+): { titleNumber: number; sectionNumber: string } | null {
+  const m = key.match(/^(\d+) U\.S\.C\. § (.+)$/);
+  if (!m) return null;
+  return { titleNumber: Number(m[1]), sectionNumber: m[2] };
+}
+
 /** Side-by-side diff view of parsed amendments. */
 export default function LawDiffViewer({
   amendments,
@@ -161,91 +276,103 @@ export default function LawDiffViewer({
         className="min-w-0 flex-1 space-y-6 overflow-y-auto"
       >
         {Array.from(grouped.entries()).map(
-          ([sectionKey, sectionAmendments]) => (
-            <div
-              key={sectionKey}
-              ref={(el) => {
-                if (el) sectionRefs.current.set(sectionKey, el);
-              }}
-            >
-              <h3 className="mb-3 text-sm font-semibold text-gray-900">
-                {sectionKey}
-              </h3>
-              <div className="space-y-3">
-                {sectionAmendments.map((a, i) => (
-                  <div
-                    key={i}
-                    className="rounded-lg border border-gray-200 bg-white"
-                  >
-                    {/* Card header */}
-                    <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-2">
-                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                        {a.pattern_name}
-                      </span>
-                      <ChangeTypeBadge changeType={a.change_type} />
-                      <ConfidenceBadge score={a.confidence} />
-                      {a.needs_review && (
-                        <span className="text-xs font-medium text-amber-600">
-                          Needs Review
+          ([sectionKey, sectionAmendments]) => {
+            const parsed = parseSectionKey(sectionKey);
+            return (
+              <div
+                key={sectionKey}
+                ref={(el) => {
+                  if (el) sectionRefs.current.set(sectionKey, el);
+                }}
+              >
+                <h3 className="mb-3">
+                  {parsed ? (
+                    <SectionBreadcrumb
+                      titleNumber={parsed.titleNumber}
+                      sectionNumber={parsed.sectionNumber}
+                    />
+                  ) : (
+                    <span className="text-sm font-semibold text-gray-900">
+                      {sectionKey}
+                    </span>
+                  )}
+                </h3>
+                <div className="space-y-3">
+                  {sectionAmendments.map((a, i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-gray-200 bg-white"
+                    >
+                      {/* Card header */}
+                      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-2">
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                          {a.pattern_name}
                         </span>
-                      )}
-                      {a.position_qualifier && (
-                        <span className="text-xs text-gray-500">
-                          {a.position_qualifier.type}
-                          {a.position_qualifier.anchor_text &&
-                            `: "${a.position_qualifier.anchor_text}"`}
-                        </span>
-                      )}
-                    </div>
+                        <ChangeTypeBadge changeType={a.change_type} />
+                        <ConfidenceBadge score={a.confidence} />
+                        {a.needs_review && (
+                          <span className="text-xs font-medium text-amber-600">
+                            Needs Review
+                          </span>
+                        )}
+                        {a.position_qualifier && (
+                          <span className="text-xs text-gray-500">
+                            {a.position_qualifier.type}
+                            {a.position_qualifier.anchor_text &&
+                              `: "${a.position_qualifier.anchor_text}"`}
+                          </span>
+                        )}
+                      </div>
 
-                    {/* Card body — side-by-side diff */}
-                    <div className="space-y-3 px-4 py-3">
-                      {a.old_text != null || a.new_text != null ? (
-                        <div className="grid grid-cols-2 gap-3">
-                          <DiffBlock
-                            text={a.old_text ?? ''}
-                            variant="old"
-                            startLine={1}
-                          />
-                          <DiffBlock
-                            text={a.new_text ?? ''}
-                            variant="new"
-                            startLine={1}
-                          />
-                        </div>
-                      ) : (
-                        <p className="text-xs italic text-gray-400">
-                          No text content extracted
-                        </p>
-                      )}
-                      {a.context && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer text-xs text-gray-500">
-                            Context
-                          </summary>
-                          <div className="mt-1 rounded bg-gray-100 py-2 pr-8 font-mono text-sm leading-relaxed">
-                            {a.context.split('\n').map((line, ci) => (
-                              <div key={ci} className="flex items-start">
-                                <span className="w-10 shrink-0 select-none text-right text-gray-400">
-                                  {ci + 1}
-                                </span>
-                                <span className="mx-2 select-none text-gray-400">
-                                  │
-                                </span>
-                                <span className="min-w-0 whitespace-pre-wrap text-gray-600">
-                                  {line}
-                                </span>
-                              </div>
-                            ))}
+                      {/* Card body — side-by-side diff */}
+                      <div className="space-y-3 px-4 py-3">
+                        {a.old_text != null || a.new_text != null ? (
+                          <div className="grid grid-cols-2 gap-3">
+                            <DiffBlock
+                              text={a.old_text ?? ''}
+                              variant="old"
+                              startLine={1}
+                            />
+                            <DiffBlock
+                              text={a.new_text ?? ''}
+                              variant="new"
+                              startLine={1}
+                            />
                           </div>
-                        </details>
-                      )}
+                        ) : (
+                          <p className="text-xs italic text-gray-400">
+                            No text content extracted
+                          </p>
+                        )}
+                        {a.context && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-gray-500">
+                              Context
+                            </summary>
+                            <div className="mt-1 rounded bg-gray-100 py-2 pr-8 font-mono text-sm leading-relaxed">
+                              {a.context.split('\n').map((line, ci) => (
+                                <div key={ci} className="flex items-start">
+                                  <span className="w-10 shrink-0 select-none text-right text-gray-400">
+                                    {ci + 1}
+                                  </span>
+                                  <span className="mx-2 select-none text-gray-400">
+                                    │
+                                  </span>
+                                  <span className="min-w-0 whitespace-pre-wrap text-gray-600">
+                                    {line}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )
+            );
+          }
         )}
       </div>
     </div>
