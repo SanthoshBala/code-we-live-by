@@ -51,9 +51,9 @@ function DiffBlock({
   startLine: number;
 }) {
   const lines = text.split('\n');
-  const bg = variant === 'old' ? 'bg-red-50' : 'bg-green-50';
+  const bg = variant === 'old' ? 'bg-red-100' : 'bg-green-100';
   const textColor = variant === 'old' ? 'text-red-900' : 'text-green-900';
-  const gutterColor = variant === 'old' ? 'text-red-300' : 'text-green-300';
+  const gutterColor = variant === 'old' ? 'text-red-400' : 'text-green-400';
   const prefix = variant === 'old' ? '−' : '+';
 
   return (
