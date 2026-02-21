@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,63 @@ from pipeline.olrc.parser import compute_text_hash
 from pipeline.olrc.snapshot_service import SnapshotService
 
 logger = logging.getLogger(__name__)
+
+
+def _patch_provisions(
+    parent_provisions: Any,
+    changes: list[LawChange],
+) -> Any:
+    """Apply text replacements to provision lines, preserving structure.
+
+    For each MODIFY/DELETE change with old_text, replaces occurrences in
+    each provision's ``content`` field.  Returns a new list (or None if
+    the parent had no provisions).
+    """
+    if not isinstance(parent_provisions, list):
+        return parent_provisions
+
+    import copy
+    import re
+
+    patched = copy.deepcopy(parent_provisions)
+
+    for change in changes:
+        if change.old_text is None:
+            continue
+        replacement = change.new_text or ""
+        if change.change_type not in (ChangeType.MODIFY, ChangeType.DELETE):
+            continue
+
+        for line in patched:
+            content = line.get("content", "")
+            if not content:
+                continue
+
+            # Exact match
+            if change.old_text in content:
+                line["content"] = content.replace(change.old_text, replacement)
+                continue
+
+            # Whitespace-normalised match (same strategy as amendment_applicator)
+            parts = change.old_text.split()
+            ws_pattern = r"\s+".join(re.escape(part) for part in parts)
+            ws_re = re.compile(ws_pattern)
+            match = ws_re.search(content)
+            if match:
+                line["content"] = (
+                    content[: match.start()] + replacement + content[match.end() :]
+                )
+                continue
+
+            # Case-insensitive fallback
+            ci_re = re.compile(ws_pattern, re.IGNORECASE)
+            match = ci_re.search(content)
+            if match:
+                line["content"] = (
+                    content[: match.start()] + replacement + content[match.end() :]
+                )
+
+    return patched
 
 
 @dataclass
@@ -247,6 +305,15 @@ class RevisionBuilder:
         text_hash = compute_text_hash(current_text) if current_text else None
         notes_hash = compute_text_hash(updated_raw_notes) if updated_raw_notes else None
 
+        # Patch provisions in-place: apply the same text replacements to
+        # each provision line's content.  This preserves the original
+        # structure (headers, markers, indentation) from the parent
+        # snapshot while keeping content in sync with text_content.
+        provisions_json = _patch_provisions(
+            parent_state.normalized_provisions if parent_state else None,
+            section_changes,
+        )
+
         # Create snapshot, carrying forward structural metadata from parent
         snapshot = SectionSnapshot(
             revision_id=revision.revision_id,
@@ -254,9 +321,7 @@ class RevisionBuilder:
             section_number=section_number,
             heading=parent_state.heading if parent_state else None,
             text_content=current_text,
-            normalized_provisions=(
-                parent_state.normalized_provisions if parent_state else None
-            ),
+            normalized_provisions=provisions_json,
             notes=updated_raw_notes,
             normalized_notes=updated_notes_dict,
             text_hash=text_hash,
