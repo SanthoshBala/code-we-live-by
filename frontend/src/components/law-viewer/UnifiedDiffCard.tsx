@@ -104,7 +104,16 @@ function findAmendmentRanges(
       const start = prefix;
       const end = thisText.length - suffix;
       if (start < end) {
-        ranges.push([idx + start, idx + end]);
+        // Expand outward to cover full words (non-whitespace runs)
+        let wStart = start;
+        while (wStart > 0 && thisText[wStart - 1] !== ' ') {
+          wStart--;
+        }
+        let wEnd = end;
+        while (wEnd < thisText.length && thisText[wEnd] !== ' ') {
+          wEnd++;
+        }
+        ranges.push([idx + wStart, idx + wEnd]);
         continue;
       }
     }
