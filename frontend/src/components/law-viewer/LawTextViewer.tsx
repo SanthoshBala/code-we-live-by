@@ -15,6 +15,8 @@ function stripHtml(raw: string): string {
     el.innerHTML = text;
     text = el.value;
   }
+  // Remove GPO end-of-document marker <all>
+  text = text.replace(/<all>\s*/gi, '');
   // Trim leading/trailing blank lines
   return text.replace(/^\n+/, '').replace(/\n+$/, '');
 }
