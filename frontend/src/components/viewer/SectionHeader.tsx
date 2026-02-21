@@ -8,6 +8,7 @@ export interface LawReference {
   congress: number;
   date: string | null;
   label: string; // e.g. "PL 113-22"
+  shortTitle?: string | null;
 }
 
 interface SectionHeaderProps {
@@ -45,7 +46,10 @@ function ordinal(n: number): string {
 }
 
 function formatDate(raw: string): string {
-  const date = new Date(raw + 'T00:00:00');
+  // Backend may send ISO (YYYY-MM-DD) or prose ("Oct. 19, 1976") format
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const date = new Date(iso ? raw + 'T00:00:00' : raw);
+  if (isNaN(date.getTime())) return raw; // fallback to raw string
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -60,6 +64,11 @@ function LawLine({ label, law }: { label: string; law: LawReference }) {
       <dd className="text-gray-600">{ordinal(law.congress)} Congress</dd>
       <dd className="text-gray-600">{law.date ? formatDate(law.date) : '—'}</dd>
       <dd className="font-mono text-gray-600">{law.label}</dd>
+      {law.shortTitle ? (
+        <dd className="text-gray-500">{law.shortTitle}</dd>
+      ) : (
+        <dd />
+      )}
     </>
   );
 }
@@ -99,7 +108,7 @@ export default function SectionHeader({
             </span>
           )}
           {hasLawInfo && (
-            <dl className="grid grid-cols-[auto_auto_auto_auto] gap-x-3 gap-y-0.5">
+            <dl className="grid grid-cols-[auto_auto_auto_auto_auto] gap-x-3 gap-y-0.5">
               {enacted && <LawLine label="Enacted:" law={enacted} />}
               {lastAmended && (
                 <LawLine label="Last amended:" law={lastAmended} />

@@ -62,7 +62,13 @@ const baseSectionData: SectionView = {
         public_law_id: 'PL 110-403',
       },
     ],
-    short_titles: [],
+    short_titles: [
+      {
+        title: 'Copyright Act of 1976',
+        year: 1976,
+        public_law: 'PL 94-553',
+      },
+    ],
     notes: [],
     has_notes: false,
     has_citations: true,

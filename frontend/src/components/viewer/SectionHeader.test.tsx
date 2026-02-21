@@ -153,4 +153,40 @@ describe('SectionHeader', () => {
     expect(screen.getByText('PL 93-406')).toBeInTheDocument();
     expect(screen.queryByText(/Last amended/)).not.toBeInTheDocument();
   });
+
+  it('handles prose date format without showing Invalid Date', () => {
+    render(
+      <SectionHeader
+        heading="Test"
+        isPositiveLaw={false}
+        status={null}
+        enacted={{
+          congress: 93,
+          date: 'Sept. 2, 1974',
+          label: 'PL 93-406',
+        }}
+      />
+    );
+    expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
+    expect(screen.getByText(/1974/)).toBeInTheDocument();
+  });
+
+  it('renders short title after PL ID when provided', () => {
+    render(
+      <SectionHeader
+        heading="Test"
+        isPositiveLaw={false}
+        status={null}
+        enacted={{
+          congress: 93,
+          date: '1974-09-02',
+          label: 'PL 93-406',
+          shortTitle: 'Employee Retirement Income Security Act of 1974',
+        }}
+      />
+    );
+    expect(
+      screen.getByText('Employee Retirement Income Security Act of 1974')
+    ).toBeInTheDocument();
+  });
 });

@@ -40,7 +40,12 @@ export default function SectionViewer({
 
   const amendments = data.notes?.amendments ?? [];
   const citations = data.notes?.citations ?? [];
+  const shortTitles = data.notes?.short_titles ?? [];
   const hasHistory = amendments.length > 0 || citations.length > 0;
+
+  // Helper: find the short title associated with a public law ID
+  const findShortTitle = (plId: string): string | null =>
+    shortTitles.find((st) => st.public_law === plId)?.title ?? null;
 
   // Build enacted reference from first citation with "Enactment" relationship
   let enacted: LawReference | null = null;
@@ -52,6 +57,7 @@ export default function SectionViewer({
       congress: enactmentCitation.law.congress,
       date: enactmentCitation.law.date,
       label: enactmentCitation.law.public_law_id,
+      shortTitle: findShortTitle(enactmentCitation.law.public_law_id),
     };
   }
 
@@ -64,6 +70,7 @@ export default function SectionViewer({
       congress: latest.law.congress,
       date: latest.law.date,
       label: latest.public_law_id,
+      shortTitle: findShortTitle(latest.public_law_id),
     };
   }
 
