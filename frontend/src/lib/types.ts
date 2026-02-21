@@ -113,6 +113,12 @@ export interface Amendment {
 
 /** A source law citation for a section. */
 export interface SourceLaw {
+  law?: {
+    congress: number;
+    law_number: number;
+    date: string | null;
+    public_law_id: string;
+  } | null;
   law_id: string;
   law_title: string | null;
   relationship: string;

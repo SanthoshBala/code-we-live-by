@@ -1,18 +1,22 @@
 import Link from 'next/link';
-import type { BreadcrumbSegment, HeadRevision, ItemStatus } from '@/lib/types';
+import type { BreadcrumbSegment, ItemStatus } from '@/lib/types';
 import { statusBadge } from '@/lib/statusStyles';
-import { revisionLabel } from '@/lib/revisionLabel';
 import PageHeader from '@/components/ui/PageHeader';
+
+/** A law reference for the enacted/amended lines. */
+export interface LawReference {
+  congress: number;
+  date: string | null;
+  label: string; // e.g. "PL 113-22"
+}
 
 interface SectionHeaderProps {
   heading: string;
   breadcrumbs?: BreadcrumbSegment[];
-  enactedDate: string | null;
-  lastModifiedDate: string | null;
   isPositiveLaw: boolean;
   status: ItemStatus;
-  latestAmendment?: { publicLawId: string; year: number } | null;
-  lastRevision?: HeadRevision | null;
+  enacted?: LawReference | null;
+  lastAmended?: LawReference | null;
 }
 
 function Breadcrumbs({ segments }: { segments: BreadcrumbSegment[] }) {
@@ -34,18 +38,44 @@ function Breadcrumbs({ segments }: { segments: BreadcrumbSegment[] }) {
   );
 }
 
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function formatDate(raw: string): string {
+  const date = new Date(raw + 'T00:00:00');
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function LawLine({ label, law }: { label: string; law: LawReference }) {
+  return (
+    <>
+      <dt className="text-gray-400">{label}</dt>
+      <dd className="text-gray-600">{ordinal(law.congress)} Congress</dd>
+      <dd className="text-gray-600">{law.date ? formatDate(law.date) : '—'}</dd>
+      <dd className="font-mono text-gray-600">{law.label}</dd>
+    </>
+  );
+}
+
 /** Renders the section heading, breadcrumbs, and metadata badges. */
 export default function SectionHeader({
   heading,
   breadcrumbs,
-  enactedDate,
-  lastModifiedDate,
   isPositiveLaw,
   status,
-  latestAmendment,
-  lastRevision,
+  enacted,
+  lastAmended,
 }: SectionHeaderProps) {
   const badge = statusBadge(status);
+  const hasLawInfo = enacted || lastAmended;
+
   return (
     <PageHeader
       title={heading}
@@ -68,25 +98,13 @@ export default function SectionHeader({
               Positive Law
             </span>
           )}
-          {enactedDate && (
-            <span className="text-gray-500">Enacted {enactedDate}</span>
-          )}
-          {lastModifiedDate && (
-            <span className="text-gray-500">
-              Last modified {lastModifiedDate}
-            </span>
-          )}
-          {latestAmendment && (
-            <span className="rounded bg-primary-50 px-2 py-0.5 font-medium text-primary-700">
-              Last amended by{' '}
-              <span className="font-mono">{latestAmendment.publicLawId}</span> (
-              {latestAmendment.year})
-            </span>
-          )}
-          {lastRevision && (
-            <span className="text-gray-500">
-              Current through: {revisionLabel(lastRevision)}
-            </span>
+          {hasLawInfo && (
+            <dl className="grid grid-cols-[auto_auto_auto_auto] gap-x-3 gap-y-0.5">
+              {enacted && <LawLine label="Enacted:" law={enacted} />}
+              {lastAmended && (
+                <LawLine label="Last amended:" law={lastAmended} />
+              )}
+            </dl>
           )}
         </>
       }

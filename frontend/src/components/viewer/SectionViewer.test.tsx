@@ -26,6 +26,12 @@ const baseSectionData: SectionView = {
   notes: {
     citations: [
       {
+        law: {
+          congress: 94,
+          law_number: 553,
+          date: '1976-10-19',
+          public_law_id: 'PL 94-553',
+        },
         law_id: 'PL 94-553',
         law_title: 'Copyright Act of 1976',
         relationship: 'Enactment',

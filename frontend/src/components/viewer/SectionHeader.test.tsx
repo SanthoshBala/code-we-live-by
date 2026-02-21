@@ -22,8 +22,6 @@ describe('SectionHeader', () => {
     render(
       <SectionHeader
         heading="Exclusive rights in copyrighted works"
-        enactedDate={null}
-        lastModifiedDate={null}
         isPositiveLaw={false}
         status={null}
       />
@@ -42,8 +40,6 @@ describe('SectionHeader', () => {
           { label: 'Chapter 1', href: '/titles/17/chapters/1' },
           { label: '\u00A7\u2009106' },
         ]}
-        enactedDate={null}
-        lastModifiedDate={null}
         isPositiveLaw={false}
         status={null}
       />
@@ -60,40 +56,20 @@ describe('SectionHeader', () => {
   });
 
   it('shows Positive Law badge when isPositiveLaw is true', () => {
-    render(
-      <SectionHeader
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={true}
-        status={null}
-      />
-    );
+    render(<SectionHeader heading="Test" isPositiveLaw={true} status={null} />);
     expect(screen.getByText('Positive Law')).toBeInTheDocument();
   });
 
   it('shows Repealed badge when status is repealed', () => {
     render(
-      <SectionHeader
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={false}
-        status="repealed"
-      />
+      <SectionHeader heading="Test" isPositiveLaw={false} status="repealed" />
     );
     expect(screen.getByText('Repealed')).toBeInTheDocument();
   });
 
   it('shows Reserved badge when status is reserved', () => {
     render(
-      <SectionHeader
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={false}
-        status="reserved"
-      />
+      <SectionHeader heading="Test" isPositiveLaw={false} status="reserved" />
     );
     expect(screen.getByText('Reserved')).toBeInTheDocument();
   });
@@ -102,8 +78,6 @@ describe('SectionHeader', () => {
     render(
       <SectionHeader
         heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
         isPositiveLaw={false}
         status="transferred"
       />
@@ -113,39 +87,21 @@ describe('SectionHeader', () => {
 
   it('shows Renumbered badge when status is renumbered', () => {
     render(
-      <SectionHeader
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={false}
-        status="renumbered"
-      />
+      <SectionHeader heading="Test" isPositiveLaw={false} status="renumbered" />
     );
     expect(screen.getByText('Renumbered')).toBeInTheDocument();
   });
 
   it('shows Omitted badge when status is omitted', () => {
     render(
-      <SectionHeader
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={false}
-        status="omitted"
-      />
+      <SectionHeader heading="Test" isPositiveLaw={false} status="omitted" />
     );
     expect(screen.getByText('Omitted')).toBeInTheDocument();
   });
 
   it('shows no status badge when status is null', () => {
     render(
-      <SectionHeader
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={false}
-        status={null}
-      />
+      <SectionHeader heading="Test" isPositiveLaw={false} status={null} />
     );
     expect(screen.queryByText('Repealed')).not.toBeInTheDocument();
     expect(screen.queryByText('Reserved')).not.toBeInTheDocument();
@@ -154,47 +110,47 @@ describe('SectionHeader', () => {
     expect(screen.queryByText('Omitted')).not.toBeInTheDocument();
   });
 
-  it('shows enacted and last modified dates when provided', () => {
+  it('renders enacted and last amended law info', () => {
     render(
       <SectionHeader
         heading="Test"
-        enactedDate="1976-10-19"
-        lastModifiedDate="2020-01-01"
         isPositiveLaw={false}
         status={null}
+        enacted={{ congress: 93, date: '1974-09-02', label: 'PL 93-406' }}
+        lastAmended={{
+          congress: 113,
+          date: '2013-07-25',
+          label: 'PL 113-22',
+        }}
       />
     );
-    expect(screen.getByText('Enacted 1976-10-19')).toBeInTheDocument();
-    expect(screen.getByText('Last modified 2020-01-01')).toBeInTheDocument();
+    expect(screen.getByText('Enacted:')).toBeInTheDocument();
+    expect(screen.getByText('93rd Congress')).toBeInTheDocument();
+    expect(screen.getByText('PL 93-406')).toBeInTheDocument();
+    expect(screen.getByText('Last amended:')).toBeInTheDocument();
+    expect(screen.getByText('113th Congress')).toBeInTheDocument();
+    expect(screen.getByText('PL 113-22')).toBeInTheDocument();
   });
 
-  it('hides dates when not provided', () => {
+  it('hides law info when not provided', () => {
     render(
-      <SectionHeader
-        heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
-        isPositiveLaw={false}
-        status={null}
-      />
+      <SectionHeader heading="Test" isPositiveLaw={false} status={null} />
     );
     expect(screen.queryByText(/Enacted/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Last modified/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last amended/)).not.toBeInTheDocument();
   });
 
-  it('renders latest amendment badge when provided', () => {
+  it('shows only enacted when no amendments exist', () => {
     render(
       <SectionHeader
         heading="Test"
-        enactedDate={null}
-        lastModifiedDate={null}
         isPositiveLaw={false}
         status={null}
-        latestAmendment={{ publicLawId: 'PL 116-283', year: 2021 }}
+        enacted={{ congress: 93, date: '1974-09-02', label: 'PL 93-406' }}
       />
     );
-    expect(screen.getByText('PL 116-283')).toBeInTheDocument();
-    expect(screen.getByText(/2021/)).toBeInTheDocument();
-    expect(screen.getByText(/Last amended by/)).toBeInTheDocument();
+    expect(screen.getByText('Enacted:')).toBeInTheDocument();
+    expect(screen.getByText('PL 93-406')).toBeInTheDocument();
+    expect(screen.queryByText(/Last amended/)).not.toBeInTheDocument();
   });
 });

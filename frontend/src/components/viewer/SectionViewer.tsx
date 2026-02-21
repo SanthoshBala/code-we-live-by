@@ -5,6 +5,7 @@ import { useSection } from '@/hooks/useSection';
 import type { BreadcrumbSegment } from '@/lib/types';
 import TabBar from '@/components/ui/TabBar';
 import SectionHeader from './SectionHeader';
+import type { LawReference } from './SectionHeader';
 import SectionProvisions from './SectionProvisions';
 import AmendmentList from './AmendmentList';
 import CitationList from './CitationList';
@@ -41,23 +42,40 @@ export default function SectionViewer({
   const citations = data.notes?.citations ?? [];
   const hasHistory = amendments.length > 0 || citations.length > 0;
 
+  // Build enacted reference from first citation with "Enactment" relationship
+  let enacted: LawReference | null = null;
+  const enactmentCitation = citations.find(
+    (c) => c.relationship === 'Enactment'
+  );
+  if (enactmentCitation?.law) {
+    enacted = {
+      congress: enactmentCitation.law.congress,
+      date: enactmentCitation.law.date,
+      label: enactmentCitation.law.public_law_id,
+    };
+  }
+
+  // Build last amended reference from most recent amendment
+  let lastAmended: LawReference | null = null;
   const sorted = [...amendments].sort((a, b) => b.year - a.year);
-  const latestAmendment =
-    sorted.length > 0
-      ? { publicLawId: sorted[0].public_law_id, year: sorted[0].year }
-      : null;
+  if (sorted.length > 0) {
+    const latest = sorted[0];
+    lastAmended = {
+      congress: latest.law.congress,
+      date: latest.law.date,
+      label: latest.public_law_id,
+    };
+  }
 
   return (
     <div>
       <SectionHeader
         heading={data.heading}
         breadcrumbs={breadcrumbs}
-        enactedDate={data.enacted_date}
-        lastModifiedDate={data.last_modified_date}
         isPositiveLaw={data.is_positive_law}
         status={data.is_repealed ? 'repealed' : null}
-        latestAmendment={latestAmendment}
-        lastRevision={data.last_revision}
+        enacted={enacted}
+        lastAmended={lastAmended}
       />
       {hasHistory && (
         <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
