@@ -37,10 +37,10 @@ export default function LawLine({
   return (
     <>
       <dt className="text-gray-400">{label}</dt>
-      <dd className="text-gray-600">{ordinal(law.congress)} Congress</dd>
       <dd className="text-gray-600">
         {law.date ? formatLawDate(law.date) : '—'}
       </dd>
+      <dd className="text-gray-600">{ordinal(law.congress)} Congress</dd>
       <dd className="font-mono text-gray-600">
         <Link
           href={`/laws/${law.congress}/${law.lawNumber}`}
