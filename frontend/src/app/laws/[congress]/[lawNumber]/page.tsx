@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
 import LawTextViewer from '@/components/law-viewer/LawTextViewer';
 import LawDiffViewer from '@/components/law-viewer/LawDiffViewer';
+import LawLine from '@/components/ui/LawLine';
 
 const TABS = [
   { id: 'htm', label: 'HTM Text' },
@@ -44,22 +45,15 @@ export default function LawViewerPage() {
   // Official title always goes in subtitle
   const subtitle = lawText.official_title;
 
-  const dateBadges: { label: string; date: string }[] = [];
-  if (lawText.introduced_date)
-    dateBadges.push({ label: 'Introduced', date: lawText.introduced_date });
-  if (lawText.house_passed_date)
-    dateBadges.push({ label: 'House', date: lawText.house_passed_date });
-  if (lawText.senate_passed_date)
-    dateBadges.push({ label: 'Senate', date: lawText.senate_passed_date });
-  if (lawText.presented_to_president_date)
-    dateBadges.push({
-      label: 'Presented',
-      date: lawText.presented_to_president_date,
-    });
-  if (lawText.enacted_date)
-    dateBadges.push({ label: 'Enacted', date: lawText.enacted_date });
-  if (lawText.effective_date)
-    dateBadges.push({ label: 'Effective', date: lawText.effective_date });
+  const enacted = lawText.enacted_date
+    ? {
+        congress,
+        lawNumber: Number(lawNumber),
+        date: lawText.enacted_date,
+        label: `PL ${congress}-${lawNumber}`,
+        shortTitle: lawText.short_title ?? undefined,
+      }
+    : null;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -67,17 +61,10 @@ export default function LawViewerPage() {
         title={title}
         subtitle={subtitle}
         badges={
-          dateBadges.length > 0 ? (
-            <>
-              {dateBadges.map(({ label, date }) => (
-                <span
-                  key={label}
-                  className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600"
-                >
-                  {label} {date}
-                </span>
-              ))}
-            </>
+          enacted ? (
+            <dl className="grid grid-cols-[auto_auto_auto_auto_auto] gap-x-3 gap-y-0.5">
+              <LawLine label="Enacted:" law={enacted} />
+            </dl>
           ) : undefined
         }
       />
