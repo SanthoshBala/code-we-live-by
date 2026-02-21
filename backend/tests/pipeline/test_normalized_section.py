@@ -1527,3 +1527,310 @@ class TestAmendmentDateSpacing:
         desc = amendments[0].description
         # Spaces inside quotes should be removed
         assert '" December' not in desc
+
+
+class TestMultiSentenceSplitting:
+    """Tests for splitting multi-sentence paragraphs onto separate provision lines.
+
+    Covers both the XML-based path (normalize_parsed_section) and the
+    fallback heuristic path (normalize_section).
+    """
+
+    # -- XML-based path (normalize_parsed_section) --
+
+    def test_xml_heading_multi_sentence_content(self) -> None:
+        """Multi-sentence content under a heading produces one line per sentence."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="2705",
+            heading="Exemptions",
+            full_citation="16 U.S.C. § 2705",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(d)",
+                    heading="Exemptions",
+                    content=(
+                        "The Commission may in its discretion grant an exemption. "
+                        "Except as specifically provided in this subsection, "
+                        "no exemption shall apply."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Header + 2 content sentences = 3 lines
+        assert result.provision_count == 3
+        assert result.provisions[0].content == "(d) Exemptions"
+        assert result.provisions[0].is_header is True
+        assert result.provisions[1].content == (
+            "The Commission may in its discretion grant an exemption."
+        )
+        assert result.provisions[1].indent_level == 1
+        assert result.provisions[2].content == (
+            "Except as specifically provided in this subsection, "
+            "no exemption shall apply."
+        )
+        assert result.provisions[2].indent_level == 1
+
+    def test_xml_no_heading_multi_sentence_content(self) -> None:
+        """Multi-sentence content without a heading splits after the marker."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="100",
+            heading="Test",
+            full_citation="42 U.S.C. § 100",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content=(
+                        "First sentence of provision. "
+                        "Second sentence continues here."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # 2 lines: marker + first sentence, then second sentence
+        assert result.provision_count == 2
+        assert result.provisions[0].content == (
+            "(a) First sentence of provision."
+        )
+        assert result.provisions[0].marker == "(a)"
+        assert result.provisions[1].content == "Second sentence continues here."
+        assert result.provisions[1].marker is None
+        assert result.provisions[1].indent_level == result.provisions[0].indent_level
+
+    def test_xml_single_sentence_unchanged(self) -> None:
+        """Single-sentence content still produces exactly one line."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="101",
+            heading="Test",
+            full_citation="17 U.S.C. § 101",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="Only one sentence here.",
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.provision_count == 1
+        assert result.provisions[0].content == "(a) Only one sentence here."
+
+    def test_xml_abbreviations_not_split(self) -> None:
+        """Legal abbreviations like U.S.C. are not treated as sentence boundaries."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="200",
+            heading="Test",
+            full_citation="42 U.S.C. § 200",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content=(
+                        "As defined under title 42, U.S.C. The term applies broadly. "
+                        "Additional provisions may apply."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # "U.S.C." should NOT be a sentence boundary, so the first two
+        # sentences merge.  Only the period after "broadly." triggers a real
+        # split, producing 2 lines total (not 3).
+        assert result.provision_count == 2
+        first = result.provisions[0].content
+        assert "U.S.C." in first
+        assert "applies broadly." in first
+
+    def test_xml_pub_l_abbreviation_not_split(self) -> None:
+        """Pub. L. abbreviation does not cause a false sentence split."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="300",
+            heading="Test",
+            full_citation="50 U.S.C. § 300",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(b)",
+                    heading=None,
+                    content=(
+                        "As amended by Pub. L. 116–136, this section "
+                        "provides relief."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # "Pub." and "L." should not cause splits
+        assert result.provision_count == 1
+        assert "Pub. L. 116–136" in result.provisions[0].content
+
+    def test_xml_three_sentences(self) -> None:
+        """Three sentences in one paragraph produce three lines."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="400",
+            heading="Test",
+            full_citation="26 U.S.C. § 400",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(c)",
+                    heading=None,
+                    content=(
+                        "The Secretary shall promulgate regulations. "
+                        "Such regulations shall take effect on the date of enactment. "
+                        "Nothing in this paragraph limits the authority of the Secretary."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.provision_count == 3
+        assert result.provisions[0].content.startswith("(c) The Secretary")
+        assert result.provisions[0].marker == "(c)"
+        assert result.provisions[1].content.startswith("Such regulations")
+        assert result.provisions[1].marker is None
+        assert result.provisions[2].content.startswith("Nothing in this paragraph")
+        assert result.provisions[2].marker is None
+
+    def test_xml_chapeau_not_split_on_colon(self) -> None:
+        """Chapeau text ending with a colon stays on one line."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="500",
+            heading="Test",
+            full_citation="22 U.S.C. § 500",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="The following conditions apply:",
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="Condition one.",
+                            level="paragraph",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Chapeau on one line, child on next
+        assert result.provisions[0].content == "(a) The following conditions apply:"
+        assert result.provisions[1].content == "(1) Condition one."
+
+    # -- Fallback heuristic path (normalize_section) --
+
+    def test_fallback_multi_sentence_list_item(self) -> None:
+        """Fallback normalize_section splits multi-sentence list items."""
+        text = (
+            "(a) The Commission may grant an exemption in its discretion. "
+            "No exemption shall be granted without notice."
+        )
+
+        result = normalize_section(text)
+
+        assert result.provision_count == 2
+        assert result.provisions[0].content.startswith("(a) The Commission")
+        assert result.provisions[0].marker == "(a)"
+        assert result.provisions[1].content.startswith("No exemption")
+        assert result.provisions[1].marker is None
+
+    def test_fallback_single_sentence_unchanged(self) -> None:
+        """Fallback single-sentence list items remain on one line."""
+        text = "(a) The Commission may grant an exemption."
+
+        result = normalize_section(text)
+
+        assert result.provision_count == 1
+        assert result.provisions[0].content == "(a) The Commission may grant an exemption."
+
+    def test_fallback_abbreviation_not_split(self) -> None:
+        """Fallback path respects legal abbreviations."""
+        text = "(a) Pursuant to Pub. L. 116–136, the Secretary shall act."
+
+        result = normalize_section(text)
+
+        assert result.provision_count == 1
+        assert "Pub. L. 116–136" in result.provisions[0].content
+
+    def test_xml_et_seq_abbreviation_not_split(self) -> None:
+        """'et seq.' abbreviation does not trigger a false split."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="600",
+            heading="Test",
+            full_citation="42 U.S.C. § 600",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content=(
+                        "As defined in section 1396 et seq. "
+                        "Additional requirements apply."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # "et seq." ends with a period but should not trigger a split
+        # because "seq." is in LEGAL_ABBREVIATIONS (via "et." check)
+        # The "Additional" starts a new sentence after "seq. "
+        # This should produce 2 lines
+        assert result.provision_count == 2
+        assert "et seq." in result.provisions[0].content

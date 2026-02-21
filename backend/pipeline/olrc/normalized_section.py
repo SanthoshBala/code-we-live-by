@@ -1643,22 +1643,57 @@ def normalize_section(
                     )
                 )
             else:
-                # No header detected - keep as single line
-                full_content = (
-                    f"{marker_text} {item_content}" if item_content else marker_text
-                )
-                line_number += 1
-                lines.append(
-                    ParsedLine(
-                        line_number=line_number,
-                        content=full_content,
-                        indent_level=indent_level,
-                        marker=marker_text,
-                        is_header=False,
-                        start_char=pos,
-                        end_char=item_end,
+                # No header detected - split multi-sentence content onto
+                # separate lines.  The first sentence stays with the marker;
+                # subsequent sentences get their own lines at the same indent.
+                if item_content:
+                    sentences = _split_into_sentences(
+                        item_content, start_offset=marker_end
                     )
-                )
+                    real_sentences = [
+                        (text.strip(), s, e)
+                        for text, s, e in sentences
+                        if text.strip() and text != PARAGRAPH_BREAK_MARKER
+                    ]
+                else:
+                    real_sentences = []
+
+                if real_sentences:
+                    for i, (
+                        sentence_text,
+                        start_char,
+                        end_char,
+                    ) in enumerate(real_sentences):
+                        if i == 0:
+                            full_content = f"{marker_text} {sentence_text}"
+                        else:
+                            full_content = sentence_text
+                        line_number += 1
+                        lines.append(
+                            ParsedLine(
+                                line_number=line_number,
+                                content=full_content,
+                                indent_level=indent_level,
+                                marker=marker_text if i == 0 else None,
+                                is_header=False,
+                                start_char=pos if i == 0 else start_char,
+                                end_char=end_char,
+                            )
+                        )
+                else:
+                    # No sentences (marker only or empty content)
+                    line_number += 1
+                    lines.append(
+                        ParsedLine(
+                            line_number=line_number,
+                            content=marker_text,
+                            indent_level=indent_level,
+                            marker=marker_text,
+                            is_header=False,
+                            start_char=pos,
+                            end_char=item_end,
+                        )
+                    )
 
             pos = item_end
 
@@ -1856,49 +1891,71 @@ def _normalize_subsection_recursive(
             )
         )
 
-        # Content goes on a separate line, indented under the header
+        # Content goes on separate line(s), indented under the header.
+        # Split multi-sentence content so each sentence gets its own line.
         if subsection.content:
-            line_counter[0] += 1
-            start_pos = char_pos[0]
-            char_pos[0] += len(subsection.content) + 1
-            lines.append(
-                ParsedLine(
-                    line_number=line_counter[0],
-                    content=subsection.content,
-                    indent_level=base_indent + 1,  # Indent under header
-                    marker=None,
-                    is_header=False,
-                    start_char=start_pos,
-                    end_char=char_pos[0],
-                )
-            )
+            sentences = _split_into_sentences(subsection.content)
+            for sentence_text, _s_start, _s_end in sentences:
+                sentence_text = sentence_text.strip()
+                if sentence_text and sentence_text != PARAGRAPH_BREAK_MARKER:
+                    line_counter[0] += 1
+                    start_pos = char_pos[0]
+                    char_pos[0] += len(sentence_text) + 1
+                    lines.append(
+                        ParsedLine(
+                            line_number=line_counter[0],
+                            content=sentence_text,
+                            indent_level=base_indent + 1,  # Indent under header
+                            marker=None,
+                            is_header=False,
+                            start_char=start_pos,
+                            end_char=char_pos[0],
+                        )
+                    )
 
         # Children are indented under the content
         # If there's content, children go at base + 2 (content is at base + 1)
         # If there's no content, children go at base + 1 (directly under header)
         child_indent = base_indent + 2 if subsection.content else base_indent + 1
     else:
-        # No heading - marker and content on one line
+        # No heading - marker and content on one line.
+        # Split multi-sentence content so each sentence gets its own line.
+        # The first sentence stays with the marker; subsequent sentences
+        # appear on their own lines at the same indent level.
         if subsection.content:
-            line_counter[0] += 1
-            content = (
-                f"{subsection.marker} {subsection.content}"
-                if subsection.marker
-                else subsection.content
-            )
-            start_pos = char_pos[0]
-            char_pos[0] += len(content) + 1
-            lines.append(
-                ParsedLine(
-                    line_number=line_counter[0],
-                    content=content,
-                    indent_level=base_indent,
-                    marker=subsection.marker if subsection.marker else None,
-                    is_header=False,
-                    start_char=start_pos,
-                    end_char=char_pos[0],
+            sentences = _split_into_sentences(subsection.content)
+            real_sentences = [
+                (text.strip(), s, e)
+                for text, s, e in sentences
+                if text.strip() and text != PARAGRAPH_BREAK_MARKER
+            ]
+
+            for i, (sentence_text, _s_start, _s_end) in enumerate(real_sentences):
+                if i == 0:
+                    content = (
+                        f"{subsection.marker} {sentence_text}"
+                        if subsection.marker
+                        else sentence_text
+                    )
+                    marker = subsection.marker if subsection.marker else None
+                else:
+                    content = sentence_text
+                    marker = None
+
+                line_counter[0] += 1
+                start_pos = char_pos[0]
+                char_pos[0] += len(content) + 1
+                lines.append(
+                    ParsedLine(
+                        line_number=line_counter[0],
+                        content=content,
+                        indent_level=base_indent,
+                        marker=marker,
+                        is_header=False,
+                        start_char=start_pos,
+                        end_char=char_pos[0],
+                    )
                 )
-            )
         elif subsection.marker:
             # Just a marker with no content (rare but possible)
             line_counter[0] += 1
