@@ -196,25 +196,21 @@ export default function LawDiffViewer({
                       )}
                     </div>
 
-                    {/* Card body — diff blocks */}
+                    {/* Card body — side-by-side diff */}
                     <div className="space-y-3 px-4 py-3">
                       {a.old_text != null || a.new_text != null ? (
-                        <>
-                          {a.old_text != null && (
-                            <DiffBlock
-                              text={a.old_text}
-                              variant="old"
-                              startLine={1}
-                            />
-                          )}
-                          {a.new_text != null && (
-                            <DiffBlock
-                              text={a.new_text}
-                              variant="new"
-                              startLine={1}
-                            />
-                          )}
-                        </>
+                        <div className="grid grid-cols-2 gap-3">
+                          <DiffBlock
+                            text={a.old_text ?? ''}
+                            variant="old"
+                            startLine={1}
+                          />
+                          <DiffBlock
+                            text={a.new_text ?? ''}
+                            variant="new"
+                            startLine={1}
+                          />
+                        </div>
                       ) : (
                         <p className="text-xs italic text-gray-400">
                           No text content extracted
