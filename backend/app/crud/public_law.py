@@ -12,10 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.public_law import PublicLaw
 from app.schemas.law_viewer import (
+    DiffHunkSchema,
+    DiffLineSchema,
     LawSummarySchema,
     LawTextSchema,
     ParsedAmendmentSchema,
     PositionQualifierSchema,
+    SectionDiffSchema,
     SectionReferenceSchema,
 )
 
@@ -139,6 +142,123 @@ def _amendment_to_schema(amendment: Any) -> ParsedAmendmentSchema:
     )
 
 
+def _find_line_number(provisions: list[dict[str, Any]], old_text: str) -> int | None:
+    """Find the 1-indexed line number where old_text starts in provisions.
+
+    Normalises whitespace for matching since amendment text and provision
+    content may differ in spacing.
+    """
+    import re
+
+    def normalise(s: str) -> str:
+        return re.sub(r"\s+", " ", s).strip().lower()
+
+    needle = normalise(old_text)
+    if not needle:
+        return None
+
+    # Try matching against individual lines first (most amendments touch one line)
+    for line in provisions:
+        content = normalise(line.get("content", ""))
+        if not content:
+            continue
+        if needle in content or content in needle:
+            return int(line.get("line_number", 1))
+
+    # Multi-line: concatenate all provision text and find the offset
+    full_text_parts: list[tuple[int, str]] = []
+    for line in provisions:
+        ln = int(line.get("line_number", 1))
+        full_text_parts.append((ln, line.get("content", "")))
+
+    concat = ""
+    line_starts: list[tuple[int, int]] = []  # (char_offset, line_number)
+    for ln, content in full_text_parts:
+        line_starts.append((len(concat), ln))
+        concat += content + " "
+
+    concat_norm = normalise(concat)
+    pos = concat_norm.find(needle)
+    if pos == -1:
+        return None
+
+    # Map char position back to line number
+    for i in range(len(line_starts) - 1, -1, -1):
+        if line_starts[i][0] <= pos:
+            return line_starts[i][1]
+    return None
+
+
+async def _get_parent_revision_id(
+    session: AsyncSession, congress: int, law_number: int
+) -> int | None:
+    """Find the revision ID *before* this law was applied.
+
+    Returns the parent revision of the law's revision, or HEAD as fallback.
+    """
+    from app.models.revision import CodeRevision
+    from pipeline.olrc.snapshot_service import SnapshotService
+
+    stmt = (
+        select(CodeRevision)
+        .where(CodeRevision.summary == f"PL {congress}-{law_number}")
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    law_revision = result.scalar_one_or_none()
+
+    if law_revision and law_revision.parent_revision_id is not None:
+        return law_revision.parent_revision_id
+
+    # Fallback to HEAD if the law hasn't been applied yet
+    svc = SnapshotService(session)
+    return await svc.get_head_revision_id()
+
+
+async def _enrich_start_lines(
+    session: AsyncSession,
+    schemas: list[ParsedAmendmentSchema],
+    congress: int,
+    law_number: int,
+) -> None:
+    """Look up target sections and set start_line on each amendment.
+
+    Uses the revision *before* this law was applied so that old_text
+    (the text being struck) still exists in the provisions.
+    """
+    from pipeline.olrc.snapshot_service import SnapshotService
+
+    lookup_revision_id = await _get_parent_revision_id(session, congress, law_number)
+    if lookup_revision_id is None:
+        return
+
+    svc = SnapshotService(session)
+
+    # Cache provisions by (title, section) to avoid duplicate queries
+    provisions_cache: dict[tuple[int, str], list[dict[str, Any]] | None] = {}
+
+    for schema in schemas:
+        if schema.old_text is None or schema.section_ref is None:
+            continue
+        title = schema.section_ref.title
+        section = schema.section_ref.section
+        if title is None:
+            continue
+
+        cache_key = (title, section)
+        if cache_key not in provisions_cache:
+            state = await svc.get_section_at_revision(
+                title, section, lookup_revision_id
+            )
+            # normalized_provisions is a list stored as JSONB
+            raw = state.normalized_provisions if state else None
+            provisions_cache[cache_key] = raw if isinstance(raw, list) else None
+
+        provisions = provisions_cache[cache_key]
+        if provisions:
+            schema.start_line = _find_line_number(provisions, schema.old_text)
+
+
 async def parse_law_amendments(
     session: AsyncSession, congress: int, law_number: int
 ) -> list[ParsedAmendmentSchema]:
@@ -172,4 +292,664 @@ async def parse_law_amendments(
         text_parser = text_mod.AmendmentParser()
         amendments = text_parser.parse(law_text.htm_content)
 
-    return [_amendment_to_schema(a) for a in amendments]
+    schemas = [_amendment_to_schema(a) for a in amendments]
+    await _enrich_start_lines(session, schemas, congress, law_number)
+    return schemas
+
+
+def _provision_to_diff_line(
+    prov: dict[str, Any], line_type: str = "context"
+) -> DiffLineSchema:
+    """Convert a provision dict to a DiffLineSchema."""
+    ln = int(prov.get("line_number", 1))
+    return DiffLineSchema(
+        old_line_number=ln,
+        new_line_number=ln,
+        content=prov.get("content", ""),
+        type=line_type,
+        indent_level=int(prov.get("indent_level", 0)),
+        marker=prov.get("marker"),
+        is_header=bool(prov.get("is_header", False)),
+    )
+
+
+def _parse_redesignation(text: str) -> list[tuple[int, str]] | None:
+    """Extract ordinal→marker pairs from a redesignation instruction.
+
+    E.g. "designating the first, second, and third sentences as subsections
+    (a), (c), and (d)" → [(0, "(a)"), (1, "(c)"), (2, "(d)")].
+
+    Returns None if the text doesn't match a redesignation pattern.
+    """
+    import re
+
+    ORDINALS = {
+        "first": 0,
+        "second": 1,
+        "third": 2,
+        "fourth": 3,
+        "fifth": 4,
+        "sixth": 5,
+        "seventh": 6,
+        "eighth": 7,
+        "ninth": 8,
+        "tenth": 9,
+    }
+
+    m = re.search(
+        r"designating\s+the\s+((?:(?:first|second|third|fourth|fifth|sixth|"
+        r"seventh|eighth|ninth|tenth)(?:\s*,\s+and\s+|\s*,\s*|\s+and\s+|\s*))+)"
+        r"sentences?\s+as\s+subsections?\s+"
+        r"((?:\([a-zA-Z0-9]+\)(?:\s*,\s+and\s+|\s*,\s*|\s+and\s+|\s*))+)",
+        text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+
+    ordinal_words = re.findall(
+        r"(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)",
+        m.group(1),
+        re.IGNORECASE,
+    )
+    markers = re.findall(r"(\([a-zA-Z0-9]+\))", m.group(2))
+
+    if len(ordinal_words) != len(markers):
+        return None
+
+    result: list[tuple[int, str]] = []
+    for word, marker in zip(ordinal_words, markers, strict=False):
+        idx = ORDINALS.get(word.lower())
+        if idx is None:
+            return None
+        result.append((idx, marker))
+
+    return result if result else None
+
+
+def _parse_struck_subsections(full_match: str) -> list[str] | None:
+    """Extract subsection markers from a 'striking subsections (X) and (Y)' instruction.
+
+    Returns a list of single-letter/number markers like ['a', 'b'], or None
+    if the instruction doesn't match this pattern.
+    """
+    import re
+
+    # Match patterns like:
+    #   "striking subsections (a) and (b)"
+    #   "striking subsection (a)"
+    #   "striking subsections (a), (b), and (c)"
+    m = re.search(
+        r"striking\s+subsections?\s+((?:\([a-zA-Z0-9]+\)(?:\s*(?:,\s*|\s+and\s+))?)+)",
+        full_match,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    markers = re.findall(r"\(([a-zA-Z0-9]+)\)", m.group(1))
+    return markers if markers else None
+
+
+def _find_subsection_range(
+    provisions: list[dict[str, Any]], markers: list[str]
+) -> tuple[int, int] | None:
+    """Find the contiguous index range of provision lines belonging to given subsection markers.
+
+    Returns (start_index, end_index) inclusive, stopping at the next
+    same-level marker that is NOT in the target set.  "Same-level" means
+    the same marker style as the struck markers (e.g. lowercase letters).
+    """
+    import re
+
+    marker_set = {f"({m})" for m in markers}
+
+    # Determine boundary pattern from the marker style being struck.
+    sample = markers[0]
+    if sample.isdigit():
+        boundary_re = re.compile(r"^\([0-9]+\)$")
+    elif sample.isupper():
+        boundary_re = re.compile(r"^\([A-Z]+\)$")
+    else:
+        boundary_re = re.compile(r"^\([a-z]+\)$")
+
+    start_idx: int | None = None
+    end_idx: int | None = None
+
+    for i, line in enumerate(provisions):
+        line_marker = line.get("marker", "")
+        if line_marker in marker_set:
+            if start_idx is None:
+                start_idx = i
+            end_idx = i
+        elif start_idx is not None:
+            if line_marker and boundary_re.match(line_marker):
+                break
+            end_idx = i
+
+    if start_idx is None:
+        return None
+    assert end_idx is not None
+    return (start_idx, end_idx)
+
+
+def _prev_marker(marker: str) -> str | None:
+    """Return the marker that logically precedes *marker*.
+
+    E.g. "b" → "a", "3" → "2", "B" → "A".  Returns None for the
+    first in sequence ("a", "1", "A").
+    """
+    if marker.isdigit():
+        val = int(marker)
+        return str(val - 1) if val > 1 else None
+    if len(marker) == 1 and marker.isalpha():
+        prev_ord = ord(marker) - 1
+        if marker.islower() and prev_ord >= ord("a"):
+            return chr(prev_ord)
+        if marker.isupper() and prev_ord >= ord("A"):
+            return chr(prev_ord)
+    return None
+
+
+def _apply_amendments_to_provisions(
+    provisions: list[dict[str, Any]],
+    amendments: list[ParsedAmendmentSchema],
+) -> list[dict[str, Any]]:
+    """Apply text replacements from amendments to provisions.
+
+    Handles two cases:
+    1. Simple text replacement: old_text is found in a provision line's content.
+    2. Structural replacement: old_text is None but the instruction references
+       subsections to strike (e.g., "striking subsections (a) and (b) and
+       inserting the following"). Identifies the provision lines belonging
+       to those subsections and replaces them with new_text lines.
+    """
+    import copy
+    import re
+
+    patched = copy.deepcopy(provisions)
+
+    # Process redesignations first so markers exist for subsequent ADD anchoring
+    for amendment in amendments:
+        if amendment.change_type != "Redesignate":
+            continue
+        mapping = _parse_redesignation(amendment.full_match)
+        if not mapping:
+            continue
+        for idx, new_marker in mapping:
+            if 0 <= idx < len(patched):
+                patched[idx]["marker"] = new_marker
+                content = patched[idx].get("content", "")
+                # Prepend marker to content if not already present
+                if not content.startswith(new_marker):
+                    patched[idx]["content"] = f"{new_marker} {content}"
+
+    for amendment in amendments:
+        if amendment.change_type not in ("Modify", "Delete", "Add"):
+            continue
+
+        # Case 3: ADD — insert new provisions at the correct position
+        if amendment.change_type == "Add" and amendment.new_text:
+            new_lines_text = amendment.new_text.split("\n")
+            insert_idx = len(patched)  # default: append at end
+
+            # Determine insertion point from position_qualifier
+            if (
+                amendment.position_qualifier
+                and amendment.position_qualifier.type == "after"
+                and amendment.position_qualifier.anchor_text
+            ):
+                anchor = amendment.position_qualifier.anchor_text
+                # anchor is a marker like "(a)" — find end of that subsection
+                marker_letter = re.match(r"\(([a-zA-Z0-9]+)\)", anchor)
+                if marker_letter:
+                    span = _find_subsection_range(patched, [marker_letter.group(1)])
+                    if span:
+                        insert_idx = span[1] + 1
+            else:
+                # Try to infer from the new_text marker (e.g. "(b)" → insert after "(a)")
+                first_line = new_lines_text[0].strip()
+                marker_match = re.match(r"^\(([a-zA-Z0-9]+)\)", first_line)
+                if marker_match:
+                    marker_val = marker_match.group(1)
+                    prev_marker = _prev_marker(marker_val)
+                    if prev_marker:
+                        span = _find_subsection_range(patched, [prev_marker])
+                        if span:
+                            insert_idx = span[1] + 1
+
+            # Build provision dicts
+            base_line_number = (
+                int(patched[insert_idx - 1].get("line_number", insert_idx)) + 1
+                if insert_idx > 0 and patched
+                else 1
+            )
+            base_char = (
+                int(patched[insert_idx - 1].get("end_char", 0))
+                if insert_idx > 0 and patched
+                else 0
+            )
+            char_offset = base_char
+            line_num = base_line_number
+            new_provisions: list[dict[str, Any]] = []
+            for text in new_lines_text:
+                text = text.strip()
+                if not text:
+                    continue
+                marker_match = re.match(r"^(\([a-zA-Z0-9]+\)(?:\([A-Z0-9]+\))?)", text)
+                marker = marker_match.group(1) if marker_match else None
+                new_provisions.append(
+                    {
+                        "line_number": line_num,
+                        "content": text,
+                        "indent_level": 0,
+                        "marker": marker,
+                        "is_header": False,
+                        "start_char": char_offset,
+                        "end_char": char_offset + len(text),
+                    }
+                )
+                line_num += 1
+                char_offset += len(text) + 1
+
+            patched[insert_idx:insert_idx] = new_provisions
+            continue
+
+        # Case 1: Simple text replacement (old_text present)
+        if amendment.old_text is not None:
+            replacement = amendment.new_text or ""
+            for line in patched:
+                content = line.get("content", "")
+                if not content:
+                    continue
+
+                # Exact match
+                if amendment.old_text in content:
+                    line["content"] = content.replace(amendment.old_text, replacement)
+                    continue
+
+                # Whitespace-normalised match
+                parts = amendment.old_text.split()
+                if not parts:
+                    continue
+                ws_pattern = r"\s+".join(re.escape(part) for part in parts)
+                ws_re = re.compile(ws_pattern)
+                match = ws_re.search(content)
+                if match:
+                    line["content"] = (
+                        content[: match.start()] + replacement + content[match.end() :]
+                    )
+                    continue
+
+                # Case-insensitive fallback
+                ci_re = re.compile(ws_pattern, re.IGNORECASE)
+                match = ci_re.search(content)
+                if match:
+                    line["content"] = (
+                        content[: match.start()] + replacement + content[match.end() :]
+                    )
+            continue
+
+        # Case 2: Structural replacement (old_text is None, new_text present)
+        if amendment.new_text is None:
+            continue
+
+        struck = _parse_struck_subsections(amendment.full_match)
+        if not struck:
+            continue
+
+        span = _find_subsection_range(patched, struck)
+        if not span:
+            continue
+
+        start_idx, end_idx = span
+
+        # Build replacement lines with basic marker detection.
+        # Indent inference is unreliable without XML structure; the next
+        # release-point ingestion will supply proper formatting.
+        new_lines_text = amendment.new_text.split("\n")
+        base_line_number = int(patched[start_idx].get("line_number", start_idx + 1))
+        base_char = int(patched[start_idx].get("start_char", 0))
+        char_offset = base_char
+        line_num = base_line_number
+        replacement_provisions: list[dict[str, Any]] = []
+        for text in new_lines_text:
+            text = text.strip()
+            if not text:
+                continue
+            marker_match = re.match(r"^(\([a-zA-Z0-9]+\)(?:\([A-Z0-9]+\))?)", text)
+            marker = marker_match.group(1) if marker_match else None
+            replacement_provisions.append(
+                {
+                    "line_number": line_num,
+                    "content": text,
+                    "indent_level": 0,
+                    "marker": marker,
+                    "is_header": False,
+                    "start_char": char_offset,
+                    "end_char": char_offset + len(text),
+                }
+            )
+            line_num += 1
+            char_offset += len(text) + 1
+
+        # Replace the struck range with new provisions
+        patched[start_idx : end_idx + 1] = replacement_provisions
+
+    # Renumber all lines sequentially so replacements that change the
+    # line count don't leave gaps or duplicates.
+    for i, line in enumerate(patched):
+        line["line_number"] = i + 1
+
+    return patched
+
+
+def _strip_leading_marker(content: str) -> str:
+    """Strip a leading subsection marker for comparison purposes.
+
+    E.g. "(a) Each preliminary…" → "Each preliminary…"
+    """
+    import re
+
+    return re.sub(r"^\([a-zA-Z0-9]+\)\s*", "", content)
+
+
+def _build_hunks(
+    before: list[dict[str, Any]],
+    after: list[dict[str, Any]],
+    context_lines: int = 3,
+) -> list[DiffHunkSchema]:
+    """Build diff hunks by comparing before/after provisions.
+
+    Uses SequenceMatcher to handle both same-length (in-place edit) and
+    different-length (structural replacement) cases.  Comparisons strip
+    leading subsection markers so that redesignated lines match their
+    originals, with only genuinely new lines (like insertions) appearing
+    as added.
+    """
+    from difflib import SequenceMatcher
+
+    if not before and not after:
+        return []
+
+    # Compare marker-stripped content so redesignated lines match originals
+    old_stripped = [_strip_leading_marker(p.get("content", "")) for p in before]
+    new_stripped = [_strip_leading_marker(p.get("content", "")) for p in after]
+
+    sm = SequenceMatcher(None, old_stripped, new_stripped)
+    opcodes = sm.get_opcodes()
+
+    # Check if there are any actual changes (using real content, not stripped)
+    old_contents = [p.get("content", "") for p in before]
+    new_contents = [p.get("content", "") for p in after]
+    has_changes = False
+    for tag, i1, i2, j1, _j2 in opcodes:
+        if tag != "equal":
+            has_changes = True
+            break
+        # "equal" by stripped comparison — check if real content differs
+        for k in range(i2 - i1):
+            if old_contents[i1 + k] != new_contents[j1 + k]:
+                has_changes = True
+                break
+        if has_changes:
+            break
+    if not has_changes:
+        return []
+
+    # Build a flat list of diff entries with source indices, then group into hunks
+    entries: list[
+        tuple[str, int | None, int | None, dict[str, Any] | None, dict[str, Any] | None]
+    ] = []
+    for tag, i1, i2, j1, j2 in opcodes:
+        if tag == "equal":
+            for k in range(i2 - i1):
+                oi, ni = i1 + k, j1 + k
+                # Stripped content matched — check if real content differs
+                # (e.g. a marker was prepended by redesignation)
+                if old_contents[oi] != new_contents[ni]:
+                    entries.append(("removed", oi, None, before[oi], None))
+                    entries.append(("added", None, ni, None, after[ni]))
+                else:
+                    entries.append(("context", oi, ni, before[oi], after[ni]))
+        elif tag == "replace":
+            for k in range(i1, i2):
+                entries.append(("removed", k, None, before[k], None))
+            for k in range(j1, j2):
+                entries.append(("added", None, k, None, after[k]))
+        elif tag == "delete":
+            for k in range(i1, i2):
+                entries.append(("removed", k, None, before[k], None))
+        elif tag == "insert":
+            for k in range(j1, j2):
+                entries.append(("added", None, k, None, after[k]))
+
+    # Mark which entries are changes (not context)
+    is_change = [e[0] != "context" for e in entries]
+
+    # Expand change regions by context_lines and merge overlapping ranges
+    n = len(entries)
+    in_hunk = [False] * n
+    for i, changed in enumerate(is_change):
+        if changed:
+            for j in range(max(0, i - context_lines), min(n, i + context_lines + 1)):
+                in_hunk[j] = True
+
+    # Split into contiguous hunk regions
+    hunk_ranges: list[tuple[int, int]] = []
+    start: int | None = None
+    for i in range(n):
+        if in_hunk[i]:
+            if start is None:
+                start = i
+        else:
+            if start is not None:
+                hunk_ranges.append((start, i - 1))
+                start = None
+    if start is not None:
+        hunk_ranges.append((start, n - 1))
+
+    hunks: list[DiffHunkSchema] = []
+    for h_start, h_end in hunk_ranges:
+        lines: list[DiffLineSchema] = []
+        first_old_ln = 1
+        first_new_ln = 1
+
+        for i in range(h_start, h_end + 1):
+            line_type, old_idx, new_idx, old_prov, new_prov = entries[i]
+
+            if line_type == "context":
+                assert old_prov is not None and new_prov is not None
+                old_ln = int(old_prov.get("line_number", (old_idx or 0) + 1))
+                new_ln = int(new_prov.get("line_number", (new_idx or 0) + 1))
+                if i == h_start:
+                    first_old_ln = old_ln
+                    first_new_ln = new_ln
+                lines.append(
+                    DiffLineSchema(
+                        old_line_number=old_ln,
+                        new_line_number=new_ln,
+                        content=old_prov.get("content", ""),
+                        type="context",
+                        indent_level=int(old_prov.get("indent_level", 0)),
+                        marker=old_prov.get("marker"),
+                        is_header=bool(old_prov.get("is_header", False)),
+                    )
+                )
+            elif line_type == "removed":
+                assert old_prov is not None
+                old_ln = int(old_prov.get("line_number", (old_idx or 0) + 1))
+                if i == h_start:
+                    first_old_ln = old_ln
+                lines.append(
+                    DiffLineSchema(
+                        old_line_number=old_ln,
+                        new_line_number=None,
+                        content=old_prov.get("content", ""),
+                        type="removed",
+                        indent_level=int(old_prov.get("indent_level", 0)),
+                        marker=old_prov.get("marker"),
+                        is_header=bool(old_prov.get("is_header", False)),
+                    )
+                )
+            elif line_type == "added":
+                assert new_prov is not None
+                new_ln = int(new_prov.get("line_number", (new_idx or 0) + 1))
+                if i == h_start:
+                    first_new_ln = new_ln
+                lines.append(
+                    DiffLineSchema(
+                        old_line_number=None,
+                        new_line_number=new_ln,
+                        content=new_prov.get("content", ""),
+                        type="added",
+                        indent_level=int(new_prov.get("indent_level", 0)),
+                        marker=new_prov.get("marker"),
+                        is_header=bool(new_prov.get("is_header", False)),
+                    )
+                )
+
+        hunks.append(
+            DiffHunkSchema(old_start=first_old_ln, new_start=first_new_ln, lines=lines)
+        )
+
+    return hunks
+
+
+async def compute_law_diffs(
+    session: AsyncSession, congress: int, law_number: int
+) -> list[SectionDiffSchema]:
+    """Compute per-section unified diffs for a law's amendments.
+
+    Groups amendments by (title, section), fetches before provisions,
+    applies amendments to get after provisions, and builds diff hunks.
+    """
+    from pipeline.olrc.snapshot_service import SnapshotService
+
+    # Parse amendments (reuses existing logic)
+    schemas = await parse_law_amendments(session, congress, law_number)
+    if not schemas:
+        return []
+
+    # Get parent revision for "before" state
+    revision_id = await _get_parent_revision_id(session, congress, law_number)
+    if revision_id is None:
+        return []
+
+    # Group amendments by (title, section)
+    groups: dict[tuple[int, str], list[ParsedAmendmentSchema]] = {}
+    for s in schemas:
+        if s.section_ref is None or s.section_ref.title is None:
+            continue
+        key = (s.section_ref.title, s.section_ref.section)
+        groups.setdefault(key, []).append(s)
+
+    svc = SnapshotService(session)
+    diffs: list[SectionDiffSchema] = []
+
+    for (title, section), section_amendments in groups.items():
+        # Separate note amendments from text-modifying amendments
+        note_amendments = [a for a in section_amendments if a.change_type == "Add_Note"]
+        text_amendments = [a for a in section_amendments if a.change_type != "Add_Note"]
+
+        # Fetch "before" provisions
+        state = await svc.get_section_at_revision(title, section, revision_id)
+        raw = state.normalized_provisions if state else None
+
+        # Handle text-modifying amendments (normal diff flow)
+        if text_amendments:
+            if not isinstance(raw, list) or not raw:
+                diffs.append(
+                    SectionDiffSchema(
+                        title_number=title,
+                        section_number=section,
+                        section_key=f"{title} U.S.C. § {section}",
+                        heading=state.heading if state else "",
+                        hunks=[],
+                        total_lines=0,
+                        amendments=text_amendments,
+                        all_provisions=[],
+                    )
+                )
+            else:
+                before = raw
+                after = _apply_amendments_to_provisions(before, text_amendments)
+                hunks = _build_hunks(before, after)
+                all_provisions = [_provision_to_diff_line(p) for p in after]
+                diffs.append(
+                    SectionDiffSchema(
+                        title_number=title,
+                        section_number=section,
+                        section_key=f"{title} U.S.C. § {section}",
+                        heading=state.heading if state else "",
+                        hunks=hunks,
+                        total_lines=len(after),
+                        amendments=text_amendments,
+                        all_provisions=all_provisions,
+                    )
+                )
+
+        # Handle note amendments as a separate "STATUTORY NOTES" diff card
+        if note_amendments:
+            note_hunks = _build_note_hunks(note_amendments)
+            note_lines = [line for hunk in note_hunks for line in hunk.lines]
+            diffs.append(
+                SectionDiffSchema(
+                    title_number=title,
+                    section_number=section,
+                    section_key=f"{title} U.S.C. § {section}",
+                    heading=(state.heading or "" if state else "")
+                    + " — STATUTORY NOTES",
+                    hunks=note_hunks,
+                    total_lines=len(note_lines),
+                    amendments=note_amendments,
+                    all_provisions=note_lines,
+                )
+            )
+
+    return diffs
+
+
+def _build_note_hunks(
+    note_amendments: list[ParsedAmendmentSchema],
+) -> list[DiffHunkSchema]:
+    """Build diff hunks for ADD_NOTE amendments.
+
+    Renders each note's text as all-added lines under a header,
+    mimicking a new file being added (like STATUTORY_NOTES).
+    """
+    lines: list[DiffLineSchema] = []
+    line_num = 1
+
+    for amendment in note_amendments:
+        note_text = amendment.new_text or amendment.full_match
+        if not note_text:
+            continue
+
+        # Split note text into lines
+        for text_line in note_text.split("\n"):
+            text_line = text_line.strip()
+            if not text_line:
+                continue
+            lines.append(
+                DiffLineSchema(
+                    old_line_number=None,
+                    new_line_number=line_num,
+                    content=text_line,
+                    type="added",
+                    indent_level=0,
+                    marker=None,
+                    is_header=line_num == 1,
+                )
+            )
+            line_num += 1
+
+    if not lines:
+        return []
+
+    return [
+        DiffHunkSchema(
+            old_start=0,
+            new_start=1,
+            lines=lines,
+        )
+    ]

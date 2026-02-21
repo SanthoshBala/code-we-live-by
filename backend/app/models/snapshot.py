@@ -4,7 +4,7 @@ Only stores sections that changed at a given revision. For unchanged sections,
 walk the parent revision chain to find the most recent snapshot.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     ForeignKey,
@@ -12,7 +12,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,6 +20,7 @@ from app.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.revision import CodeRevision
+    from app.models.us_code import SectionGroup
 
 
 class SectionSnapshot(Base, TimestampMixin):
@@ -79,26 +79,40 @@ class SectionSnapshot(Base, TimestampMixin):
         nullable=False,
         doc="True if the section was repealed/removed at this revision",
     )
+    group_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("section_group.group_id", ondelete="SET NULL"),
+        nullable=True,
+        doc="SectionGroup this snapshot belongs to (for navigation)",
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        doc="Sort order within the group",
+    )
 
     # Relationships
+    group: Mapped[Optional["SectionGroup"]] = relationship(
+        foreign_keys=[group_id],
+    )
     revision: Mapped["CodeRevision"] = relationship(
         back_populates="snapshots",
         foreign_keys=[revision_id],
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "revision_id",
-            "title_number",
-            "section_number",
-            name="uq_section_snapshot_revision_section",
-        ),
+        # No unique constraint on (revision_id, title_number, section_number):
+        # the US Code contains legitimate duplicate section numbers where
+        # Congress enacted two provisions with the same number (e.g. two
+        # § 4781 in Title 10). See pipeline/olrc/README.md for details.
         Index(
             "idx_section_snapshot_title_section",
             "title_number",
             "section_number",
         ),
         Index("idx_section_snapshot_text_hash", "text_hash"),
+        Index("idx_section_snapshot_group", "group_id"),
     )
 
     def __repr__(self) -> str:

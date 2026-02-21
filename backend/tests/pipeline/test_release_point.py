@@ -308,13 +308,12 @@ class TestReleasePointRegistry:
 class TestReleasePointSortOrder:
     """Tests for release point chronological ordering.
 
-    Sort key: (date, congress, primary_law_number, -exclusion_count, update_number)
+    Sort key: (congress, primary_law_number, -exclusion_count, update_number)
     """
 
     @staticmethod
     def _sort_key(rp: ReleasePointInfo) -> tuple:
         return (
-            rp.publication_date or date.min,
             rp.congress,
             rp.primary_law_number or 0,
             -len(rp.excluded_laws),
@@ -359,8 +358,8 @@ class TestReleasePointSortOrder:
             "113-296",  # 0 exclusions (latest, most comprehensive)
         ]
 
-    def test_date_is_primary_sort_key(self) -> None:
-        """Earlier date sorts before later date, regardless of law number."""
+    def test_law_number_sorts_within_congress(self) -> None:
+        """Lower law number sorts before higher, regardless of date."""
         rps = [
             ReleasePointInfo(
                 full_identifier="113-296",
@@ -379,6 +378,27 @@ class TestReleasePointSortOrder:
 
         ids = [rp.full_identifier for rp in rps]
         assert ids == ["113-200", "113-296"]
+
+    def test_congress_is_primary_sort_key(self) -> None:
+        """Earlier congress sorts before later congress, even without dates."""
+        rps = [
+            ReleasePointInfo(
+                full_identifier="115-40u1",
+                congress=115,
+                law_identifier="40u1",
+                publication_date=None,
+            ),
+            ReleasePointInfo(
+                full_identifier="113-21",
+                congress=113,
+                law_identifier="21",
+                publication_date=date(2013, 7, 18),
+            ),
+        ]
+        rps.sort(key=self._sort_key)
+
+        ids = [rp.full_identifier for rp in rps]
+        assert ids == ["113-21", "115-40u1"]
 
     def test_update_suffix_sorts_after_base(self) -> None:
         """Update suffixes (u1) sort after the base RP by date, then update number."""

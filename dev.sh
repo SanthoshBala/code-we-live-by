@@ -2,10 +2,11 @@
 # dev.sh — Start the full CWLB local development environment
 #
 # Usage:
-#   ./dev.sh          Start Postgres, backend, and frontend
-#   ./dev.sh --seed   Also ingest Phase 1 titles into the database
-#   ./dev.sh stop     Stop Postgres container
-#   ./dev.sh reset    Destroy DB volume, recreate, migrate, and re-ingest
+#   ./dev.sh              Start Postgres, backend, and frontend
+#   ./dev.sh --seed       Also build chronology: bootstrap RP, load laws,
+#                         advance chronology
+#   ./dev.sh stop         Stop Postgres container
+#   ./dev.sh reset        Destroy DB and rebuild everything from scratch
 #
 # Prerequisites:
 #   - Docker (for Postgres)
@@ -57,7 +58,7 @@ fi
 # ── Reset command ────────────────────────────────────────────────────────────
 
 if [[ "${1:-}" == "reset" ]]; then
-    warn "This will destroy all local data and re-ingest from scratch."
+    warn "This will destroy all local data and rebuild from scratch."
     read -rp "Continue? [y/N] " confirm
     if [[ "$confirm" != [yY] ]]; then
         log "Aborted."
@@ -78,13 +79,21 @@ if [[ "${1:-}" == "reset" ]]; then
     cd "$BACKEND_DIR"
     uv run python -m alembic upgrade head
 
-    log "Ingesting Phase 1 titles (this may take a few minutes)..."
-    uv run python -m pipeline.cli ingest-phase1
+    log "Step 1/4: Bootstrapping oldest release point (downloads all titles)..."
+    uv run python -m pipeline.cli chrono-bootstrap
 
-    log "Seeding sample Public Laws..."
-    uv run python -m pipeline.cli seed-laws
+    log "Step 2/4: Ingesting all Public Laws for Congress 113..."
+    uv run python -m pipeline.cli govinfo-ingest-congress 113
 
-    log "Reset complete."
+    log "Step 3/4: Checking chronology status..."
+    uv run python -m pipeline.cli chrono-status
+
+    log "Step 4/4: Applying first law after RP (auto-fetches and parses)..."
+    uv run python -m pipeline.cli chrono-advance
+
+    log "Reset complete. Current state:"
+    uv run python -m pipeline.cli chrono-status
+
     exit 0
 fi
 
@@ -127,11 +136,20 @@ uv run python -m alembic upgrade head
 # ── 3. Optionally seed data ──────────────────────────────────────────────────
 
 if [[ "$SEED" == true ]]; then
-    log "Seeding Phase 1 titles (this may take a few minutes)..."
-    uv run python -m pipeline.cli ingest-phase1
-    log "Seeding sample Public Laws for parse-law testing..."
-    uv run python -m pipeline.cli seed-laws
-    log "Seeding complete."
+    log "Step 1/4: Bootstrapping oldest release point (downloads all titles)..."
+    uv run python -m pipeline.cli chrono-bootstrap
+
+    log "Step 2/4: Ingesting all Public Laws for Congress 113..."
+    uv run python -m pipeline.cli govinfo-ingest-congress 113
+
+    log "Step 3/4: Checking chronology status..."
+    uv run python -m pipeline.cli chrono-status
+
+    log "Step 4/4: Applying first law after RP (auto-fetches and parses)..."
+    uv run python -m pipeline.cli chrono-advance
+
+    log "Chronology built. Current state:"
+    uv run python -m pipeline.cli chrono-status
 fi
 
 # ── 4. Start backend ─────────────────────────────────────────────────────────

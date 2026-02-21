@@ -2,15 +2,17 @@ import Link from 'next/link';
 import type { BreadcrumbSegment, ItemStatus } from '@/lib/types';
 import { statusBadge } from '@/lib/statusStyles';
 import PageHeader from '@/components/ui/PageHeader';
+import LawLine from '@/components/ui/LawLine';
+export type { LawReference } from '@/components/ui/LawLine';
+import type { LawReference } from '@/components/ui/LawLine';
 
 interface SectionHeaderProps {
   heading: string;
   breadcrumbs?: BreadcrumbSegment[];
-  enactedDate: string | null;
-  lastModifiedDate: string | null;
   isPositiveLaw: boolean;
   status: ItemStatus;
-  latestAmendment?: { publicLawId: string; year: number } | null;
+  enacted?: LawReference | null;
+  lastAmended?: LawReference | null;
 }
 
 function Breadcrumbs({ segments }: { segments: BreadcrumbSegment[] }) {
@@ -36,13 +38,14 @@ function Breadcrumbs({ segments }: { segments: BreadcrumbSegment[] }) {
 export default function SectionHeader({
   heading,
   breadcrumbs,
-  enactedDate,
-  lastModifiedDate,
   isPositiveLaw,
   status,
-  latestAmendment,
+  enacted,
+  lastAmended,
 }: SectionHeaderProps) {
   const badge = statusBadge(status);
+  const hasLawInfo = enacted || lastAmended;
+
   return (
     <PageHeader
       title={heading}
@@ -65,20 +68,13 @@ export default function SectionHeader({
               Positive Law
             </span>
           )}
-          {enactedDate && (
-            <span className="text-gray-500">Enacted {enactedDate}</span>
-          )}
-          {lastModifiedDate && (
-            <span className="text-gray-500">
-              Last modified {lastModifiedDate}
-            </span>
-          )}
-          {latestAmendment && (
-            <span className="rounded bg-primary-50 px-2 py-0.5 font-medium text-primary-700">
-              Last amended by{' '}
-              <span className="font-mono">{latestAmendment.publicLawId}</span> (
-              {latestAmendment.year})
-            </span>
+          {hasLawInfo && (
+            <dl className="grid grid-cols-[auto_auto_auto_auto_auto] gap-x-3 gap-y-0.5">
+              {enacted && <LawLine label="Enacted:" law={enacted} />}
+              {lastAmended && (
+                <LawLine label="Last amended:" law={lastAmended} />
+              )}
+            </dl>
           )}
         </>
       }

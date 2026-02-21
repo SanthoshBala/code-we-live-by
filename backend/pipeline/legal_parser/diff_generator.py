@@ -152,12 +152,17 @@ class DiffGenerator:
 
         # Dispatch based on pattern type
         if amendment.pattern_type == PatternType.STRIKE_INSERT:
-            # Both old and new text should come from the parser
-            if not old_text:
+            if not old_text and not new_text:
                 return None
-            description = f"Strike '{_truncate(old_text)}'"
-            if new_text:
-                description += f" and insert '{_truncate(new_text)}'"
+            if old_text:
+                description = f"Strike '{_truncate(old_text)}'"
+                if new_text:
+                    description += f" and insert '{_truncate(new_text)}'"
+            else:
+                # Structural replacement (e.g., "striking subsections (a) and (b)
+                # and inserting the following"). Preserve the instruction text so
+                # the revision builder can parse which subsections to replace.
+                description = _truncate(amendment.full_match, max_len=200)
 
         elif amendment.pattern_type == PatternType.STRIKE:
             if not old_text:
@@ -187,10 +192,7 @@ class DiffGenerator:
             description = f"Add '{_truncate(new_text)}'"
 
         elif amendment.pattern_type == PatternType.REPEAL:
-            # Old text is the entire section/subsection content
-            section = resolution.section
-            if section and section.text_content:
-                old_text = section.text_content
+            # Old text is read from parent snapshot by RevisionBuilder
             description = "Repeal section"
 
         elif amendment.pattern_type == PatternType.SUBSTITUTE:
@@ -198,6 +200,11 @@ class DiffGenerator:
             if extraction:
                 new_text = extraction.text
             description = "Substitute text"
+
+        elif amendment.pattern_type == PatternType.ADD_NOTE:
+            description = (
+                f"Add statutory note: {_truncate(new_text or amendment.full_match)}"
+            )
 
         elif amendment.pattern_type in (
             PatternType.REDESIGNATE,
@@ -226,40 +233,13 @@ class DiffGenerator:
         )
 
     def _validate_diff(self, diff: DiffResult) -> None:
-        """Validate a diff against the current section content.
+        """Mark diff as validated — actual validation deferred to amendment applicator.
 
-        Checks that old_text actually exists in the section for STRIKE/MODIFY ops.
+        With natural keys, we no longer have section content at diff generation
+        time. The amendment applicator validates old_text against the snapshot.
         """
-        section = diff.resolution.section
-        if not section or not section.text_content:
-            diff.validation_notes = "No section content available for validation"
-            return
-
-        content = section.text_content
-
-        if diff.old_text and diff.change_type in (
-            ChangeType.MODIFY,
-            ChangeType.DELETE,
-        ):
-            if diff.old_text in content:
-                diff.validated = True
-                diff.validation_notes = "old_text found in section"
-            else:
-                # Try case-insensitive match
-                if diff.old_text.lower() in content.lower():
-                    diff.validated = True
-                    diff.validation_notes = "old_text found (case-insensitive)"
-                else:
-                    diff.validation_notes = "old_text NOT found in section content"
-        elif diff.change_type in (ChangeType.ADD, ChangeType.REPEAL):
-            # ADD doesn't need old_text validation
-            # REPEAL is validated by section existence
-            diff.validated = True
-            diff.validation_notes = "No old_text validation needed"
-        else:
-            # REDESIGNATE, TRANSFER — structural, can't validate against text
-            diff.validated = True
-            diff.validation_notes = "Structural change, no text validation"
+        diff.validated = True
+        diff.validation_notes = "Validation deferred to amendment applicator"
 
     async def persist_law_changes(
         self,
@@ -278,14 +258,15 @@ class DiffGenerator:
         changes: list[LawChange] = []
 
         for diff in diffs:
-            if not diff.resolution.section:
+            if not diff.resolution.resolved:
                 continue
 
             effective = law.effective_date or law.enacted_date
 
             change = LawChange(
                 law_id=law.law_id,
-                section_id=diff.resolution.section.section_id,
+                title_number=diff.resolution.title_number,
+                section_number=diff.resolution.section_number,
                 change_type=diff.change_type,
                 old_text=diff.old_text,
                 new_text=diff.new_text,

@@ -11,6 +11,7 @@ interface DirectoryViewProps {
   title: string;
   breadcrumbs?: BreadcrumbSegment[];
   items: DirectoryItem[];
+  revisionLabel?: string | null;
 }
 
 const TABS = [{ id: 'code', label: 'Code' }];
@@ -39,6 +40,7 @@ export default function DirectoryView({
   title,
   breadcrumbs,
   items,
+  revisionLabel: revLabel,
 }: DirectoryViewProps) {
   const [activeTab, setActiveTab] = useState('code');
 
@@ -49,6 +51,11 @@ export default function DirectoryView({
         subtitle={
           breadcrumbs && breadcrumbs.length > 0 ? (
             <Breadcrumbs segments={breadcrumbs} />
+          ) : undefined
+        }
+        badges={
+          revLabel ? (
+            <span className="text-gray-500">Current through: {revLabel}</span>
           ) : undefined
         }
       />

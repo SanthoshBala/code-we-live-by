@@ -143,15 +143,15 @@ class ReleasePointRegistry:
                 seen.add(rp.full_identifier)
                 unique_rps.append(rp)
 
-        # Sort chronologically:
-        # 1. Publication date (primary ordering)
-        # 2. Congress number (tiebreaker for same-day across congresses)
-        # 3. Primary law number (sequential within a congress)
-        # 4. Exclusion count descending (more exclusions = earlier state)
-        # 5. Update number (u1, u2 — multiple updates on the same day)
+        # Sort chronologically by legislative sequence:
+        # 1. Congress number (primary — each congress spans ~2 years)
+        # 2. Primary law number (sequential within a congress)
+        # 3. Exclusion count descending (more exclusions = earlier state)
+        # 4. Update number (u1, u2 — multiple updates on the same day)
+        # Note: publication_date is NOT used because some RPs lack a parseable
+        # date, which would sort them incorrectly before dated entries.
         unique_rps.sort(
             key=lambda rp: (
-                rp.publication_date or date.min,
                 rp.congress,
                 rp.primary_law_number or 0,
                 -len(rp.excluded_laws),

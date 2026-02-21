@@ -51,6 +51,7 @@ class ChangeType(enum.StrEnum):
     REPEAL = "Repeal"
     REDESIGNATE = "Redesignate"
     TRANSFER = "Transfer"
+    ADD_NOTE = "Add_Note"
 
 
 class LawLevel(enum.StrEnum):

@@ -66,3 +66,47 @@ class ParsedAmendmentSchema(BaseModel):
     needs_review: bool = False
     context: str = ""
     position_qualifier: PositionQualifierSchema | None = None
+    start_line: int | None = Field(
+        None,
+        description="1-indexed line number in the target section where old_text starts",
+    )
+
+
+class DiffLineSchema(BaseModel):
+    """A single line in a unified diff."""
+
+    old_line_number: int | None = Field(
+        None, description="Line number in the 'before' version (None for added lines)"
+    )
+    new_line_number: int | None = Field(
+        None, description="Line number in the 'after' version (None for removed lines)"
+    )
+    content: str = ""
+    type: str = Field(..., description="Line type: 'context', 'added', or 'removed'")
+    indent_level: int = 0
+    marker: str | None = None
+    is_header: bool = False
+
+
+class DiffHunkSchema(BaseModel):
+    """A contiguous region of changes with surrounding context."""
+
+    old_start: int = Field(..., description="Starting line number in 'before' version")
+    new_start: int = Field(..., description="Starting line number in 'after' version")
+    lines: list[DiffLineSchema] = Field(default_factory=list)
+
+
+class SectionDiffSchema(BaseModel):
+    """Unified diff for all amendments to a single section."""
+
+    title_number: int
+    section_number: str
+    section_key: str = Field(..., description="Display string like '16 U.S.C. § 2705'")
+    heading: str = ""
+    hunks: list[DiffHunkSchema] = Field(default_factory=list)
+    total_lines: int = Field(0, description="Total lines in the section")
+    amendments: list[ParsedAmendmentSchema] = Field(default_factory=list)
+    all_provisions: list[DiffLineSchema] = Field(
+        default_factory=list,
+        description="Full section lines for frontend expansion",
+    )

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 import httpx
 
@@ -238,7 +239,7 @@ class GovInfoClient:
             # Import here to avoid circular imports
             from app.config import settings
 
-            self.api_key = settings.govinfo_api_key
+            self.api_key = settings.govinfo_api_key  # type: ignore[assignment]
         if not self.api_key:
             raise ValueError(
                 "GovInfo API key required. Set GOVINFO_API_KEY environment "
@@ -366,10 +367,12 @@ class GovInfoClient:
                 if not next_offset or not packages:
                     break
 
-                # Extract offset mark from next page URL
-                # nextPage format: "...&offsetMark=XXXXX&..."
+                # Extract offset mark from next page URL.
+                # The value is already URL-encoded in the URL; decode it
+                # so httpx doesn't double-encode when sending the request.
                 if "offsetMark=" in next_offset:
-                    offset_mark = next_offset.split("offsetMark=")[1].split("&")[0]
+                    raw = next_offset.split("offsetMark=")[1].split("&")[0]
+                    offset_mark = unquote(raw)
                 else:
                     break
 
@@ -429,15 +432,16 @@ class GovInfoClient:
         Returns:
             List of PLAWPackageInfo objects for that Congress.
         """
-        # Use a wide date range to get all laws
-        # Congress sessions span ~2 years; use a 3-year window to be safe
+        # The collections API date range filters by lastModified on
+        # govinfo.gov (not enacted date). Records are re-indexed
+        # periodically, so we use a start date near the Congress start
+        # with no end date (open-ended = "modified since X").
+        # The congress parameter + client-side filter handle the rest.
         start_year = 1789 + (congress - 1) * 2  # Approximate start year
         start_date = datetime(start_year, 1, 1)
-        end_date = datetime(start_year + 3, 12, 31)
 
         all_laws = await self.get_public_laws(
             start_date=start_date,
-            end_date=end_date,
             congress=congress,
         )
 

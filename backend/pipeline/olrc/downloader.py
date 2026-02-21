@@ -1,5 +1,6 @@
 """Download US Code XML files from OLRC (Office of Law Revision Counsel)."""
 
+import asyncio
 import logging
 import zipfile
 from io import BytesIO
@@ -254,43 +255,61 @@ class OLRCDownloader:
         )
         logger.info(f"Downloading Title {title_number}@{release_point} from {url}")
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.get(url, follow_redirects=True)
+                    response.raise_for_status()
 
-                rp_dir.mkdir(parents=True, exist_ok=True)
-                with zipfile.ZipFile(BytesIO(response.content)) as zf:
-                    zf.extractall(rp_dir)
+                    rp_dir.mkdir(parents=True, exist_ok=True)
+                    with zipfile.ZipFile(BytesIO(response.content)) as zf:
+                        zf.extractall(rp_dir)
 
-                xml_files = list(rp_dir.glob("*.xml"))
-                if xml_files:
-                    logger.info(
-                        f"Title {title_number}@{release_point} downloaded: {xml_files[0]}"
+                    xml_files = list(rp_dir.glob("*.xml"))
+                    if xml_files:
+                        logger.info(
+                            f"Title {title_number}@{release_point} downloaded: "
+                            f"{xml_files[0]}"
+                        )
+                        return xml_files[0]
+                    else:
+                        logger.error(
+                            f"No XML file found in archive for "
+                            f"Title {title_number}@{release_point}"
+                        )
+                        return None
+
+            except httpx.HTTPStatusError as e:
+                logger.error(
+                    f"HTTP error downloading Title {title_number}@{release_point}: {e}"
+                )
+                return None
+            except zipfile.BadZipFile as e:
+                logger.error(
+                    f"Invalid ZIP file for Title {title_number}@{release_point}: {e}"
+                )
+                return None
+            except (httpx.RemoteProtocolError, httpx.ReadError) as e:
+                if attempt < max_retries:
+                    wait = 2**attempt
+                    logger.warning(
+                        f"Title {title_number}@{release_point}: connection error "
+                        f"(attempt {attempt}/{max_retries}), retrying in {wait}s: {e}"
                     )
-                    return xml_files[0]
+                    await asyncio.sleep(wait)
                 else:
                     logger.error(
-                        f"No XML file found in archive for "
-                        f"Title {title_number}@{release_point}"
+                        f"Title {title_number}@{release_point}: failed after "
+                        f"{max_retries} attempts: {e}"
                     )
                     return None
-
-        except httpx.HTTPStatusError as e:
-            logger.error(
-                f"HTTP error downloading Title {title_number}@{release_point}: {e}"
-            )
-            return None
-        except zipfile.BadZipFile as e:
-            logger.error(
-                f"Invalid ZIP file for Title {title_number}@{release_point}: {e}"
-            )
-            return None
-        except Exception as e:
-            logger.exception(
-                f"Error downloading Title {title_number}@{release_point}: {e}"
-            )
-            return None
+            except Exception as e:
+                logger.exception(
+                    f"Error downloading Title {title_number}@{release_point}: {e}"
+                )
+                return None
+        return None
 
     def get_xml_path_at_release_point(
         self, title_number: int, release_point: str

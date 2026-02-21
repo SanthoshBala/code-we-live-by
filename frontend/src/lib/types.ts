@@ -105,6 +105,8 @@ export interface Amendment {
     law_number: number;
     public_law_id: string;
     date: string | null;
+    short_title?: string | null;
+    display_title?: string | null;
   };
   year: number;
   description: string;
@@ -113,8 +115,16 @@ export interface Amendment {
 
 /** A source law citation for a section. */
 export interface SourceLaw {
+  law?: {
+    congress: number;
+    law_number: number;
+    date: string | null;
+    public_law_id: string;
+    short_title?: string | null;
+    display_title?: string | null;
+  } | null;
   law_id: string;
-  law_title: string | null;
+  law_title?: string | null;
   relationship: string;
   raw_text: string;
 }
@@ -135,6 +145,17 @@ export interface SectionNotes {
   transferred_to: string | null;
   omitted: boolean;
   renumbered_from: string | null;
+}
+
+// --- Revision types ---
+
+/** HEAD revision metadata (latest ingested commit). */
+export interface HeadRevision {
+  revision_id: number;
+  revision_type: string;
+  effective_date: string;
+  summary: string | null;
+  sequence_number: number;
 }
 
 // --- Law viewer types ---
@@ -193,6 +214,39 @@ export interface ParsedAmendment {
   needs_review: boolean;
   context: string;
   position_qualifier: PositionQualifier | null;
+  start_line: number | null;
+}
+
+// --- Unified diff types ---
+
+/** A single line in a unified diff. */
+export interface DiffLine {
+  old_line_number: number | null;
+  new_line_number: number | null;
+  content: string;
+  type: 'context' | 'added' | 'removed';
+  indent_level: number;
+  marker: string | null;
+  is_header: boolean;
+}
+
+/** A contiguous diff hunk with surrounding context. */
+export interface DiffHunk {
+  old_start: number;
+  new_start: number;
+  lines: DiffLine[];
+}
+
+/** Unified diff for all amendments to a single section. */
+export interface SectionDiff {
+  title_number: number;
+  section_number: string;
+  section_key: string;
+  heading: string;
+  hunks: DiffHunk[];
+  total_lines: number;
+  amendments: ParsedAmendment[];
+  all_provisions: DiffLine[];
 }
 
 /** Full section view returned by the section detail endpoint. */
@@ -208,4 +262,5 @@ export interface SectionView {
   is_positive_law: boolean;
   is_repealed: boolean;
   notes: SectionNotes | null;
+  last_revision?: HeadRevision | null;
 }

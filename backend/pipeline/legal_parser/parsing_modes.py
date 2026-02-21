@@ -141,6 +141,10 @@ class RegExParsingSession:
             # Track text coverage
             accountant = TextAccountant(law_text)
             for i, amendment in enumerate(amendments):
+                # Skip span tracking for amendments without valid positions
+                # (e.g. freestanding note sections detected by sidenote)
+                if amendment.start_pos >= amendment.end_pos:
+                    continue
                 accountant.claim_span(
                     start_pos=amendment.start_pos,
                     end_pos=amendment.end_pos,
@@ -164,6 +168,9 @@ class RegExParsingSession:
 
                 # Update spans with record IDs
                 for i, amendment in enumerate(amendments):
+                    # Skip span tracking for amendments without valid positions
+                    if amendment.start_pos >= amendment.end_pos:
+                        continue
                     span = TextSpan(
                         session_id=session.session_id,
                         start_pos=amendment.start_pos,

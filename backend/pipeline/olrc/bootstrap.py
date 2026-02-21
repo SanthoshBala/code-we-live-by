@@ -20,6 +20,7 @@ from app.models.release_point import OLRCReleasePoint
 from app.models.revision import CodeRevision
 from app.models.snapshot import SectionSnapshot
 from pipeline.olrc.downloader import OLRCDownloader
+from pipeline.olrc.group_service import upsert_groups_from_parse_result
 from pipeline.olrc.normalized_section import normalize_parsed_section
 from pipeline.olrc.parser import USLMParser, compute_text_hash
 from pipeline.olrc.release_point import parse_release_point_identifier
@@ -87,7 +88,12 @@ async def ingest_title(
         logger.error(f"Title {title_num}: parse failed, skipping", exc_info=True)
         return None
 
-    # Create snapshots
+    # Upsert SectionGroup hierarchy for navigation
+    group_lookup = await upsert_groups_from_parse_result(session, parse_result.groups)
+
+    # Create snapshots with group_id for navigation
+    # Note: duplicate section numbers are allowed — Congress occasionally
+    # enacts two provisions with the same number (see pipeline/olrc/README.md).
     count = 0
     for section in parse_result.sections:
         try:
@@ -111,6 +117,13 @@ async def ingest_title(
         if normalized.section_notes is not None:
             notes_json = normalized.section_notes.model_dump(mode="json")
 
+        # Resolve group_id from parsed section's parent_group_key
+        group_id = None
+        if section.parent_group_key:
+            group_record = group_lookup.get(section.parent_group_key)
+            if group_record:
+                group_id = group_record.group_id
+
         snapshot = SectionSnapshot(
             revision_id=revision_id,
             title_number=title_num,
@@ -124,6 +137,8 @@ async def ingest_title(
             notes_hash=compute_text_hash(section.notes) if section.notes else None,
             full_citation=section.full_citation,
             is_deleted=False,
+            group_id=group_id,
+            sort_order=section.sort_order,
         )
         session.add(snapshot)
         count += 1

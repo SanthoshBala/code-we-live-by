@@ -191,6 +191,13 @@ This document tracks the remaining implementation backlog, organized by phase an
   - Requires: XHTML parser for annual archives, Statutes at Large parser, `AnnualEdition` revision type
   - **Priority**: Low — revisit after play-forward engine is working end-to-end
 
+- [ ] **Task 1.20f**: Inject section header comment lines into normalized_provisions during parsing (Backlog)
+  - Currently the section viewer prepends 4 "comment" lines (full citation, heading, "Provisions", blank) at render time in `SectionProvisions.tsx`
+  - This means `normalized_provisions` line numbers don't match what the user sees, requiring a `+4` offset hack in `LawDiffViewer.tsx` (`SECTION_HEADER_LINES`)
+  - Fix: generate these comment lines in the backend normalizer (`normalized_section.py`) so `line_number` values in `normalized_provisions` match the rendered output
+  - Remove the frontend `docstring`/`blankLineNumber` injection in `SectionProvisions.tsx` and the `SECTION_HEADER_LINES` constant in `LawDiffViewer.tsx`
+  - **Priority**: Low — cosmetic consistency; current `+4` hack works correctly
+
 ### Backend API Development
 - [ ] **Task 1.21**: Implement Code Browsing API endpoints
   - `GET /api/titles` - List all titles

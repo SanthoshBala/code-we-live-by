@@ -124,14 +124,16 @@ async def ingest_title(
             return 1
 
 
-async def ingest_phase1(
+async def ingest_titles_command(
+    title_list: list[int] | None = None,
     download_dir: Path = Path("data/olrc"),
     force_download: bool = False,
     force_parse: bool = False,
 ) -> int:
-    """Ingest all Phase 1 US Code titles into the database.
+    """Ingest US Code titles into the database.
 
     Args:
+        title_list: Specific titles to ingest. None = all 54 titles.
         download_dir: Directory for OLRC XML files.
         force_download: If True, re-download even if files exist.
         force_parse: If True, re-parse and update existing records.
@@ -142,12 +144,21 @@ async def ingest_phase1(
     from app.models.base import async_session_maker
     from pipeline.olrc.ingestion import USCodeIngestionService
 
+    all_titles = title_list or list(range(1, 55))
+    label = f"{len(all_titles)} titles"
+
     async with async_session_maker() as session:
         service = USCodeIngestionService(session, download_dir=download_dir)
-        logs = await service.ingest_phase1_titles(
-            force_download=force_download,
-            force_parse=force_parse,
-        )
+        logs = []
+        for title_number in all_titles:
+            logger.info(f"Ingesting Title {title_number}...")
+            log = await service.ingest_title(
+                title_number,
+                force_download=force_download,
+                force_parse=force_parse,
+            )
+            logs.append(log)
+            logger.info(f"Title {title_number}: {log.status}")
 
         succeeded = sum(1 for log in logs if log.status in ("completed", "skipped"))
         failed = sum(1 for log in logs if log.status == "failed")
@@ -155,7 +166,7 @@ async def ingest_phase1(
         total_updated = sum(log.records_updated or 0 for log in logs)
 
         logger.info(
-            f"Phase 1 ingestion complete: {succeeded} succeeded, {failed} failed, "
+            f"Ingestion complete ({label}): {succeeded} succeeded, {failed} failed, "
             f"{total_created} created, {total_updated} updated"
         )
 
@@ -164,6 +175,22 @@ async def ingest_phase1(
                 logger.error(f"  {log.operation}: {log.error_message}")
 
         return 1 if failed > 0 else 0
+
+
+async def ingest_phase1(
+    download_dir: Path = Path("data/olrc"),
+    force_download: bool = False,
+    force_parse: bool = False,
+) -> int:
+    """Ingest Phase 1 US Code titles (backwards-compatible wrapper)."""
+    from pipeline.olrc.downloader import PHASE_1_TITLES
+
+    return await ingest_titles_command(
+        title_list=PHASE_1_TITLES,
+        download_dir=download_dir,
+        force_download=force_download,
+        force_parse=force_parse,
+    )
 
 
 # =============================================================================
@@ -1925,9 +1952,43 @@ def main() -> int:
         help="Re-parse and update existing records",
     )
 
-    # Ingest-phase1 command
+    # Ingest-titles command
+    ingest_titles_parser = subparsers.add_parser(
+        "ingest-titles",
+        help="Ingest US Code titles into the database (all titles by default)",
+    )
+    ingest_titles_parser.add_argument(
+        "--phase1",
+        action="store_true",
+        help="Only ingest Phase 1 titles (10, 17, 18, 20, 22, 26, 42, 50)",
+    )
+    ingest_titles_parser.add_argument(
+        "--titles",
+        type=str,
+        default=None,
+        help="Comma-separated title numbers to ingest (e.g., '10,17,18')",
+    )
+    ingest_titles_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+    ingest_titles_parser.add_argument(
+        "--force-download",
+        action="store_true",
+        help="Re-download XML even if files exist",
+    )
+    ingest_titles_parser.add_argument(
+        "--force-parse",
+        action="store_true",
+        help="Re-parse and update existing records",
+    )
+
+    # Keep ingest-phase1 as an alias for backwards compatibility
     ingest_phase1_parser = subparsers.add_parser(
-        "ingest-phase1", help="Ingest all Phase 1 US Code titles into the database"
+        "ingest-phase1",
+        help="(Deprecated: use ingest-titles --phase1) Ingest Phase 1 titles",
     )
     ingest_phase1_parser.add_argument(
         "--dir",
@@ -2506,7 +2567,10 @@ Examples:
     chrono_bootstrap_parser.add_argument(
         "release_point",
         type=str,
-        help="Release point identifier (e.g., '113-21')",
+        nargs="?",
+        default=None,
+        help="Release point identifier (e.g., '113-21'). "
+        "If omitted, uses the oldest available RP.",
     )
     chrono_bootstrap_parser.add_argument(
         "--titles",
@@ -2616,6 +2680,49 @@ Examples:
         help="Include notes content in output",
     )
 
+    chrono_advance_parser = subparsers.add_parser(
+        "chrono-advance",
+        help="Advance the timeline by processing the next N events",
+    )
+    chrono_advance_parser.add_argument(
+        "--count",
+        type=int,
+        default=1,
+        help="Number of events to process (default: 1)",
+    )
+    chrono_advance_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
+    chrono_advance_to_parser = subparsers.add_parser(
+        "chrono-advance-to",
+        help="Advance through all events up to a target release point",
+    )
+    chrono_advance_to_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Target release point identifier (e.g., '113-37')",
+    )
+    chrono_advance_to_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
+
+    chrono_validate_parser = subparsers.add_parser(
+        "chrono-validate",
+        help="Validate derived state against an RP checkpoint (read-only)",
+    )
+    chrono_validate_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier to validate against (e.g., '113-37')",
+    )
+
     args = parser.parse_args()
 
     if args.command == "download":
@@ -2653,6 +2760,24 @@ Examples:
         return asyncio.run(
             ingest_title(
                 title_number=args.title,
+                download_dir=args.dir,
+                force_download=args.force_download,
+                force_parse=args.force_parse,
+            )
+        )
+
+    elif args.command == "ingest-titles":
+        if args.titles:
+            title_list = [int(t.strip()) for t in args.titles.split(",")]
+        elif args.phase1:
+            from pipeline.olrc.downloader import PHASE_1_TITLES as _p1
+
+            title_list = _p1
+        else:
+            title_list = None  # all titles
+        return asyncio.run(
+            ingest_titles_command(
+                title_list=title_list,
                 download_dir=args.dir,
                 force_download=args.force_download,
                 force_parse=args.force_parse,
@@ -2954,6 +3079,29 @@ Examples:
             )
         )
 
+    elif args.command == "chrono-advance":
+        return asyncio.run(
+            chrono_advance_command(
+                count=args.count,
+                download_dir=args.dir,
+            )
+        )
+
+    elif args.command == "chrono-advance-to":
+        return asyncio.run(
+            chrono_advance_to_command(
+                release_point=args.release_point,
+                download_dir=args.dir,
+            )
+        )
+
+    elif args.command == "chrono-validate":
+        return asyncio.run(
+            chrono_validate_command(
+                release_point=args.release_point,
+            )
+        )
+
     else:
         parser.print_help()
         return 1
@@ -3093,14 +3241,27 @@ async def chrono_status_command() -> int:
 
 
 async def chrono_bootstrap_command(
-    release_point: str,
+    release_point: str | None,
     titles: list[int] | None,
     force: bool,
     download_dir: Path,
 ) -> int:
-    """Bootstrap the chronological pipeline from an OLRC release point."""
+    """Bootstrap the chronological pipeline from an OLRC release point.
+
+    If release_point is None, auto-detects the oldest available RP.
+    """
     from app.models.base import async_session_maker
     from pipeline.olrc.bootstrap import BootstrapService
+    from pipeline.olrc.release_point import ReleasePointRegistry
+
+    if release_point is None:
+        registry = ReleasePointRegistry()
+        rps = await registry.fetch_release_points()
+        if not rps:
+            logger.error("No release points found from OLRC.")
+            return 1
+        release_point = rps[0].full_identifier
+        print(f"Auto-detected oldest release point: {release_point}")
 
     downloader = OLRCDownloader(download_dir=download_dir)
     parser = USLMParser()
@@ -3490,6 +3651,126 @@ def _print_section_state(
                 print(f"    {line}")
         else:
             print("  [No notes]")
+
+
+async def chrono_advance_command(
+    count: int,
+    download_dir: Path,
+) -> int:
+    """Advance the timeline by processing the next N events."""
+    from app.models.base import async_session_maker
+    from pipeline.chrono.play_forward import PlayForwardEngine
+
+    downloader = OLRCDownloader(download_dir=download_dir)
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        engine = PlayForwardEngine(session, downloader, parser)
+        try:
+            result = await engine.advance(count=count)
+        except RuntimeError as exc:
+            logger.error(str(exc))
+            return 1
+
+    print(f"\nAdvance result ({result.events_processed} event(s) processed):")
+    print(f"  Laws applied:  {result.laws_applied}")
+    print(f"  Laws skipped:  {result.laws_skipped}")
+    print(f"  Laws failed:   {result.laws_failed}")
+    print(f"  RPs ingested:  {result.rps_ingested}")
+    print(f"  Revisions:     {result.revisions_created}")
+    print(f"  Elapsed:       {result.elapsed_seconds:.1f}s")
+
+    if result.checkpoint_result:
+        _print_checkpoint_result(result.checkpoint_result)
+
+    return 0
+
+
+async def chrono_advance_to_command(
+    release_point: str,
+    download_dir: Path,
+) -> int:
+    """Advance through all events up to a target release point."""
+    from app.models.base import async_session_maker
+    from pipeline.chrono.play_forward import PlayForwardEngine
+
+    downloader = OLRCDownloader(download_dir=download_dir)
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        engine = PlayForwardEngine(session, downloader, parser)
+        try:
+            result = await engine.advance_to(release_point)
+        except (RuntimeError, ValueError) as exc:
+            logger.error(str(exc))
+            return 1
+
+    print(
+        f"\nAdvance-to {release_point} ({result.events_processed} event(s) processed):"
+    )
+    print(f"  Laws applied:  {result.laws_applied}")
+    print(f"  Laws skipped:  {result.laws_skipped}")
+    print(f"  Laws failed:   {result.laws_failed}")
+    print(f"  RPs ingested:  {result.rps_ingested}")
+    print(f"  Revisions:     {result.revisions_created}")
+    print(f"  Elapsed:       {result.elapsed_seconds:.1f}s")
+
+    if result.checkpoint_result:
+        _print_checkpoint_result(result.checkpoint_result)
+
+    return 0
+
+
+async def chrono_validate_command(
+    release_point: str,
+) -> int:
+    """Validate derived state against an RP checkpoint (read-only)."""
+    from app.models.base import async_session_maker
+    from pipeline.chrono.play_forward import PlayForwardEngine
+
+    downloader = OLRCDownloader()
+    parser = USLMParser()
+
+    async with async_session_maker() as session:
+        engine = PlayForwardEngine(session, downloader, parser)
+        try:
+            checkpoint = await engine.validate_at_rp(release_point)
+        except ValueError as exc:
+            logger.error(str(exc))
+            return 1
+
+    if checkpoint is None:
+        print(f"No derived revisions found before RP {release_point}.")
+        print("Nothing to validate.")
+        return 0
+
+    _print_checkpoint_result(checkpoint)
+    return 0
+
+
+def _print_checkpoint_result(checkpoint) -> None:  # type: ignore[type-arg]
+    """Print checkpoint validation results."""
+    status = "CLEAN" if checkpoint.is_clean else "DIVERGED"
+    print(f"\n  Checkpoint validation: {status}")
+    print(f"    RP:             {checkpoint.rp_identifier}")
+    print(f"    RP revision:    {checkpoint.rp_revision_id}")
+    print(f"    Derived rev:    {checkpoint.derived_revision_id}")
+    print(f"    Sections match: {checkpoint.sections_match}")
+    print(f"    Mismatches:     {checkpoint.sections_mismatch}")
+    print(f"    Only derived:   {checkpoint.sections_only_in_derived}")
+    print(f"    Only RP:        {checkpoint.sections_only_in_rp}")
+
+    if checkpoint.mismatches:
+        print("\n    Mismatched sections:")
+        for m in checkpoint.mismatches[:30]:
+            print(
+                f"      [{m.mismatch_type:18s}] "
+                f"Title {m.title_number} § {m.section_number}  "
+                f"derived={m.derived_hash or '(none)'}  "
+                f"rp={m.rp_hash or '(none)'}"
+            )
+        if len(checkpoint.mismatches) > 30:
+            print(f"      ... and {len(checkpoint.mismatches) - 30} more")
 
 
 if __name__ == "__main__":

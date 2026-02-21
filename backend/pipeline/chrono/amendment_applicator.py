@@ -128,7 +128,11 @@ def apply_text_change(
     description = f"{change_type.value} on {title_number} USC {section_number}"
 
     # Structural changes — skip
-    if change_type in (ChangeType.REDESIGNATE, ChangeType.TRANSFER):
+    if change_type in (
+        ChangeType.REDESIGNATE,
+        ChangeType.TRANSFER,
+        ChangeType.ADD_NOTE,
+    ):
         return ApplicationResult(
             status=ApplicationStatus.SKIPPED,
             new_text=text_content,

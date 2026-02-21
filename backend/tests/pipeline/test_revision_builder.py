@@ -36,17 +36,6 @@ def _make_law(
     return law
 
 
-def _make_section_mock(
-    title_number: int = 26,
-    section_number: str = "401",
-) -> MagicMock:
-    """Create a minimal mock USCodeSection."""
-    section = MagicMock()
-    section.title_number = title_number
-    section.section_number = section_number
-    return section
-
-
 def _make_change(
     change_id: int = 1,
     law_id: int = 1,
@@ -57,7 +46,7 @@ def _make_change(
     section_number: str = "401",
     description: str | None = "substituted '10 percent' for '5 percent'",
 ) -> MagicMock:
-    """Create a minimal mock LawChange with section relationship."""
+    """Create a minimal mock LawChange with natural keys."""
     change = MagicMock(spec=LawChange)
     change.change_id = change_id
     change.law_id = law_id
@@ -65,7 +54,8 @@ def _make_change(
     change.old_text = old_text
     change.new_text = new_text
     change.description = description
-    change.section = _make_section_mock(title_number, section_number)
+    change.title_number = title_number
+    change.section_number = section_number
     return change
 
 
@@ -277,12 +267,14 @@ class TestRevisionBuilder:
         assert snapshots[0].is_deleted is True
 
     @pytest.mark.asyncio
-    async def test_build_redesignate_skipped(self) -> None:
-        """REDESIGNATE produces no snapshot, counted as skipped."""
+    async def test_build_redesignate_applied(self) -> None:
+        """REDESIGNATE is treated as structural and produces a snapshot."""
         change = _make_change(
             change_type=ChangeType.REDESIGNATE,
             old_text=None,
             new_text=None,
+            description="by designating the first and second sentences "
+            "as subsections (a) and (b), respectively",
         )
         parent_state = _make_parent_state()
         session = _make_mock_session(changes=[change])
@@ -300,12 +292,13 @@ class TestRevisionBuilder:
                 law, parent_revision_id=1, sequence_number=2
             )
 
-        assert result.sections_skipped == 1
+        assert result.sections_applied == 1
+        assert result.sections_skipped == 0
 
-        # No snapshots created (only the revision itself is added)
+        # A snapshot IS created for redesignations
         added_objects = [call.args[0] for call in session.add.call_args_list]
         snapshots = [o for o in added_objects if isinstance(o, SectionSnapshot)]
-        assert len(snapshots) == 0
+        assert len(snapshots) == 1
 
     @pytest.mark.asyncio
     async def test_build_idempotent(self) -> None:
@@ -391,3 +384,39 @@ class TestRevisionBuilder:
         assert snapshot.text_hash is not None
         assert snapshot.text_hash != "abc123"  # Different from parent
         assert snapshot.notes_hash is not None
+
+    @pytest.mark.asyncio
+    async def test_build_add_note(self) -> None:
+        """ADD_NOTE creates snapshot with unchanged text but updated notes."""
+        change = _make_change(
+            change_type=ChangeType.ADD_NOTE,
+            old_text=None,
+            new_text=None,
+            description="Add statutory note: Study on impacts",
+        )
+        parent_state = _make_parent_state()
+        session = _make_mock_session(changes=[change])
+        law = _make_law()
+
+        builder = RevisionBuilder(session)
+
+        with patch.object(
+            builder.snapshot_service,
+            "get_section_at_revision",
+            new_callable=AsyncMock,
+            return_value=parent_state,
+        ):
+            result = await builder.build_revision(
+                law, parent_revision_id=1, sequence_number=2
+            )
+
+        assert result.sections_applied == 1
+        assert result.sections_skipped == 0
+
+        # A snapshot IS created for note additions
+        added_objects = [call.args[0] for call in session.add.call_args_list]
+        snapshots = [o for o in added_objects if isinstance(o, SectionSnapshot)]
+        assert len(snapshots) == 1
+        # Text content should be unchanged from parent
+        assert snapshots[0].text_content == parent_state.text_content
+        assert snapshots[0].is_deleted is False

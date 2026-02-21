@@ -44,6 +44,8 @@ class TestDiffResult:
         )
         resolution = ResolutionResult(
             section_ref=ref,
+            title_number=17,
+            section_number="106",
             resolved=True,
             normalized_section_number="106",
         )

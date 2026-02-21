@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,14 +28,16 @@ class SectionState:
     heading: str | None
     text_content: str | None
     text_hash: str | None
-    normalized_provisions: dict | None
+    normalized_provisions: dict[str, Any] | None
     notes: str | None
-    normalized_notes: dict | None
+    normalized_notes: dict[str, Any] | None
     notes_hash: str | None
     full_citation: str | None
     snapshot_id: int
     revision_id: int
     is_deleted: bool
+    group_id: int | None = None
+    sort_order: int = 0
 
 
 class SnapshotService:
@@ -47,6 +50,22 @@ class SnapshotService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def get_head_revision_id(self) -> int | None:
+        """Return the latest INGESTED revision's ID.
+
+        Returns None if no revisions have been ingested yet.
+        """
+        from app.models.enums import RevisionStatus
+
+        stmt = (
+            select(CodeRevision.revision_id)
+            .where(CodeRevision.status == RevisionStatus.INGESTED.value)
+            .order_by(CodeRevision.sequence_number.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_section_at_revision(
         self,
@@ -223,4 +242,6 @@ class SnapshotService:
             snapshot_id=snapshot.snapshot_id,
             revision_id=snapshot.revision_id,
             is_deleted=snapshot.is_deleted,
+            group_id=snapshot.group_id,
+            sort_order=snapshot.sort_order,
         )

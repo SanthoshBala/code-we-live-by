@@ -5,6 +5,8 @@ import type {
   LawSummary,
   LawText,
   ParsedAmendment,
+  SectionDiff,
+  HeadRevision,
 } from './types';
 
 const API_BASE = '/api/v1';
@@ -72,6 +74,28 @@ export async function fetchLawText(
   return res.json();
 }
 
+/** Fetch the HEAD (latest ingested) revision. */
+export async function fetchHeadRevision(): Promise<HeadRevision> {
+  const res = await fetch(`${API_BASE}/revisions/head`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch head revision: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** Fetch the most recent revision that affected any section in a title. */
+export async function fetchLatestRevisionForTitle(
+  titleNumber: number
+): Promise<HeadRevision> {
+  const res = await fetch(`${API_BASE}/revisions/latest?title=${titleNumber}`);
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch latest revision for title ${titleNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
 /** Fetch parsed amendments for a public law (live parse). */
 export async function fetchLawAmendments(
   congress: number,
@@ -83,6 +107,22 @@ export async function fetchLawAmendments(
   if (!res.ok) {
     throw new Error(
       `Failed to fetch amendments for PL ${congress}-${lawNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
+/** Fetch per-section unified diffs for a public law. */
+export async function fetchLawDiffs(
+  congress: number,
+  lawNumber: string
+): Promise<SectionDiff[]> {
+  const res = await fetch(
+    `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/diffs`
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch diffs for PL ${congress}-${lawNumber}: ${res.status}`
     );
   }
   return res.json();

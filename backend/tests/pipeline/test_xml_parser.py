@@ -113,21 +113,24 @@ class TestParsePL114_153:
         parser = XMLAmendmentParser(default_title=18)
         amendments = parser.parse(_load_pl114_153())
         # Multi-part instructions are decomposed into leaf amendments.
-        assert len(amendments) == 16
+        # 16 instruction-based + 2 freestanding note sections.
+        assert len(amendments) == 18
 
     def test_amendments_reference_title_18(self) -> None:
         parser = XMLAmendmentParser(default_title=18)
         amendments = parser.parse(_load_pl114_153())
         for a in amendments:
             assert a.section_ref is not None
-            assert a.section_ref.title == 18
+            # Note sections may reference other titles (e.g. 28 USC 620)
+            assert a.section_ref.title in (18, 28)
 
     def test_all_xml_source(self) -> None:
         parser = XMLAmendmentParser(default_title=18)
         amendments = parser.parse(_load_pl114_153())
         for a in amendments:
             assert a.metadata["source"] == "xml"
-            assert a.pattern_name.startswith("xml_")
+            # Note sections use "add_note" pattern name
+            assert a.pattern_name.startswith("xml_") or a.pattern_name == "add_note"
 
     def test_high_confidence(self) -> None:
         parser = XMLAmendmentParser(default_title=18)
@@ -449,6 +452,107 @@ class TestEdgeCases:
         assert result[0].section_ref is not None
         assert result[0].section_ref.title == 42
         assert result[0].section_ref.section == "101"
+
+
+# ---------------------------------------------------------------------------
+# Freestanding note section tests
+# ---------------------------------------------------------------------------
+
+
+class TestNoteSections:
+    """Tests for freestanding note section detection via <sidenote>."""
+
+    def test_sidenote_detected(self) -> None:
+        """Section with sidenote '16 USC 797 note' produces ADD_NOTE amendment."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            "<main><section>"
+            "<num>6</num>"
+            "<heading>Study on Impacts</heading>"
+            "<sidenote>16 USC 797 note</sidenote>"
+            "<content>The Secretary shall conduct a study...</content>"
+            "</section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=16)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        a = result[0]
+        assert a.pattern_type == PatternType.ADD_NOTE
+        assert a.change_type == ChangeType.ADD_NOTE
+        assert a.section_ref is not None
+        assert a.section_ref.title == 16
+        assert a.section_ref.section == "797"
+        assert a.confidence == 1.0
+        assert a.new_text is not None
+        assert "Secretary shall conduct" in a.new_text
+
+    def test_sidenote_with_periods(self) -> None:
+        """Sidenote with 'U.S.C.' format is also detected."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            "<main><section>"
+            "<num>3</num>"
+            "<heading>Short Title</heading>"
+            "<sidenote>42 U.S.C. 1305 note</sidenote>"
+            "<content>This Act may be cited as the Example Act.</content>"
+            "</section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=42)
+        result = parser.parse(xml)
+        assert len(result) == 1
+        assert result[0].section_ref.title == 42
+        assert result[0].section_ref.section == "1305"
+
+    def test_instruction_section_not_duplicated(self) -> None:
+        """Sections with role=instruction are NOT re-parsed as notes."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            '<main><section role="instruction">'
+            "<num>1</num>"
+            "<content>Section 101 "
+            '<amendingAction type="amend">is amended</amendingAction> by '
+            '<amendingAction type="delete">striking</amendingAction> '
+            '"<quotedText>old</quotedText>".'
+            "</content></section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=42)
+        result = parser.parse(xml)
+        # Only the instruction amendment, no duplicate note
+        assert len(result) == 1
+        assert result[0].pattern_type != PatternType.ADD_NOTE
+
+    def test_no_sidenote_skipped(self) -> None:
+        """Section without sidenote is silently skipped."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            "<main><section>"
+            "<num>1</num>"
+            "<heading>Short Title</heading>"
+            "<content>This Act may be cited as the Example Act.</content>"
+            "</section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=42)
+        result = parser.parse(xml)
+        assert result == []
+
+    def test_sidenote_without_note_keyword_skipped(self) -> None:
+        """Sidenote without 'note' keyword is skipped."""
+        xml = (
+            '<?xml version="1.0"?>'
+            '<pLaw xmlns="http://schemas.gpo.gov/xml/uslm">'
+            "<main><section>"
+            "<num>1</num>"
+            "<sidenote>42 USC 1305</sidenote>"
+            "<content>Some text.</content>"
+            "</section></main></pLaw>"
+        )
+        parser = XMLAmendmentParser(default_title=42)
+        result = parser.parse(xml)
+        assert result == []
 
 
 # ---------------------------------------------------------------------------

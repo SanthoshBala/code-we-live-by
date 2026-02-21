@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pipeline.olrc.group_service import upsert_group, upsert_groups_from_parse_result
 from pipeline.olrc.parser import (
     ParsedGroup,
     ParsedSection,
@@ -37,16 +38,13 @@ def _mock_found(record):
 
 
 class TestUpsertGroup:
-    """Tests for _upsert_group method (replaces _upsert_title, _upsert_chapter, _upsert_subchapter)."""
+    """Tests for upsert_group function."""
 
     @pytest.mark.asyncio
     async def test_new_title_insert(self, mock_session) -> None:
         """Test inserting a new title group when none exists."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         mock_session.execute.return_value = _mock_not_found()
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="title",
             number="17",
@@ -55,7 +53,7 @@ class TestUpsertGroup:
             positive_law_date="July 30, 1947",
             key="title:17",
         )
-        group, was_created = await service._upsert_group(parsed, parent_id=None)
+        group, was_created = await upsert_group(mock_session, parsed, parent_id=None)
 
         assert was_created is True
         mock_session.add.assert_called_once()
@@ -68,11 +66,8 @@ class TestUpsertGroup:
     @pytest.mark.asyncio
     async def test_new_chapter_insert(self, mock_session) -> None:
         """Test inserting a new chapter group."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         mock_session.execute.return_value = _mock_not_found()
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="chapter",
             number="1",
@@ -81,7 +76,7 @@ class TestUpsertGroup:
             parent_key="title:17",
             key="title:17/chapter:1",
         )
-        group, was_created = await service._upsert_group(parsed, parent_id=100)
+        group, was_created = await upsert_group(mock_session, parsed, parent_id=100)
 
         assert was_created is True
         mock_session.add.assert_called_once()
@@ -95,11 +90,8 @@ class TestUpsertGroup:
     @pytest.mark.asyncio
     async def test_new_subchapter_insert(self, mock_session) -> None:
         """Test inserting a new subchapter group."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         mock_session.execute.return_value = _mock_not_found()
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="subchapter",
             number="I",
@@ -108,7 +100,7 @@ class TestUpsertGroup:
             parent_key="title:17/chapter:1",
             key="title:17/chapter:1/subchapter:I",
         )
-        group, was_created = await service._upsert_group(parsed, parent_id=200)
+        group, was_created = await upsert_group(mock_session, parsed, parent_id=200)
 
         assert was_created is True
         mock_session.add.assert_called_once()
@@ -120,14 +112,11 @@ class TestUpsertGroup:
     @pytest.mark.asyncio
     async def test_update_with_force(self, mock_session) -> None:
         """Test updating an existing group with force=True."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         existing = MagicMock()
         existing.name = "Old Name"
         existing.sort_order = 0
         mock_session.execute.return_value = _mock_found(existing)
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="chapter",
             number="1",
@@ -136,8 +125,8 @@ class TestUpsertGroup:
             parent_key="title:17",
             key="title:17/chapter:1",
         )
-        group, was_created = await service._upsert_group(
-            parsed, parent_id=100, force=True
+        group, was_created = await upsert_group(
+            mock_session, parsed, parent_id=100, force=True
         )
 
         assert was_created is False
@@ -149,13 +138,10 @@ class TestUpsertGroup:
     @pytest.mark.asyncio
     async def test_skip_without_force(self, mock_session) -> None:
         """Test skipping update when force=False and record exists."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         existing = MagicMock()
         existing.name = "Old Name"
         mock_session.execute.return_value = _mock_found(existing)
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="chapter",
             number="1",
@@ -163,8 +149,8 @@ class TestUpsertGroup:
             parent_key="title:17",
             key="title:17/chapter:1",
         )
-        group, was_created = await service._upsert_group(
-            parsed, parent_id=100, force=False
+        group, was_created = await upsert_group(
+            mock_session, parsed, parent_id=100, force=False
         )
 
         assert was_created is False
@@ -174,11 +160,8 @@ class TestUpsertGroup:
     @pytest.mark.asyncio
     async def test_positive_law_with_parser_date(self, mock_session) -> None:
         """Test positive law title uses parser-provided date."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         mock_session.execute.return_value = _mock_not_found()
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="title",
             number="17",
@@ -187,7 +170,7 @@ class TestUpsertGroup:
             positive_law_date="July 30, 1947",
             key="title:17",
         )
-        group, _ = await service._upsert_group(parsed, parent_id=None)
+        group, _ = await upsert_group(mock_session, parsed, parent_id=None)
 
         added = mock_session.add.call_args[0][0]
         assert added.positive_law_date == date(1947, 7, 30)
@@ -195,11 +178,8 @@ class TestUpsertGroup:
     @pytest.mark.asyncio
     async def test_positive_law_fallback_date(self, mock_session) -> None:
         """Test positive law title falls back to hardcoded date when parser provides none."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         mock_session.execute.return_value = _mock_not_found()
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="title",
             number="17",
@@ -208,7 +188,7 @@ class TestUpsertGroup:
             positive_law_date=None,
             key="title:17",
         )
-        group, _ = await service._upsert_group(parsed, parent_id=None)
+        group, _ = await upsert_group(mock_session, parsed, parent_id=None)
 
         added = mock_session.add.call_args[0][0]
         # Title 17 fallback date is 1947-07-30
@@ -217,11 +197,8 @@ class TestUpsertGroup:
     @pytest.mark.asyncio
     async def test_non_positive_law(self, mock_session) -> None:
         """Test non-positive law title has no positive_law_date."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
         mock_session.execute.return_value = _mock_not_found()
 
-        service = USCodeIngestionService(mock_session)
         parsed = ParsedGroup(
             group_type="title",
             number="42",
@@ -229,7 +206,7 @@ class TestUpsertGroup:
             is_positive_law=False,
             key="title:42",
         )
-        group, _ = await service._upsert_group(parsed, parent_id=None)
+        group, _ = await upsert_group(mock_session, parsed, parent_id=None)
 
         added = mock_session.add.call_args[0][0]
         assert added.positive_law_date is None
@@ -237,7 +214,7 @@ class TestUpsertGroup:
 
 
 class TestIngestParseResult:
-    """Tests for _ingest_parse_result orchestration method."""
+    """Tests for _ingest_parse_result orchestration via upsert_groups_from_parse_result."""
 
     @pytest.fixture
     def minimal_parse_result(self):
@@ -283,55 +260,26 @@ class TestIngestParseResult:
     async def test_end_to_end_orchestration(
         self, mock_session, minimal_parse_result
     ) -> None:
-        """Test that all entities are ingested and stats are returned."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
-        # Each call to execute returns "not found" -> new inserts
+        """Test that all groups are upserted."""
         mock_session.execute.return_value = _mock_not_found()
 
-        service = USCodeIngestionService(mock_session)
-        stats = await service._ingest_parse_result(minimal_parse_result)
+        group_lookup = await upsert_groups_from_parse_result(
+            mock_session, minimal_parse_result.groups
+        )
 
         # 3 groups (title + chapter + subchapter)
-        assert stats["groups"] == 3
-        assert stats["sections"] == 1
-        # All 3 groups were created
-        assert stats["created"] == 3
+        assert len(group_lookup) == 3
 
     @pytest.mark.asyncio
     async def test_empty_results(self, mock_session) -> None:
-        """Test ingestion with no children groups or sections."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
+        """Test upsert with no groups."""
+        group_lookup = await upsert_groups_from_parse_result(mock_session, [])
 
-        title_group = ParsedGroup(
-            group_type="title",
-            number="17",
-            name="Copyrights",
-            key="title:17",
-        )
-        parse_result = USLMParseResult(
-            title=title_group,
-            groups=[title_group],
-            sections=[],
-        )
-
-        mock_session.execute.return_value = _mock_not_found()
-
-        service = USCodeIngestionService(mock_session)
-        stats = await service._ingest_parse_result(parse_result)
-
-        assert stats["groups"] == 1
-        assert stats["sections"] == 0
-        # Only the title was created
-        assert stats["created"] == 1
-        assert stats["updated"] == 0
+        assert len(group_lookup) == 0
 
     @pytest.mark.asyncio
     async def test_created_vs_updated_stats(self, mock_session) -> None:
-        """Test that created/updated stats are tracked correctly."""
-        from pipeline.olrc.ingestion import USCodeIngestionService
-
-        # Title: existing (updated), Chapter: new (created)
+        """Test that existing groups are returned without re-adding."""
         existing_title = MagicMock()
         existing_title.group_id = 1
 
@@ -341,10 +289,8 @@ class TestIngestParseResult:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                # Title lookup -> found
                 return _mock_found(existing_title)
             else:
-                # Chapter lookup -> not found
                 return _mock_not_found()
 
         mock_session.execute = AsyncMock(side_effect=side_effect)
@@ -362,15 +308,11 @@ class TestIngestParseResult:
             parent_key="title:17",
             key="title:17/chapter:1",
         )
-        parse_result = USLMParseResult(
-            title=title_group,
-            groups=[title_group, chapter_group],
-            sections=[],
+
+        group_lookup = await upsert_groups_from_parse_result(
+            mock_session, [title_group, chapter_group], force=True
         )
 
-        service = USCodeIngestionService(mock_session)
-        stats = await service._ingest_parse_result(parse_result, force=True)
-
-        # Title existed -> updated, Chapter new -> created
-        assert stats["updated"] == 1
-        assert stats["created"] == 1
+        assert len(group_lookup) == 2
+        # Title was existing, chapter was new
+        assert group_lookup["title:17"] is existing_title

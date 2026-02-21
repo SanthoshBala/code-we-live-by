@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import DataIngestionLog
@@ -118,6 +118,19 @@ class LawChangeService:
 
         result = LawChangeResult(law=law, dry_run=dry_run)
 
+        # Idempotency: skip if LawChange records already exist (unless dry_run)
+        if not dry_run:
+            count_result = await self.session.execute(
+                select(func.count()).where(LawChange.law_id == law.law_id)
+            )
+            existing_count = count_result.scalar() or 0
+            if existing_count > 0:
+                logger.info(
+                    f"PL {congress}-{law_number} already has {existing_count} "
+                    "LawChange records. Skipping."
+                )
+                return result
+
         # Create ingestion log
         log = DataIngestionLog(
             source="LawChangeService",
@@ -170,9 +183,9 @@ class LawChangeService:
                 return result
 
             # Step 4: Resolve section references
-            resolver = SectionResolver(self.session)
+            resolver = SectionResolver()
             section_refs = [a.section_ref for a in result.amendments]
-            resolutions = await resolver.resolve_batch(
+            resolutions = resolver.resolve_batch(
                 [ref for ref in section_refs if ref is not None],
                 default_title=default_title,
             )

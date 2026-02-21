@@ -1,7 +1,6 @@
 """Ingest US Code data from OLRC into the database."""
 
 import logging
-import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -14,131 +13,18 @@ from app.models import (
     USCodeSection,
 )
 from pipeline.olrc.downloader import OLRCDownloader
+from pipeline.olrc.group_service import (
+    _parse_citation_date,
+    upsert_groups_from_parse_result,
+)
 from pipeline.olrc.normalized_section import _clean_heading, normalize_parsed_section
 from pipeline.olrc.parser import (
-    ParsedGroup,
     ParsedSection,
     USLMParser,
     USLMParseResult,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_citation_date(date_str: str | None) -> date | None:
-    """Parse a date string from a citation into a Python date object.
-
-    Handles two formats:
-    - ISO format from Act hrefs: "1935-08-14" -> date(1935, 8, 14)
-    - Prose format from source credits: "Oct. 19, 1976" -> date(1976, 10, 19)
-
-    Args:
-        date_str: The date string to parse, or None.
-
-    Returns:
-        A date object if parsing succeeds, None otherwise.
-    """
-    if not date_str:
-        return None
-
-    # Try ISO format first (YYYY-MM-DD)
-    iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", date_str)
-    if iso_match:
-        try:
-            return date(
-                int(iso_match.group(1)),
-                int(iso_match.group(2)),
-                int(iso_match.group(3)),
-            )
-        except ValueError:
-            pass
-
-    # Try prose format (e.g., "Oct. 19, 1976" or "July 3, 1990")
-    month_map = {
-        "Jan": 1,
-        "January": 1,
-        "Feb": 2,
-        "February": 2,
-        "Mar": 3,
-        "March": 3,
-        "Apr": 4,
-        "April": 4,
-        "May": 5,
-        "Jun": 6,
-        "June": 6,
-        "Jul": 7,
-        "July": 7,
-        "Aug": 8,
-        "August": 8,
-        "Sep": 9,
-        "Sept": 9,
-        "September": 9,
-        "Oct": 10,
-        "October": 10,
-        "Nov": 11,
-        "November": 11,
-        "Dec": 12,
-        "December": 12,
-    }
-
-    # Match "Oct. 19, 1976" or "July 3, 1990" formats
-    match = re.match(r"([A-Z][a-z]+)\.?\s+(\d{1,2})\s*,\s+(\d{4})", date_str)
-    if match:
-        month_str = match.group(1)
-        month = month_map.get(month_str)
-        if month:
-            try:
-                return date(int(match.group(3)), month, int(match.group(2)))
-            except ValueError:
-                pass
-
-    return None
-
-
-# Fallback positive law enactment dates for titles where XML doesn't provide the date.
-# Source: https://uscode.house.gov/codification/legislation.shtml
-# These dates represent when each title was enacted into positive law.
-POSITIVE_LAW_DATES: dict[int, date] = {
-    1: date(1947, 7, 30),  # General Provisions
-    3: date(1948, 6, 25),  # The President
-    4: date(1947, 7, 30),  # Flag and Seal
-    5: date(1966, 9, 6),  # Government Organization and Employees
-    9: date(1947, 7, 30),  # Arbitration
-    10: date(1956, 8, 10),  # Armed Forces
-    11: date(1978, 11, 6),  # Bankruptcy
-    13: date(1954, 8, 31),  # Census
-    14: date(1949, 8, 4),  # Coast Guard
-    17: date(1947, 7, 30),  # Copyrights
-    18: date(1948, 6, 25),  # Crimes and Criminal Procedure
-    23: date(1958, 7, 7),  # Highways
-    28: date(1948, 6, 25),  # Judiciary and Judicial Procedure
-    31: date(1982, 9, 13),  # Money and Finance
-    32: date(1956, 8, 10),  # National Guard
-    35: date(1952, 7, 19),  # Patents
-    36: date(1998, 8, 12),  # Patriotic and National Observances
-    37: date(1962, 9, 7),  # Pay and Allowances of the Uniformed Services
-    38: date(1958, 9, 2),  # Veterans' Benefits
-    39: date(1970, 8, 12),  # Postal Service
-    40: date(2002, 8, 21),  # Public Buildings, Property, and Works
-    41: date(2011, 1, 4),  # Public Contracts
-    44: date(1968, 6, 19),  # Public Printing and Documents
-    46: date(2006, 10, 6),  # Shipping
-    49: date(1983, 7, 5),  # Transportation
-    51: date(2010, 10, 11),  # National and Commercial Space Programs
-    54: date(2014, 12, 19),  # National Park Service and Related Programs
-}
-
-
-def _get_positive_law_date(title_number: int) -> date | None:
-    """Get the positive law enactment date for a title.
-
-    Args:
-        title_number: The US Code title number.
-
-    Returns:
-        The enactment date if known, None otherwise.
-    """
-    return POSITIVE_LAW_DATES.get(title_number)
 
 
 class USCodeIngestionService:
@@ -254,22 +140,11 @@ class USCodeIngestionService:
             "updated": 0,
         }
 
-        # Groups are already sorted parents-before-children by parser order
-        group_lookup: dict[str, SectionGroup] = {}
-
-        for parsed_group in result.groups:
-            parent_id = None
-            if parsed_group.parent_key:
-                parent_record = group_lookup.get(parsed_group.parent_key)
-                if parent_record:
-                    parent_id = parent_record.group_id
-
-            group_record, group_created = await self._upsert_group(
-                parsed_group, parent_id, force
-            )
-            group_lookup[parsed_group.key] = group_record
-            stats["groups"] += 1
-            stats["created" if group_created else "updated"] += 1
+        # Upsert groups using the shared group service
+        group_lookup = await upsert_groups_from_parse_result(
+            self.session, result.groups, force
+        )
+        stats["groups"] = len(group_lookup)
 
         # Extract title_number from the root title group
         title_number = result.title.title_number
@@ -291,63 +166,6 @@ class USCodeIngestionService:
             stats["sections"] += 1
 
         return stats
-
-    async def _upsert_group(
-        self,
-        parsed: ParsedGroup,
-        parent_id: int | None,
-        force: bool = False,
-    ) -> tuple[SectionGroup, bool]:
-        """Insert or update a group record.
-
-        Returns:
-            Tuple of (group record, was_created).
-        """
-        # For title groups, also handle positive_law_date
-        positive_law_date = None
-        if parsed.group_type == "title":
-            if parsed.positive_law_date:
-                positive_law_date = _parse_citation_date(parsed.positive_law_date)
-            if parsed.is_positive_law and not positive_law_date:
-                positive_law_date = _get_positive_law_date(int(parsed.number))
-
-        if parent_id is not None:
-            stmt = select(SectionGroup).where(
-                SectionGroup.parent_id == parent_id,
-                SectionGroup.group_type == parsed.group_type,
-                SectionGroup.number == parsed.number,
-            )
-        else:
-            stmt = select(SectionGroup).where(
-                SectionGroup.parent_id.is_(None),
-                SectionGroup.group_type == parsed.group_type,
-                SectionGroup.number == parsed.number,
-            )
-        result = await self.session.execute(stmt)
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            if force:
-                existing.name = parsed.name
-                existing.sort_order = parsed.sort_order
-                existing.is_positive_law = parsed.is_positive_law
-                existing.positive_law_date = positive_law_date
-                existing.positive_law_citation = parsed.positive_law_citation
-            return existing, False
-
-        group = SectionGroup(
-            parent_id=parent_id,
-            group_type=parsed.group_type,
-            number=parsed.number,
-            name=parsed.name,
-            sort_order=parsed.sort_order,
-            is_positive_law=parsed.is_positive_law,
-            positive_law_date=positive_law_date,
-            positive_law_citation=parsed.positive_law_citation,
-        )
-        self.session.add(group)
-        await self.session.flush()
-        return group, True
 
     async def _upsert_section(
         self,

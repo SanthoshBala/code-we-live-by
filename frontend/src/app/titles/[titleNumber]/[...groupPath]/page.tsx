@@ -2,6 +2,8 @@
 
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
+import { useLatestRevisionForTitle } from '@/hooks/useLatestRevision';
+import { revisionLabel } from '@/lib/revisionLabel';
 import type {
   SectionGroupTree,
   DirectoryItem,
@@ -86,6 +88,7 @@ export default function GroupDirectoryPage() {
     isLoading,
     error,
   } = useTitleStructure(titleNumber, true);
+  const { data: latestRevision } = useLatestRevisionForTitle(titleNumber);
 
   if (isLoading) {
     return <p className="text-gray-500">Loading...</p>;
@@ -154,6 +157,11 @@ export default function GroupDirectoryPage() {
   }
 
   return (
-    <DirectoryView title={group.name} breadcrumbs={breadcrumbs} items={items} />
+    <DirectoryView
+      title={group.name}
+      breadcrumbs={breadcrumbs}
+      items={items}
+      revisionLabel={latestRevision ? revisionLabel(latestRevision) : null}
+    />
   );
 }

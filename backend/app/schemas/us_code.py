@@ -10,6 +10,7 @@ from datetime import date
 from pydantic import BaseModel, Field, computed_field
 
 from app.schemas.public_law import PublicLawSchema, SourceLawSchema
+from app.schemas.revision import HeadRevisionSchema
 
 
 class CodeLineSchema(BaseModel):
@@ -320,11 +321,12 @@ class SectionViewerSchema(BaseModel):
     full_citation: str
     text_content: str | None
     provisions: list[CodeLineSchema] | None = None
-    enacted_date: date | None
-    last_modified_date: date | None
-    is_positive_law: bool
-    is_repealed: bool
-    notes: SectionNotesSchema | None
+    enacted_date: date | None = None
+    last_modified_date: date | None = None
+    is_positive_law: bool = False
+    is_repealed: bool = False
+    notes: SectionNotesSchema | None = None
+    last_revision: HeadRevisionSchema | None = None
 
 
 class TitleSummarySchema(BaseModel):
