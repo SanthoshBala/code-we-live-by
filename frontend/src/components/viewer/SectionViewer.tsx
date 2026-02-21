@@ -57,7 +57,9 @@ export default function SectionViewer({
       congress: enactmentCitation.law.congress,
       date: enactmentCitation.law.date,
       label: enactmentCitation.law.public_law_id,
-      shortTitle: findShortTitle(enactmentCitation.law.public_law_id),
+      shortTitle:
+        enactmentCitation.law.short_title ??
+        findShortTitle(enactmentCitation.law.public_law_id),
     };
   }
 
@@ -70,7 +72,8 @@ export default function SectionViewer({
       congress: latest.law.congress,
       date: latest.law.date,
       label: latest.public_law_id,
-      shortTitle: findShortTitle(latest.public_law_id),
+      shortTitle:
+        latest.law.short_title ?? findShortTitle(latest.public_law_id),
     };
   }
 

@@ -7,11 +7,12 @@ SectionGroup (populated by both ingestion and bootstrap).
 
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
 from app.crud.revision import get_last_changed_revision_for_section
+from app.models.public_law import PublicLaw
 from app.models.us_code import SectionGroup
 from app.schemas.us_code import (
     CodeLineSchema,
@@ -299,6 +300,44 @@ async def get_title_structure(
     )
 
 
+async def _enrich_notes_with_short_titles(
+    session: AsyncSession, notes: SectionNotesSchema
+) -> None:
+    """Populate law.short_title on citations and amendments from the public_law table."""
+    # Collect all (congress, law_number) pairs
+    pairs: set[tuple[int, str]] = set()
+    for c in notes.citations:
+        if c.law:
+            pairs.add((c.law.congress, str(c.law.law_number)))
+    for a in notes.amendments:
+        pairs.add((a.law.congress, str(a.law.law_number)))
+
+    if not pairs:
+        return
+
+    # Batch query
+    stmt = select(
+        PublicLaw.congress, PublicLaw.law_number, PublicLaw.short_title
+    ).where(tuple_(PublicLaw.congress, PublicLaw.law_number).in_(list(pairs)))
+    result = await session.execute(stmt)
+    lookup: dict[tuple[int, str], str | None] = {
+        (row[0], row[1]): row[2] for row in result
+    }
+
+    # Enrich citations
+    for c in notes.citations:
+        if c.law:
+            title = lookup.get((c.law.congress, str(c.law.law_number)))
+            if title:
+                c.law.short_title = title
+
+    # Enrich amendments
+    for a in notes.amendments:
+        title = lookup.get((a.law.congress, str(a.law.law_number)))
+        if title:
+            a.law.short_title = title
+
+
 async def get_section(
     session: AsyncSession,
     title_number: int,
@@ -323,6 +362,7 @@ async def get_section(
     notes = None
     if state.normalized_notes is not None:
         notes = SectionNotesSchema.model_validate(state.normalized_notes)
+        await _enrich_notes_with_short_titles(session, notes)
 
     provisions = None
     if state.normalized_provisions is not None:

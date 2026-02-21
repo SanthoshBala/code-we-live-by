@@ -105,6 +105,7 @@ export interface Amendment {
     law_number: number;
     public_law_id: string;
     date: string | null;
+    short_title?: string | null;
   };
   year: number;
   description: string;
@@ -118,6 +119,7 @@ export interface SourceLaw {
     law_number: number;
     date: string | null;
     public_law_id: string;
+    short_title?: string | null;
   } | null;
   law_id: string;
   law_title: string | null;
