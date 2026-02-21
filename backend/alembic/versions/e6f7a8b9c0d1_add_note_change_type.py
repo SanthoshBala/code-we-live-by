@@ -19,7 +19,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE changetype ADD VALUE IF NOT EXISTS 'Add_Note'")
+    op.execute("ALTER TYPE change_type ADD VALUE IF NOT EXISTS 'Add_Note'")
 
 
 def downgrade() -> None:

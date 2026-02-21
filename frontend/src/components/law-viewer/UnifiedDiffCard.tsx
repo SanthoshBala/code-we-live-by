@@ -18,6 +18,7 @@ function ChangeTypeBadge({ changeType }: { changeType: string }) {
     Repeal: 'bg-red-100 text-red-800',
     Redesignate: 'bg-yellow-100 text-yellow-800',
     Transfer: 'bg-purple-100 text-purple-800',
+    Add_Note: 'bg-teal-100 text-teal-800',
   };
   return (
     <span

@@ -847,43 +847,109 @@ async def compute_law_diffs(
     diffs: list[SectionDiffSchema] = []
 
     for (title, section), section_amendments in groups.items():
+        # Separate note amendments from text-modifying amendments
+        note_amendments = [a for a in section_amendments if a.change_type == "Add_Note"]
+        text_amendments = [a for a in section_amendments if a.change_type != "Add_Note"]
+
         # Fetch "before" provisions
         state = await svc.get_section_at_revision(title, section, revision_id)
         raw = state.normalized_provisions if state else None
-        if not isinstance(raw, list) or not raw:
-            # No provisions — emit a diff with just amendments metadata
+
+        # Handle text-modifying amendments (normal diff flow)
+        if text_amendments:
+            if not isinstance(raw, list) or not raw:
+                diffs.append(
+                    SectionDiffSchema(
+                        title_number=title,
+                        section_number=section,
+                        section_key=f"{title} U.S.C. § {section}",
+                        heading=state.heading if state else "",
+                        hunks=[],
+                        total_lines=0,
+                        amendments=text_amendments,
+                        all_provisions=[],
+                    )
+                )
+            else:
+                before = raw
+                after = _apply_amendments_to_provisions(before, text_amendments)
+                hunks = _build_hunks(before, after)
+                all_provisions = [_provision_to_diff_line(p) for p in after]
+                diffs.append(
+                    SectionDiffSchema(
+                        title_number=title,
+                        section_number=section,
+                        section_key=f"{title} U.S.C. § {section}",
+                        heading=state.heading if state else "",
+                        hunks=hunks,
+                        total_lines=len(after),
+                        amendments=text_amendments,
+                        all_provisions=all_provisions,
+                    )
+                )
+
+        # Handle note amendments as a separate "STATUTORY NOTES" diff card
+        if note_amendments:
+            note_hunks = _build_note_hunks(note_amendments)
+            note_lines = [line for hunk in note_hunks for line in hunk.lines]
             diffs.append(
                 SectionDiffSchema(
                     title_number=title,
                     section_number=section,
                     section_key=f"{title} U.S.C. § {section}",
-                    heading=state.heading if state else "",
-                    hunks=[],
-                    total_lines=0,
-                    amendments=section_amendments,
-                    all_provisions=[],
+                    heading=(state.heading or "" if state else "")
+                    + " — STATUTORY NOTES",
+                    hunks=note_hunks,
+                    total_lines=len(note_lines),
+                    amendments=note_amendments,
+                    all_provisions=note_lines,
                 )
             )
-            continue
-
-        before = raw
-        after = _apply_amendments_to_provisions(before, section_amendments)
-        hunks = _build_hunks(before, after)
-
-        # Build all_provisions from "after" state for expansion
-        all_provisions = [_provision_to_diff_line(p) for p in after]
-
-        diffs.append(
-            SectionDiffSchema(
-                title_number=title,
-                section_number=section,
-                section_key=f"{title} U.S.C. § {section}",
-                heading=state.heading if state else "",
-                hunks=hunks,
-                total_lines=len(after),
-                amendments=section_amendments,
-                all_provisions=all_provisions,
-            )
-        )
 
     return diffs
+
+
+def _build_note_hunks(
+    note_amendments: list[ParsedAmendmentSchema],
+) -> list[DiffHunkSchema]:
+    """Build diff hunks for ADD_NOTE amendments.
+
+    Renders each note's text as all-added lines under a header,
+    mimicking a new file being added (like STATUTORY_NOTES).
+    """
+    lines: list[DiffLineSchema] = []
+    line_num = 1
+
+    for amendment in note_amendments:
+        note_text = amendment.new_text or amendment.full_match
+        if not note_text:
+            continue
+
+        # Split note text into lines
+        for text_line in note_text.split("\n"):
+            text_line = text_line.strip()
+            if not text_line:
+                continue
+            lines.append(
+                DiffLineSchema(
+                    old_line_number=None,
+                    new_line_number=line_num,
+                    content=text_line,
+                    type="added",
+                    indent_level=0,
+                    marker=None,
+                    is_header=line_num == 1,
+                )
+            )
+            line_num += 1
+
+    if not lines:
+        return []
+
+    return [
+        DiffHunkSchema(
+            old_start=0,
+            new_start=1,
+            lines=lines,
+        )
+    ]
