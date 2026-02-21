@@ -37,6 +37,7 @@ class PatternType(enum.StrEnum):
     AMEND_GENERAL = "amend_general"
     ADD_SECTION = "add_section"
     ADD_SUBSECTION = "add_subsection"
+    ADD_NOTE = "add_note"
 
 
 @dataclass

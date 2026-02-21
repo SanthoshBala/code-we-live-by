@@ -384,3 +384,39 @@ class TestRevisionBuilder:
         assert snapshot.text_hash is not None
         assert snapshot.text_hash != "abc123"  # Different from parent
         assert snapshot.notes_hash is not None
+
+    @pytest.mark.asyncio
+    async def test_build_add_note(self) -> None:
+        """ADD_NOTE creates snapshot with unchanged text but updated notes."""
+        change = _make_change(
+            change_type=ChangeType.ADD_NOTE,
+            old_text=None,
+            new_text=None,
+            description="Add statutory note: Study on impacts",
+        )
+        parent_state = _make_parent_state()
+        session = _make_mock_session(changes=[change])
+        law = _make_law()
+
+        builder = RevisionBuilder(session)
+
+        with patch.object(
+            builder.snapshot_service,
+            "get_section_at_revision",
+            new_callable=AsyncMock,
+            return_value=parent_state,
+        ):
+            result = await builder.build_revision(
+                law, parent_revision_id=1, sequence_number=2
+            )
+
+        assert result.sections_applied == 1
+        assert result.sections_skipped == 0
+
+        # A snapshot IS created for note additions
+        added_objects = [call.args[0] for call in session.add.call_args_list]
+        snapshots = [o for o in added_objects if isinstance(o, SectionSnapshot)]
+        assert len(snapshots) == 1
+        # Text content should be unchanged from parent
+        assert snapshots[0].text_content == parent_state.text_content
+        assert snapshots[0].is_deleted is False

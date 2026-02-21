@@ -559,6 +559,11 @@ class RevisionBuilder:
                     desc = change.description or app_result.description
                     descriptions.append(desc)
                     result.sections_applied += 1
+                elif change.change_type == ChangeType.ADD_NOTE:
+                    any_applied = True
+                    desc = change.description or "Added statutory note"
+                    descriptions.append(desc)
+                    result.sections_applied += 1
                 else:
                     result.sections_skipped += 1
 

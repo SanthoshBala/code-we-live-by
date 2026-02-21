@@ -276,6 +276,23 @@ class XMLAmendmentParser:
                 if amendment is not None:
                     amendments.append(amendment)
 
+        # Second pass: detect freestanding note sections (no amending
+        # instruction) that have a <sidenote> like "16 USC 797 note".
+        processed_ids = {
+            elem.get("identifier")
+            for elem in root.iter()
+            if elem.get("role") == "instruction" and elem.get("identifier")
+        }
+        for elem in root.iter(_tag("section")):
+            if elem.get("role") == "instruction":
+                continue
+            ident = elem.get("identifier")
+            if ident and ident in processed_ids:
+                continue
+            amendment = self._parse_note_section(elem)
+            if amendment is not None:
+                amendments.append(amendment)
+
         return amendments
 
     def _parse_leaf(
@@ -676,6 +693,52 @@ class XMLAmendmentParser:
                 return idx, idx + len(content_text)
 
         return 0, 0
+
+    # -- Sidenote regex for freestanding note sections --
+    _SIDENOTE_RE = re.compile(r"(\d+)\s+U\.?S\.?C\.?\s+(\S+)\s+note", re.IGNORECASE)
+
+    def _parse_note_section(self, section: ET.Element) -> ParsedAmendment | None:
+        """Parse a freestanding section with a ``<sidenote>`` annotation.
+
+        Returns a ParsedAmendment with change_type=ADD_NOTE if the section
+        has a sidenote matching "NN USC XXX note", or None otherwise.
+        """
+        # Look for <sidenote> child
+        sidenote_text: str | None = None
+        for sn in section.iter(_tag("sidenote")):
+            text = _element_text(sn)
+            if text:
+                sidenote_text = text
+                break
+
+        if sidenote_text is None:
+            return None
+
+        m = self._SIDENOTE_RE.search(sidenote_text)
+        if not m:
+            return None
+
+        title = int(m.group(1))
+        section_num = m.group(2)
+        section_ref = SectionReference(title=title, section=section_num)
+
+        full_text = _element_text(section)
+
+        return ParsedAmendment(
+            pattern_name="add_note",
+            pattern_type=PatternType.ADD_NOTE,
+            change_type=ChangeType.ADD_NOTE,
+            section_ref=section_ref,
+            old_text=None,
+            new_text=full_text,
+            full_match=sidenote_text,
+            confidence=1.0,
+            start_pos=0,
+            end_pos=0,
+            needs_review=False,
+            context=full_text[:200],
+            metadata={"source": "xml", "sidenote": sidenote_text},
+        )
 
     def _needs_review(
         self,

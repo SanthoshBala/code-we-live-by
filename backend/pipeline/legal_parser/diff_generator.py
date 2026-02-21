@@ -201,6 +201,11 @@ class DiffGenerator:
                 new_text = extraction.text
             description = "Substitute text"
 
+        elif amendment.pattern_type == PatternType.ADD_NOTE:
+            description = (
+                f"Add statutory note: {_truncate(new_text or amendment.full_match)}"
+            )
+
         elif amendment.pattern_type in (
             PatternType.REDESIGNATE,
             PatternType.TRANSFER,
