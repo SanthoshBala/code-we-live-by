@@ -12,7 +12,12 @@ import logging
 from app.models.enums import ChangeType, SourceRelationship
 from app.models.public_law import PublicLaw
 from app.schemas.public_law import PublicLawSchema, SourceLawSchema
-from app.schemas.us_code import AmendmentSchema, SectionNotesSchema
+from app.schemas.us_code import (
+    AmendmentSchema,
+    NoteCategoryEnum,
+    SectionNoteSchema,
+    SectionNotesSchema,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +37,9 @@ def update_notes_for_applied_law(
     existing_notes: dict | None,
     raw_notes: str | None,
     law: PublicLaw,
-    change_type: ChangeType,  # noqa: ARG001 — reserved for future per-type note formatting
+    change_type: ChangeType,
     description: str,
+    note_texts: list[str] | None = None,
 ) -> tuple[dict, str]:
     """Update notes metadata after applying a law change.
 
@@ -73,7 +79,18 @@ def update_notes_for_applied_law(
     )
     notes_schema.amendments.append(amendment)
 
-    # 4. Re-serialize to dict for JSONB storage
+    # 4. Add statutory note entries for ADD_NOTE changes
+    if change_type == ChangeType.ADD_NOTE and note_texts:
+        for text in note_texts:
+            header = f"Pub. L. {law.congress}\u2013{law.law_number}"
+            note_entry = SectionNoteSchema(
+                header=header,
+                content=text,
+                category=NoteCategoryEnum.STATUTORY,
+            )
+            notes_schema.notes.append(note_entry)
+
+    # 5. Re-serialize to dict for JSONB storage
     updated_dict = notes_schema.model_dump(mode="json")
 
     # 5. Append raw notes text line

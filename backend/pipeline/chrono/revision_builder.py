@@ -607,12 +607,21 @@ class RevisionBuilder:
         existing_notes = parent_state.normalized_notes if parent_state else None
         existing_raw_notes = parent_state.notes if parent_state else None
         combined_description = "; ".join(descriptions)
+
+        # Collect note texts from ADD_NOTE changes
+        note_texts = [
+            change.new_text
+            for change in section_changes
+            if change.change_type == ChangeType.ADD_NOTE and change.new_text
+        ]
+
         updated_notes_dict, updated_raw_notes = update_notes_for_applied_law(
             existing_notes=existing_notes,
             raw_notes=existing_raw_notes,
             law=law,
             change_type=section_changes[0].change_type,
             description=combined_description,
+            note_texts=note_texts or None,
         )
 
         # Compute hashes
