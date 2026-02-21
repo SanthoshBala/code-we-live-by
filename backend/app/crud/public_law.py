@@ -187,15 +187,41 @@ def _find_line_number(provisions: list[dict[str, Any]], old_text: str) -> int | 
 
 
 async def _enrich_start_lines(
-    session: AsyncSession, schemas: list[ParsedAmendmentSchema]
+    session: AsyncSession,
+    schemas: list[ParsedAmendmentSchema],
+    congress: int,
+    law_number: int,
 ) -> None:
-    """Look up target sections and set start_line on each amendment."""
+    """Look up target sections and set start_line on each amendment.
+
+    Uses the revision *before* this law was applied so that old_text
+    (the text being struck) still exists in the provisions.
+    """
+    from app.models.revision import CodeRevision
     from pipeline.olrc.snapshot_service import SnapshotService
 
+    # Find the revision for this law, then use its parent
+    stmt = (
+        select(CodeRevision)
+        .where(
+            CodeRevision.summary == f"PL {congress}-{law_number}",
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    law_revision = result.scalar_one_or_none()
+
+    if law_revision and law_revision.parent_revision_id is not None:
+        lookup_revision_id = law_revision.parent_revision_id
+    else:
+        # Fallback to HEAD if the law hasn't been applied yet
+        svc = SnapshotService(session)
+        head_id = await svc.get_head_revision_id()
+        if head_id is None:
+            return
+        lookup_revision_id = head_id
+
     svc = SnapshotService(session)
-    head_id = await svc.get_head_revision_id()
-    if head_id is None:
-        return
 
     # Cache provisions by (title, section) to avoid duplicate queries
     provisions_cache: dict[tuple[int, str], list[dict[str, Any]] | None] = {}
@@ -210,7 +236,9 @@ async def _enrich_start_lines(
 
         cache_key = (title, section)
         if cache_key not in provisions_cache:
-            state = await svc.get_section_at_revision(title, section, head_id)
+            state = await svc.get_section_at_revision(
+                title, section, lookup_revision_id
+            )
             # normalized_provisions is a list stored as JSONB
             raw = state.normalized_provisions if state else None
             provisions_cache[cache_key] = raw if isinstance(raw, list) else None
@@ -254,5 +282,5 @@ async def parse_law_amendments(
         amendments = text_parser.parse(law_text.htm_content)
 
     schemas = [_amendment_to_schema(a) for a in amendments]
-    await _enrich_start_lines(session, schemas)
+    await _enrich_start_lines(session, schemas, congress, law_number)
     return schemas
