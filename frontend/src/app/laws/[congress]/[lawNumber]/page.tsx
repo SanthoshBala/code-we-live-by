@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useLawText, useLawAmendments } from '@/hooks/useLaw';
+import { useLawText, useLawDiffs } from '@/hooks/useLaw';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
 import LawTextViewer from '@/components/law-viewer/LawTextViewer';
@@ -28,7 +28,7 @@ export default function LawViewerPage() {
     error: textError,
   } = useLawText(congress, lawNumber);
 
-  const { data: amendments, isLoading: amendmentsLoading } = useLawAmendments(
+  const { data: diffs, isLoading: diffsLoading } = useLawDiffs(
     congress,
     lawNumber,
     activeTab === 'diff'
@@ -93,10 +93,7 @@ export default function LawViewerPage() {
           ))}
 
         {activeTab === 'diff' && (
-          <LawDiffViewer
-            amendments={amendments ?? []}
-            isLoading={amendmentsLoading}
-          />
+          <LawDiffViewer diffs={diffs ?? []} isLoading={diffsLoading} />
         )}
       </div>
     </div>

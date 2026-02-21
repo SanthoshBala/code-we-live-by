@@ -217,6 +217,38 @@ export interface ParsedAmendment {
   start_line: number | null;
 }
 
+// --- Unified diff types ---
+
+/** A single line in a unified diff. */
+export interface DiffLine {
+  old_line_number: number | null;
+  new_line_number: number | null;
+  content: string;
+  type: 'context' | 'added' | 'removed';
+  indent_level: number;
+  marker: string | null;
+  is_header: boolean;
+}
+
+/** A contiguous diff hunk with surrounding context. */
+export interface DiffHunk {
+  old_start: number;
+  new_start: number;
+  lines: DiffLine[];
+}
+
+/** Unified diff for all amendments to a single section. */
+export interface SectionDiff {
+  title_number: number;
+  section_number: string;
+  section_key: string;
+  heading: string;
+  hunks: DiffHunk[];
+  total_lines: number;
+  amendments: ParsedAmendment[];
+  all_provisions: DiffLine[];
+}
+
 /** Full section view returned by the section detail endpoint. */
 export interface SectionView {
   title_number: number;

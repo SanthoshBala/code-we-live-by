@@ -1,5 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchLaws, fetchLawText, fetchLawAmendments } from '@/lib/api';
+import {
+  fetchLaws,
+  fetchLawText,
+  fetchLawAmendments,
+  fetchLawDiffs,
+} from '@/lib/api';
 
 /** Fetches all public law summaries. */
 export function useLaws() {
@@ -26,6 +31,19 @@ export function useLawAmendments(
   return useQuery({
     queryKey: ['lawAmendments', congress, lawNumber],
     queryFn: () => fetchLawAmendments(congress, lawNumber),
+    enabled,
+  });
+}
+
+/** Fetches per-section unified diffs for a single law. */
+export function useLawDiffs(
+  congress: number,
+  lawNumber: string,
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: ['lawDiffs', congress, lawNumber],
+    queryFn: () => fetchLawDiffs(congress, lawNumber),
     enabled,
   });
 }

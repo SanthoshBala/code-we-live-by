@@ -5,6 +5,7 @@ import type {
   LawSummary,
   LawText,
   ParsedAmendment,
+  SectionDiff,
   HeadRevision,
 } from './types';
 
@@ -106,6 +107,22 @@ export async function fetchLawAmendments(
   if (!res.ok) {
     throw new Error(
       `Failed to fetch amendments for PL ${congress}-${lawNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
+/** Fetch per-section unified diffs for a public law. */
+export async function fetchLawDiffs(
+  congress: number,
+  lawNumber: string
+): Promise<SectionDiff[]> {
+  const res = await fetch(
+    `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/diffs`
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch diffs for PL ${congress}-${lawNumber}: ${res.status}`
     );
   }
   return res.json();
