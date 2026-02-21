@@ -239,7 +239,7 @@ class GovInfoClient:
             # Import here to avoid circular imports
             from app.config import settings
 
-            self.api_key = settings.govinfo_api_key
+            self.api_key = settings.govinfo_api_key  # type: ignore[assignment]
         if not self.api_key:
             raise ValueError(
                 "GovInfo API key required. Set GOVINFO_API_KEY environment "

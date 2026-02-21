@@ -58,7 +58,8 @@ export default function SectionViewer({
       date: enactmentCitation.law.date,
       label: enactmentCitation.law.public_law_id,
       shortTitle:
-        enactmentCitation.law.short_title ??
+        enactmentCitation.law_title ??
+        enactmentCitation.law.display_title ??
         findShortTitle(enactmentCitation.law.public_law_id),
     };
   }
@@ -73,7 +74,7 @@ export default function SectionViewer({
       date: latest.law.date,
       label: latest.public_law_id,
       shortTitle:
-        latest.law.short_title ?? findShortTitle(latest.public_law_id),
+        latest.law.display_title ?? findShortTitle(latest.public_law_id),
     };
   }
 

@@ -56,6 +56,11 @@ HARDCODED_TITLES: dict[tuple[int, int] | str, LawTitleInfo] = {
     "ch531": LawTitleInfo(short_title="Social Security Act"),
     "ch343": LawTitleInfo(short_title="National Security Act of 1947"),
     "ch121": LawTitleInfo(short_title="Administrative Procedure Act"),
+    # Tax / Benefits
+    (93, 406): LawTitleInfo(
+        short_title="Employee Retirement Income Security Act of 1974",
+        short_title_aliases=["ERISA"],
+    ),
     # Copyright / IP
     (94, 553): LawTitleInfo(
         short_title="Copyright Act of 1976",
@@ -141,7 +146,7 @@ def _save_cache() -> None:
     """Save the title cache to disk."""
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        data = {}
+        data: dict[str, dict[str, str | list[str] | None] | None] = {}
         for (congress, law_number), info in _title_cache.items():
             key_str = f"{congress},{law_number}"
             if info is None:
@@ -158,7 +163,7 @@ def _save_cache() -> None:
         logger.warning(f"Failed to save title cache: {e}")
 
 
-def _parse_govinfo_short_titles(short_title_data: list[dict]) -> LawTitleInfo:
+def _parse_govinfo_short_titles(short_title_data: list[dict[str, str]]) -> LawTitleInfo:
     """Parse the shortTitle field from GovInfo API response.
 
     The API returns a list like:
@@ -306,7 +311,7 @@ def clear_cache(clear_file: bool = False) -> None:
 
 
 async def enrich_citations_with_titles(
-    citations: list,
+    citations: list,  # type: ignore[type-arg]
     skip_api: bool = False,
 ) -> None:
     """Enrich a list of SourceLaw citations with title information.

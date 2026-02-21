@@ -303,39 +303,69 @@ async def get_title_structure(
 async def _enrich_notes_with_short_titles(
     session: AsyncSession, notes: SectionNotesSchema
 ) -> None:
-    """Populate law.short_title on citations and amendments from the public_law table."""
-    # Collect all (congress, law_number) pairs
+    """Populate law.short_title on citations and amendments.
+
+    Three-tier lookup (no API calls — all local):
+    1. Batch query the public_law table (GovInfo-sourced data)
+    2. Hardcoded titles for major historical laws (title_lookup.py)
+    3. OLRC short_titles from statutory notes on this section
+    """
+    import re
+
+    from pipeline.olrc.title_lookup import HARDCODED_TITLES
+
+    # Collect all (congress, law_number) pairs that need enrichment
     pairs: set[tuple[int, str]] = set()
     for c in notes.citations:
-        if c.law:
+        if c.law and not c.law.short_title:
             pairs.add((c.law.congress, str(c.law.law_number)))
     for a in notes.amendments:
-        pairs.add((a.law.congress, str(a.law.law_number)))
+        if not a.law.short_title:
+            pairs.add((a.law.congress, str(a.law.law_number)))
 
     if not pairs:
         return
 
-    # Batch query
+    # Tier 1: batch query public_law table
     stmt = select(
         PublicLaw.congress, PublicLaw.law_number, PublicLaw.short_title
     ).where(tuple_(PublicLaw.congress, PublicLaw.law_number).in_(list(pairs)))
     result = await session.execute(stmt)
-    lookup: dict[tuple[int, str], str | None] = {
-        (row[0], row[1]): row[2] for row in result
-    }
+    lookup: dict[str, str] = {}
+    for row in result:
+        if row[2]:
+            lookup[f"PL {row[0]}-{row[1]}"] = row[2]
+
+    # Tier 2: hardcoded titles for major historical laws
+    for congress, law_num_str in pairs:
+        key = f"PL {congress}-{law_num_str}"
+        if key not in lookup:
+            info = HARDCODED_TITLES.get((congress, int(law_num_str)))
+            if info and info.short_title:
+                lookup[key] = info.short_title
+
+    # Tier 3: OLRC short_titles from statutory notes
+    for st in notes.short_titles:
+        if st.public_law and st.title:
+            m = re.match(r"Pub\.\s*L\.\s*(\d+)[–-](\d+)", st.public_law)
+            if m:
+                key = f"PL {m.group(1)}-{m.group(2)}"
+                if key not in lookup:
+                    lookup[key] = st.title
 
     # Enrich citations
     for c in notes.citations:
-        if c.law:
-            title = lookup.get((c.law.congress, str(c.law.law_number)))
+        if c.law and not c.law.short_title:
+            title = lookup.get(c.law.public_law_id)
             if title:
                 c.law.short_title = title
 
     # Enrich amendments
     for a in notes.amendments:
-        title = lookup.get((a.law.congress, str(a.law.law_number)))
-        if title:
-            a.law.short_title = title
+        if not a.law.short_title:
+            title = lookup.get(a.law.public_law_id)
+            if title:
+                a.law.short_title = title
 
 
 async def get_section(
