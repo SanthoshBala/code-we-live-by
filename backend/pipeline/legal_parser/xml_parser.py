@@ -180,6 +180,12 @@ def _has_amending_action(elem: ET.Element) -> bool:
     return any(True for _ in elem.iter(_ACTION_TAG))
 
 
+def _is_redesignation(elem: ET.Element) -> bool:
+    """Return True if *elem* text matches a redesignation pattern."""
+    text = _element_text(elem).lower()
+    return bool(re.search(r"\bby\s+(re)?designating\b", text))
+
+
 def _find_leaf_instructions(
     elem: ET.Element, ancestor_prose: str = ""
 ) -> list[tuple[ET.Element, str]]:
@@ -212,6 +218,18 @@ def _find_leaf_instructions(
         leaves: list[tuple[ET.Element, str]] = []
         for kid in structural_kids:
             leaves.extend(_find_leaf_instructions(kid, combined))
+
+        # Also capture structural siblings that have no <amendingAction>
+        # but contain redesignation prose (e.g. "by designating...").
+        # These are emitted as leaves so _parse_leaf can tag them with
+        # a synthetic redesignate action.
+        for child in elem:
+            if (
+                child.tag in _STRUCTURAL_TAGS
+                and not _has_amending_action(child)
+                and _is_redesignation(child)
+            ):
+                leaves.append((child, combined))
         return leaves
 
     if _has_amending_action(elem):
@@ -287,7 +305,12 @@ class XMLAmendmentParser:
                 action_types.add(atype)
 
         if not action_types:
-            return None
+            # Synthetic redesignate action for paragraphs with no
+            # <amendingAction> but redesignation prose.
+            if _is_redesignation(leaf):
+                action_types = {"redesignate"}
+            else:
+                return None
 
         pattern_type, change_type = _classify_actions(action_types)
 
@@ -535,6 +558,16 @@ class XMLAmendmentParser:
         anchor = self._find_anchor_text(leaf, all_quoted_texts, old_text, new_text)
         if anchor is not None:
             return anchor
+
+        # 2b. Plain-text "after/before subsection (X)" without <quotedText>
+        m = re.search(
+            r"\b(after|before)\s+subsection\s+\(([a-zA-Z0-9]+)\)", prose_lower
+        )
+        if m:
+            pos_type = (
+                PositionType.AFTER if m.group(1) == "after" else PositionType.BEFORE
+            )
+            return PositionQualifier(type=pos_type, anchor_text=f"({m.group(2)})")
 
         # 4. Unquoted target: "striking the period at the end" (no quotedText for old)
         if old_text is None:

@@ -313,6 +313,60 @@ def _provision_to_diff_line(
     )
 
 
+def _parse_redesignation(text: str) -> list[tuple[int, str]] | None:
+    """Extract ordinal→marker pairs from a redesignation instruction.
+
+    E.g. "designating the first, second, and third sentences as subsections
+    (a), (c), and (d)" → [(0, "(a)"), (1, "(c)"), (2, "(d)")].
+
+    Returns None if the text doesn't match a redesignation pattern.
+    """
+    import re
+
+    ORDINALS = {
+        "first": 0,
+        "second": 1,
+        "third": 2,
+        "fourth": 3,
+        "fifth": 4,
+        "sixth": 5,
+        "seventh": 6,
+        "eighth": 7,
+        "ninth": 8,
+        "tenth": 9,
+    }
+
+    m = re.search(
+        r"designating\s+the\s+((?:(?:first|second|third|fourth|fifth|sixth|"
+        r"seventh|eighth|ninth|tenth)(?:\s*,\s+and\s+|\s*,\s*|\s+and\s+|\s*))+)"
+        r"sentences?\s+as\s+subsections?\s+"
+        r"((?:\([a-zA-Z0-9]+\)(?:\s*,\s+and\s+|\s*,\s*|\s+and\s+|\s*))+)",
+        text,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+
+    ordinal_words = re.findall(
+        r"(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)",
+        m.group(1),
+        re.IGNORECASE,
+    )
+    markers = re.findall(r"(\([a-zA-Z0-9]+\))", m.group(2))
+
+    if len(ordinal_words) != len(markers):
+        return None
+
+    result: list[tuple[int, str]] = []
+    for word, marker in zip(ordinal_words, markers, strict=False):
+        idx = ORDINALS.get(word.lower())
+        if idx is None:
+            return None
+        result.append((idx, marker))
+
+    return result if result else None
+
+
 def _parse_struck_subsections(full_match: str) -> list[str] | None:
     """Extract subsection markers from a 'striking subsections (X) and (Y)' instruction.
 
@@ -378,6 +432,24 @@ def _find_subsection_range(
     return (start_idx, end_idx)
 
 
+def _prev_marker(marker: str) -> str | None:
+    """Return the marker that logically precedes *marker*.
+
+    E.g. "b" → "a", "3" → "2", "B" → "A".  Returns None for the
+    first in sequence ("a", "1", "A").
+    """
+    if marker.isdigit():
+        val = int(marker)
+        return str(val - 1) if val > 1 else None
+    if len(marker) == 1 and marker.isalpha():
+        prev_ord = ord(marker) - 1
+        if marker.islower() and prev_ord >= ord("a"):
+            return chr(prev_ord)
+        if marker.isupper() and prev_ord >= ord("A"):
+            return chr(prev_ord)
+    return None
+
+
 def _apply_amendments_to_provisions(
     provisions: list[dict[str, Any]],
     amendments: list[ParsedAmendmentSchema],
@@ -396,8 +468,90 @@ def _apply_amendments_to_provisions(
 
     patched = copy.deepcopy(provisions)
 
+    # Process redesignations first so markers exist for subsequent ADD anchoring
     for amendment in amendments:
-        if amendment.change_type not in ("Modify", "Delete"):
+        if amendment.change_type != "Redesignate":
+            continue
+        mapping = _parse_redesignation(amendment.full_match)
+        if not mapping:
+            continue
+        for idx, new_marker in mapping:
+            if 0 <= idx < len(patched):
+                patched[idx]["marker"] = new_marker
+                content = patched[idx].get("content", "")
+                # Prepend marker to content if not already present
+                if not content.startswith(new_marker):
+                    patched[idx]["content"] = f"{new_marker} {content}"
+
+    for amendment in amendments:
+        if amendment.change_type not in ("Modify", "Delete", "Add"):
+            continue
+
+        # Case 3: ADD — insert new provisions at the correct position
+        if amendment.change_type == "Add" and amendment.new_text:
+            new_lines_text = amendment.new_text.split("\n")
+            insert_idx = len(patched)  # default: append at end
+
+            # Determine insertion point from position_qualifier
+            if (
+                amendment.position_qualifier
+                and amendment.position_qualifier.type == "after"
+                and amendment.position_qualifier.anchor_text
+            ):
+                anchor = amendment.position_qualifier.anchor_text
+                # anchor is a marker like "(a)" — find end of that subsection
+                marker_letter = re.match(r"\(([a-zA-Z0-9]+)\)", anchor)
+                if marker_letter:
+                    span = _find_subsection_range(patched, [marker_letter.group(1)])
+                    if span:
+                        insert_idx = span[1] + 1
+            else:
+                # Try to infer from the new_text marker (e.g. "(b)" → insert after "(a)")
+                first_line = new_lines_text[0].strip()
+                marker_match = re.match(r"^\(([a-zA-Z0-9]+)\)", first_line)
+                if marker_match:
+                    marker_val = marker_match.group(1)
+                    prev_marker = _prev_marker(marker_val)
+                    if prev_marker:
+                        span = _find_subsection_range(patched, [prev_marker])
+                        if span:
+                            insert_idx = span[1] + 1
+
+            # Build provision dicts
+            base_line_number = (
+                int(patched[insert_idx - 1].get("line_number", insert_idx)) + 1
+                if insert_idx > 0 and patched
+                else 1
+            )
+            base_char = (
+                int(patched[insert_idx - 1].get("end_char", 0))
+                if insert_idx > 0 and patched
+                else 0
+            )
+            char_offset = base_char
+            line_num = base_line_number
+            new_provisions: list[dict[str, Any]] = []
+            for text in new_lines_text:
+                text = text.strip()
+                if not text:
+                    continue
+                marker_match = re.match(r"^(\([a-zA-Z0-9]+\)(?:\([A-Z0-9]+\))?)", text)
+                marker = marker_match.group(1) if marker_match else None
+                new_provisions.append(
+                    {
+                        "line_number": line_num,
+                        "content": text,
+                        "indent_level": 0,
+                        "marker": marker,
+                        "is_header": False,
+                        "start_char": char_offset,
+                        "end_char": char_offset + len(text),
+                    }
+                )
+                line_num += 1
+                char_offset += len(text) + 1
+
+            patched[insert_idx:insert_idx] = new_provisions
             continue
 
         # Case 1: Simple text replacement (old_text present)

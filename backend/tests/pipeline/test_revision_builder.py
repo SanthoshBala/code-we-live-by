@@ -267,12 +267,14 @@ class TestRevisionBuilder:
         assert snapshots[0].is_deleted is True
 
     @pytest.mark.asyncio
-    async def test_build_redesignate_skipped(self) -> None:
-        """REDESIGNATE produces no snapshot, counted as skipped."""
+    async def test_build_redesignate_applied(self) -> None:
+        """REDESIGNATE is treated as structural and produces a snapshot."""
         change = _make_change(
             change_type=ChangeType.REDESIGNATE,
             old_text=None,
             new_text=None,
+            description="by designating the first and second sentences "
+            "as subsections (a) and (b), respectively",
         )
         parent_state = _make_parent_state()
         session = _make_mock_session(changes=[change])
@@ -290,12 +292,13 @@ class TestRevisionBuilder:
                 law, parent_revision_id=1, sequence_number=2
             )
 
-        assert result.sections_skipped == 1
+        assert result.sections_applied == 1
+        assert result.sections_skipped == 0
 
-        # No snapshots created (only the revision itself is added)
+        # A snapshot IS created for redesignations
         added_objects = [call.args[0] for call in session.add.call_args_list]
         snapshots = [o for o in added_objects if isinstance(o, SectionSnapshot)]
-        assert len(snapshots) == 0
+        assert len(snapshots) == 1
 
     @pytest.mark.asyncio
     async def test_build_idempotent(self) -> None:
