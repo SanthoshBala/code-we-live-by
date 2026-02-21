@@ -40,6 +40,44 @@ function ConfidenceBadge({ score }: { score: number }) {
   return <span className={`text-xs ${color}`}>{pct}%</span>;
 }
 
+/** Renders a block of text with line numbers in provisions style. */
+function DiffBlock({
+  text,
+  variant,
+  startLine,
+}: {
+  text: string;
+  variant: 'old' | 'new';
+  startLine: number;
+}) {
+  const lines = text.split('\n');
+  const bg = variant === 'old' ? 'bg-red-50' : 'bg-green-50';
+  const textColor = variant === 'old' ? 'text-red-900' : 'text-green-900';
+  const gutterColor = variant === 'old' ? 'text-red-300' : 'text-green-300';
+  const prefix = variant === 'old' ? '−' : '+';
+
+  return (
+    <div
+      className={`rounded ${bg} py-2 pr-8 font-mono text-sm leading-relaxed`}
+    >
+      {lines.map((line, i) => (
+        <div key={i} className="flex items-start">
+          <span
+            className={`w-10 shrink-0 select-none text-right ${gutterColor}`}
+          >
+            {startLine + i}
+          </span>
+          <span className={`mx-2 select-none ${gutterColor}`}>│</span>
+          <span className={`min-w-0 whitespace-pre-wrap ${textColor}`}>
+            <span className="select-none">{prefix} </span>
+            {line}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Build a section-level key (no subsection path) for grouping. */
 function sectionGroupKey(a: ParsedAmendment): string {
   if (!a.section_ref) return 'No section reference';
@@ -158,39 +196,25 @@ export default function LawDiffViewer({
                       )}
                     </div>
 
-                    {/* Card body — diff panels */}
-                    <div className="px-4 py-3">
+                    {/* Card body — diff blocks */}
+                    <div className="space-y-3 px-4 py-3">
                       {a.old_text != null || a.new_text != null ? (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div className="rounded bg-red-50 p-3">
-                            <div className="mb-1 text-xs font-medium text-red-700">
-                              Old Text
-                            </div>
-                            {a.old_text != null ? (
-                              <pre className="whitespace-pre-wrap font-mono text-xs text-red-900">
-                                {a.old_text}
-                              </pre>
-                            ) : (
-                              <p className="text-xs italic text-gray-400">
-                                (none)
-                              </p>
-                            )}
-                          </div>
-                          <div className="rounded bg-green-50 p-3">
-                            <div className="mb-1 text-xs font-medium text-green-700">
-                              New Text
-                            </div>
-                            {a.new_text != null ? (
-                              <pre className="whitespace-pre-wrap font-mono text-xs text-green-900">
-                                {a.new_text}
-                              </pre>
-                            ) : (
-                              <p className="text-xs italic text-gray-400">
-                                (none)
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                        <>
+                          {a.old_text != null && (
+                            <DiffBlock
+                              text={a.old_text}
+                              variant="old"
+                              startLine={1}
+                            />
+                          )}
+                          {a.new_text != null && (
+                            <DiffBlock
+                              text={a.new_text}
+                              variant="new"
+                              startLine={1}
+                            />
+                          )}
+                        </>
                       ) : (
                         <p className="text-xs italic text-gray-400">
                           No text content extracted
@@ -201,9 +225,21 @@ export default function LawDiffViewer({
                           <summary className="cursor-pointer text-xs text-gray-500">
                             Context
                           </summary>
-                          <pre className="mt-1 whitespace-pre-wrap rounded bg-gray-50 p-2 font-mono text-xs text-gray-600">
-                            {a.context}
-                          </pre>
+                          <div className="mt-1 rounded bg-gray-100 py-2 pr-8 font-mono text-sm leading-relaxed">
+                            {a.context.split('\n').map((line, ci) => (
+                              <div key={ci} className="flex items-start">
+                                <span className="w-10 shrink-0 select-none text-right text-gray-400">
+                                  {ci + 1}
+                                </span>
+                                <span className="mx-2 select-none text-gray-400">
+                                  │
+                                </span>
+                                <span className="min-w-0 whitespace-pre-wrap text-gray-600">
+                                  {line}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </details>
                       )}
                     </div>
