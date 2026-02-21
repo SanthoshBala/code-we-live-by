@@ -643,6 +643,16 @@ def _apply_amendments_to_provisions(
     return patched
 
 
+def _strip_leading_marker(content: str) -> str:
+    """Strip a leading subsection marker for comparison purposes.
+
+    E.g. "(a) Each preliminary…" → "Each preliminary…"
+    """
+    import re
+
+    return re.sub(r"^\([a-zA-Z0-9]+\)\s*", "", content)
+
+
 def _build_hunks(
     before: list[dict[str, Any]],
     after: list[dict[str, Any]],
@@ -651,21 +661,39 @@ def _build_hunks(
     """Build diff hunks by comparing before/after provisions.
 
     Uses SequenceMatcher to handle both same-length (in-place edit) and
-    different-length (structural replacement) cases.
+    different-length (structural replacement) cases.  Comparisons strip
+    leading subsection markers so that redesignated lines match their
+    originals, with only genuinely new lines (like insertions) appearing
+    as added.
     """
     from difflib import SequenceMatcher
 
     if not before and not after:
         return []
 
-    old_contents = [p.get("content", "") for p in before]
-    new_contents = [p.get("content", "") for p in after]
+    # Compare marker-stripped content so redesignated lines match originals
+    old_stripped = [_strip_leading_marker(p.get("content", "")) for p in before]
+    new_stripped = [_strip_leading_marker(p.get("content", "")) for p in after]
 
-    sm = SequenceMatcher(None, old_contents, new_contents)
+    sm = SequenceMatcher(None, old_stripped, new_stripped)
     opcodes = sm.get_opcodes()
 
-    # Check if there are any actual changes
-    if all(tag == "equal" for tag, *_ in opcodes):
+    # Check if there are any actual changes (using real content, not stripped)
+    old_contents = [p.get("content", "") for p in before]
+    new_contents = [p.get("content", "") for p in after]
+    has_changes = False
+    for tag, i1, i2, j1, _j2 in opcodes:
+        if tag != "equal":
+            has_changes = True
+            break
+        # "equal" by stripped comparison — check if real content differs
+        for k in range(i2 - i1):
+            if old_contents[i1 + k] != new_contents[j1 + k]:
+                has_changes = True
+                break
+        if has_changes:
+            break
+    if not has_changes:
         return []
 
     # Build a flat list of diff entries with source indices, then group into hunks
@@ -675,9 +703,14 @@ def _build_hunks(
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
             for k in range(i2 - i1):
-                entries.append(
-                    ("context", i1 + k, j1 + k, before[i1 + k], after[j1 + k])
-                )
+                oi, ni = i1 + k, j1 + k
+                # Stripped content matched — check if real content differs
+                # (e.g. a marker was prepended by redesignation)
+                if old_contents[oi] != new_contents[ni]:
+                    entries.append(("removed", oi, None, before[oi], None))
+                    entries.append(("added", None, ni, None, after[ni]))
+                else:
+                    entries.append(("context", oi, ni, before[oi], after[ni]))
         elif tag == "replace":
             for k in range(i1, i2):
                 entries.append(("removed", k, None, before[k], None))

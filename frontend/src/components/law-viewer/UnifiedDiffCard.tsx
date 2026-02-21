@@ -51,21 +51,24 @@ function displayLineNum(ln: number | null): string {
 import type { ParsedAmendment } from '@/lib/types';
 
 /**
- * Find the first occurrence of any search text within content.
- * Returns [start, end) character range, or null if no match.
+ * Find all occurrences of amendment search texts within content.
+ * Returns non-overlapping [start, end) ranges sorted by position.
  * Tries exact match first, then whitespace-normalized match.
  */
-function findAmendmentRange(
+function findAmendmentRanges(
   content: string,
   searchTexts: (string | null)[]
-): [number, number] | null {
+): [number, number][] {
+  const ranges: [number, number][] = [];
+
   for (const text of searchTexts) {
     if (!text) continue;
 
     // Exact substring match
     const idx = content.indexOf(text);
     if (idx !== -1) {
-      return [idx, idx + text.length];
+      ranges.push([idx, idx + text.length]);
+      continue;
     }
 
     // Whitespace-normalized match (amendment text may differ in spacing)
@@ -73,29 +76,53 @@ function findAmendmentRange(
     const normText = text.replace(/\s+/g, ' ');
     const normIdx = normContent.indexOf(normText);
     if (normIdx !== -1) {
-      return [normIdx, normIdx + normText.length];
+      ranges.push([normIdx, normIdx + normText.length]);
     }
   }
-  return null;
+
+  // Sort by start position and merge overlapping ranges
+  if (ranges.length <= 1) return ranges;
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [ranges[0]];
+  for (let i = 1; i < ranges.length; i++) {
+    const prev = merged[merged.length - 1];
+    if (ranges[i][0] <= prev[1]) {
+      prev[1] = Math.max(prev[1], ranges[i][1]);
+    } else {
+      merged.push(ranges[i]);
+    }
+  }
+  return merged;
 }
 
-/** Render text with a highlighted range using a darker background. */
+/** Render text with highlighted ranges using a darker background. */
 function renderHighlightedContent(
   content: string,
-  range: [number, number] | null,
+  ranges: [number, number][],
   highlightClass: string
 ): React.ReactNode {
-  if (!range || range[0] >= range[1]) {
+  if (ranges.length === 0) {
     return content;
   }
-  const [start, end] = range;
-  return (
-    <>
-      {content.slice(0, start)}
-      <span className={highlightClass}>{content.slice(start, end)}</span>
-      {content.slice(end)}
-    </>
-  );
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+  for (let i = 0; i < ranges.length; i++) {
+    const [start, end] = ranges[i];
+    if (start > cursor) {
+      parts.push(content.slice(cursor, start));
+    }
+    parts.push(
+      <span key={i} className={highlightClass}>
+        {content.slice(start, end)}
+      </span>
+    );
+    cursor = end;
+  }
+  if (cursor < content.length) {
+    parts.push(content.slice(cursor));
+  }
+  return <>{parts}</>;
 }
 
 /** Collect old_text values from amendments for highlighting removed lines. */
@@ -112,9 +139,11 @@ function getNewTexts(amendments: ParsedAmendment[]): (string | null)[] {
 function UnifiedDiffLineRow({
   line,
   amendmentTexts,
+  inlineDiffRange,
 }: {
   line: DiffLine;
   amendmentTexts: (string | null)[];
+  inlineDiffRange?: [number, number] | null;
 }) {
   const isAdded = line.type === 'added';
   const isRemoved = line.type === 'removed';
@@ -139,10 +168,16 @@ function UnifiedDiffLineRow({
     highlightClass = 'bg-green-200';
   }
 
-  const highlight =
-    isRemoved || isAdded
-      ? findAmendmentRange(line.content, amendmentTexts)
-      : null;
+  // Prefer amendment text matches (precise), fall back to inline diff (word-level)
+  let highlights: [number, number][] = [];
+  if (isRemoved || isAdded) {
+    const amendmentHits = findAmendmentRanges(line.content, amendmentTexts);
+    if (amendmentHits.length > 0) {
+      highlights = amendmentHits;
+    } else if (inlineDiffRange) {
+      highlights = [inlineDiffRange];
+    }
+  }
 
   return (
     <div className={`flex items-start ${bg}`}>
@@ -161,7 +196,7 @@ function UnifiedDiffLineRow({
         className={`min-w-0 flex-1 whitespace-pre-wrap pl-[2ch] -indent-[2ch] font-mono text-sm ${textColor}`}
       >
         <span className="select-none">{prefix} </span>
-        {renderHighlightedContent(line.content, highlight, highlightClass)}
+        {renderHighlightedContent(line.content, highlights, highlightClass)}
       </span>
     </div>
   );
@@ -169,10 +204,55 @@ function UnifiedDiffLineRow({
 
 /* ---- Paired line helpers (shared between unified & side-by-side) ---- */
 
+/**
+ * Compute the character range that differs between two strings.
+ * Returns [start, end) for the portion of `b` not shared with `a`,
+ * or null if the strings are identical or the change exceeds the
+ * highlight threshold (20% of line length, similar to GitHub).
+ */
+const INLINE_DIFF_THRESHOLD = 0.2;
+
+function computeInlineDiff(a: string, b: string): [number, number] | null {
+  if (a === b) return null;
+
+  // Find common prefix length
+  let prefix = 0;
+  const minLen = Math.min(a.length, b.length);
+  while (prefix < minLen && a[prefix] === b[prefix]) {
+    prefix++;
+  }
+
+  // Find common suffix length (not overlapping with prefix)
+  let suffix = 0;
+  while (
+    suffix < minLen - prefix &&
+    a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  const start = prefix;
+  const end = b.length - suffix;
+
+  if (start >= end) return null;
+
+  // Suppress highlighting when too much of the line changed
+  const changedLen = end - start;
+  if (b.length > 0 && changedLen / b.length > INLINE_DIFF_THRESHOLD) {
+    return null;
+  }
+
+  return [start, end];
+}
+
 /** A paired row for the side-by-side view. */
 interface PairedRow {
   left: DiffLine | null;
   right: DiffLine | null;
+  /** Inline diff range [start, end) for the left (removed) line. */
+  leftHighlight: [number, number] | null;
+  /** Inline diff range [start, end) for the right (added) line. */
+  rightHighlight: [number, number] | null;
 }
 
 /** Pair up removed/added lines from a hunk into side-by-side rows. */
@@ -182,7 +262,12 @@ function pairHunkLines(lines: DiffLine[]): PairedRow[] {
   while (i < lines.length) {
     const line = lines[i];
     if (line.type === 'context') {
-      rows.push({ left: line, right: line });
+      rows.push({
+        left: line,
+        right: line,
+        leftHighlight: null,
+        rightHighlight: null,
+      });
       i++;
     } else if (line.type === 'removed') {
       const removed: DiffLine[] = [];
@@ -197,13 +282,31 @@ function pairHunkLines(lines: DiffLine[]): PairedRow[] {
       }
       const maxLen = Math.max(removed.length, added.length);
       for (let j = 0; j < maxLen; j++) {
+        const leftLine = j < removed.length ? removed[j] : null;
+        const rightLine = j < added.length ? added[j] : null;
+
+        // Compute word-level diff for paired removed+added lines
+        let leftHL: [number, number] | null = null;
+        let rightHL: [number, number] | null = null;
+        if (leftLine && rightLine) {
+          leftHL = computeInlineDiff(rightLine.content, leftLine.content);
+          rightHL = computeInlineDiff(leftLine.content, rightLine.content);
+        }
+
         rows.push({
-          left: j < removed.length ? removed[j] : null,
-          right: j < added.length ? added[j] : null,
+          left: leftLine,
+          right: rightLine,
+          leftHighlight: leftHL,
+          rightHighlight: rightHL,
         });
       }
     } else {
-      rows.push({ left: null, right: line });
+      rows.push({
+        left: null,
+        right: line,
+        leftHighlight: null,
+        rightHighlight: null,
+      });
       i++;
     }
   }
@@ -215,10 +318,12 @@ function SideBySideCell({
   line,
   side,
   amendmentTexts,
+  inlineDiffRange,
 }: {
   line: DiffLine | null;
   side: 'left' | 'right';
   amendmentTexts: (string | null)[];
+  inlineDiffRange?: [number, number] | null;
 }) {
   if (!line) {
     return <div className="flex min-h-[1.5rem] items-start bg-gray-50" />;
@@ -247,10 +352,16 @@ function SideBySideCell({
     highlightClass = 'bg-green-200';
   }
 
-  const highlight =
-    isRemoved || isAdded
-      ? findAmendmentRange(line.content, amendmentTexts)
-      : null;
+  // Prefer amendment text matches (precise), fall back to inline diff (word-level)
+  let highlights: [number, number][] = [];
+  if (isRemoved || isAdded) {
+    const amendmentHits = findAmendmentRanges(line.content, amendmentTexts);
+    if (amendmentHits.length > 0) {
+      highlights = amendmentHits;
+    } else if (inlineDiffRange) {
+      highlights = [inlineDiffRange];
+    }
+  }
 
   const lineNum =
     side === 'left'
@@ -269,7 +380,7 @@ function SideBySideCell({
         className={`min-w-0 flex-1 whitespace-pre-wrap pl-[2ch] -indent-[2ch] font-mono text-sm ${textColor}`}
       >
         <span className="select-none">{prefix} </span>
-        {renderHighlightedContent(line.content, highlight, highlightClass)}
+        {renderHighlightedContent(line.content, highlights, highlightClass)}
       </span>
     </div>
   );
@@ -294,11 +405,13 @@ function SideBySideHunk({
             line={row.left}
             side="left"
             amendmentTexts={oldTexts}
+            inlineDiffRange={row.leftHighlight}
           />
           <SideBySideCell
             line={row.right}
             side="right"
             amendmentTexts={newTexts}
+            inlineDiffRange={row.rightHighlight}
           />
         </div>
       ))}
@@ -542,15 +655,44 @@ export default function UnifiedDiffCard({ diff }: UnifiedDiffCardProps) {
                         1}{' '}
                       @@
                     </div>
-                    {region.hunk.lines.map((line, li) => (
-                      <UnifiedDiffLineRow
-                        key={li}
-                        line={line}
-                        amendmentTexts={
-                          line.type === 'removed' ? oldTexts : newTexts
+                    {(() => {
+                      const paired = pairHunkLines(region.hunk.lines);
+                      // Flatten paired rows back to lines with highlights
+                      const linesWithHL: {
+                        line: DiffLine;
+                        hl: [number, number] | null;
+                      }[] = [];
+                      for (const row of paired) {
+                        if (row.left && row.left.type !== 'context') {
+                          linesWithHL.push({
+                            line: row.left,
+                            hl: row.leftHighlight,
+                          });
                         }
-                      />
-                    ))}
+                        if (row.right && row.right !== row.left) {
+                          linesWithHL.push({
+                            line: row.right,
+                            hl: row.rightHighlight,
+                          });
+                        }
+                        if (row.left?.type === 'context') {
+                          linesWithHL.push({
+                            line: row.left,
+                            hl: null,
+                          });
+                        }
+                      }
+                      return linesWithHL.map((item, li) => (
+                        <UnifiedDiffLineRow
+                          key={li}
+                          line={item.line}
+                          amendmentTexts={
+                            item.line.type === 'removed' ? oldTexts : newTexts
+                          }
+                          inlineDiffRange={item.hl}
+                        />
+                      ));
+                    })()}
                   </div>
                 );
               }
