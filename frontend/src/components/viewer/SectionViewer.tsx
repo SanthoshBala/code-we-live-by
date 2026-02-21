@@ -55,6 +55,7 @@ export default function SectionViewer({
   if (enactmentCitation?.law) {
     enacted = {
       congress: enactmentCitation.law.congress,
+      lawNumber: enactmentCitation.law.law_number,
       date: enactmentCitation.law.date,
       label: enactmentCitation.law.public_law_id,
       shortTitle:
@@ -71,6 +72,7 @@ export default function SectionViewer({
     const latest = sorted[0];
     lastAmended = {
       congress: latest.law.congress,
+      lawNumber: latest.law.law_number,
       date: latest.law.date,
       label: latest.public_law_id,
       shortTitle:

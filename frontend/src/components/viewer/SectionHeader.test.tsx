@@ -116,9 +116,15 @@ describe('SectionHeader', () => {
         heading="Test"
         isPositiveLaw={false}
         status={null}
-        enacted={{ congress: 93, date: '1974-09-02', label: 'PL 93-406' }}
+        enacted={{
+          congress: 93,
+          lawNumber: 406,
+          date: '1974-09-02',
+          label: 'PL 93-406',
+        }}
         lastAmended={{
           congress: 113,
+          lawNumber: 22,
           date: '2013-07-25',
           label: 'PL 113-22',
         }}
@@ -146,7 +152,12 @@ describe('SectionHeader', () => {
         heading="Test"
         isPositiveLaw={false}
         status={null}
-        enacted={{ congress: 93, date: '1974-09-02', label: 'PL 93-406' }}
+        enacted={{
+          congress: 93,
+          lawNumber: 406,
+          date: '1974-09-02',
+          label: 'PL 93-406',
+        }}
       />
     );
     expect(screen.getByText('Enacted:')).toBeInTheDocument();
@@ -162,6 +173,7 @@ describe('SectionHeader', () => {
         status={null}
         enacted={{
           congress: 93,
+          lawNumber: 406,
           date: 'Sept. 2, 1974',
           label: 'PL 93-406',
         }}
@@ -179,6 +191,7 @@ describe('SectionHeader', () => {
         status={null}
         enacted={{
           congress: 93,
+          lawNumber: 406,
           date: '1974-09-02',
           label: 'PL 93-406',
           shortTitle: 'Employee Retirement Income Security Act of 1974',

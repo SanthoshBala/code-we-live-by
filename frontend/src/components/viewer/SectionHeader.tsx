@@ -6,6 +6,7 @@ import PageHeader from '@/components/ui/PageHeader';
 /** A law reference for the enacted/amended lines. */
 export interface LawReference {
   congress: number;
+  lawNumber: number;
   date: string | null;
   label: string; // e.g. "PL 113-22"
   shortTitle?: string | null;
@@ -62,7 +63,14 @@ function LawLine({ label, law }: { label: string; law: LawReference }) {
       <dt className="text-gray-400">{label}</dt>
       <dd className="text-gray-600">{ordinal(law.congress)} Congress</dd>
       <dd className="text-gray-600">{law.date ? formatDate(law.date) : '—'}</dd>
-      <dd className="font-mono text-gray-600">{law.label}</dd>
+      <dd className="font-mono text-gray-600">
+        <Link
+          href={`/laws/${law.congress}/${law.lawNumber}`}
+          className="hover:text-primary-700 hover:underline"
+        >
+          {law.label}
+        </Link>
+      </dd>
       {law.shortTitle ? (
         <dd className="text-gray-500">{law.shortTitle}</dd>
       ) : (
