@@ -1,0 +1,11 @@
+node_modules/
+.next/
+.env
+.env.*
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+coverage/
+.eslintcache
