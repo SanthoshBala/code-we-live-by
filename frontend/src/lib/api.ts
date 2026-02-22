@@ -21,9 +21,7 @@ function buildQuery(params: Record<string, string | undefined>): string {
 }
 
 /** Fetch all title summaries. */
-export async function fetchTitles(
-  revision?: number
-): Promise<TitleSummary[]> {
+export async function fetchTitles(revision?: number): Promise<TitleSummary[]> {
   const q = buildQuery({ revision: revision?.toString() });
   const res = await fetch(`${API_BASE}/titles/${q}`);
   if (!res.ok) {
@@ -103,9 +101,7 @@ export async function fetchHeadRevision(): Promise<HeadRevision> {
 export async function fetchRevision(revisionId: number): Promise<HeadRevision> {
   const res = await fetch(`${API_BASE}/revisions/${revisionId}`);
   if (!res.ok) {
-    throw new Error(
-      `Failed to fetch revision ${revisionId}: ${res.status}`
-    );
+    throw new Error(`Failed to fetch revision ${revisionId}: ${res.status}`);
   }
   return res.json();
 }

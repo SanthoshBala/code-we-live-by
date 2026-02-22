@@ -70,7 +70,10 @@ function buildBreadcrumbs(
     }
   }
 
-  crumbs.push({ label: `\u00A7\u2009${sectionNumber}`, href: withRev(basePath) });
+  crumbs.push({
+    label: `\u00A7\u2009${sectionNumber}`,
+    href: withRev(basePath),
+  });
   crumbs.push({ label: 'CODE' });
   return crumbs;
 }

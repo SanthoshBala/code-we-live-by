@@ -47,7 +47,5 @@ async def get_revision(
     """Return metadata for a specific revision by ID."""
     result = await get_revision_by_id(session, revision_id)
     if result is None:
-        raise HTTPException(
-            status_code=404, detail=f"Revision {revision_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Revision {revision_id} not found")
     return result
