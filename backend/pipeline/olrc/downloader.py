@@ -1,12 +1,18 @@
 """Download US Code XML files from OLRC (Office of Law Revision Counsel)."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import zipfile
 from io import BytesIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +77,7 @@ class OLRCDownloader:
         download_dir: Path | str = "data/olrc",
         release_point: str = DEFAULT_RELEASE_POINT,
         timeout: float = 120.0,
+        cache: PipelineCache | None = None,
     ):
         """Initialize the downloader.
 
@@ -78,11 +85,14 @@ class OLRCDownloader:
             download_dir: Directory to store downloaded files.
             release_point: OLRC release point (e.g., "119-72not60").
             timeout: HTTP request timeout in seconds.
+            cache: Optional PipelineCache for shared (GCS-backed) caching
+                of raw ZIP downloads.
         """
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
         self.release_point = release_point
         self.timeout = timeout
+        self._cache = cache
 
         # Parse release point into congress and public_law components
         # e.g., "119-72not60" -> congress="119", public_law="72not60"
@@ -117,7 +127,7 @@ class OLRCDownloader:
         Returns:
             Path to the extracted XML file, or None if download failed.
         """
-        # Check if already downloaded
+        # Check if already downloaded (extracted XML)
         xml_dir = self.download_dir / f"title{title_number}"
         if xml_dir.exists() and not force:
             xml_files = list(xml_dir.glob("*.xml"))
@@ -125,38 +135,52 @@ class OLRCDownloader:
                 logger.info(f"Title {title_number} already downloaded: {xml_files[0]}")
                 return xml_files[0]
 
-        url = self.get_title_url(title_number)
-        logger.info(f"Downloading Title {title_number} from {url}")
+        cache_key = f"olrc/downloads/title{title_number}@{self.release_point}.zip"
 
+        # Try GCS cache for the ZIP before hitting the OLRC API
+        zip_bytes: bytes | None = None
+        if self._cache and not force:
+            zip_bytes = self._cache.get_bytes(cache_key)
+            if zip_bytes:
+                logger.info(f"Title {title_number} ZIP from cache")
+
+        if zip_bytes is None:
+            url = self.get_title_url(title_number)
+            logger.info(f"Downloading Title {title_number} from {url}")
+
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.get(url, follow_redirects=True)
+                    response.raise_for_status()
+                    zip_bytes = response.content
+
+                # Store in cache
+                if self._cache:
+                    self._cache.put_bytes(cache_key, zip_bytes)
+            except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP error downloading Title {title_number}: {e}")
+                return None
+            except Exception as e:
+                logger.exception(f"Error downloading Title {title_number}: {e}")
+                return None
+
+        # Extract ZIP file
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
+            xml_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+                zf.extractall(xml_dir)
 
-                # Extract ZIP file
-                xml_dir.mkdir(parents=True, exist_ok=True)
-                with zipfile.ZipFile(BytesIO(response.content)) as zf:
-                    zf.extractall(xml_dir)
-
-                # Find the extracted XML file
-                xml_files = list(xml_dir.glob("*.xml"))
-                if xml_files:
-                    logger.info(f"Title {title_number} downloaded: {xml_files[0]}")
-                    return xml_files[0]
-                else:
-                    logger.error(
-                        f"No XML file found in downloaded archive for Title {title_number}"
-                    )
-                    return None
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error downloading Title {title_number}: {e}")
-            return None
+            xml_files = list(xml_dir.glob("*.xml"))
+            if xml_files:
+                logger.info(f"Title {title_number} downloaded: {xml_files[0]}")
+                return xml_files[0]
+            else:
+                logger.error(
+                    f"No XML file found in downloaded archive for Title {title_number}"
+                )
+                return None
         except zipfile.BadZipFile as e:
             logger.error(f"Invalid ZIP file for Title {title_number}: {e}")
-            return None
-        except Exception as e:
-            logger.exception(f"Error downloading Title {title_number}: {e}")
             return None
 
     async def download_phase1_titles(
@@ -243,73 +267,91 @@ class OLRCDownloader:
                 )
                 return xml_files[0]
 
-        # Parse the release point
-        parts = release_point.split("-", 1)
-        congress = parts[0]
-        public_law = parts[1] if len(parts) > 1 else ""
+        cache_key = f"olrc/downloads/title{title_number}@{release_point}.zip"
 
-        url = TITLE_XML_URL_PATTERN.format(
-            congress=congress,
-            public_law=public_law,
-            title_number=title_number,
-        )
-        logger.info(f"Downloading Title {title_number}@{release_point} from {url}")
+        # Try GCS cache for the ZIP
+        zip_bytes: bytes | None = None
+        if self._cache and not force:
+            zip_bytes = self._cache.get_bytes(cache_key)
+            if zip_bytes:
+                logger.info(f"Title {title_number}@{release_point} ZIP from cache")
 
-        max_retries = 3
-        for attempt in range(1, max_retries + 1):
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.get(url, follow_redirects=True)
-                    response.raise_for_status()
+        if zip_bytes is None:
+            # Parse the release point
+            parts = release_point.split("-", 1)
+            congress = parts[0]
+            public_law = parts[1] if len(parts) > 1 else ""
 
-                    rp_dir.mkdir(parents=True, exist_ok=True)
-                    with zipfile.ZipFile(BytesIO(response.content)) as zf:
-                        zf.extractall(rp_dir)
+            url = TITLE_XML_URL_PATTERN.format(
+                congress=congress,
+                public_law=public_law,
+                title_number=title_number,
+            )
+            logger.info(f"Downloading Title {title_number}@{release_point} from {url}")
 
-                    xml_files = list(rp_dir.glob("*.xml"))
-                    if xml_files:
-                        logger.info(
-                            f"Title {title_number}@{release_point} downloaded: "
-                            f"{xml_files[0]}"
-                        )
-                        return xml_files[0]
-                    else:
-                        logger.error(
-                            f"No XML file found in archive for "
-                            f"Title {title_number}@{release_point}"
-                        )
-                        return None
-
-            except httpx.HTTPStatusError as e:
-                logger.error(
-                    f"HTTP error downloading Title {title_number}@{release_point}: {e}"
-                )
-                return None
-            except zipfile.BadZipFile as e:
-                logger.error(
-                    f"Invalid ZIP file for Title {title_number}@{release_point}: {e}"
-                )
-                return None
-            except (httpx.RemoteProtocolError, httpx.ReadError) as e:
-                if attempt < max_retries:
-                    wait = 2**attempt
-                    logger.warning(
-                        f"Title {title_number}@{release_point}: connection error "
-                        f"(attempt {attempt}/{max_retries}), retrying in {wait}s: {e}"
-                    )
-                    await asyncio.sleep(wait)
-                else:
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                        response = await client.get(url, follow_redirects=True)
+                        response.raise_for_status()
+                        zip_bytes = response.content
+                    break
+                except httpx.HTTPStatusError as e:
                     logger.error(
-                        f"Title {title_number}@{release_point}: failed after "
-                        f"{max_retries} attempts: {e}"
+                        f"HTTP error downloading Title {title_number}@{release_point}: {e}"
                     )
                     return None
-            except Exception as e:
-                logger.exception(
-                    f"Error downloading Title {title_number}@{release_point}: {e}"
+                except (httpx.RemoteProtocolError, httpx.ReadError) as e:
+                    if attempt < max_retries:
+                        wait = 2**attempt
+                        logger.warning(
+                            f"Title {title_number}@{release_point}: connection error "
+                            f"(attempt {attempt}/{max_retries}), retrying in {wait}s: {e}"
+                        )
+                        await asyncio.sleep(wait)
+                    else:
+                        logger.error(
+                            f"Title {title_number}@{release_point}: failed after "
+                            f"{max_retries} attempts: {e}"
+                        )
+                        return None
+                except Exception as e:
+                    logger.exception(
+                        f"Error downloading Title {title_number}@{release_point}: {e}"
+                    )
+                    return None
+
+            if zip_bytes is None:
+                return None
+
+            # Store in cache
+            if self._cache:
+                self._cache.put_bytes(cache_key, zip_bytes)
+
+        # Extract ZIP
+        try:
+            rp_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+                zf.extractall(rp_dir)
+
+            xml_files = list(rp_dir.glob("*.xml"))
+            if xml_files:
+                logger.info(
+                    f"Title {title_number}@{release_point} downloaded: {xml_files[0]}"
+                )
+                return xml_files[0]
+            else:
+                logger.error(
+                    f"No XML file found in archive for "
+                    f"Title {title_number}@{release_point}"
                 )
                 return None
-        return None
+        except zipfile.BadZipFile as e:
+            logger.error(
+                f"Invalid ZIP file for Title {title_number}@{release_point}: {e}"
+            )
+            return None
 
     def get_xml_path_at_release_point(
         self, title_number: int, release_point: str

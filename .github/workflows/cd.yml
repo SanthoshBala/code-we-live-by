@@ -63,7 +63,7 @@ jobs:
             --region "$GCP_REGION" \
             --platform managed \
             --port 8080 \
-            --set-secrets "DATABASE_URL=DATABASE_URL:latest" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest" \
             --add-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
             --allow-unauthenticated \
             --min-instances 0 \

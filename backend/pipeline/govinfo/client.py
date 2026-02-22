@@ -1,5 +1,7 @@
 """GovInfo API client for fetching Public Laws and related documents."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import json
@@ -7,10 +9,13 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 
 import httpx
+
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +60,7 @@ class PLAWPackageInfo:
     law_type: str  # "public" or "private"
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "PLAWPackageInfo":
+    def from_api_response(cls, data: dict[str, Any]) -> PLAWPackageInfo:
         """Create from GovInfo API response item."""
         package_id = data.get("packageId", "")
 
@@ -127,7 +132,7 @@ class PLAWPackageDetail:
     committees: list[dict[str, str]]
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "PLAWPackageDetail":
+    def from_api_response(cls, data: dict[str, Any]) -> PLAWPackageDetail:
         """Create from GovInfo API package summary response."""
         package_id = data.get("packageId", "")
 
@@ -220,6 +225,7 @@ class GovInfoClient:
         api_key: str | None = None,
         timeout: float = 30.0,
         cache_dir: Path | str | None = "data/govinfo",
+        cache: PipelineCache | None = None,
     ):
         """Initialize the GovInfo client.
 
@@ -229,6 +235,9 @@ class GovInfoClient:
             timeout: HTTP request timeout in seconds.
             cache_dir: Directory for caching downloaded law texts. Set to None
                 to disable caching. Defaults to "data/govinfo".
+            cache: Optional PipelineCache for shared (GCS-backed) caching.
+                If provided, cache_dir is ignored in favor of the cache's
+                local root.
 
         Raises:
             ValueError: If no API key is provided or found in settings.
@@ -250,7 +259,8 @@ class GovInfoClient:
         self.base_url = GOVINFO_BASE_URL
         self.max_retries = 3
         self.retry_delay = 2.0  # seconds
-        self.cache_dir = Path(cache_dir) if cache_dir else None
+        self._cache = cache
+        self.cache_dir = Path(cache_dir) if cache_dir and not cache else None
 
     async def _request_with_retry(
         self,
@@ -393,9 +403,18 @@ class GovInfoClient:
         Returns:
             PLAWPackageDetail with full metadata and download URLs.
         """
-        # Check cache first
+        cache_key = f"govinfo/plaw/{package_id}.json"
+
+        # Check PipelineCache first
+        if self._cache and not force:
+            cached = self._cache.get_text(cache_key)
+            if cached is not None:
+                logger.info(f"Using cached summary for {package_id}")
+                return PLAWPackageDetail.from_api_response(json.loads(cached))
+
+        # Legacy local cache fallback
         cache_file = None
-        if self.cache_dir:
+        if not self._cache and self.cache_dir:
             cache_file = self.cache_dir / "plaw" / f"{package_id}.json"
             if cache_file.exists() and not force:
                 logger.info(f"Using cached summary for {package_id}: {cache_file}")
@@ -410,8 +429,11 @@ class GovInfoClient:
             response = await self._request_with_retry(client, "GET", url, params=params)
             data = response.json()
 
-        # Write to cache
-        if cache_file:
+        # Write to PipelineCache
+        if self._cache:
+            self._cache.put_text(cache_key, json.dumps(data))
+            logger.info(f"Cached summary for {package_id}")
+        elif cache_file:
             cache_file.parent.mkdir(parents=True, exist_ok=True)
             cache_file.write_text(json.dumps(data))
             logger.info(f"Cached summary to {cache_file}")
@@ -542,8 +564,24 @@ class GovInfoClient:
         Returns:
             Law text as string, or None if not available.
         """
-        # Check cache first
-        cache_file = self._cache_path(congress, law_number, law_type, format)
+        package_id = self.build_package_id(congress, law_number, law_type)
+        cache_key = f"govinfo/plaw/{package_id}.{format}"
+
+        # Check PipelineCache first
+        if self._cache and not force:
+            cached = self._cache.get_text(cache_key)
+            if cached is not None:
+                logger.info(
+                    f"Using cached {format.upper()} for PL {congress}-{law_number}"
+                )
+                return cached
+
+        # Legacy local cache fallback
+        cache_file = (
+            self._cache_path(congress, law_number, law_type, format)
+            if not self._cache
+            else None
+        )
         if cache_file and cache_file.exists() and not force:
             logger.info(
                 f"Using cached {format.upper()} for PL {congress}-{law_number}: "
@@ -569,8 +607,13 @@ class GovInfoClient:
                 )
                 text = response.text
 
-                # Write to cache
-                if cache_file:
+                # Write to PipelineCache
+                if self._cache:
+                    self._cache.put_text(cache_key, text)
+                    logger.info(
+                        f"Cached {format.upper()} for PL {congress}-{law_number}"
+                    )
+                elif cache_file:
                     cache_file.parent.mkdir(parents=True, exist_ok=True)
                     cache_file.write_text(text)
                     logger.info(f"Cached {format.upper()} to {cache_file}")

@@ -14,12 +14,19 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
 
 logger = logging.getLogger(__name__)
 
 # Cache file location (in data/cache/ directory)
 _CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
 _CACHE_FILE = _CACHE_DIR / "law_titles.json"
+
+# Module-level PipelineCache reference (set via set_pipeline_cache())
+_pipeline_cache: PipelineCache | None = None
 
 
 @dataclass
@@ -112,20 +119,36 @@ HARDCODED_TITLES: dict[tuple[int, int] | str, LawTitleInfo] = {
 _title_cache: dict[tuple[int, int], LawTitleInfo | None] = {}
 _cache_loaded = False
 
+# GCS cache key for law_titles.json
+_GCS_CACHE_KEY = "cache/law_titles.json"
+
+
+def set_pipeline_cache(cache: PipelineCache | None) -> None:
+    """Set the module-level PipelineCache for GCS-backed persistence."""
+    global _pipeline_cache
+    _pipeline_cache = cache
+
 
 def _load_cache() -> None:
-    """Load the title cache from disk."""
+    """Load the title cache from disk (and GCS if available)."""
     global _title_cache, _cache_loaded
     if _cache_loaded:
         return
 
     _cache_loaded = True
-    if not _CACHE_FILE.exists():
+
+    # Try PipelineCache (GCS-backed) first, then fall back to local file
+    raw: str | None = None
+    if _pipeline_cache:
+        raw = _pipeline_cache.get_text(_GCS_CACHE_KEY)
+    if raw is None and _CACHE_FILE.exists():
+        raw = _CACHE_FILE.read_text()
+
+    if not raw:
         return
 
     try:
-        with open(_CACHE_FILE) as f:
-            data = json.load(f)
+        data = json.loads(raw)
         for key_str, value in data.items():
             # Parse key from "congress,law_number" format
             congress, law_number = map(int, key_str.split(","))
@@ -143,7 +166,7 @@ def _load_cache() -> None:
 
 
 def _save_cache() -> None:
-    """Save the title cache to disk."""
+    """Save the title cache to disk (and GCS if available)."""
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         data: dict[str, dict[str, str | list[str] | None] | None] = {}
@@ -157,8 +180,13 @@ def _save_cache() -> None:
                     "short_title": info.short_title,
                     "short_title_aliases": info.short_title_aliases,
                 }
+        content = json.dumps(data, indent=2)
         with open(_CACHE_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+            f.write(content)
+
+        # Also persist to GCS via PipelineCache
+        if _pipeline_cache:
+            _pipeline_cache.put_text(_GCS_CACHE_KEY, content)
     except Exception as e:
         logger.warning(f"Failed to save title cache: {e}")
 

@@ -1,7 +1,10 @@
 """Ingest Public Law data from GovInfo into the database."""
 
+from __future__ import annotations
+
 import logging
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import DataIngestionLog, PublicLaw
 from app.models.enums import LawType
 from pipeline.govinfo.client import GovInfoClient, PLAWPackageDetail
+
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +26,17 @@ class PublicLawIngestionService:
         self,
         session: AsyncSession,
         api_key: str | None = None,
+        cache: PipelineCache | None = None,
     ):
         """Initialize the ingestion service.
 
         Args:
             session: SQLAlchemy async session.
             api_key: GovInfo API key (or set GOVINFO_API_KEY env var).
+            cache: Optional PipelineCache for shared caching.
         """
         self.session = session
-        self.client = GovInfoClient(api_key=api_key)
+        self.client = GovInfoClient(api_key=api_key, cache=cache)
 
     async def ingest_congress(
         self,
