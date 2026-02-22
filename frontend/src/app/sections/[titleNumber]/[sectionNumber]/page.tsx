@@ -5,8 +5,10 @@ import MainLayout from '@/components/ui/MainLayout';
 import Sidebar from '@/components/ui/Sidebar';
 import TitleList from '@/components/tree/TitleList';
 import DirectoryView from '@/components/directory/DirectoryView';
+import RevisionBanner from '@/components/ui/RevisionBanner';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import { useSection } from '@/hooks/useSection';
+import { useRevision } from '@/hooks/useRevision';
 import { revisionLabel } from '@/lib/revisionLabel';
 import type {
   BreadcrumbSegment,
@@ -82,10 +84,11 @@ function capitalizeGroupType(type: string): string {
 function buildBreadcrumbs(
   titleNumber: number,
   path: SectionPath | null,
-  sectionNumber: string
+  sectionNumber: string,
+  withRev: (href: string) => string
 ): BreadcrumbSegment[] {
   const crumbs: BreadcrumbSegment[] = [
-    { label: `Title ${titleNumber}`, href: `/titles/${titleNumber}` },
+    { label: `Title ${titleNumber}`, href: withRev(`/titles/${titleNumber}`) },
   ];
 
   if (path) {
@@ -94,7 +97,7 @@ function buildBreadcrumbs(
       pathSoFar += `/${ancestor.type}/${ancestor.number}`;
       crumbs.push({
         label: `${capitalizeGroupType(ancestor.type)} ${ancestor.number}`,
-        href: pathSoFar,
+        href: withRev(pathSoFar),
       });
     }
   }
@@ -107,13 +110,22 @@ export default function SectionDirectoryPage() {
   const params = useParams<{ titleNumber: string; sectionNumber: string }>();
   const titleNumber = Number(params.titleNumber);
   const sectionNumber = decodeURIComponent(params.sectionNumber);
-  const { data: structure, isLoading } = useTitleStructure(titleNumber, true);
-  const { data: sectionData } = useSection(titleNumber, sectionNumber);
+  const { revision, withRev } = useRevision();
+  const { data: structure, isLoading } = useTitleStructure(
+    titleNumber,
+    true,
+    revision
+  );
+  const { data: sectionData } = useSection(
+    titleNumber,
+    sectionNumber,
+    revision
+  );
 
   const basePath = `/sections/${titleNumber}/${sectionNumber}`;
   const path = structure ? findSection(structure, sectionNumber) : null;
   const breadcrumbs = structure
-    ? buildBreadcrumbs(titleNumber, path, sectionNumber)
+    ? buildBreadcrumbs(titleNumber, path, sectionNumber, withRev)
     : [];
 
   const heading = path?.section.heading ?? `Section ${sectionNumber}`;
@@ -124,7 +136,7 @@ export default function SectionDirectoryPage() {
     {
       id: `\u00A7\u2009${sectionNumber}`,
       name: heading,
-      href: `${basePath}/CODE`,
+      href: withRev(`${basePath}/CODE`),
       kind: 'file' as const,
       status,
       lastAmendmentLaw: path?.section.last_amendment_law ?? null,
@@ -135,7 +147,7 @@ export default function SectionDirectoryPage() {
     ).map(({ file, label }) => ({
       id: file,
       name: label,
-      href: `${basePath}/${file}`,
+      href: withRev(`${basePath}/${file}`),
       kind: 'file' as const,
       status,
     })),
@@ -154,6 +166,7 @@ export default function SectionDirectoryPage() {
         </Sidebar>
       }
     >
+      {revision !== undefined && <RevisionBanner revision={revision} />}
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
       ) : (

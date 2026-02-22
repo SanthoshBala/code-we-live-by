@@ -5,7 +5,9 @@ import MainLayout from '@/components/ui/MainLayout';
 import Sidebar from '@/components/ui/Sidebar';
 import TitleList from '@/components/tree/TitleList';
 import SectionViewer from '@/components/viewer/SectionViewer';
+import RevisionBanner from '@/components/ui/RevisionBanner';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
+import { useRevision } from '@/hooks/useRevision';
 import type {
   BreadcrumbSegment,
   SectionGroupTree,
@@ -45,13 +47,14 @@ function capitalizeGroupType(type: string): string {
 function buildBreadcrumbs(
   structure: TitleStructure | undefined,
   titleNumber: number,
-  sectionNumber: string
+  sectionNumber: string,
+  withRev: (href: string) => string
 ): BreadcrumbSegment[] {
   if (!structure) return [];
 
   const basePath = `/sections/${titleNumber}/${sectionNumber}`;
   const crumbs: BreadcrumbSegment[] = [
-    { label: `Title ${titleNumber}`, href: `/titles/${titleNumber}` },
+    { label: `Title ${titleNumber}`, href: withRev(`/titles/${titleNumber}`) },
   ];
 
   const path = findSectionInGroups(structure.children ?? [], sectionNumber);
@@ -62,12 +65,12 @@ function buildBreadcrumbs(
       pathSoFar += `/${ancestor.type}/${ancestor.number}`;
       crumbs.push({
         label: `${capitalizeGroupType(ancestor.type)} ${ancestor.number}`,
-        href: pathSoFar,
+        href: withRev(pathSoFar),
       });
     }
   }
 
-  crumbs.push({ label: `\u00A7\u2009${sectionNumber}`, href: basePath });
+  crumbs.push({ label: `\u00A7\u2009${sectionNumber}`, href: withRev(basePath) });
   crumbs.push({ label: 'CODE' });
   return crumbs;
 }
@@ -76,9 +79,15 @@ export default function SectionCodePage() {
   const params = useParams<{ titleNumber: string; sectionNumber: string }>();
   const titleNumber = Number(params.titleNumber);
   const sectionNumber = decodeURIComponent(params.sectionNumber);
-  const { data: structure } = useTitleStructure(titleNumber, true);
+  const { revision, withRev } = useRevision();
+  const { data: structure } = useTitleStructure(titleNumber, true, revision);
 
-  const breadcrumbs = buildBreadcrumbs(structure, titleNumber, sectionNumber);
+  const breadcrumbs = buildBreadcrumbs(
+    structure,
+    titleNumber,
+    sectionNumber,
+    withRev
+  );
 
   return (
     <MainLayout
@@ -93,10 +102,12 @@ export default function SectionCodePage() {
         </Sidebar>
       }
     >
+      {revision !== undefined && <RevisionBanner revision={revision} />}
       <SectionViewer
         titleNumber={titleNumber}
         sectionNumber={sectionNumber}
         breadcrumbs={breadcrumbs}
+        revision={revision}
       />
     </MainLayout>
   );
