@@ -16,6 +16,7 @@ COPY app/ app/
 COPY alembic/ alembic/
 COPY alembic.ini .
 COPY pipeline/ pipeline/
+COPY scripts/ scripts/
 
 EXPOSE 8080
 

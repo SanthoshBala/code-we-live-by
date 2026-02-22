@@ -63,12 +63,29 @@ jobs:
             --region "$GCP_REGION" \
             --platform managed \
             --port 8080 \
-            --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
             --add-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
             --allow-unauthenticated \
             --min-instances 0 \
             --max-instances 3 \
             --memory 512Mi \
+            --quiet
+
+      - name: Run migrations and seed database
+        run: |
+          gcloud run jobs deploy cwlb-seed \
+            --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
+            --region "$GCP_REGION" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
+            --add-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
+            --memory 2Gi \
+            --task-timeout 30m \
+            --command "bash" \
+            --args "scripts/seed.sh" \
+            --quiet
+          gcloud run jobs execute cwlb-seed \
+            --region "$GCP_REGION" \
+            --wait \
             --quiet
 
   deploy-frontend:
