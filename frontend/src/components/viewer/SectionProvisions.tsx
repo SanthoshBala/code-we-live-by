@@ -251,24 +251,24 @@ export default function SectionProvisions({
               else headerRefs.current.delete(pl.lineIndex);
             }}
             data-sticky-header={pl.lineIndex}
-            className="sticky flex items-start bg-gray-100"
+            className="relative sticky flex items-start bg-gray-100"
             style={{
               top: topStyle,
               zIndex,
-              // Extend bg to fully occlude content scrolling behind
-              // this header. Negative margins offset the layout impact.
-              // Sub-headers use less top padding so they sit closer to
-              // their parent.
-              paddingTop: node.depth === 0 ? 4 : 1,
-              marginTop: node.depth === 0 ? -4 : -1,
               paddingBottom: 4,
               marginBottom: -4,
-              boxShadow:
-                node.depth === 0
-                  ? '0 -4px 0 0 rgb(243 244 246)'
-                  : '0 -1px 0 0 rgb(243 244 246)',
             }}
           >
+            {/* Extend background above/below header to occlude content
+                scrolling behind, without negative marginTop that clips
+                the preceding line's line numbers. */}
+            <div
+              className="pointer-events-none absolute inset-x-0 bg-gray-100"
+              style={{
+                top: node.depth === 0 ? -4 : -1,
+                height: node.depth === 0 ? 4 : 1,
+              }}
+            />
             {renderLineContent(pl)}
           </div>
           {node.children.map((child) => renderNode(child, childTopPx))}
