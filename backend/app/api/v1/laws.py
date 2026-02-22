@@ -20,7 +20,7 @@ from app.schemas.law_viewer import (
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 async def list_laws(
     session: AsyncSession = Depends(get_async_session),
 ) -> list[LawSummarySchema]:

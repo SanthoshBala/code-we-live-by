@@ -9,7 +9,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies (production only, no dev extras)
-RUN uv sync --frozen --no-dev
+# --extra gcs installs google-cloud-storage for GCS-backed pipeline cache
+RUN uv sync --frozen --no-dev --extra gcs
 
 # Copy application code
 COPY app/ app/
