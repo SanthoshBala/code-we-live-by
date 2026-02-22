@@ -1483,4 +1483,25 @@ def downgrade() -> None:
     )
     op.drop_index("idx_bill_congress", table_name="bill")
     op.drop_table("bill")
+
+    # Drop all PostgreSQL enum types created by this migration
+    for enum_name in [
+        "amendment_review_status",
+        "bill_status",
+        "bill_type",
+        "chamber",
+        "change_type",
+        "law_type",
+        "parsing_mode",
+        "parsing_session_status",
+        "pattern_discovery_status",
+        "political_party",
+        "reference_type",
+        "span_type",
+        "sponsorship_role",
+        "verification_method",
+        "verification_result",
+        "vote_type",
+    ]:
+        sa.Enum(name=enum_name).drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###
