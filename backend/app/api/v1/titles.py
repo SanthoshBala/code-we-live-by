@@ -10,7 +10,7 @@ from app.schemas.us_code import TitleStructureSchema, TitleSummarySchema
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 async def list_titles(
     revision: int | None = Query(None, description="Revision ID (default: HEAD)"),
     session: AsyncSession = Depends(get_async_session),
