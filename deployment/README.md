@@ -181,7 +181,7 @@ gcloud run jobs create cwlb-migrate \
     --image "$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/cwlb-backend:latest" \
     --region $REGION \
     --set-secrets "DATABASE_URL=DATABASE_URL:latest" \
-    --add-cloudsql-instances "$PROJECT_ID:$REGION:$SQL_INSTANCE" \
+    --set-cloudsql-instances "$PROJECT_ID:$REGION:$SQL_INSTANCE" \
     --command "uv,run,alembic,upgrade,head" \
     --project $PROJECT_ID
 ```

@@ -77,7 +77,7 @@ jobs:
             --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
             --region "$GCP_REGION" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
-            --add-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
+            --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
             --memory 2Gi \
             --task-timeout 30m \
             --command "bash" \
