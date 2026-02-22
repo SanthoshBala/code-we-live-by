@@ -4,10 +4,21 @@
 # every run resets all data. Acceptable during early development.
 set -euo pipefail
 
-echo "=== Downgrading database to base ==="
-uv run alembic downgrade base
+echo "=== Wiping database schema ==="
+uv run python -c "
+import asyncio, asyncpg, os
 
-echo "=== Upgrading database to head ==="
+async def wipe():
+    url = os.environ['DATABASE_URL'].replace('postgresql+asyncpg://', 'postgresql://')
+    conn = await asyncpg.connect(url)
+    await conn.execute('DROP SCHEMA IF EXISTS public CASCADE')
+    await conn.execute('CREATE SCHEMA public')
+    await conn.close()
+
+asyncio.run(wipe())
+"
+
+echo "=== Running migrations ==="
 uv run alembic upgrade head
 
 echo "=== Bootstrapping oldest release point ==="
