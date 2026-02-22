@@ -1,21 +1,21 @@
 steps:
-    - name: "gcr.io/cloud-builders/docker"
-      args:
-          [
-              "build",
-              "--build-arg",
-              "BACKEND_URL=${_BACKEND_URL}",
-              "-t",
-              "${_IMAGE_TAG}",
-              ".",
-          ]
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '--build-arg',
+        'BACKEND_URL=${_BACKEND_URL}',
+        '-t',
+        '${_IMAGE_TAG}',
+        '.',
+      ]
 
-    - name: "gcr.io/cloud-builders/docker"
-      args: ["push", "${_IMAGE_TAG}"]
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_IMAGE_TAG}']
 
 images:
-    - "${_IMAGE_TAG}"
+  - '${_IMAGE_TAG}'
 
 substitutions:
-    _BACKEND_URL: ""
-    _IMAGE_TAG: ""
+  _BACKEND_URL: ''
+  _IMAGE_TAG: ''
