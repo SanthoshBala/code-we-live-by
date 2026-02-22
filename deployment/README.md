@@ -27,7 +27,7 @@ Both Cloud Run services scale to zero when idle.
 
 ## Prerequisites
 
-- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) (`gcloud` CLI)
+- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) (`gcloud` CLI) — install via `brew install --cask google-cloud-sdk` on macOS
 - A GCP project with billing enabled
 
 ## GCP Project Setup
@@ -78,18 +78,22 @@ gcloud sql databases create $DB_NAME \
     --instance=$SQL_INSTANCE \
     --project=$PROJECT_ID
 
-gcloud sql users set-password $DB_USER \
+read -s DB_PASSWORD
+gcloud sql users create $DB_USER \
     --instance=$SQL_INSTANCE \
-    --password=YOUR_SECURE_PASSWORD \
+    --password=$DB_PASSWORD \
     --project=$PROJECT_ID
 ```
 
 ### 5. Store secrets in Secret Manager
 
 ```bash
-# Database URL for Cloud SQL via Unix socket
-echo -n "postgresql+asyncpg://${DB_USER}:YOUR_SECURE_PASSWORD@/${DB_NAME}?host=/cloudsql/${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
+# Database URL for Cloud SQL via Unix socket (uses $DB_PASSWORD from previous step)
+echo -n "postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@/${DB_NAME}?host=/cloudsql/${PROJECT_ID}:${REGION}:${SQL_INSTANCE}" \
     | gcloud secrets create DATABASE_URL --data-file=- --project=$PROJECT_ID
+
+# Verify the secret version was created
+gcloud secrets versions list DATABASE_URL --project=$PROJECT_ID
 ```
 
 ### 6. Set up Workload Identity Federation (for GitHub Actions)
@@ -101,12 +105,16 @@ gcloud iam workload-identity-pools create github-pool \
     --display-name="GitHub Actions Pool" \
     --project=$PROJECT_ID
 
-# Create a provider for GitHub
+# Create a provider for GitHub (attribute-condition is required by GCP)
+REPO_OWNER=SanthoshBala
+REPO_NAME=code-we-live-by
+
 gcloud iam workload-identity-pools providers create-oidc github-provider \
     --location=global \
     --workload-identity-pool=github-pool \
     --display-name="GitHub Provider" \
     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+    --attribute-condition="attribute.repository == '${REPO_OWNER}/${REPO_NAME}'" \
     --issuer-uri="https://token.actions.githubusercontent.com" \
     --project=$PROJECT_ID
 
@@ -115,21 +123,21 @@ gcloud iam service-accounts create github-cd \
     --display-name="GitHub CD" \
     --project=$PROJECT_ID
 
-# Grant necessary roles
-for ROLE in run.admin cloudsql.client artifactregistry.writer cloudbuild.builds.editor secretmanager.secretAccessor iam.serviceAccountUser; do
-    gcloud projects add-iam-policy-binding $PROJECT_ID \
-        --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" \
-        --role="roles/$ROLE"
-done
+# Grant necessary roles to the CD service account
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" --role="roles/run.admin"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" --role="roles/cloudsql.client"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" --role="roles/artifactregistry.writer"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" --role="roles/cloudbuild.builds.editor"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" --role="roles/iam.serviceAccountUser"
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" --role="roles/storage.admin"
 
 # Allow GitHub Actions to impersonate the service account
-REPO_OWNER=SanthoshBala
-REPO_NAME=code-we-live-by
+PROJECT_NUM=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
 
 gcloud iam service-accounts add-iam-policy-binding \
     "github-cd@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="roles/iam.workloadIdentityUser" \
-    --member="principalSet://iam.googleapis.com/projects/$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')/locations/global/workloadIdentityPools/github-pool/attribute.repository/${REPO_OWNER}/${REPO_NAME}" \
+    --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUM}/locations/global/workloadIdentityPools/github-pool/attribute.repository/${REPO_OWNER}/${REPO_NAME}" \
     --project=$PROJECT_ID
 ```
 
@@ -149,15 +157,7 @@ Set these in **Settings > Secrets and variables > Actions > Variables**:
 ### 8. Grant Cloud Run access to secrets
 
 ```bash
-# Get the Cloud Run service agent
-PROJECT_NUM=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-
-gcloud secrets add-iam-policy-binding DATABASE_URL \
-    --member="serviceAccount:github-cd@${PROJECT_ID}.iam.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor" \
-    --project=$PROJECT_ID
-
-# Also grant to the default compute service account (used by Cloud Run at runtime)
+# Grant the default compute service account (used by Cloud Run at runtime) access to read the DATABASE_URL secret
 gcloud secrets add-iam-policy-binding DATABASE_URL \
     --member="serviceAccount:${PROJECT_NUM}-compute@developer.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor" \
