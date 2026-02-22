@@ -164,6 +164,16 @@ gcloud secrets add-iam-policy-binding DATABASE_URL \
     --project=$PROJECT_ID
 ```
 
+## GCS Cache Bucket
+
+The pipeline cache bucket (`cwlb-pipeline-cache`) stores downloaded XML/HTM files from GovInfo and Congress.gov to avoid re-fetching on subsequent pipeline runs. A lifecycle policy auto-deletes objects after 180 days (see `gcs-cache-lifecycle.json`).
+
+```bash
+# Apply the lifecycle policy
+gcloud storage buckets update gs://cwlb-pipeline-cache \
+    --lifecycle-file=deployment/gcs-cache-lifecycle.json
+```
+
 ## Running Migrations
 
 Run Alembic migrations via Cloud Run Jobs or a one-off Cloud Run execution:
