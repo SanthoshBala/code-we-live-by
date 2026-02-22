@@ -13,7 +13,7 @@ const API_BASE = '/api/v1';
 
 /** Fetch all title summaries. */
 export async function fetchTitles(): Promise<TitleSummary[]> {
-  const res = await fetch(`${API_BASE}/titles/`);
+  const res = await fetch(`${API_BASE}/titles`);
   if (!res.ok) {
     throw new Error(`Failed to fetch titles: ${res.status}`);
   }
@@ -51,7 +51,7 @@ export async function fetchSection(
 
 /** Fetch all public law summaries. */
 export async function fetchLaws(): Promise<LawSummary[]> {
-  const res = await fetch(`${API_BASE}/laws/`);
+  const res = await fetch(`${API_BASE}/laws`);
   if (!res.ok) {
     throw new Error(`Failed to fetch laws: ${res.status}`);
   }
