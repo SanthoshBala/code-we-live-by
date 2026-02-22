@@ -1,13 +1,19 @@
 """Congress.gov API client for fetching legislator and bill data."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
+
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +59,7 @@ class MemberTerm:
     end_year: int | None
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "MemberTerm":
+    def from_api_response(cls, data: dict[str, Any]) -> MemberTerm:
         """Create from Congress.gov API response."""
         return cls(
             chamber=data.get("chamber", ""),
@@ -79,7 +85,7 @@ class MemberInfo:
     depiction_url: str | None = None
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "MemberInfo":
+    def from_api_response(cls, data: dict[str, Any]) -> MemberInfo:
         """Create from Congress.gov API response item."""
         # Parse terms
         terms_data = data.get("terms", {})
@@ -126,7 +132,7 @@ class MemberDetail:
     update_date: datetime | None = None
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "MemberDetail":
+    def from_api_response(cls, data: dict[str, Any]) -> MemberDetail:
         """Create from Congress.gov API member detail response."""
         # Parse terms
         terms_data = data.get("terms", [])
@@ -184,7 +190,7 @@ class SponsorInfo:
     sponsorship_withdrawn_date: str | None = None
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "SponsorInfo":
+    def from_api_response(cls, data: dict[str, Any]) -> SponsorInfo:
         """Create from Congress.gov API sponsor/cosponsor response."""
         return cls(
             bioguide_id=data.get("bioguideId", ""),
@@ -215,7 +221,7 @@ class HouseVoteInfo:
     bill_number: int | None = None
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "HouseVoteInfo":
+    def from_api_response(cls, data: dict[str, Any]) -> HouseVoteInfo:
         """Create from Congress.gov API response item.
 
         Note: List endpoint uses different field names than detail endpoint:
@@ -260,7 +266,7 @@ class HouseVoteDetail:
     amendment_number: str | None = None
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "HouseVoteDetail":
+    def from_api_response(cls, data: dict[str, Any]) -> HouseVoteDetail:
         """Create from Congress.gov API house-vote detail response."""
         vote_data = data.get("houseRollCallVote", data)
 
@@ -307,7 +313,7 @@ class MemberVoteInfo:
     vote_cast: str  # "Yea", "Nay", "Present", "Not Voting"
 
     @classmethod
-    def from_api_response(cls, data: dict[str, Any]) -> "MemberVoteInfo":
+    def from_api_response(cls, data: dict[str, Any]) -> MemberVoteInfo:
         """Create from Congress.gov API member vote response.
 
         Note: API uses bioguideID (not bioguideId), voteCast (not votePosition),
@@ -340,6 +346,7 @@ class CongressClient:
         self,
         api_key: str | None = None,
         timeout: float = 30.0,
+        cache: PipelineCache | None = None,
     ):
         """Initialize the Congress.gov client.
 
@@ -347,6 +354,7 @@ class CongressClient:
             api_key: Congress.gov API key. If not provided, reads from app settings
                 (which loads from CONGRESS_API_KEY environment variable or .env).
             timeout: HTTP request timeout in seconds.
+            cache: Optional PipelineCache for shared (GCS-backed) caching.
 
         Raises:
             ValueError: If no API key is provided or found in settings.
@@ -367,6 +375,7 @@ class CongressClient:
         self.base_url = CONGRESS_BASE_URL
         self.max_retries = 3
         self.retry_delay = 2.0  # seconds
+        self._cache = cache
 
     async def _request_with_retry(
         self,
@@ -546,6 +555,15 @@ class CongressClient:
         Returns:
             MemberDetail with full biographical and service information.
         """
+        cache_key = f"congress/member/{bioguide_id}.json"
+
+        # Check cache
+        if self._cache:
+            cached = self._cache.get_text(cache_key)
+            if cached is not None:
+                logger.info(f"Using cached member detail for {bioguide_id}")
+                return MemberDetail.from_api_response(json.loads(cached))
+
         url = f"{self.base_url}/member/{bioguide_id}"
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -555,6 +573,11 @@ class CongressClient:
             data = response.json()
 
         member_data = data.get("member", {})
+
+        # Write to cache
+        if self._cache:
+            self._cache.put_text(cache_key, json.dumps(member_data))
+
         return MemberDetail.from_api_response(member_data)
 
     async def get_bill_sponsors(

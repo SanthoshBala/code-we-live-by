@@ -1,8 +1,11 @@
 """Ingest US Code data from OLRC into the database."""
 
+from __future__ import annotations
+
 import logging
 from datetime import date, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,21 +27,30 @@ from pipeline.olrc.parser import (
     USLMParseResult,
 )
 
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
+
 logger = logging.getLogger(__name__)
 
 
 class USCodeIngestionService:
     """Service for ingesting US Code data into the database."""
 
-    def __init__(self, session: AsyncSession, download_dir: Path | str = "data/olrc"):
+    def __init__(
+        self,
+        session: AsyncSession,
+        download_dir: Path | str = "data/olrc",
+        cache: PipelineCache | None = None,
+    ):
         """Initialize the ingestion service.
 
         Args:
             session: SQLAlchemy async session.
             download_dir: Directory for downloaded XML files.
+            cache: Optional PipelineCache for shared caching.
         """
         self.session = session
-        self.downloader = OLRCDownloader(download_dir=download_dir)
+        self.downloader = OLRCDownloader(download_dir=download_dir, cache=cache)
         self.parser = USLMParser()
 
     async def ingest_title(
@@ -169,7 +181,7 @@ class USCodeIngestionService:
 
     async def _upsert_section(
         self,
-        parsed: "ParsedSection",
+        parsed: ParsedSection,
         group_id: int | None,
         title_number: int,
         force: bool = False,

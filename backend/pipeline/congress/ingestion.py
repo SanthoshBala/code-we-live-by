@@ -1,7 +1,10 @@
 """Ingest legislator data from Congress.gov into the database."""
 
+from __future__ import annotations
+
 import logging
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import DataIngestionLog, Legislator, LegislatorTerm
 from app.models.enums import Chamber, PoliticalParty
 from pipeline.congress.client import CongressClient, MemberDetail, MemberTerm
+
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
 
 logger = logging.getLogger(__name__)
 
@@ -77,15 +83,17 @@ class LegislatorIngestionService:
         self,
         session: AsyncSession,
         api_key: str | None = None,
+        cache: PipelineCache | None = None,
     ):
         """Initialize the ingestion service.
 
         Args:
             session: SQLAlchemy async session.
             api_key: Congress.gov API key (or set CONGRESS_API_KEY env var).
+            cache: Optional PipelineCache for shared caching.
         """
         self.session = session
-        self.client = CongressClient(api_key=api_key)
+        self.client = CongressClient(api_key=api_key, cache=cache)
 
     async def ingest_member(
         self,

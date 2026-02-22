@@ -14,6 +14,7 @@ from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
 from pipeline.olrc.parser import USLMParser
 
 if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
     from pipeline.olrc.parser import ParsedSection
 
 # Configure logging
@@ -22,6 +23,9 @@ logging.basicConfig(
     format="%(levelname)-5.5s [%(name)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Module-level pipeline cache, set in main()
+_cli_cache: PipelineCache | None = None
 
 
 async def download_titles(
@@ -37,7 +41,7 @@ async def download_titles(
     Returns:
         Dictionary mapping title numbers to XML file paths.
     """
-    downloader = OLRCDownloader(download_dir=download_dir)
+    downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
     results = {}
 
     for title_num in titles:
@@ -99,7 +103,9 @@ async def ingest_title(
     from pipeline.olrc.ingestion import USCodeIngestionService
 
     async with async_session_maker() as session:
-        service = USCodeIngestionService(session, download_dir=download_dir)
+        service = USCodeIngestionService(
+            session, download_dir=download_dir, cache=_cli_cache
+        )
         log = await service.ingest_title(
             title_number,
             force_download=force_download,
@@ -148,7 +154,9 @@ async def ingest_titles_command(
     label = f"{len(all_titles)} titles"
 
     async with async_session_maker() as session:
-        service = USCodeIngestionService(session, download_dir=download_dir)
+        service = USCodeIngestionService(
+            session, download_dir=download_dir, cache=_cli_cache
+        )
         logs = []
         for title_number in all_titles:
             logger.info(f"Ingesting Title {title_number}...")
@@ -231,7 +239,7 @@ async def seed_laws_command() -> int:
 
     failed = 0
     async with async_session_maker() as session:
-        service = PublicLawIngestionService(session)
+        service = PublicLawIngestionService(session, cache=_cli_cache)
         for congress, law_number, _default_title, short_name in SEED_LAWS:
             label = f"PL {congress}-{law_number}"
             try:
@@ -290,7 +298,7 @@ async def list_public_laws(
 
     from pipeline.govinfo.client import GovInfoClient
 
-    client = GovInfoClient()
+    client = GovInfoClient(cache=_cli_cache)
 
     start_date = datetime.utcnow() - timedelta(days=days)
     laws = await client.get_public_laws(start_date=start_date, congress=congress)
@@ -326,7 +334,7 @@ async def ingest_public_law(
     from pipeline.govinfo.ingestion import PublicLawIngestionService
 
     async with async_session_maker() as session:
-        service = PublicLawIngestionService(session)
+        service = PublicLawIngestionService(session, cache=_cli_cache)
         log = await service.ingest_law(congress, law_number, force=force)
 
         if log.status == "completed":
@@ -356,7 +364,7 @@ async def ingest_congress_laws(
     from pipeline.govinfo.ingestion import PublicLawIngestionService
 
     async with async_session_maker() as session:
-        service = PublicLawIngestionService(session)
+        service = PublicLawIngestionService(session, cache=_cli_cache)
         log = await service.ingest_congress(congress, force=force)
 
         if log.status == "completed":
@@ -388,7 +396,7 @@ async def ingest_recent_laws(
     from pipeline.govinfo.ingestion import PublicLawIngestionService
 
     async with async_session_maker() as session:
-        service = PublicLawIngestionService(session)
+        service = PublicLawIngestionService(session, cache=_cli_cache)
         log = await service.ingest_recent_laws(days, force=force)
 
         if log.status == "completed":
@@ -421,7 +429,7 @@ async def list_members(
     """
     from pipeline.congress.client import CongressClient
 
-    client = CongressClient()
+    client = CongressClient(cache=_cli_cache)
 
     if congress:
         members = await client.get_members_by_congress(congress, current_member=current)
@@ -460,7 +468,7 @@ async def ingest_member(
     from pipeline.congress.ingestion import LegislatorIngestionService
 
     async with async_session_maker() as session:
-        service = LegislatorIngestionService(session)
+        service = LegislatorIngestionService(session, cache=_cli_cache)
         log = await service.ingest_member(bioguide_id, force=force)
 
         if log.status == "completed":
@@ -488,7 +496,7 @@ async def ingest_congress_members(
     from pipeline.congress.ingestion import LegislatorIngestionService
 
     async with async_session_maker() as session:
-        service = LegislatorIngestionService(session)
+        service = LegislatorIngestionService(session, cache=_cli_cache)
         log = await service.ingest_congress(congress, force=force)
 
         if log.status == "completed":
@@ -520,7 +528,7 @@ async def ingest_current_members(
     from pipeline.congress.ingestion import LegislatorIngestionService
 
     async with async_session_maker() as session:
-        service = LegislatorIngestionService(session)
+        service = LegislatorIngestionService(session, cache=_cli_cache)
         log = await service.ingest_current_members(force=force)
 
         if log.status == "completed":
@@ -1215,7 +1223,7 @@ async def parse_law_command(
         return 1
 
     # Fetch law text from GovInfo
-    client = GovInfoClient()
+    client = GovInfoClient(cache=_cli_cache)
     law_info = await client.get_public_law(congress, law_number)
     if not law_info:
         logger.error(f"Law PL {congress}-{law_number} not found")
@@ -1555,7 +1563,7 @@ async def list_house_votes(
     """
     from pipeline.congress.client import CongressClient
 
-    client = CongressClient()
+    client = CongressClient(cache=_cli_cache)
 
     votes = await client.get_house_votes(congress, session=session, limit=limit)
 
@@ -2725,6 +2733,17 @@ Examples:
 
     args = parser.parse_args()
 
+    # Initialize shared pipeline cache (local-only unless GCS_CACHE_BUCKET is set)
+    global _cli_cache
+    from pipeline.cache import get_pipeline_cache
+
+    _cli_cache = get_pipeline_cache()
+
+    # Wire cache into title_lookup module for GCS persistence
+    from pipeline.olrc.title_lookup import set_pipeline_cache
+
+    set_pipeline_cache(_cli_cache)
+
     if args.command == "download":
         titles = args.titles or PHASE_1_TITLES
         logger.info(f"Downloading titles: {titles}")
@@ -2736,7 +2755,7 @@ Examples:
         return 0 if failed == 0 else 1
 
     elif args.command == "parse":
-        downloader = OLRCDownloader(download_dir=args.dir)
+        downloader = OLRCDownloader(download_dir=args.dir, cache=_cli_cache)
         xml_path = downloader.get_xml_path(args.title)
 
         if not xml_path:
@@ -2747,7 +2766,7 @@ Examples:
         return 0
 
     elif args.command == "list":
-        downloader = OLRCDownloader(download_dir=args.dir)
+        downloader = OLRCDownloader(download_dir=args.dir, cache=_cli_cache)
         titles = downloader.get_downloaded_titles()
 
         if titles:
@@ -3263,7 +3282,7 @@ async def chrono_bootstrap_command(
         release_point = rps[0].full_identifier
         print(f"Auto-detected oldest release point: {release_point}")
 
-    downloader = OLRCDownloader(download_dir=download_dir)
+    downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
     parser = USLMParser()
 
     async with async_session_maker() as session:
@@ -3297,7 +3316,7 @@ async def chrono_ingest_rp_command(
     from app.models.revision import CodeRevision
     from pipeline.olrc.rp_ingestor import RPIngestor
 
-    downloader = OLRCDownloader(download_dir=download_dir)
+    downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
     parser = USLMParser()
 
     async with async_session_maker() as session:
@@ -3661,7 +3680,7 @@ async def chrono_advance_command(
     from app.models.base import async_session_maker
     from pipeline.chrono.play_forward import PlayForwardEngine
 
-    downloader = OLRCDownloader(download_dir=download_dir)
+    downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
     parser = USLMParser()
 
     async with async_session_maker() as session:
@@ -3694,7 +3713,7 @@ async def chrono_advance_to_command(
     from app.models.base import async_session_maker
     from pipeline.chrono.play_forward import PlayForwardEngine
 
-    downloader = OLRCDownloader(download_dir=download_dir)
+    downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
     parser = USLMParser()
 
     async with async_session_maker() as session:
@@ -3728,7 +3747,7 @@ async def chrono_validate_command(
     from app.models.base import async_session_maker
     from pipeline.chrono.play_forward import PlayForwardEngine
 
-    downloader = OLRCDownloader()
+    downloader = OLRCDownloader(cache=_cli_cache)
     parser = USLMParser()
 
     async with async_session_maker() as session:

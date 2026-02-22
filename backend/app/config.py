@@ -64,5 +64,16 @@ class Settings(BaseSettings):
         description="Congress.gov API key from api.congress.gov",
     )
 
+    # =========================================================================
+    # Pipeline Cache
+    # =========================================================================
+    # GCS bucket for shared pipeline cache (optional).
+    # When set, pipeline API fetches are cached in GCS so they persist
+    # across Cloud Run instances and local rebuilds.
+    gcs_cache_bucket: str | None = Field(
+        default=None,
+        description="GCS bucket name for pipeline cache (e.g., 'cwlb-pipeline-cache')",
+    )
+
 
 settings = Settings()
