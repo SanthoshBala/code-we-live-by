@@ -1593,8 +1593,7 @@ class TestMultiSentenceSplitting:
                     marker="(a)",
                     heading=None,
                     content=(
-                        "First sentence of provision. "
-                        "Second sentence continues here."
+                        "First sentence of provision. Second sentence continues here."
                     ),
                     level="subsection",
                 ),
@@ -1605,9 +1604,7 @@ class TestMultiSentenceSplitting:
 
         # 2 lines: marker + first sentence, then second sentence
         assert result.provision_count == 2
-        assert result.provisions[0].content == (
-            "(a) First sentence of provision."
-        )
+        assert result.provisions[0].content == ("(a) First sentence of provision.")
         assert result.provisions[0].marker == "(a)"
         assert result.provisions[1].content == "Second sentence continues here."
         assert result.provisions[1].marker is None
@@ -1686,8 +1683,7 @@ class TestMultiSentenceSplitting:
                     marker="(b)",
                     heading=None,
                     content=(
-                        "As amended by Pub. L. 116–136, this section "
-                        "provides relief."
+                        "As amended by Pub. L. 116–136, this section provides relief."
                     ),
                     level="subsection",
                 ),
@@ -1792,7 +1788,9 @@ class TestMultiSentenceSplitting:
         result = normalize_section(text)
 
         assert result.provision_count == 1
-        assert result.provisions[0].content == "(a) The Commission may grant an exemption."
+        assert (
+            result.provisions[0].content == "(a) The Commission may grant an exemption."
+        )
 
     def test_fallback_abbreviation_not_split(self) -> None:
         """Fallback path respects legal abbreviations."""
