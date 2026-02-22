@@ -20,8 +20,8 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
-  deploy-backend:
-    name: Deploy Backend
+  build-images:
+    name: Build Images
     needs: ci
     runs-on: ubuntu-latest
     permissions:
@@ -40,23 +40,58 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push image
+      - name: Build backend and frontend images in parallel
         run: |
-          BUILD_ID=$(gcloud builds submit backend/ \
-            --tag "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
+          BACKEND_TAG="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
+          FRONTEND_TAG="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend:$GITHUB_SHA"
+
+          BACKEND_BUILD_ID=$(gcloud builds submit backend/ \
+            --tag "$BACKEND_TAG" \
             --async --format='value(id)' --quiet)
-          echo "Waiting for build $BUILD_ID..."
-          while true; do
-            STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)' --quiet)
-            if [ "$STATUS" = "SUCCESS" ]; then break; fi
-            if [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "TIMEOUT" ] || [ "$STATUS" = "CANCELLED" ]; then
-              echo "Build failed with status: $STATUS"
-              exit 1
-            fi
-            sleep 10
+          echo "Backend build started: $BACKEND_BUILD_ID"
+
+          FRONTEND_BUILD_ID=$(gcloud builds submit frontend/ \
+            --tag "$FRONTEND_TAG" \
+            --async --format='value(id)' --quiet)
+          echo "Frontend build started: $FRONTEND_BUILD_ID"
+
+          # Wait for both builds to complete
+          for BUILD_ID in "$BACKEND_BUILD_ID" "$FRONTEND_BUILD_ID"; do
+            echo "Waiting for build $BUILD_ID..."
+            while true; do
+              STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)' --quiet)
+              if [ "$STATUS" = "SUCCESS" ]; then
+                echo "Build $BUILD_ID succeeded"
+                break
+              fi
+              if [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "TIMEOUT" ] || [ "$STATUS" = "CANCELLED" ]; then
+                echo "Build $BUILD_ID failed with status: $STATUS"
+                gcloud builds log "$BUILD_ID" --quiet || true
+                exit 1
+              fi
+              sleep 5
+            done
           done
 
-      - name: Deploy to Cloud Run
+  deploy:
+    name: Deploy
+    needs: build-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy backend to Cloud Run
         run: |
           gcloud run deploy cwlb-backend \
             --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
@@ -88,58 +123,17 @@ jobs:
             --wait \
             --quiet
 
-  deploy-frontend:
-    name: Deploy Frontend
-    needs: [ci, deploy-backend]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Get backend URL
-        id: backend-url
+      - name: Deploy frontend to Cloud Run
         run: |
-          URL=$(gcloud run services describe cwlb-backend \
+          BACKEND_URL=$(gcloud run services describe cwlb-backend \
             --region "$GCP_REGION" \
             --format "value(status.url)")
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push image
-        run: |
-          BUILD_ID=$(gcloud builds submit frontend/ \
-            --tag "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend:$GITHUB_SHA" \
-            --async --format='value(id)' --quiet)
-          echo "Waiting for build $BUILD_ID..."
-          while true; do
-            STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)' --quiet)
-            if [ "$STATUS" = "SUCCESS" ]; then break; fi
-            if [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "TIMEOUT" ] || [ "$STATUS" = "CANCELLED" ]; then
-              echo "Build failed with status: $STATUS"
-              exit 1
-            fi
-            sleep 10
-          done
-
-      - name: Deploy to Cloud Run
-        run: |
           gcloud run deploy cwlb-frontend \
             --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend:$GITHUB_SHA" \
             --region "$GCP_REGION" \
             --platform managed \
             --port 3000 \
-            --set-env-vars "BACKEND_URL=${{ steps.backend-url.outputs.url }}" \
+            --set-env-vars "BACKEND_URL=$BACKEND_URL" \
             --allow-unauthenticated \
             --min-instances 0 \
             --max-instances 3 \
