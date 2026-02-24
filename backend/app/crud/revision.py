@@ -11,6 +11,20 @@ from app.schemas.revision import HeadRevisionSchema
 from pipeline.olrc.snapshot_service import SnapshotService
 
 
+async def get_revision_by_id(
+    session: AsyncSession, revision_id: int
+) -> HeadRevisionSchema | None:
+    """Return a specific revision by ID."""
+    stmt = select(CodeRevision).where(CodeRevision.revision_id == revision_id)
+    result = await session.execute(stmt)
+    revision = result.scalar_one_or_none()
+
+    if revision is None:
+        return None
+
+    return HeadRevisionSchema.model_validate(revision)
+
+
 async def get_head_revision(session: AsyncSession) -> HeadRevisionSchema | None:
     """Return the latest INGESTED revision with full metadata.
 

@@ -11,9 +11,19 @@ import type {
 
 const API_BASE = '/api/v1';
 
+/** Build a query string from optional params, omitting undefined values. */
+function buildQuery(params: Record<string, string | undefined>): string {
+  const entries = Object.entries(params).filter(
+    (entry): entry is [string, string] => entry[1] !== undefined
+  );
+  if (entries.length === 0) return '';
+  return '?' + new URLSearchParams(entries).toString();
+}
+
 /** Fetch all title summaries. */
-export async function fetchTitles(): Promise<TitleSummary[]> {
-  const res = await fetch(`${API_BASE}/titles/`);
+export async function fetchTitles(revision?: number): Promise<TitleSummary[]> {
+  const q = buildQuery({ revision: revision?.toString() });
+  const res = await fetch(`${API_BASE}/titles/${q}`);
   if (!res.ok) {
     throw new Error(`Failed to fetch titles: ${res.status}`);
   }
@@ -22,9 +32,11 @@ export async function fetchTitles(): Promise<TitleSummary[]> {
 
 /** Fetch the chapter/subchapter/section structure for a single title. */
 export async function fetchTitleStructure(
-  titleNumber: number
+  titleNumber: number,
+  revision?: number
 ): Promise<TitleStructure> {
-  const res = await fetch(`${API_BASE}/titles/${titleNumber}/structure`);
+  const q = buildQuery({ revision: revision?.toString() });
+  const res = await fetch(`${API_BASE}/titles/${titleNumber}/structure${q}`);
   if (!res.ok) {
     throw new Error(
       `Failed to fetch structure for title ${titleNumber}: ${res.status}`
@@ -36,10 +48,12 @@ export async function fetchTitleStructure(
 /** Fetch the full detail view for a single section. */
 export async function fetchSection(
   titleNumber: number,
-  sectionNumber: string
+  sectionNumber: string,
+  revision?: number
 ): Promise<SectionView> {
+  const q = buildQuery({ revision: revision?.toString() });
   const res = await fetch(
-    `${API_BASE}/sections/${titleNumber}/${encodeURIComponent(sectionNumber)}`
+    `${API_BASE}/sections/${titleNumber}/${encodeURIComponent(sectionNumber)}${q}`
   );
   if (!res.ok) {
     throw new Error(
@@ -79,6 +93,15 @@ export async function fetchHeadRevision(): Promise<HeadRevision> {
   const res = await fetch(`${API_BASE}/revisions/head`);
   if (!res.ok) {
     throw new Error(`Failed to fetch head revision: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** Fetch metadata for a specific revision by ID. */
+export async function fetchRevision(revisionId: number): Promise<HeadRevision> {
+  const res = await fetch(`${API_BASE}/revisions/${revisionId}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch revision ${revisionId}: ${res.status}`);
   }
   return res.json();
 }

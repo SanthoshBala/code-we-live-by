@@ -204,6 +204,34 @@ class ActRef:
 
 
 @dataclass
+class NoteRef:
+    """A hyperlink reference extracted from notes sections.
+
+    Extracted from <ref href="..."> elements within Historical, Editorial,
+    or Statutory notes in USLM XML. These enable linking from notes to
+    referenced laws and sections.
+
+    Unlike SourceCreditRef (used for sourceCredit element), NoteRef can
+    reference multiple target types: Public Laws, Acts, US Code sections,
+    and Statutes at Large.
+    """
+
+    ref_type: str  # "public_law", "act", "usc_section", "statute"
+    href: str  # The full href value
+    display_text: str = ""  # The display text from the ref element
+
+    # Parsed target fields (based on ref_type)
+    congress: int | None = None  # For PUBLIC_LAW
+    law_number: int | None = None  # For PUBLIC_LAW
+    act_date: str | None = None  # For ACT (e.g., "1935-08-14")
+    act_chapter: int | None = None  # For ACT
+    usc_title: int | None = None  # For USC_SECTION
+    usc_section: str | None = None  # For USC_SECTION (e.g., "106")
+    stat_volume: int | None = None  # For STATUTE
+    stat_page: int | None = None  # For STATUTE
+
+
+@dataclass
 class ParsedSection:
     """Parsed US Code Section data.
 
@@ -230,6 +258,9 @@ class ParsedSection:
     act_refs: list[ActRef] = field(
         default_factory=list
     )  # Structured Act citations (pre-1957)
+    notes_refs: list[NoteRef] = field(
+        default_factory=list
+    )  # Hyperlinks in notes sections (Task 1.17b)
 
     # ParsedLine fields (populated after normalization)
     provisions: list[ParsedLine] = field(default_factory=list)
@@ -834,6 +865,9 @@ class USLMParser:
         # Extract structured citation refs from sourceCredit
         source_credit_refs, act_refs = self._extract_source_credit_refs(section_elem)
 
+        # Extract hyperlink refs from notes sections (Task 1.17b)
+        notes_refs = self._extract_notes_refs(section_elem)
+
         return ParsedSection(
             section_number=section_number,
             heading=heading,
@@ -845,6 +879,7 @@ class USLMParser:
             subsections=subsections,
             source_credit_refs=source_credit_refs,
             act_refs=act_refs,
+            notes_refs=notes_refs,
         )
 
     def _get_level_type(self, elem: etree._Element) -> str | None:
@@ -1435,6 +1470,110 @@ class USLMParser:
                 pl_refs[i].date = date_text
 
         return pl_refs, act_refs
+
+    def _extract_notes_refs(self, section_elem: etree._Element) -> list[NoteRef]:
+        """Extract hyperlink references from notes sections.
+
+        Parses <ref href="..."> elements from Historical, Editorial, and
+        Statutory notes (not sourceCredit). These provide hyperlinks to:
+        - Public Laws: /us/pl/CONGRESS/LAW_NUMBER/...
+        - Acts: /us/act/DATE/ch/CHAPTER/...
+        - US Code sections: /us/usc/tTITLE/sSECTION
+        - Statutes at Large: /us/stat/VOLUME/PAGE
+
+        Args:
+            section_elem: The section XML element to extract refs from.
+
+        Returns:
+            List of NoteRef objects in document order.
+        """
+        refs: list[NoteRef] = []
+
+        # Find the notes element (not sourceCredit - that's handled separately)
+        notes_elem = section_elem.find(".//{*}notes")
+        if notes_elem is None:
+            notes_elem = section_elem.find(".//notes")
+        if notes_elem is None:
+            return refs
+
+        # Find all ref elements within notes
+        ref_elems = notes_elem.findall(".//{*}ref")
+        if not ref_elems:
+            ref_elems = notes_elem.findall(".//ref")
+
+        for ref_elem in ref_elems:
+            href = ref_elem.get("href", "")
+            if not href:
+                continue
+
+            text = "".join(ref_elem.itertext()).strip()
+
+            # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
+            if "/us/pl/" in href:
+                match = re.match(
+                    r"/us/pl/(\d+)/(\d+)",  # Congress and law number
+                    href,
+                )
+                if match:
+                    refs.append(
+                        NoteRef(
+                            ref_type="public_law",
+                            href=href,
+                            display_text=text,
+                            congress=int(match.group(1)),
+                            law_number=int(match.group(2)),
+                        )
+                    )
+
+            # Parse /us/act/YYYY-MM-DD/chNNN/... hrefs (Acts, pre-1957)
+            elif "/us/act/" in href:
+                match = re.match(
+                    r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)",  # Date and chapter
+                    href,
+                )
+                if match:
+                    refs.append(
+                        NoteRef(
+                            ref_type="act",
+                            href=href,
+                            display_text=text,
+                            act_date=match.group(1),
+                            act_chapter=int(match.group(2)),
+                        )
+                    )
+
+            # Parse /us/usc/tTITLE/sSECTION hrefs (US Code sections)
+            elif "/us/usc/" in href:
+                match = re.match(
+                    r"/us/usc/t(\d+)/s([\w-]+)",  # Title and section
+                    href,
+                )
+                if match:
+                    refs.append(
+                        NoteRef(
+                            ref_type="usc_section",
+                            href=href,
+                            display_text=text,
+                            usc_title=int(match.group(1)),
+                            usc_section=match.group(2),
+                        )
+                    )
+
+            # Parse /us/stat/VOLUME/PAGE hrefs (Statutes at Large)
+            elif "/us/stat/" in href:
+                match = re.match(r"/us/stat/(\d+)/(\d+)", href)
+                if match:
+                    refs.append(
+                        NoteRef(
+                            ref_type="statute",
+                            href=href,
+                            display_text=text,
+                            stat_volume=int(match.group(1)),
+                            stat_page=int(match.group(2)),
+                        )
+                    )
+
+        return refs
 
 
 def compute_text_hash(text: str) -> str:
