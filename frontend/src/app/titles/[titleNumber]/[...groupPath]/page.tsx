@@ -4,7 +4,6 @@ import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import { useLatestRevisionForTitle } from '@/hooks/useLatestRevision';
 import { useRevision } from '@/hooks/useRevision';
-import { revisionLabel } from '@/lib/revisionLabel';
 import type {
   SectionGroupTree,
   DirectoryItem,
@@ -13,7 +12,6 @@ import type {
 } from '@/lib/types';
 import { detectStatus } from '@/lib/statusStyles';
 import DirectoryView from '@/components/directory/DirectoryView';
-import RevisionBanner from '@/components/ui/RevisionBanner';
 
 function latestAmendment(sections: SectionSummary[]): {
   law: string | null;
@@ -160,14 +158,12 @@ export default function GroupDirectoryPage() {
   }
 
   return (
-    <>
-      {revision !== undefined && <RevisionBanner revision={revision} />}
-      <DirectoryView
-        title={group.name}
-        breadcrumbs={breadcrumbs}
-        items={items}
-        revisionLabel={latestRevision ? revisionLabel(latestRevision) : null}
-      />
-    </>
+    <DirectoryView
+      title={group.name}
+      breadcrumbs={breadcrumbs}
+      items={items}
+      revisionData={latestRevision ?? null}
+      revision={revision}
+    />
   );
 }

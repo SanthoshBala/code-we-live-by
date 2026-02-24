@@ -5,11 +5,9 @@ import MainLayout from '@/components/ui/MainLayout';
 import Sidebar from '@/components/ui/Sidebar';
 import TitleList from '@/components/tree/TitleList';
 import DirectoryView from '@/components/directory/DirectoryView';
-import RevisionBanner from '@/components/ui/RevisionBanner';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import { useSection } from '@/hooks/useSection';
 import { useRevision } from '@/hooks/useRevision';
-import { revisionLabel } from '@/lib/revisionLabel';
 import type {
   BreadcrumbSegment,
   DirectoryItem,
@@ -166,7 +164,6 @@ export default function SectionDirectoryPage() {
         </Sidebar>
       }
     >
-      {revision !== undefined && <RevisionBanner revision={revision} />}
       {isLoading ? (
         <p className="text-gray-500">Loading...</p>
       ) : (
@@ -174,11 +171,8 @@ export default function SectionDirectoryPage() {
           title={heading}
           breadcrumbs={breadcrumbs}
           items={items}
-          revisionLabel={
-            sectionData?.last_revision
-              ? revisionLabel(sectionData.last_revision)
-              : null
-          }
+          revisionData={sectionData?.last_revision ?? null}
+          revision={revision}
         />
       )}
     </MainLayout>
