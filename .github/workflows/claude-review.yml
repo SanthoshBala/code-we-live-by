@@ -1,0 +1,32 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  review:
+    name: Claude Code Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Review PR with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          model: claude-sonnet-4-6
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            Review this pull request. Focus on:
+            - Correctness and potential bugs
+            - Security concerns
+            - Code style consistency with the existing codebase
+            - Test coverage for new functionality
+
+            Be concise. Only comment on issues that matter.
