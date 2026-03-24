@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import { useLatestRevisionForTitle } from '@/hooks/useLatestRevision';
-import { revisionLabel } from '@/lib/revisionLabel';
+import { useRevision } from '@/hooks/useRevision';
 import type {
   SectionGroupTree,
   DirectoryItem,
@@ -50,14 +50,15 @@ function collectAllSections(group: SectionGroupTree): SectionSummary[] {
 function groupToItem(
   group: SectionGroupTree,
   titleNumber: number,
-  parentPath: string
+  parentPath: string,
+  withRev: (href: string) => string
 ): DirectoryItem {
   const allSections = collectAllSections(group);
   const amendment = latestAmendment(allSections);
   return {
     id: `${capitalizeGroupType(group.group_type)} ${group.number}`,
     name: group.name,
-    href: `${parentPath}/${group.group_type}/${group.number}`,
+    href: withRev(`${parentPath}/${group.group_type}/${group.number}`),
     kind: 'folder' as const,
     status: detectStatus(group.name),
     sectionCount: allSections.length,
@@ -70,11 +71,12 @@ function groupToItem(
 export default function TitleDirectoryPage() {
   const params = useParams<{ titleNumber: string }>();
   const titleNumber = Number(params.titleNumber);
+  const { revision, withRev } = useRevision();
   const {
     data: structure,
     isLoading,
     error,
-  } = useTitleStructure(titleNumber, true);
+  } = useTitleStructure(titleNumber, true, revision);
   const { data: latestRevision } = useLatestRevisionForTitle(titleNumber);
 
   if (isLoading) {
@@ -92,7 +94,7 @@ export default function TitleDirectoryPage() {
 
   // Child groups as folders
   for (const g of structure.children ?? []) {
-    items.push(groupToItem(g, titleNumber, basePath));
+    items.push(groupToItem(g, titleNumber, basePath, withRev));
   }
 
   // Direct sections as folders (sections expand into CODE + notes sub-files)
@@ -100,7 +102,7 @@ export default function TitleDirectoryPage() {
     items.push({
       id: `\u00A7\u2009${s.section_number}`,
       name: s.heading,
-      href: `/sections/${titleNumber}/${s.section_number}`,
+      href: withRev(`/sections/${titleNumber}/${s.section_number}`),
       kind: 'folder' as const,
       status: s.status ?? detectStatus(s.heading),
       lastAmendmentLaw: s.last_amendment_law ?? null,
@@ -113,7 +115,8 @@ export default function TitleDirectoryPage() {
       title={structure.title_name}
       breadcrumbs={breadcrumbs}
       items={items}
-      revisionLabel={latestRevision ? revisionLabel(latestRevision) : null}
+      revisionData={latestRevision ?? null}
+      revision={revision}
     />
   );
 }

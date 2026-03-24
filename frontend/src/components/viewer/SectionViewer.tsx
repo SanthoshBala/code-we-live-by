@@ -14,6 +14,7 @@ interface SectionViewerProps {
   titleNumber: number;
   sectionNumber: string;
   breadcrumbs?: BreadcrumbSegment[];
+  revision?: number;
 }
 
 const TABS = [
@@ -26,8 +27,13 @@ export default function SectionViewer({
   titleNumber,
   sectionNumber,
   breadcrumbs,
+  revision,
 }: SectionViewerProps) {
-  const { data, isLoading, error } = useSection(titleNumber, sectionNumber);
+  const { data, isLoading, error } = useSection(
+    titleNumber,
+    sectionNumber,
+    revision
+  );
   const [activeTab, setActiveTab] = useState('code');
 
   if (isLoading) {

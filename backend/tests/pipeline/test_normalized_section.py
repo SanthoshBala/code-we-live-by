@@ -1,5 +1,7 @@
 """Tests for legal text line normalization."""
 
+from app.models.enums import NoteRefType
+from app.schemas import NoteReferenceSchema
 from pipeline.olrc.normalized_section import (
     PARAGRAPH_BREAK_MARKER,
     ParsedPublicLaw,
@@ -11,9 +13,11 @@ from pipeline.olrc.normalized_section import (
     char_span_to_line_span,
     normalize_note_content,
     normalize_section,
+    note_refs_to_schemas,
     parse_citation,
     parse_citations,
 )
+from pipeline.olrc.parser import NoteRef
 
 
 class TestMarkerLevelDetection:
@@ -1832,3 +1836,171 @@ class TestMultiSentenceSplitting:
         # This should produce 2 lines
         assert result.provision_count == 2
         assert "et seq." in result.provisions[0].content
+
+
+class TestNoteRefsToSchemas:
+    """Tests for note_refs_to_schemas function (Task 1.17b)."""
+
+    def test_convert_public_law_ref(self) -> None:
+        """Test converting a Public Law NoteRef to NoteReferenceSchema."""
+        note_ref = NoteRef(
+            ref_type="public_law",
+            href="/us/pl/115/264",
+            display_text="Pub. L. 115–264",
+            congress=115,
+            law_number=264,
+        )
+        schemas = note_refs_to_schemas([note_ref])
+
+        assert len(schemas) == 1
+        schema = schemas[0]
+        assert schema.ref_type == NoteRefType.PUBLIC_LAW
+        assert schema.href == "/us/pl/115/264"
+        assert schema.display_text == "Pub. L. 115–264"
+        assert schema.congress == 115
+        assert schema.law_number == 264
+        assert schema.target_id == "PL 115-264"
+
+    def test_convert_usc_section_ref(self) -> None:
+        """Test converting a US Code section NoteRef to NoteReferenceSchema."""
+        note_ref = NoteRef(
+            ref_type="usc_section",
+            href="/us/usc/t17/s106",
+            display_text="section 106",
+            usc_title=17,
+            usc_section="106",
+        )
+        schemas = note_refs_to_schemas([note_ref])
+
+        assert len(schemas) == 1
+        schema = schemas[0]
+        assert schema.ref_type == NoteRefType.USC_SECTION
+        assert schema.usc_title == 17
+        assert schema.usc_section == "106"
+        assert schema.target_id == "17 USC 106"
+
+    def test_convert_statute_ref(self) -> None:
+        """Test converting a Statute NoteRef to NoteReferenceSchema."""
+        note_ref = NoteRef(
+            ref_type="statute",
+            href="/us/stat/90/2546",
+            display_text="90 Stat. 2546",
+            stat_volume=90,
+            stat_page=2546,
+        )
+        schemas = note_refs_to_schemas([note_ref])
+
+        assert len(schemas) == 1
+        schema = schemas[0]
+        assert schema.ref_type == NoteRefType.STATUTE
+        assert schema.stat_volume == 90
+        assert schema.stat_page == 2546
+        assert schema.target_id == "90 Stat. 2546"
+
+    def test_convert_act_ref(self) -> None:
+        """Test converting an Act NoteRef to NoteReferenceSchema."""
+        note_ref = NoteRef(
+            ref_type="act",
+            href="/us/act/1935-08-14/ch531",
+            display_text="act Aug. 14, 1935, ch. 531",
+            act_date="1935-08-14",
+            act_chapter=531,
+        )
+        schemas = note_refs_to_schemas([note_ref])
+
+        assert len(schemas) == 1
+        schema = schemas[0]
+        assert schema.ref_type == NoteRefType.ACT
+        assert schema.act_date == "1935-08-14"
+        assert schema.act_chapter == 531
+        assert schema.target_id == "Act of 1935-08-14 ch. 531"
+
+    def test_convert_multiple_refs(self) -> None:
+        """Test converting multiple NoteRefs to schemas."""
+        note_refs = [
+            NoteRef(
+                ref_type="public_law",
+                href="/us/pl/94/553",
+                display_text="Pub. L. 94–553",
+                congress=94,
+                law_number=553,
+            ),
+            NoteRef(
+                ref_type="usc_section",
+                href="/us/usc/t17/s101",
+                display_text="17 U.S.C. 101",
+                usc_title=17,
+                usc_section="101",
+            ),
+            NoteRef(
+                ref_type="statute",
+                href="/us/stat/90/2546",
+                display_text="90 Stat. 2546",
+                stat_volume=90,
+                stat_page=2546,
+            ),
+        ]
+        schemas = note_refs_to_schemas(note_refs)
+
+        assert len(schemas) == 3
+        assert schemas[0].ref_type == NoteRefType.PUBLIC_LAW
+        assert schemas[1].ref_type == NoteRefType.USC_SECTION
+        assert schemas[2].ref_type == NoteRefType.STATUTE
+
+    def test_empty_list(self) -> None:
+        """Test converting an empty list returns empty list."""
+        schemas = note_refs_to_schemas([])
+        assert schemas == []
+
+
+class TestNoteReferenceSchema:
+    """Tests for NoteReferenceSchema model (Task 1.17b)."""
+
+    def test_target_id_public_law(self) -> None:
+        """Test target_id computed property for Public Law."""
+        schema = NoteReferenceSchema(
+            ref_type=NoteRefType.PUBLIC_LAW,
+            href="/us/pl/115/264",
+            congress=115,
+            law_number=264,
+        )
+        assert schema.target_id == "PL 115-264"
+
+    def test_target_id_usc_section(self) -> None:
+        """Test target_id computed property for US Code section."""
+        schema = NoteReferenceSchema(
+            ref_type=NoteRefType.USC_SECTION,
+            href="/us/usc/t17/s106",
+            usc_title=17,
+            usc_section="106",
+        )
+        assert schema.target_id == "17 USC 106"
+
+    def test_target_id_statute(self) -> None:
+        """Test target_id computed property for Statute."""
+        schema = NoteReferenceSchema(
+            ref_type=NoteRefType.STATUTE,
+            href="/us/stat/90/2546",
+            stat_volume=90,
+            stat_page=2546,
+        )
+        assert schema.target_id == "90 Stat. 2546"
+
+    def test_target_id_act(self) -> None:
+        """Test target_id computed property for Act."""
+        schema = NoteReferenceSchema(
+            ref_type=NoteRefType.ACT,
+            href="/us/act/1935-08-14/ch531",
+            act_date="1935-08-14",
+            act_chapter=531,
+        )
+        assert schema.target_id == "Act of 1935-08-14 ch. 531"
+
+    def test_target_id_fallback_to_href(self) -> None:
+        """Test target_id falls back to href when fields missing."""
+        schema = NoteReferenceSchema(
+            ref_type=NoteRefType.PUBLIC_LAW,
+            href="/us/pl/unknown",
+            # Missing congress and law_number
+        )
+        assert schema.target_id == "/us/pl/unknown"

@@ -6,7 +6,9 @@ import MainLayout from '@/components/ui/MainLayout';
 import Sidebar from '@/components/ui/Sidebar';
 import TitleList from '@/components/tree/TitleList';
 import NotesViewer from '@/components/viewer/NotesViewer';
+import RevisionBanner from '@/components/ui/RevisionBanner';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
+import { useRevision } from '@/hooks/useRevision';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
 import type {
@@ -75,13 +77,14 @@ function buildBreadcrumbs(
   structure: TitleStructure | undefined,
   titleNumber: number,
   sectionNumber: string,
-  file: string
+  file: string,
+  withRev: (href: string) => string
 ): BreadcrumbSegment[] {
   if (!structure) return [];
 
   const basePath = `/sections/${titleNumber}/${sectionNumber}`;
   const crumbs: BreadcrumbSegment[] = [
-    { label: `Title ${titleNumber}`, href: `/titles/${titleNumber}` },
+    { label: `Title ${titleNumber}`, href: withRev(`/titles/${titleNumber}`) },
   ];
 
   const path = findSectionInGroups(structure.children ?? [], sectionNumber);
@@ -92,12 +95,15 @@ function buildBreadcrumbs(
       pathSoFar += `/${ancestor.type}/${ancestor.number}`;
       crumbs.push({
         label: `${capitalizeGroupType(ancestor.type)} ${ancestor.number}`,
-        href: pathSoFar,
+        href: withRev(pathSoFar),
       });
     }
   }
 
-  crumbs.push({ label: `\u00A7\u2009${sectionNumber}`, href: basePath });
+  crumbs.push({
+    label: `\u00A7\u2009${sectionNumber}`,
+    href: withRev(basePath),
+  });
   crumbs.push({ label: file });
   return crumbs;
 }
@@ -115,12 +121,14 @@ export default function NoteFilePage() {
 
   const titleNumber = Number(params.titleNumber);
   const sectionNumber = decodeURIComponent(params.sectionNumber);
-  const { data: structure } = useTitleStructure(titleNumber, true);
+  const { revision, withRev } = useRevision();
+  const { data: structure } = useTitleStructure(titleNumber, true, revision);
   const breadcrumbs = buildBreadcrumbs(
     structure,
     titleNumber,
     sectionNumber,
-    params.file
+    params.file,
+    withRev
   );
 
   return (
@@ -136,6 +144,7 @@ export default function NoteFilePage() {
         </Sidebar>
       }
     >
+      {revision !== undefined && <RevisionBanner revision={revision} />}
       <PageHeader
         title={VALID_FILES[params.file]}
         subtitle={
@@ -153,6 +162,7 @@ export default function NoteFilePage() {
         titleNumber={titleNumber}
         sectionNumber={sectionNumber}
         file={params.file}
+        revision={revision}
       />
     </MainLayout>
   );

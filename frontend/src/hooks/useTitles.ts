@@ -5,6 +5,6 @@ import { fetchTitles } from '@/lib/api';
 export function useTitles() {
   return useQuery({
     queryKey: ['titles'],
-    queryFn: fetchTitles,
+    queryFn: () => fetchTitles(),
   });
 }

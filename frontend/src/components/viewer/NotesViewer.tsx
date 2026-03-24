@@ -8,6 +8,7 @@ interface NotesViewerProps {
   titleNumber: number;
   sectionNumber: string;
   file: string;
+  revision?: number;
 }
 
 const FILE_TO_CATEGORY: Record<string, SectionNote['category']> = {
@@ -27,8 +28,13 @@ export default function NotesViewer({
   titleNumber,
   sectionNumber,
   file,
+  revision,
 }: NotesViewerProps) {
-  const { data, isLoading, error } = useSection(titleNumber, sectionNumber);
+  const { data, isLoading, error } = useSection(
+    titleNumber,
+    sectionNumber,
+    revision
+  );
   const category = FILE_TO_CATEGORY[file];
 
   if (isLoading) {
