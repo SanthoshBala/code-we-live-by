@@ -1,7 +1,6 @@
 """Section endpoints for viewing US Code section content."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.us_code import get_section
@@ -10,9 +9,6 @@ from app.schemas.us_code import SectionViewerSchema
 
 router = APIRouter()
 
-# Section content changes only on new revision ingestions (~monthly).
-_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600"
-
 
 @router.get("/{title_number}/{section_number}")
 async def read_section(
@@ -20,7 +16,7 @@ async def read_section(
     section_number: str,
     revision: int | None = Query(None, description="Revision ID (default: HEAD)"),
     session: AsyncSession = Depends(get_async_session),
-) -> JSONResponse:
+) -> SectionViewerSchema:
     """Get the full content of a US Code section."""
     result = await get_section(session, title_number, section_number, revision)
     if result is None:
@@ -28,10 +24,7 @@ async def read_section(
             status_code=404,
             detail=f"Section {title_number} USC § {section_number} not found",
         )
-    return JSONResponse(
-        content=result.model_dump(mode="json"),
-        headers={"Cache-Control": _CACHE_CONTROL},
-    )
+    return result
 
 
 @router.get("/{title_number}/{section_number}/blame")
