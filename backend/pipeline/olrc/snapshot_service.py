@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.revision import CodeRevision
@@ -210,20 +210,27 @@ class SnapshotService:
     async def _get_revision_chain(self, revision_id: int) -> list[int]:
         """Build the chain of revision IDs from target back to initial.
 
+        Uses a recursive CTE to fetch the entire chain in a single query
+        instead of N sequential round-trips to the database.
+
         Returns list ordered from newest to oldest (target first).
         """
-        chain: list[int] = []
-        current_id: int | None = revision_id
-
-        while current_id is not None:
-            chain.append(current_id)
-            stmt = select(CodeRevision.parent_revision_id).where(
-                CodeRevision.revision_id == current_id
-            )
-            result = await self.session.execute(stmt)
-            current_id = result.scalar_one_or_none()
-
-        return chain
+        result = await self.session.execute(
+            text("""
+                WITH RECURSIVE chain AS (
+                    SELECT revision_id, parent_revision_id, 1 AS depth
+                    FROM code_revision
+                    WHERE revision_id = :start_id
+                    UNION ALL
+                    SELECT cr.revision_id, cr.parent_revision_id, c.depth + 1
+                    FROM code_revision cr
+                    JOIN chain c ON cr.revision_id = c.parent_revision_id
+                )
+                SELECT revision_id FROM chain ORDER BY depth
+            """),
+            {"start_id": revision_id},
+        )
+        return [row[0] for row in result]
 
     @staticmethod
     def _snapshot_to_state(snapshot: SectionSnapshot) -> SectionState:
