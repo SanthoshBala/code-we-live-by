@@ -6,11 +6,14 @@ import {
   fetchLawDiffs,
 } from '@/lib/api';
 
-/** Fetches all public law summaries. */
+/** Fetches all public law summaries.
+ *  Law list is stable within a session — cache indefinitely.
+ */
 export function useLaws() {
   return useQuery({
     queryKey: ['laws'],
     queryFn: () => fetchLaws(),
+    staleTime: Infinity,
   });
 }
 
