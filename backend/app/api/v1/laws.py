@@ -1,6 +1,7 @@
 """Law Viewer API endpoints for QC of parsed law text and amendments."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.public_law import (
@@ -19,13 +20,19 @@ from app.schemas.law_viewer import (
 
 router = APIRouter()
 
+_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=3600"
+
 
 @router.get("")
 async def list_laws(
     session: AsyncSession = Depends(get_async_session),
-) -> list[LawSummarySchema]:
+) -> JSONResponse:
     """List all public laws in the database."""
-    return await get_laws_list(session)
+    laws = await get_laws_list(session)
+    return JSONResponse(
+        content=[law.model_dump(mode="json") for law in laws],
+        headers={"Cache-Control": _CACHE_CONTROL},
+    )
 
 
 @router.get("/{congress}/{law_number}/text")
