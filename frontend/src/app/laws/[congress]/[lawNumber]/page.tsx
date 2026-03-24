@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLawMeta, useLawText, useLawDiffs } from '@/hooks/useLaw';
+import { fetchLawText } from '@/lib/api';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
 import LawTextViewer from '@/components/law-viewer/LawTextViewer';
@@ -19,6 +21,7 @@ export default function LawViewerPage() {
     const params = useParams<{ congress: string; lawNumber: string }>();
     const congress = Number(params.congress);
     const lawNumber = decodeURIComponent(params.lawNumber);
+    const queryClient = useQueryClient();
 
     const [activeTab, setActiveTab] = useState('diff');
 
@@ -29,7 +32,21 @@ export default function LawViewerPage() {
         error: metaError,
     } = useLawMeta(congress, lawNumber);
 
-    // HTM/XML content fetched lazily only when the respective tab is active
+    // Prefetch HTM and XML in the background after initial render,
+    // so they're already cached when the user switches tabs.
+    useEffect(() => {
+        if (!lawMeta) return;
+        queryClient.prefetchQuery({
+            queryKey: ['lawText', congress, lawNumber, 'htm'],
+            queryFn: () => fetchLawText(congress, lawNumber, 'htm'),
+        });
+        queryClient.prefetchQuery({
+            queryKey: ['lawText', congress, lawNumber, 'xml'],
+            queryFn: () => fetchLawText(congress, lawNumber, 'xml'),
+        });
+    }, [lawMeta, congress, lawNumber, queryClient]);
+
+    // HTM/XML content: read from cache or fetch on tab switch
     const { data: htmData, isLoading: htmLoading } = useLawText(
         congress,
         lawNumber,
