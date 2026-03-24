@@ -85,3 +85,8 @@ plugins = ["pydantic.mypy"]
 [tool.coverage.run]
 source = ["app"]
 omit = ["*/tests/*", "*/__pycache__/*"]
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+]
