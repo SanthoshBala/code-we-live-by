@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useLawText, useLawDiffs } from '@/hooks/useLaw';
+import { useQueryClient } from '@tanstack/react-query';
+import { useLawMeta, useLawText, useLawDiffs } from '@/hooks/useLaw';
+import { fetchLawText } from '@/lib/api';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
 import LawTextViewer from '@/components/law-viewer/LawTextViewer';
@@ -19,39 +21,70 @@ export default function LawViewerPage() {
   const params = useParams<{ congress: string; lawNumber: string }>();
   const congress = Number(params.congress);
   const lawNumber = decodeURIComponent(params.lawNumber);
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState('diff');
 
+  // Metadata is always fetched (fast — no file I/O, just a DB query)
   const {
-    data: lawText,
-    isLoading: textLoading,
-    error: textError,
-  } = useLawText(congress, lawNumber);
+    data: lawMeta,
+    isLoading: metaLoading,
+    error: metaError,
+  } = useLawMeta(congress, lawNumber);
 
+  // Prefetch HTM and XML in the background after initial render,
+  // so they're already cached when the user switches tabs.
+  useEffect(() => {
+    if (!lawMeta) return;
+    queryClient.prefetchQuery({
+      queryKey: ['lawText', congress, lawNumber, 'htm'],
+      queryFn: () => fetchLawText(congress, lawNumber, 'htm'),
+    });
+    queryClient.prefetchQuery({
+      queryKey: ['lawText', congress, lawNumber, 'xml'],
+      queryFn: () => fetchLawText(congress, lawNumber, 'xml'),
+    });
+  }, [lawMeta, congress, lawNumber, queryClient]);
+
+  // HTM/XML content: read from cache or fetch on tab switch
+  const { data: htmData, isLoading: htmLoading } = useLawText(
+    congress,
+    lawNumber,
+    'htm',
+    activeTab === 'htm'
+  );
+  const { data: xmlData, isLoading: xmlLoading } = useLawText(
+    congress,
+    lawNumber,
+    'xml',
+    activeTab === 'xml'
+  );
+
+  // Diffs fetched when the amendments tab is active (default)
   const { data: diffs, isLoading: diffsLoading } = useLawDiffs(
     congress,
     lawNumber,
     activeTab === 'diff'
   );
 
-  if (textLoading) return <p className="text-gray-500">Loading law text...</p>;
-  if (textError || !lawText)
+  if (metaLoading) return <p className="text-gray-500">Loading law text...</p>;
+  if (metaError || !lawMeta)
     return <p className="text-red-600">Failed to load law text.</p>;
 
   // Title line: PL number + short title (if available)
-  const title = lawText.short_title
-    ? `PL ${congress}-${lawNumber} — ${lawText.short_title}`
+  const title = lawMeta.short_title
+    ? `PL ${congress}-${lawNumber} — ${lawMeta.short_title}`
     : `PL ${congress}-${lawNumber}`;
   // Official title always goes in subtitle
-  const subtitle = lawText.official_title;
+  const subtitle = lawMeta.official_title;
 
-  const enacted = lawText.enacted_date
+  const enacted = lawMeta.enacted_date
     ? {
         congress,
         lawNumber: Number(lawNumber),
-        date: lawText.enacted_date,
+        date: lawMeta.enacted_date,
         label: `PL ${congress}-${lawNumber}`,
-        shortTitle: lawText.short_title ?? undefined,
+        shortTitle: lawMeta.short_title ?? undefined,
       }
     : null;
 
@@ -75,8 +108,10 @@ export default function LawViewerPage() {
 
       <div className="mt-4">
         {activeTab === 'htm' &&
-          (lawText.htm_content ? (
-            <LawTextViewer content={lawText.htm_content} />
+          (htmLoading ? (
+            <p className="text-gray-500">Loading HTM content...</p>
+          ) : htmData?.htm_content ? (
+            <LawTextViewer content={htmData.htm_content} />
           ) : (
             <p className="py-8 text-center text-sm text-gray-500">
               No HTM content available for this law.
@@ -84,8 +119,10 @@ export default function LawViewerPage() {
           ))}
 
         {activeTab === 'xml' &&
-          (lawText.xml_content ? (
-            <LawTextViewer content={lawText.xml_content} />
+          (xmlLoading ? (
+            <p className="text-gray-500">Loading XML content...</p>
+          ) : xmlData?.xml_content ? (
+            <LawTextViewer content={xmlData.xml_content} />
           ) : (
             <p className="py-8 text-center text-sm text-gray-500">
               No XML content available for this law.

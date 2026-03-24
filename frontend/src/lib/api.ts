@@ -58,13 +58,30 @@ export async function fetchLaws(): Promise<LawSummary[]> {
   return res.json();
 }
 
-/** Fetch raw HTM and XML text for a public law. */
-export async function fetchLawText(
+/** Fetch law metadata only (no HTM/XML content). */
+export async function fetchLawMeta(
   congress: number,
   lawNumber: string
 ): Promise<LawText> {
   const res = await fetch(
-    `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/text`
+    `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/text?format=metadata`
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch law metadata for PL ${congress}-${lawNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
+/** Fetch law text in a specific format (htm or xml). */
+export async function fetchLawText(
+  congress: number,
+  lawNumber: string,
+  format: 'htm' | 'xml' = 'htm'
+): Promise<LawText> {
+  const res = await fetch(
+    `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/text?format=${format}`
   );
   if (!res.ok) {
     throw new Error(

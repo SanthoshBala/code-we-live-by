@@ -231,6 +231,9 @@ async def get_title_structure(
     # Load sections for this title from snapshots at HEAD.
     # Uses DISTINCT ON to find the latest snapshot per section across the
     # revision chain without loading all 97k+ snapshots into Python.
+    # Only fetches columns needed for the tree summary — skipping
+    # text_content and normalized_provisions avoids transferring ~3-15MB
+    # of unused data from the database.
     head_id = await _resolve_head(session, revision_id)
     sections_by_group: dict[int, list[SectionState]] = {}
 
@@ -242,9 +245,7 @@ async def get_title_structure(
             result = await session.execute(
                 text("""
                     SELECT DISTINCT ON (title_number, section_number)
-                        snapshot_id, revision_id, title_number, section_number,
-                        heading, text_content, normalized_provisions, notes,
-                        normalized_notes, text_hash, notes_hash, full_citation,
+                        section_number, heading, normalized_notes,
                         is_deleted, group_id, sort_order
                     FROM section_snapshot
                     WHERE revision_id = ANY(:chain)
@@ -258,18 +259,18 @@ async def get_title_structure(
                 if row.is_deleted:
                     continue
                 state = SectionState(
-                    title_number=row.title_number,
+                    title_number=title_number,
                     section_number=row.section_number,
                     heading=row.heading,
-                    text_content=row.text_content,
-                    text_hash=row.text_hash,
-                    normalized_provisions=row.normalized_provisions,
-                    notes=row.notes,
+                    text_content=None,
+                    text_hash=None,
+                    normalized_provisions=None,
+                    notes=None,
                     normalized_notes=row.normalized_notes,
-                    notes_hash=row.notes_hash,
-                    full_citation=row.full_citation,
-                    snapshot_id=row.snapshot_id,
-                    revision_id=row.revision_id,
+                    notes_hash=None,
+                    full_citation=None,
+                    snapshot_id=0,
+                    revision_id=0,
                     is_deleted=row.is_deleted,
                     group_id=row.group_id,
                     sort_order=row.sort_order,
@@ -396,8 +397,13 @@ async def get_section(
     if head_id is None:
         return None
 
+    # Build the revision chain once and share it across all lookups
+    # to avoid redundant HEAD resolution and CTE queries.
     svc = SnapshotService(session)
-    state = await svc.get_section_at_revision(title_number, section_number, head_id)
+    chain = await svc._get_revision_chain(head_id)
+    state = await svc.get_section_at_revision(
+        title_number, section_number, head_id, chain=chain
+    )
 
     if state is None:
         return None
@@ -437,9 +443,10 @@ async def get_section(
             max_year = max(a["year"] for a in amendments if "year" in a)
             last_modified_date = date(max_year, 1, 1)
 
-    # Find the revision that last *changed* this section's content
+    # Find the revision that last *changed* this section's content.
+    # Reuse the same chain to avoid re-fetching HEAD + CTE.
     last_revision = await get_last_changed_revision_for_section(
-        session, title_number, section_number
+        session, title_number, section_number, chain=chain
     )
 
     return SectionViewerSchema(

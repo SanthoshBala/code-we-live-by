@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.config import settings
+from app.core.cache_middleware import CacheControlMiddleware
 from app.core.logging_middleware import RequestLoggingMiddleware
 
 logging.basicConfig(
@@ -26,6 +27,7 @@ app = FastAPI(
 
 # Middleware (order matters — outermost first)
 app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(CacheControlMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

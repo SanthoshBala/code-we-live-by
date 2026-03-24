@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchLaws,
+  fetchLawMeta,
   fetchLawText,
   fetchLawAmendments,
   fetchLawDiffs,
@@ -14,11 +15,25 @@ export function useLaws() {
   });
 }
 
-/** Fetches raw HTM/XML text for a single law. */
-export function useLawText(congress: number, lawNumber: string) {
+/** Fetches law metadata only (titles, dates — no HTM/XML content). */
+export function useLawMeta(congress: number, lawNumber: string) {
   return useQuery({
-    queryKey: ['lawText', congress, lawNumber],
-    queryFn: () => fetchLawText(congress, lawNumber),
+    queryKey: ['lawMeta', congress, lawNumber],
+    queryFn: () => fetchLawMeta(congress, lawNumber),
+  });
+}
+
+/** Fetches law text in a specific format. Only fires when enabled. */
+export function useLawText(
+  congress: number,
+  lawNumber: string,
+  format: 'htm' | 'xml',
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: ['lawText', congress, lawNumber, format],
+    queryFn: () => fetchLawText(congress, lawNumber, format),
+    enabled,
   });
 }
 

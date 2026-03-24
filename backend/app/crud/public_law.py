@@ -51,45 +51,14 @@ def _date_str(d: Any) -> str | None:
     return d.isoformat() if d else None
 
 
-async def get_law_text(
-    session: AsyncSession, congress: int, law_number: int
-) -> LawTextSchema | None:
-    """Fetch raw HTM and XML text for a law, using cache or GovInfo API."""
-    # Dynamic import to keep pipeline/ out of mypy's module graph
-    try:
-        govinfo_mod = importlib.import_module("pipeline.govinfo.client")
-        client: Any = govinfo_mod.GovInfoClient()
-    except (ValueError, ImportError):
-        logger.warning("GovInfo API key not configured, reading from cache only")
-        client = None
-
-    htm_content: str | None = None
-    xml_content: str | None = None
-
-    if client:
-        htm_content = await client.get_law_text(congress, law_number, format="htm")
-        xml_content = await client.get_law_text(congress, law_number, format="xml")
-    else:
-        # Try reading from cache directly
-        cache_dir = Path("data/govinfo/plaw")
-        htm_file = cache_dir / f"PLAW-{congress}publ{law_number}.htm"
-        xml_file = cache_dir / f"PLAW-{congress}publ{law_number}.xml"
-        if htm_file.exists():
-            htm_content = htm_file.read_text()
-        if xml_file.exists():
-            xml_content = xml_file.read_text()
-
-    if htm_content is None and xml_content is None:
-        return None
-
-    # Query DB for metadata
-    stmt = select(PublicLaw).where(
-        PublicLaw.congress == congress,
-        PublicLaw.law_number == str(law_number),
-    )
-    result = await session.execute(stmt)
-    law = result.scalar_one_or_none()
-
+def _law_to_schema(
+    law: Any | None,
+    congress: int,
+    law_number: int,
+    htm_content: str | None = None,
+    xml_content: str | None = None,
+) -> LawTextSchema:
+    """Build a LawTextSchema from a PublicLaw ORM object + optional content."""
     return LawTextSchema(
         congress=congress,
         law_number=str(law_number),
@@ -106,6 +75,75 @@ async def get_law_text(
         htm_content=htm_content,
         xml_content=xml_content,
     )
+
+
+async def _query_law(
+    session: AsyncSession, congress: int, law_number: int
+) -> Any | None:
+    """Fetch a PublicLaw row by congress + law_number."""
+    stmt = select(PublicLaw).where(
+        PublicLaw.congress == congress,
+        PublicLaw.law_number == str(law_number),
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def get_law_metadata(
+    session: AsyncSession, congress: int, law_number: int
+) -> LawTextSchema | None:
+    """Return law metadata only (no HTM/XML content). Fast — single DB query."""
+    law = await _query_law(session, congress, law_number)
+    if law is None:
+        return None
+    return _law_to_schema(law, congress, law_number)
+
+
+async def get_law_text(
+    session: AsyncSession,
+    congress: int,
+    law_number: int,
+    include_htm: bool = True,
+    include_xml: bool = True,
+) -> LawTextSchema | None:
+    """Fetch raw HTM and/or XML text for a law, using cache or GovInfo API.
+
+    Pass include_htm/include_xml=False to skip fetching content you don't
+    need — each blob can be 100-500KB.
+    """
+    # Dynamic import to keep pipeline/ out of mypy's module graph
+    try:
+        govinfo_mod = importlib.import_module("pipeline.govinfo.client")
+        client: Any = govinfo_mod.GovInfoClient()
+    except (ValueError, ImportError):
+        logger.warning("GovInfo API key not configured, reading from cache only")
+        client = None
+
+    htm_content: str | None = None
+    xml_content: str | None = None
+
+    if client:
+        if include_htm:
+            htm_content = await client.get_law_text(congress, law_number, format="htm")
+        if include_xml:
+            xml_content = await client.get_law_text(congress, law_number, format="xml")
+    else:
+        # Try reading from cache directly
+        cache_dir = Path("data/govinfo/plaw")
+        if include_htm:
+            htm_file = cache_dir / f"PLAW-{congress}publ{law_number}.htm"
+            if htm_file.exists():
+                htm_content = htm_file.read_text()
+        if include_xml:
+            xml_file = cache_dir / f"PLAW-{congress}publ{law_number}.xml"
+            if xml_file.exists():
+                xml_content = xml_file.read_text()
+
+    if htm_content is None and xml_content is None:
+        return None
+
+    law = await _query_law(session, congress, law_number)
+    return _law_to_schema(law, congress, law_number, htm_content, xml_content)
 
 
 def _amendment_to_schema(amendment: Any) -> ParsedAmendmentSchema:
@@ -195,13 +233,19 @@ async def _get_parent_revision_id(
     """Find the revision ID *before* this law was applied.
 
     Returns the parent revision of the law's revision, or HEAD as fallback.
+    Uses the CodeRevision.law_id FK to PublicLaw for an indexed lookup
+    instead of matching on the unindexed summary string.
     """
     from app.models.revision import CodeRevision
     from pipeline.olrc.snapshot_service import SnapshotService
 
     stmt = (
         select(CodeRevision)
-        .where(CodeRevision.summary == f"PL {congress}-{law_number}")
+        .join(PublicLaw, CodeRevision.law_id == PublicLaw.law_id)
+        .where(
+            PublicLaw.congress == congress,
+            PublicLaw.law_number == str(law_number),
+        )
         .limit(1)
     )
     result = await session.execute(stmt)
@@ -225,6 +269,7 @@ async def _enrich_start_lines(
 
     Uses the revision *before* this law was applied so that old_text
     (the text being struck) still exists in the provisions.
+    Batch-fetches all needed sections in a single query.
     """
     from pipeline.olrc.snapshot_service import SnapshotService
 
@@ -232,10 +277,30 @@ async def _enrich_start_lines(
     if lookup_revision_id is None:
         return
 
-    svc = SnapshotService(session)
+    # Collect all unique (title, section) pairs that need lookup
+    keys: set[tuple[int, str]] = set()
+    for schema in schemas:
+        if schema.old_text is None or schema.section_ref is None:
+            continue
+        title = schema.section_ref.title
+        section = schema.section_ref.section
+        if title is None:
+            continue
+        keys.add((title, section))
 
-    # Cache provisions by (title, section) to avoid duplicate queries
+    if not keys:
+        return
+
+    # Batch-fetch all sections at once instead of N sequential queries
+    svc = SnapshotService(session)
+    states = await svc.get_sections_at_revision(list(keys), lookup_revision_id)
+
+    # Build provisions cache from batch result
     provisions_cache: dict[tuple[int, str], list[dict[str, Any]] | None] = {}
+    for key in keys:
+        state = states.get(key)
+        raw = state.normalized_provisions if state else None
+        provisions_cache[key] = raw if isinstance(raw, list) else None
 
     for schema in schemas:
         if schema.old_text is None or schema.section_ref is None:
@@ -245,16 +310,7 @@ async def _enrich_start_lines(
         if title is None:
             continue
 
-        cache_key = (title, section)
-        if cache_key not in provisions_cache:
-            state = await svc.get_section_at_revision(
-                title, section, lookup_revision_id
-            )
-            # normalized_provisions is a list stored as JSONB
-            raw = state.normalized_provisions if state else None
-            provisions_cache[cache_key] = raw if isinstance(raw, list) else None
-
-        provisions = provisions_cache[cache_key]
+        provisions = provisions_cache.get((title, section))
         if provisions:
             schema.start_line = _find_line_number(provisions, schema.old_text)
 
@@ -843,7 +899,12 @@ async def compute_law_diffs(
         key = (s.section_ref.title, s.section_ref.section)
         groups.setdefault(key, []).append(s)
 
+    # Batch-fetch all "before" section states in a single query
     svc = SnapshotService(session)
+    section_states = await svc.get_sections_at_revision(
+        list(groups.keys()), revision_id
+    )
+
     diffs: list[SectionDiffSchema] = []
 
     for (title, section), section_amendments in groups.items():
@@ -851,8 +912,8 @@ async def compute_law_diffs(
         note_amendments = [a for a in section_amendments if a.change_type == "Add_Note"]
         text_amendments = [a for a in section_amendments if a.change_type != "Add_Note"]
 
-        # Fetch "before" provisions
-        state = await svc.get_section_at_revision(title, section, revision_id)
+        # Use batch-fetched "before" state
+        state = section_states.get((title, section))
         raw = state.normalized_provisions if state else None
 
         # Handle text-modifying amendments (normal diff flow)
