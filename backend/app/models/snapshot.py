@@ -113,6 +113,17 @@ class SectionSnapshot(Base, TimestampMixin):
         ),
         Index("idx_section_snapshot_text_hash", "text_hash"),
         Index("idx_section_snapshot_group", "group_id"),
+        # Covers WHERE revision_id = ANY(:chain) queries used by the
+        # DISTINCT ON pattern in get_all_titles / get_title_structure.
+        Index("idx_section_snapshot_revision", "revision_id"),
+        # Composite index for per-title lookups within a revision chain
+        # (used by get_title_structure and get_section_at_revision).
+        Index(
+            "idx_section_snapshot_rev_title_section",
+            "revision_id",
+            "title_number",
+            "section_number",
+        ),
     )
 
     def __repr__(self) -> str:
