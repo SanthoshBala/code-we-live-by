@@ -1,4 +1,12 @@
-"""Request logging middleware for development debugging."""
+"""Request logging middleware with Server-Timing headers for profiling.
+
+Logs every request with method, path, status, and duration. Emits a
+``Server-Timing`` response header so browser DevTools (Network → Timing)
+shows backend processing time without any external tracing setup.
+
+Slow requests (>500 ms) are logged at WARNING level for easy filtering
+in Cloud Run logs.
+"""
 
 import logging
 import time
@@ -9,12 +17,17 @@ from starlette.responses import Response
 
 logger = logging.getLogger("cwlb.requests")
 
+# Requests slower than this threshold are logged at WARNING level.
+_SLOW_REQUEST_MS = 500
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Log every request with method, path, status, and duration.
 
-    For 4xx/5xx responses, also logs the response body so error details
-    (e.g. FastAPI's "detail" field) appear in the terminal.
+    Adds a ``Server-Timing: total;dur=<ms>`` header to every response so
+    that browser DevTools can display backend latency alongside network
+    timing. For 4xx/5xx responses, also logs the response body so error
+    details (e.g. FastAPI's "detail" field) appear in the terminal.
     """
 
     async def dispatch(
@@ -23,6 +36,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         start = time.monotonic()
         response = await call_next(request)
         duration_ms = (time.monotonic() - start) * 1000
+
+        # Expose backend timing to browser DevTools via Server-Timing header
+        response.headers["Server-Timing"] = f"total;dur={duration_ms:.1f}"
 
         status = response.status_code
         method = request.method
@@ -56,5 +72,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 media_type=response.media_type,
             )
 
-        logger.info("%s %s → %d (%.0fms)", method, path, status, duration_ms)
+        # Flag slow requests at WARNING level for easy filtering
+        if duration_ms >= _SLOW_REQUEST_MS:
+            logger.warning(
+                "SLOW %s %s → %d (%.0fms)", method, path, status, duration_ms
+            )
+        else:
+            logger.info("%s %s → %d (%.0fms)", method, path, status, duration_ms)
         return response
