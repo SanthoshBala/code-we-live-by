@@ -124,13 +124,9 @@ async def get_law_text(
 
     if client:
         if include_htm:
-            htm_content = await client.get_law_text(
-                congress, law_number, format="htm"
-            )
+            htm_content = await client.get_law_text(congress, law_number, format="htm")
         if include_xml:
-            xml_content = await client.get_law_text(
-                congress, law_number, format="xml"
-            )
+            xml_content = await client.get_law_text(congress, law_number, format="xml")
     else:
         # Try reading from cache directly
         cache_dir = Path("data/govinfo/plaw")
@@ -297,9 +293,7 @@ async def _enrich_start_lines(
 
     # Batch-fetch all sections at once instead of N sequential queries
     svc = SnapshotService(session)
-    states = await svc.get_sections_at_revision(
-        list(keys), lookup_revision_id
-    )
+    states = await svc.get_sections_at_revision(list(keys), lookup_revision_id)
 
     # Build provisions cache from batch result
     provisions_cache: dict[tuple[int, str], list[dict[str, Any]] | None] = {}

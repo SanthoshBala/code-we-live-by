@@ -253,8 +253,10 @@ async def _create_seeded_engine():
         await session.commit()
 
     total_snapshots = NUM_SECTIONS + (NUM_REVISIONS - 1) * SECTIONS_CHANGED_PER_REVISION
-    print(f"\n  Seeded: {NUM_REVISIONS} revisions, {NUM_SECTIONS} sections, "
-          f"{total_snapshots} total snapshots (~{total_snapshots * TEXT_SIZE // 1024 // 1024}MB text)")
+    print(
+        f"\n  Seeded: {NUM_REVISIONS} revisions, {NUM_SECTIONS} sections, "
+        f"{total_snapshots} total snapshots (~{total_snapshots * TEXT_SIZE // 1024 // 1024}MB text)"
+    )
 
     return engine, make_session
 
@@ -277,8 +279,7 @@ async def _sequential_get_revision_chain(
         chain.append(current_id)
         result = await session.execute(
             text(
-                "SELECT parent_revision_id FROM code_revision "
-                "WHERE revision_id = :rid"
+                "SELECT parent_revision_id FROM code_revision WHERE revision_id = :rid"
             ),
             {"rid": current_id},
         )
@@ -288,9 +289,7 @@ async def _sequential_get_revision_chain(
     return chain
 
 
-async def _cte_get_revision_chain(
-    session: AsyncSession, revision_id: int
-) -> list[int]:
+async def _cte_get_revision_chain(session: AsyncSession, revision_id: int) -> list[int]:
     """NEW implementation: single recursive CTE query."""
     result = await session.execute(
         text("""
@@ -364,8 +363,10 @@ def test_revision_chain_cte_vs_sequential(chain_length: int) -> None:
     seq_stats, cte_stats = asyncio.run(_run())
     _print_comparison(
         f"Revision chain walk — chain length: {chain_length}",
-        "Sequential (old):", seq_stats,
-        "Recursive CTE (new):", cte_stats,
+        "Sequential (old):",
+        seq_stats,
+        "Recursive CTE (new):",
+        cte_stats,
     )
 
     # CTE should not be slower than sequential
@@ -378,6 +379,7 @@ def test_revision_chain_cte_vs_sequential(chain_length: int) -> None:
 # ---------------------------------------------------------------------------
 # 2. Snapshot query: indexed vs unindexed
 # ---------------------------------------------------------------------------
+
 
 def test_snapshot_query_with_index() -> None:
     """Measure DISTINCT ON snapshot query with and without revision_id index.
@@ -461,7 +463,11 @@ def test_snapshot_query_with_index() -> None:
         async with make_session() as session:
             slim_stats = await _async_timed_runs(
                 lambda: session.execute(
-                    text(_QUERY_SUMMARY_ONLY.format(chain_placeholders=chain_placeholders)),
+                    text(
+                        _QUERY_SUMMARY_ONLY.format(
+                            chain_placeholders=chain_placeholders
+                        )
+                    ),
                     {"title": TITLE_NUMBER},
                 ),
                 n=30,
@@ -474,26 +480,35 @@ def test_snapshot_query_with_index() -> None:
 
     _print_comparison(
         f"Snapshot query — {NUM_SECTIONS} sections × {NUM_REVISIONS} revisions (full scan)",
-        "No index (baseline):", no_idx_stats,
-        "With revision index:", idx_stats,
+        "No index (baseline):",
+        no_idx_stats,
+        "With revision index:",
+        idx_stats,
     )
     _print_comparison(
-        f"Snapshot query — indexed, all columns vs summary-only",
-        "All columns (current):", idx_stats,
-        "Summary columns only:", slim_stats,
+        "Snapshot query — indexed, all columns vs summary-only",
+        "All columns (current):",
+        idx_stats,
+        "Summary columns only:",
+        slim_stats,
     )
 
-    print(f"\n  ** Column projection saves "
-          f"~{idx_stats['mean_ms'] - slim_stats['mean_ms']:.1f}ms per query "
-          f"({NUM_SECTIONS} sections × ~{TEXT_SIZE // 1024}KB text each)")
-    print(f"     In-memory savings are modest; over the network with real PG,")
-    print(f"     transferring {NUM_SECTIONS * TEXT_SIZE // 1024 // 1024}MB+ of "
-          f"unused text_content dominates latency.\n")
+    print(
+        f"\n  ** Column projection saves "
+        f"~{idx_stats['mean_ms'] - slim_stats['mean_ms']:.1f}ms per query "
+        f"({NUM_SECTIONS} sections × ~{TEXT_SIZE // 1024}KB text each)"
+    )
+    print("     In-memory savings are modest; over the network with real PG,")
+    print(
+        f"     transferring {NUM_SECTIONS * TEXT_SIZE // 1024 // 1024}MB+ of "
+        f"unused text_content dominates latency.\n"
+    )
 
 
 # ---------------------------------------------------------------------------
 # 3. Sequential per-revision snapshot loading vs single query
 # ---------------------------------------------------------------------------
+
 
 def test_snapshot_loading_single_query_vs_per_revision() -> None:
     """Compare the old per-revision loop vs single DISTINCT ON query.
@@ -574,14 +589,17 @@ def test_snapshot_loading_single_query_vs_per_revision() -> None:
     loop_stats, single_stats = asyncio.run(_run())
     _print_comparison(
         f"Section materialization — {NUM_SECTIONS} sections × {NUM_REVISIONS} revisions",
-        "Per-revision loop (old):", loop_stats,
-        "Single query (new):", single_stats,
+        "Per-revision loop (old):",
+        loop_stats,
+        "Single query (new):",
+        single_stats,
     )
 
 
 # ---------------------------------------------------------------------------
 # 4. Middleware overhead
 # ---------------------------------------------------------------------------
+
 
 def test_middleware_overhead() -> None:
     """Measure per-request overhead of CacheControlMiddleware."""
@@ -597,12 +615,16 @@ def test_middleware_overhead() -> None:
         stats = _timed_runs(lambda: client.get("/api/v1/titles/"), n=200)
 
     print(f"\n{'=' * 65}")
-    print(f"  API request latency (GET /api/v1/titles/) — with middleware")
+    print("  API request latency (GET /api/v1/titles/) — with middleware")
     print(f"{'=' * 65}")
-    print(f"  mean={stats['mean_ms']:.3f}ms  median={stats['median_ms']:.3f}ms  "
-          f"p95={stats['p95_ms']:.3f}ms")
-    print(f"  min={stats['min_ms']:.3f}ms  max={stats['max_ms']:.3f}ms  "
-          f"runs={stats['runs']}")
+    print(
+        f"  mean={stats['mean_ms']:.3f}ms  median={stats['median_ms']:.3f}ms  "
+        f"p95={stats['p95_ms']:.3f}ms"
+    )
+    print(
+        f"  min={stats['min_ms']:.3f}ms  max={stats['max_ms']:.3f}ms  "
+        f"runs={stats['runs']}"
+    )
     print(f"{'=' * 65}")
 
     # Sanity: a mocked endpoint should respond in < 50ms

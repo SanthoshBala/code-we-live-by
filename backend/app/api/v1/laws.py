@@ -52,8 +52,11 @@ async def read_law_text(
         include_htm = format in ("all", "htm")
         include_xml = format in ("all", "xml")
         result = await get_law_text(
-            session, congress, law_number,
-            include_htm=include_htm, include_xml=include_xml,
+            session,
+            congress,
+            law_number,
+            include_htm=include_htm,
+            include_xml=include_xml,
         )
     if result is None:
         raise HTTPException(
