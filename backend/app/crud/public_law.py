@@ -237,13 +237,19 @@ async def _get_parent_revision_id(
     """Find the revision ID *before* this law was applied.
 
     Returns the parent revision of the law's revision, or HEAD as fallback.
+    Uses the CodeRevision.law_id FK to PublicLaw for an indexed lookup
+    instead of matching on the unindexed summary string.
     """
     from app.models.revision import CodeRevision
     from pipeline.olrc.snapshot_service import SnapshotService
 
     stmt = (
         select(CodeRevision)
-        .where(CodeRevision.summary == f"PL {congress}-{law_number}")
+        .join(PublicLaw, CodeRevision.law_id == PublicLaw.law_id)
+        .where(
+            PublicLaw.congress == congress,
+            PublicLaw.law_number == str(law_number),
+        )
         .limit(1)
     )
     result = await session.execute(stmt)

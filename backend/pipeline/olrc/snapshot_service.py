@@ -72,46 +72,66 @@ class SnapshotService:
         title_number: int,
         section_number: str,
         revision_id: int,
+        *,
+        chain: list[int] | None = None,
     ) -> SectionState | None:
         """Get a section's state at a specific revision.
 
-        Walks the parent chain from the given revision backwards to find
-        the most recent snapshot for the requested section.
+        Uses the revision chain CTE + DISTINCT ON to find the most recent
+        snapshot in a single query instead of walking the parent chain
+        sequentially.
 
         Args:
             title_number: US Code title number.
             section_number: Section number (e.g., "106", "80a-3a").
             revision_id: The revision to query at.
+            chain: Pre-built revision chain (newest-first). If not provided,
+                built internally via ``_get_revision_chain()``.
 
         Returns:
             SectionState or None if the section doesn't exist at this revision.
         """
-        current_rev_id: int | None = revision_id
+        if chain is None:
+            chain = await self._get_revision_chain(revision_id)
+        if not chain:
+            return None
 
-        while current_rev_id is not None:
-            # Look for a snapshot at this revision
-            stmt = select(SectionSnapshot).where(
-                SectionSnapshot.revision_id == current_rev_id,
-                SectionSnapshot.title_number == title_number,
-                SectionSnapshot.section_number == section_number,
-            )
-            result = await self.session.execute(stmt)
-            snapshot = result.scalar_one_or_none()
-
-            if snapshot is not None:
-                if snapshot.is_deleted:
-                    return None
-                return self._snapshot_to_state(snapshot)
-
-            # Walk to parent revision
-            rev_stmt = select(CodeRevision.parent_revision_id).where(
-                CodeRevision.revision_id == current_rev_id
-            )
-            rev_result = await self.session.execute(rev_stmt)
-            parent_id = rev_result.scalar_one_or_none()
-            current_rev_id = parent_id
-
-        return None
+        result = await self.session.execute(
+            text("""
+                SELECT DISTINCT ON (title_number, section_number)
+                    snapshot_id, revision_id, title_number, section_number,
+                    heading, text_content, text_hash,
+                    normalized_provisions, notes, normalized_notes,
+                    notes_hash, full_citation, is_deleted, group_id, sort_order
+                FROM section_snapshot
+                WHERE revision_id = ANY(:chain)
+                  AND title_number = :title
+                  AND section_number = :section
+                ORDER BY title_number, section_number,
+                    array_position(:chain, revision_id)
+            """),
+            {"chain": chain, "title": title_number, "section": section_number},
+        )
+        row = result.one_or_none()
+        if row is None or row.is_deleted:
+            return None
+        return SectionState(
+            title_number=row.title_number,
+            section_number=row.section_number,
+            heading=row.heading,
+            text_content=row.text_content,
+            text_hash=row.text_hash,
+            normalized_provisions=row.normalized_provisions,
+            notes=row.notes,
+            normalized_notes=row.normalized_notes,
+            notes_hash=row.notes_hash,
+            full_citation=row.full_citation,
+            snapshot_id=row.snapshot_id,
+            revision_id=row.revision_id,
+            is_deleted=row.is_deleted,
+            group_id=row.group_id,
+            sort_order=row.sort_order,
+        )
 
     async def get_all_sections_at_revision(
         self,
@@ -119,8 +139,8 @@ class SnapshotService:
     ) -> list[SectionState]:
         """Materialize the full section state at a revision.
 
-        Accumulates snapshots from the initial commit through the target
-        revision, applying the most recent snapshot for each section.
+        Uses DISTINCT ON + array_position to find the latest snapshot per
+        section across the revision chain in a single query.
 
         Args:
             revision_id: The revision to materialize.
@@ -128,33 +148,49 @@ class SnapshotService:
         Returns:
             List of SectionState for all live sections at this revision.
         """
-        # Build the revision chain from target back to initial
-        revision_chain = await self._get_revision_chain(revision_id)
-
-        if not revision_chain:
+        chain = await self._get_revision_chain(revision_id)
+        if not chain:
             return []
 
-        # Accumulate snapshots: most recent wins
-        # key: (title_number, section_number) -> SectionSnapshot
-        section_map: dict[tuple[int, str], SectionSnapshot] = {}
+        result = await self.session.execute(
+            text("""
+                SELECT DISTINCT ON (title_number, section_number)
+                    snapshot_id, revision_id, title_number, section_number,
+                    heading, text_content, text_hash,
+                    normalized_provisions, notes, normalized_notes,
+                    notes_hash, full_citation, is_deleted, group_id, sort_order
+                FROM section_snapshot
+                WHERE revision_id = ANY(:chain)
+                ORDER BY title_number, section_number,
+                    array_position(:chain, revision_id)
+            """),
+            {"chain": chain},
+        )
 
-        # Process from oldest to newest so latest snapshots override
-        for rev_id in reversed(revision_chain):
-            stmt = select(SectionSnapshot).where(SectionSnapshot.revision_id == rev_id)
-            result = await self.session.execute(stmt)
-            snapshots = result.scalars().all()
-
-            for snap in snapshots:
-                key = (snap.title_number, snap.section_number)
-                section_map[key] = snap
-
-        # Filter out deleted sections and convert to SectionState
         states = []
-        for snap in section_map.values():
-            if not snap.is_deleted:
-                states.append(self._snapshot_to_state(snap))
+        for row in result:
+            if row.is_deleted:
+                continue
+            states.append(
+                SectionState(
+                    title_number=row.title_number,
+                    section_number=row.section_number,
+                    heading=row.heading,
+                    text_content=row.text_content,
+                    text_hash=row.text_hash,
+                    normalized_provisions=row.normalized_provisions,
+                    notes=row.notes,
+                    normalized_notes=row.normalized_notes,
+                    notes_hash=row.notes_hash,
+                    full_citation=row.full_citation,
+                    snapshot_id=row.snapshot_id,
+                    revision_id=row.revision_id,
+                    is_deleted=row.is_deleted,
+                    group_id=row.group_id,
+                    sort_order=row.sort_order,
+                )
+            )
 
-        # Sort by title and section for consistent ordering
         states.sort(key=lambda s: (s.title_number, s.section_number))
         return states
 
@@ -188,6 +224,84 @@ class SnapshotService:
         snapshots = result.scalars().all()
 
         return [self._snapshot_to_state(snap) for snap in snapshots]
+
+    async def get_sections_at_revision(
+        self,
+        keys: list[tuple[int, str]],
+        revision_id: int,
+        *,
+        chain: list[int] | None = None,
+    ) -> dict[tuple[int, str], SectionState]:
+        """Batch-fetch multiple sections' state at a specific revision.
+
+        Uses a single DISTINCT ON query with an IN clause to look up all
+        requested (title_number, section_number) pairs at once.
+
+        Args:
+            keys: List of (title_number, section_number) pairs to fetch.
+            revision_id: The revision to query at.
+            chain: Pre-built revision chain (newest-first). If not provided,
+                built internally via ``_get_revision_chain()``.
+
+        Returns:
+            Dict mapping (title_number, section_number) to SectionState.
+            Deleted or missing sections are omitted.
+        """
+        if not keys:
+            return {}
+        if chain is None:
+            chain = await self._get_revision_chain(revision_id)
+        if not chain:
+            return {}
+
+        # Use parallel arrays for parameterized filtering. The arrays
+        # are zipped on index: titles[i] pairs with sections[i].
+        titles = [k[0] for k in keys]
+        sections = [k[1] for k in keys]
+
+        result = await self.session.execute(
+            text("""
+                SELECT DISTINCT ON (ss.title_number, ss.section_number)
+                    ss.snapshot_id, ss.revision_id, ss.title_number,
+                    ss.section_number, ss.heading, ss.text_content,
+                    ss.text_hash, ss.normalized_provisions, ss.notes,
+                    ss.normalized_notes, ss.notes_hash, ss.full_citation,
+                    ss.is_deleted, ss.group_id, ss.sort_order
+                FROM section_snapshot ss
+                JOIN unnest(:titles::int[], :sections::text[])
+                     AS keys(title, section)
+                  ON ss.title_number = keys.title
+                 AND ss.section_number = keys.section
+                WHERE ss.revision_id = ANY(:chain)
+                ORDER BY ss.title_number, ss.section_number,
+                    array_position(:chain, ss.revision_id)
+            """),
+            {"chain": chain, "titles": titles, "sections": sections},
+        )
+
+        states: dict[tuple[int, str], SectionState] = {}
+        for row in result:
+            if row.is_deleted:
+                continue
+            state = SectionState(
+                title_number=row.title_number,
+                section_number=row.section_number,
+                heading=row.heading,
+                text_content=row.text_content,
+                text_hash=row.text_hash,
+                normalized_provisions=row.normalized_provisions,
+                notes=row.notes,
+                normalized_notes=row.normalized_notes,
+                notes_hash=row.notes_hash,
+                full_citation=row.full_citation,
+                snapshot_id=row.snapshot_id,
+                revision_id=row.revision_id,
+                is_deleted=row.is_deleted,
+                group_id=row.group_id,
+                sort_order=row.sort_order,
+            )
+            states[(row.title_number, row.section_number)] = state
+        return states
 
     async def get_changed_sections_at_revision(
         self,
