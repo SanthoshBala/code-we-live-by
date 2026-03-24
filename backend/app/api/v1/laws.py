@@ -1,10 +1,13 @@
 """Law Viewer API endpoints for QC of parsed law text and amendments."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.public_law import (
     compute_law_diffs,
+    get_law_metadata,
     get_law_text,
     get_laws_list,
     parse_law_amendments,
@@ -32,10 +35,26 @@ async def list_laws(
 async def read_law_text(
     congress: int,
     law_number: int,
+    format: Literal["all", "metadata", "htm", "xml"] = Query(
+        "all",
+        description="What to include: 'metadata' (no content), 'htm', 'xml', or 'all'",
+    ),
     session: AsyncSession = Depends(get_async_session),
 ) -> LawTextSchema:
-    """Get raw HTM and XML text for a public law."""
-    result = await get_law_text(session, congress, law_number)
+    """Get text for a public law.
+
+    Use format=metadata for just titles/dates (fast, no file I/O).
+    Use format=htm or format=xml to fetch only the needed content.
+    """
+    if format == "metadata":
+        result = await get_law_metadata(session, congress, law_number)
+    else:
+        include_htm = format in ("all", "htm")
+        include_xml = format in ("all", "xml")
+        result = await get_law_text(
+            session, congress, law_number,
+            include_htm=include_htm, include_xml=include_xml,
+        )
     if result is None:
         raise HTTPException(
             status_code=404,

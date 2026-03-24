@@ -51,45 +51,14 @@ def _date_str(d: Any) -> str | None:
     return d.isoformat() if d else None
 
 
-async def get_law_text(
-    session: AsyncSession, congress: int, law_number: int
-) -> LawTextSchema | None:
-    """Fetch raw HTM and XML text for a law, using cache or GovInfo API."""
-    # Dynamic import to keep pipeline/ out of mypy's module graph
-    try:
-        govinfo_mod = importlib.import_module("pipeline.govinfo.client")
-        client: Any = govinfo_mod.GovInfoClient()
-    except (ValueError, ImportError):
-        logger.warning("GovInfo API key not configured, reading from cache only")
-        client = None
-
-    htm_content: str | None = None
-    xml_content: str | None = None
-
-    if client:
-        htm_content = await client.get_law_text(congress, law_number, format="htm")
-        xml_content = await client.get_law_text(congress, law_number, format="xml")
-    else:
-        # Try reading from cache directly
-        cache_dir = Path("data/govinfo/plaw")
-        htm_file = cache_dir / f"PLAW-{congress}publ{law_number}.htm"
-        xml_file = cache_dir / f"PLAW-{congress}publ{law_number}.xml"
-        if htm_file.exists():
-            htm_content = htm_file.read_text()
-        if xml_file.exists():
-            xml_content = xml_file.read_text()
-
-    if htm_content is None and xml_content is None:
-        return None
-
-    # Query DB for metadata
-    stmt = select(PublicLaw).where(
-        PublicLaw.congress == congress,
-        PublicLaw.law_number == str(law_number),
-    )
-    result = await session.execute(stmt)
-    law = result.scalar_one_or_none()
-
+def _law_to_schema(
+    law: Any | None,
+    congress: int,
+    law_number: int,
+    htm_content: str | None = None,
+    xml_content: str | None = None,
+) -> LawTextSchema:
+    """Build a LawTextSchema from a PublicLaw ORM object + optional content."""
     return LawTextSchema(
         congress=congress,
         law_number=str(law_number),
@@ -106,6 +75,79 @@ async def get_law_text(
         htm_content=htm_content,
         xml_content=xml_content,
     )
+
+
+async def _query_law(
+    session: AsyncSession, congress: int, law_number: int
+) -> Any | None:
+    """Fetch a PublicLaw row by congress + law_number."""
+    stmt = select(PublicLaw).where(
+        PublicLaw.congress == congress,
+        PublicLaw.law_number == str(law_number),
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def get_law_metadata(
+    session: AsyncSession, congress: int, law_number: int
+) -> LawTextSchema | None:
+    """Return law metadata only (no HTM/XML content). Fast — single DB query."""
+    law = await _query_law(session, congress, law_number)
+    if law is None:
+        return None
+    return _law_to_schema(law, congress, law_number)
+
+
+async def get_law_text(
+    session: AsyncSession,
+    congress: int,
+    law_number: int,
+    include_htm: bool = True,
+    include_xml: bool = True,
+) -> LawTextSchema | None:
+    """Fetch raw HTM and/or XML text for a law, using cache or GovInfo API.
+
+    Pass include_htm/include_xml=False to skip fetching content you don't
+    need — each blob can be 100-500KB.
+    """
+    # Dynamic import to keep pipeline/ out of mypy's module graph
+    try:
+        govinfo_mod = importlib.import_module("pipeline.govinfo.client")
+        client: Any = govinfo_mod.GovInfoClient()
+    except (ValueError, ImportError):
+        logger.warning("GovInfo API key not configured, reading from cache only")
+        client = None
+
+    htm_content: str | None = None
+    xml_content: str | None = None
+
+    if client:
+        if include_htm:
+            htm_content = await client.get_law_text(
+                congress, law_number, format="htm"
+            )
+        if include_xml:
+            xml_content = await client.get_law_text(
+                congress, law_number, format="xml"
+            )
+    else:
+        # Try reading from cache directly
+        cache_dir = Path("data/govinfo/plaw")
+        if include_htm:
+            htm_file = cache_dir / f"PLAW-{congress}publ{law_number}.htm"
+            if htm_file.exists():
+                htm_content = htm_file.read_text()
+        if include_xml:
+            xml_file = cache_dir / f"PLAW-{congress}publ{law_number}.xml"
+            if xml_file.exists():
+                xml_content = xml_file.read_text()
+
+    if htm_content is None and xml_content is None:
+        return None
+
+    law = await _query_law(session, congress, law_number)
+    return _law_to_schema(law, congress, law_number, htm_content, xml_content)
 
 
 def _amendment_to_schema(amendment: Any) -> ParsedAmendmentSchema:
