@@ -231,6 +231,9 @@ async def get_title_structure(
     # Load sections for this title from snapshots at HEAD.
     # Uses DISTINCT ON to find the latest snapshot per section across the
     # revision chain without loading all 97k+ snapshots into Python.
+    # Only fetches columns needed for the tree summary — skipping
+    # text_content and normalized_provisions avoids transferring ~3-15MB
+    # of unused data from the database.
     head_id = await _resolve_head(session, revision_id)
     sections_by_group: dict[int, list[SectionState]] = {}
 
@@ -242,9 +245,7 @@ async def get_title_structure(
             result = await session.execute(
                 text("""
                     SELECT DISTINCT ON (title_number, section_number)
-                        snapshot_id, revision_id, title_number, section_number,
-                        heading, text_content, normalized_provisions, notes,
-                        normalized_notes, text_hash, notes_hash, full_citation,
+                        section_number, heading, normalized_notes,
                         is_deleted, group_id, sort_order
                     FROM section_snapshot
                     WHERE revision_id = ANY(:chain)
@@ -258,18 +259,18 @@ async def get_title_structure(
                 if row.is_deleted:
                     continue
                 state = SectionState(
-                    title_number=row.title_number,
+                    title_number=title_number,
                     section_number=row.section_number,
                     heading=row.heading,
-                    text_content=row.text_content,
-                    text_hash=row.text_hash,
-                    normalized_provisions=row.normalized_provisions,
-                    notes=row.notes,
+                    text_content=None,
+                    text_hash=None,
+                    normalized_provisions=None,
+                    notes=None,
                     normalized_notes=row.normalized_notes,
-                    notes_hash=row.notes_hash,
-                    full_citation=row.full_citation,
-                    snapshot_id=row.snapshot_id,
-                    revision_id=row.revision_id,
+                    notes_hash=None,
+                    full_citation=None,
+                    snapshot_id=0,
+                    revision_id=0,
                     is_deleted=row.is_deleted,
                     group_id=row.group_id,
                     sort_order=row.sort_order,
