@@ -273,6 +273,7 @@ async def _enrich_start_lines(
 
     Uses the revision *before* this law was applied so that old_text
     (the text being struck) still exists in the provisions.
+    Batch-fetches all needed sections in a single query.
     """
     from pipeline.olrc.snapshot_service import SnapshotService
 
@@ -280,10 +281,32 @@ async def _enrich_start_lines(
     if lookup_revision_id is None:
         return
 
-    svc = SnapshotService(session)
+    # Collect all unique (title, section) pairs that need lookup
+    keys: set[tuple[int, str]] = set()
+    for schema in schemas:
+        if schema.old_text is None or schema.section_ref is None:
+            continue
+        title = schema.section_ref.title
+        section = schema.section_ref.section
+        if title is None:
+            continue
+        keys.add((title, section))
 
-    # Cache provisions by (title, section) to avoid duplicate queries
+    if not keys:
+        return
+
+    # Batch-fetch all sections at once instead of N sequential queries
+    svc = SnapshotService(session)
+    states = await svc.get_sections_at_revision(
+        list(keys), lookup_revision_id
+    )
+
+    # Build provisions cache from batch result
     provisions_cache: dict[tuple[int, str], list[dict[str, Any]] | None] = {}
+    for key in keys:
+        state = states.get(key)
+        raw = state.normalized_provisions if state else None
+        provisions_cache[key] = raw if isinstance(raw, list) else None
 
     for schema in schemas:
         if schema.old_text is None or schema.section_ref is None:
@@ -293,16 +316,7 @@ async def _enrich_start_lines(
         if title is None:
             continue
 
-        cache_key = (title, section)
-        if cache_key not in provisions_cache:
-            state = await svc.get_section_at_revision(
-                title, section, lookup_revision_id
-            )
-            # normalized_provisions is a list stored as JSONB
-            raw = state.normalized_provisions if state else None
-            provisions_cache[cache_key] = raw if isinstance(raw, list) else None
-
-        provisions = provisions_cache[cache_key]
+        provisions = provisions_cache.get((title, section))
         if provisions:
             schema.start_line = _find_line_number(provisions, schema.old_text)
 
@@ -891,7 +905,12 @@ async def compute_law_diffs(
         key = (s.section_ref.title, s.section_ref.section)
         groups.setdefault(key, []).append(s)
 
+    # Batch-fetch all "before" section states in a single query
     svc = SnapshotService(session)
+    section_states = await svc.get_sections_at_revision(
+        list(groups.keys()), revision_id
+    )
+
     diffs: list[SectionDiffSchema] = []
 
     for (title, section), section_amendments in groups.items():
@@ -899,8 +918,8 @@ async def compute_law_diffs(
         note_amendments = [a for a in section_amendments if a.change_type == "Add_Note"]
         text_amendments = [a for a in section_amendments if a.change_type != "Add_Note"]
 
-        # Fetch "before" provisions
-        state = await svc.get_section_at_revision(title, section, revision_id)
+        # Use batch-fetched "before" state
+        state = section_states.get((title, section))
         raw = state.normalized_provisions if state else None
 
         # Handle text-modifying amendments (normal diff flow)

@@ -397,8 +397,13 @@ async def get_section(
     if head_id is None:
         return None
 
+    # Build the revision chain once and share it across all lookups
+    # to avoid redundant HEAD resolution and CTE queries.
     svc = SnapshotService(session)
-    state = await svc.get_section_at_revision(title_number, section_number, head_id)
+    chain = await svc._get_revision_chain(head_id)
+    state = await svc.get_section_at_revision(
+        title_number, section_number, head_id, chain=chain
+    )
 
     if state is None:
         return None
@@ -438,9 +443,10 @@ async def get_section(
             max_year = max(a["year"] for a in amendments if "year" in a)
             last_modified_date = date(max_year, 1, 1)
 
-    # Find the revision that last *changed* this section's content
+    # Find the revision that last *changed* this section's content.
+    # Reuse the same chain to avoid re-fetching HEAD + CTE.
     last_revision = await get_last_changed_revision_for_section(
-        session, title_number, section_number
+        session, title_number, section_number, chain=chain
     )
 
     return SectionViewerSchema(

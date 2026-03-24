@@ -90,14 +90,18 @@ _LAST_CHANGED_CTE = """
 
 
 async def get_latest_revision_for_title(
-    session: AsyncSession, title_number: int
+    session: AsyncSession,
+    title_number: int,
+    *,
+    chain: list[int] | None = None,
 ) -> HeadRevisionSchema | None:
     """Return the most recent revision that actually changed any section in a title.
 
     Compares content hashes between consecutive snapshots to find real
     changes (not just re-snapshots at a new release point).
     """
-    chain = await _get_chain(session)
+    if chain is None:
+        chain = await _get_chain(session)
     if not chain:
         return None
 
@@ -120,14 +124,19 @@ async def get_latest_revision_for_title(
 
 
 async def get_last_changed_revision_for_section(
-    session: AsyncSession, title_number: int, section_number: str
+    session: AsyncSession,
+    title_number: int,
+    section_number: str,
+    *,
+    chain: list[int] | None = None,
 ) -> HeadRevisionSchema | None:
     """Return the most recent revision that actually changed a specific section.
 
     Compares content hashes between consecutive snapshots so that a
     release point that re-snapshots unchanged content is skipped.
     """
-    chain = await _get_chain(session)
+    if chain is None:
+        chain = await _get_chain(session)
     if not chain:
         return None
 
