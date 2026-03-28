@@ -11,6 +11,7 @@ from sqlalchemy import func, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
+from app.core.revision_cache import revision_cache
 from app.crud.revision import get_last_changed_revision_for_section
 from app.models.public_law import PublicLaw
 from app.models.us_code import SectionGroup
@@ -97,12 +98,31 @@ def _build_group_tree(
     )
 
 
-async def _resolve_head(session: AsyncSession, revision_id: int | None) -> int | None:
-    """Resolve an explicit revision_id or fall back to HEAD."""
+async def _resolve_head_and_chain(
+    session: AsyncSession, revision_id: int | None
+) -> tuple[int | None, list[int]]:
+    """Resolve HEAD revision and its chain, using the in-memory cache.
+
+    Returns (head_id, chain). The chain is ordered newest-first.
+    """
     if revision_id is not None:
-        return revision_id
+        svc = SnapshotService(session)
+        chain = await svc._get_revision_chain(revision_id)
+        return revision_id, chain
+
+    # Try the cache first
+    cached_head, cached_chain = revision_cache.get()
+    if cached_head is not None and cached_chain is not None:
+        return cached_head, cached_chain
+
+    # Cache miss — fetch and store
     svc = SnapshotService(session)
-    return await svc.get_head_revision_id()
+    head_id = await svc.get_head_revision_id()
+    if head_id is None:
+        return None, []
+    chain = await svc._get_revision_chain(head_id)
+    revision_cache.set(head_id, chain)
+    return head_id, chain
 
 
 async def get_all_titles(
@@ -120,15 +140,10 @@ async def get_all_titles(
     # Resolve HEAD revision and count sections per title via SQL.
     # Uses a window function to find the latest snapshot per section across
     # the revision chain, then counts non-deleted sections per title.
-    head_id = await _resolve_head(session, revision_id)
+    head_id, chain = await _resolve_head_and_chain(session, revision_id)
 
     sections_by_title: dict[int, int] = {}
-    if head_id is not None:
-        # Build the revision chain IDs
-        svc = SnapshotService(session)
-        chain = await svc._get_revision_chain(head_id)
-
-        if chain:
+    if head_id is not None and chain:
             # For each (title_number, section_number), find the snapshot at the
             # most recent revision in the chain. Use raw SQL with DISTINCT ON
             # for efficiency — avoids loading 97k+ ORM objects.
@@ -234,14 +249,10 @@ async def get_title_structure(
     # Only fetches columns needed for the tree summary — skipping
     # text_content and normalized_provisions avoids transferring ~3-15MB
     # of unused data from the database.
-    head_id = await _resolve_head(session, revision_id)
+    head_id, chain = await _resolve_head_and_chain(session, revision_id)
     sections_by_group: dict[int, list[SectionState]] = {}
 
-    if head_id is not None:
-        svc = SnapshotService(session)
-        chain = await svc._get_revision_chain(head_id)
-
-        if chain:
+    if head_id is not None and chain:
             result = await session.execute(
                 text("""
                     SELECT DISTINCT ON (title_number, section_number)
@@ -393,14 +404,11 @@ async def get_section(
     Reads from SectionSnapshot at HEAD (or specified revision).
     Returns None if the section is not found.
     """
-    head_id = await _resolve_head(session, revision_id)
+    head_id, chain = await _resolve_head_and_chain(session, revision_id)
     if head_id is None:
         return None
 
-    # Build the revision chain once and share it across all lookups
-    # to avoid redundant HEAD resolution and CTE queries.
     svc = SnapshotService(session)
-    chain = await svc._get_revision_chain(head_id)
     state = await svc.get_section_at_revision(
         title_number, section_number, head_id, chain=chain
     )

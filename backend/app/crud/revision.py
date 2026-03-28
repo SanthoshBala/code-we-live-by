@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.revision_cache import revision_cache
 from app.models.enums import RevisionStatus
 from app.models.revision import CodeRevision
 from app.schemas.revision import HeadRevisionSchema
@@ -33,12 +34,22 @@ async def get_head_revision(session: AsyncSession) -> HeadRevisionSchema | None:
 
 
 async def _get_chain(session: AsyncSession) -> list[int] | None:
-    """Return the HEAD revision chain (newest-first) or None."""
+    """Return the HEAD revision chain (newest-first) or None.
+
+    Uses the in-memory revision cache to avoid the recursive CTE on
+    every request.
+    """
+    cached_head, cached_chain = revision_cache.get()
+    if cached_head is not None and cached_chain is not None:
+        return cached_chain
+
     svc = SnapshotService(session)
     head_id = await svc.get_head_revision_id()
     if head_id is None:
         return None
     chain = await svc._get_revision_chain(head_id)
+    if chain:
+        revision_cache.set(head_id, chain)
     return chain if chain else None
 
 
