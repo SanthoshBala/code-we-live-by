@@ -25,10 +25,20 @@ from app.schemas.law_viewer import (
 logger = logging.getLogger(__name__)
 
 
-async def get_laws_list(session: AsyncSession) -> list[LawSummarySchema]:
-    """Return all public laws ordered by congress desc, law_number desc."""
-    stmt = select(PublicLaw).order_by(
-        PublicLaw.congress.desc(), PublicLaw.law_number.desc()
+async def get_laws_list(
+    session: AsyncSession,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[LawSummarySchema]:
+    """Return public laws ordered by congress desc, law_number desc.
+
+    Paginated with limit/offset to avoid transferring the entire table.
+    """
+    stmt = (
+        select(PublicLaw)
+        .order_by(PublicLaw.congress.desc(), PublicLaw.law_number.desc())
+        .limit(limit)
+        .offset(offset)
     )
     result = await session.execute(stmt)
     laws = result.scalars().all()
