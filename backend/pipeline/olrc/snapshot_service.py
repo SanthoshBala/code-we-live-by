@@ -268,13 +268,13 @@ class SnapshotService:
                     ss.normalized_notes, ss.notes_hash, ss.full_citation,
                     ss.is_deleted, ss.group_id, ss.sort_order
                 FROM section_snapshot ss
-                JOIN unnest(:titles::int[], :sections::text[])
+                JOIN unnest(CAST(:titles AS int[]), CAST(:sections AS text[]))
                      AS keys(title, section)
                   ON ss.title_number = keys.title
                  AND ss.section_number = keys.section
-                WHERE ss.revision_id = ANY(:chain)
+                WHERE ss.revision_id = ANY(CAST(:chain AS int[]))
                 ORDER BY ss.title_number, ss.section_number,
-                    array_position(:chain, ss.revision_id)
+                    array_position(CAST(:chain AS int[]), ss.revision_id)
             """),
             {"chain": chain, "titles": titles, "sections": sections},
         )
