@@ -7,6 +7,8 @@ import pytest
 
 from pipeline.congress.client import (
     BillAction,
+    BillAmendment,
+    CBOEstimate,
     CongressClient,
     HouseVoteDetail,
     HouseVoteInfo,
@@ -14,6 +16,7 @@ from pipeline.congress.client import (
     MemberInfo,
     MemberTerm,
     MemberVoteInfo,
+    RelatedBill,
     SponsorInfo,
     _parse_cr_refs,
 )
@@ -664,3 +667,291 @@ class TestGetBillActions:
 
         assert len(actions) == 1
         assert len(actions[0].congressional_record_refs) == 2
+
+
+class TestBillAmendment:
+    """Tests for BillAmendment dataclass."""
+
+    def test_from_api_response_full(self) -> None:
+        """Parse a fully-populated amendment API response."""
+        data = {
+            "number": "H.AMDT.123",
+            "sponsors": [{"fullName": "Rep. Smith, John [D-CA-1]"}],
+            "description": "An amendment to strike section 2",
+            "purpose": "To reduce spending",
+            "proposedDate": "2021-03-15",
+            "latestAction": {"actionDate": "2021-03-16", "text": "Amendment agreed to"},
+            "status": "adopted",
+        }
+        amdt = BillAmendment.from_api_response(data)
+
+        assert amdt.amendment_number == "H.AMDT.123"
+        assert amdt.sponsor == "Rep. Smith, John [D-CA-1]"
+        assert amdt.description == "An amendment to strike section 2"
+        assert amdt.purpose == "To reduce spending"
+        assert amdt.proposed_date == date(2021, 3, 15)
+        assert amdt.action_date == date(2021, 3, 16)
+        assert amdt.status == "adopted"
+
+    def test_from_api_response_no_sponsor(self) -> None:
+        """Parse amendment with no sponsor."""
+        data = {
+            "number": "S.AMDT.5",
+            "latestAction": {},
+        }
+        amdt = BillAmendment.from_api_response(data)
+
+        assert amdt.amendment_number == "S.AMDT.5"
+        assert amdt.sponsor is None
+        assert amdt.proposed_date is None
+        assert amdt.action_date is None
+
+    def test_from_api_response_sponsor_fallback(self) -> None:
+        """Use name field when fullName is absent."""
+        data = {
+            "number": "H.AMDT.7",
+            "sponsors": [{"name": "Sen. Brown"}],
+            "latestAction": {},
+        }
+        amdt = BillAmendment.from_api_response(data)
+        assert amdt.sponsor == "Sen. Brown"
+
+
+class TestCBOEstimate:
+    """Tests for CBOEstimate dataclass."""
+
+    def test_from_api_response_full(self) -> None:
+        """Parse a complete CBO estimate."""
+        data = {
+            "title": "Cost Estimate for H.R. 1234",
+            "url": "https://www.cbo.gov/publication/56789",
+            "pubDate": "2021-04-01",
+            "description": "CBO estimates this bill would cost $1.2 billion over 10 years.",
+        }
+        est = CBOEstimate.from_api_response(data)
+
+        assert est.title == "Cost Estimate for H.R. 1234"
+        assert est.url == "https://www.cbo.gov/publication/56789"
+        assert est.pub_date == date(2021, 4, 1)
+        assert (
+            est.description
+            == "CBO estimates this bill would cost $1.2 billion over 10 years."
+        )
+
+    def test_from_api_response_minimal(self) -> None:
+        """Parse a minimal CBO estimate with no optional fields."""
+        data = {"title": "Informal cost estimate"}
+        est = CBOEstimate.from_api_response(data)
+
+        assert est.title == "Informal cost estimate"
+        assert est.url is None
+        assert est.pub_date is None
+        assert est.description is None
+
+
+class TestRelatedBill:
+    """Tests for RelatedBill dataclass."""
+
+    def test_from_api_response_full(self) -> None:
+        """Parse a full related bill response."""
+        data = {
+            "congress": 117,
+            "type": "S",
+            "number": "500",
+            "title": "An identical senate bill",
+            "relationshipDetails": [{"type": "Identical bill"}],
+        }
+        rb = RelatedBill.from_api_response(data)
+
+        assert rb.congress == 117
+        assert rb.bill_type == "S"
+        assert rb.bill_number == 500
+        assert rb.title == "An identical senate bill"
+        assert rb.relationship_details == "Identical bill"
+
+    def test_from_api_response_no_relationship(self) -> None:
+        """Parse a related bill with no relationship details."""
+        data = {
+            "congress": 116,
+            "type": "HR",
+            "number": "42",
+            "relationshipDetails": [],
+        }
+        rb = RelatedBill.from_api_response(data)
+
+        assert rb.bill_type == "HR"
+        assert rb.bill_number == 42
+        assert rb.relationship_details is None
+
+
+class TestCongressClientPhase2:
+    """Tests for the three new CongressClient methods (Phase 2 history data)."""
+
+    @pytest.mark.asyncio
+    async def test_get_bill_amendments_returns_list(self) -> None:
+        """get_bill_amendments fetches and parses amendments across pages."""
+        page1 = MagicMock()
+        page1.json.return_value = {
+            "amendments": [
+                {
+                    "number": "H.AMDT.1",
+                    "sponsors": [{"fullName": "Rep. Doe, Jane [D-CA-5]"}],
+                    "description": "Strike section 3",
+                    "proposedDate": "2021-06-01",
+                    "latestAction": {"actionDate": "2021-06-02", "text": "Agreed to"},
+                    "status": "adopted",
+                }
+            ],
+            "pagination": {"count": 1},
+        }
+        page1.raise_for_status = MagicMock()
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(return_value=page1),
+        ):
+            client = CongressClient(api_key="test-key")
+            amendments = await client.get_bill_amendments(117, "hr", 1234)
+
+        assert len(amendments) == 1
+        assert amendments[0].amendment_number == "H.AMDT.1"
+        assert amendments[0].sponsor == "Rep. Doe, Jane [D-CA-5]"
+        assert amendments[0].action_date == date(2021, 6, 2)
+        assert amendments[0].status == "adopted"
+
+    @pytest.mark.asyncio
+    async def test_get_bill_amendments_empty_when_404(self) -> None:
+        """get_bill_amendments returns empty list on 404."""
+        import httpx
+
+        mock_err_response = MagicMock()
+        mock_err_response.status_code = 404
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(
+                side_effect=httpx.HTTPStatusError(
+                    "Not Found",
+                    request=MagicMock(),
+                    response=mock_err_response,
+                )
+            ),
+        ):
+            client = CongressClient(api_key="test-key")
+            amendments = await client.get_bill_amendments(99, "hr", 9999)
+
+        assert amendments == []
+
+    @pytest.mark.asyncio
+    async def test_get_bill_cbo_estimates_returns_list(self) -> None:
+        """get_bill_cbo_estimates fetches and parses CBO estimates."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "costEstimates": [
+                {
+                    "title": "Cost Estimate for H.R. 1234",
+                    "url": "https://www.cbo.gov/publication/56789",
+                    "pubDate": "2021-04-01",
+                    "description": "Costs $1B over 10 years.",
+                }
+            ],
+            "pagination": {"count": 1},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            client = CongressClient(api_key="test-key")
+            estimates = await client.get_bill_cbo_estimates(117, "hr", 1234)
+
+        assert len(estimates) == 1
+        assert estimates[0].title == "Cost Estimate for H.R. 1234"
+        assert estimates[0].pub_date == date(2021, 4, 1)
+        assert estimates[0].url == "https://www.cbo.gov/publication/56789"
+
+    @pytest.mark.asyncio
+    async def test_get_bill_cbo_estimates_empty_when_404(self) -> None:
+        """get_bill_cbo_estimates returns empty list on 404."""
+        import httpx
+
+        mock_err_response = MagicMock()
+        mock_err_response.status_code = 404
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(
+                side_effect=httpx.HTTPStatusError(
+                    "Not Found",
+                    request=MagicMock(),
+                    response=mock_err_response,
+                )
+            ),
+        ):
+            client = CongressClient(api_key="test-key")
+            estimates = await client.get_bill_cbo_estimates(99, "hr", 9999)
+
+        assert estimates == []
+
+    @pytest.mark.asyncio
+    async def test_get_related_bills_returns_list(self) -> None:
+        """get_related_bills fetches and parses related bills."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "relatedBills": [
+                {
+                    "congress": 117,
+                    "type": "S",
+                    "number": "500",
+                    "title": "Senate companion bill",
+                    "relationshipDetails": [{"type": "Identical bill"}],
+                },
+                {
+                    "congress": 116,
+                    "type": "HR",
+                    "number": "42",
+                    "title": "Earlier related bill",
+                    "relationshipDetails": [{"type": "Related bill"}],
+                },
+            ],
+            "pagination": {"count": 2},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            client = CongressClient(api_key="test-key")
+            related = await client.get_related_bills(117, "hr", 1234)
+
+        assert len(related) == 2
+        assert related[0].congress == 117
+        assert related[0].bill_type == "S"
+        assert related[0].bill_number == 500
+        assert related[0].relationship_details == "Identical bill"
+        assert related[1].congress == 116
+
+    @pytest.mark.asyncio
+    async def test_get_related_bills_empty_when_404(self) -> None:
+        """get_related_bills returns empty list on 404."""
+        import httpx
+
+        mock_err_response = MagicMock()
+        mock_err_response.status_code = 404
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(
+                side_effect=httpx.HTTPStatusError(
+                    "Not Found",
+                    request=MagicMock(),
+                    response=mock_err_response,
+                )
+            ),
+        ):
+            client = CongressClient(api_key="test-key")
+            related = await client.get_related_bills(99, "hr", 9999)
+
+        assert related == []

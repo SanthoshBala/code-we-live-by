@@ -17,6 +17,7 @@ class TimelineEventSchema(BaseModel):
         "house_vote",
         "senate_vote",
         "presidential_action",
+        "amendment",
         "other",
     ]
     date: date | None
@@ -49,6 +50,37 @@ class ChamberVoteSchema(BaseModel):
     not_voting: int
 
 
+class AmendmentSchema(BaseModel):
+    """An amendment to a bill."""
+
+    amendment_number: str
+    sponsor: str | None
+    description: str | None
+    purpose: str | None
+    proposed_date: date | None
+    action_date: date | None
+    status: str | None
+
+
+class CBOEstimateSchema(BaseModel):
+    """A CBO cost estimate for a bill."""
+
+    title: str
+    url: str | None
+    pub_date: date | None
+    description: str | None
+
+
+class RelatedBillSchema(BaseModel):
+    """A bill related to this legislation."""
+
+    congress: int
+    bill_type: str
+    bill_number: int
+    title: str | None
+    relationship_details: str | None
+
+
 class LegislativeHistorySchema(BaseModel):
     """Full legislative history response for a public law."""
 
@@ -60,3 +92,6 @@ class LegislativeHistorySchema(BaseModel):
     enacted_date: date | None
     status: Literal["enacted", "vetoed", "pending"]
     congress_url: str | None
+    amendments: list[AmendmentSchema] = []
+    cbo_estimates: list[CBOEstimateSchema] = []
+    related_bills: list[RelatedBillSchema] = []

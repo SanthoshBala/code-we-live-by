@@ -259,13 +259,14 @@ class BootstrapService:
         session: AsyncSession,
         downloader: OLRCDownloader,
         session_factory: SessionFactory | None = None,
-        concurrency: int = 4,
+        concurrency: int = 6,
     ) -> None:
         self.session = session
         self.downloader = downloader
-        # concurrency=4 — the 16Gi/4-CPU Cloud Run config (PR #152) showed
-        # peak utilization under 20% at concurrency=2, so 4 fits comfortably
-        # while halving wall-clock on the cold-cache first run.
+        # concurrency=6 — after bulk-insert optimization (#184) cut per-title
+        # insert time ~96%, CPU peaks at ~40%. 6 uses 6 of 8 thread-pool slots
+        # on a 4-CPU instance, targeting ~60% CPU while leaving headroom before
+        # Cloud SQL write pressure becomes a factor on large titles (10/26).
         self._concurrency = concurrency
 
         if session_factory is not None:
