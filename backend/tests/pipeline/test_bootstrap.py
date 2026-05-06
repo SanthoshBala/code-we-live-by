@@ -539,3 +539,50 @@ class TestSnapshotFieldMapping:
 
         assert result.titles_processed == 5
         assert result.titles_skipped == 0
+
+    @pytest.mark.asyncio
+    async def test_revision_committed_before_parallel_ingest(self) -> None:
+        """Parent session must commit before worker sessions start, so the
+        revision row is visible to worker transactions and section_snapshot
+        FK inserts succeed."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+        mock_parser = _make_parser_mock()
+
+        # session_factory yields a separate worker session — record when it
+        # is entered relative to commits on the parent session.
+        worker_session = _make_mock_session()
+        events: list[str] = []
+
+        original_commit = session.commit
+
+        async def tracked_commit() -> None:
+            events.append("parent_commit")
+            await original_commit()
+
+        session.commit = tracked_commit
+
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def factory():
+            events.append("worker_session_open")
+            yield worker_session
+
+        service = BootstrapService(
+            session, downloader, session_factory=factory, concurrency=1
+        )
+
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
+        ):
+            await service.create_initial_commit("113-21", titles=[17])
+
+        # The first parent commit must precede the first worker session open.
+        assert "parent_commit" in events
+        assert "worker_session_open" in events
+        assert events.index("parent_commit") < events.index("worker_session_open")

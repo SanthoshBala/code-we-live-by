@@ -1,5 +1,8 @@
 """Tests for OLRC downloader."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
 import pytest
 
 from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
@@ -95,3 +98,37 @@ class TestPhase1Titles:
         # Title 17 (Copyrights) and Title 18 (Crimes) are commonly referenced
         assert 17 in PHASE_1_TITLES
         assert 18 in PHASE_1_TITLES
+
+
+class TestDownloadTitleAtReleasePoint:
+    """Tests for download_title_at_release_point's response validation."""
+
+    @pytest.mark.asyncio
+    async def test_non_zip_response_skipped_and_not_cached(self, tmp_path) -> None:
+        """If the OLRC returns HTML (e.g., title not yet codified at this RP),
+        treat it as 'not available' and skip — don't cache the bad bytes,
+        otherwise every retry hits the cache and fails the same way."""
+        cache = MagicMock()
+        cache.get_bytes.return_value = None
+        cache.put_bytes = MagicMock()
+
+        downloader = OLRCDownloader(download_dir=tmp_path, cache=cache)
+
+        html_body = b"<!DOCTYPE html><html><body>Not Found</body></html>"
+
+        mock_response = MagicMock()
+        mock_response.content = html_body
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch.object(httpx, "AsyncClient", return_value=mock_client):
+            result = await downloader.download_title_at_release_point(54, "113-21")
+
+        assert result is None
+        # Critical: HTML body must NOT be cached, otherwise subsequent runs
+        # read the bogus bytes from GCS and fail the same way every time.
+        cache.put_bytes.assert_not_called()
