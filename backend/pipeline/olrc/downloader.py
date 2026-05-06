@@ -127,26 +127,30 @@ class OLRCDownloader:
         Returns:
             Path to the extracted XML file, or None if download failed.
         """
-        # Check if already downloaded (extracted XML)
+        # Check if already extracted on local disk (no network, no GCS)
         xml_dir = self.download_dir / f"title{title_number}"
         if xml_dir.exists() and not force:
             xml_files = list(xml_dir.glob("*.xml"))
             if xml_files:
-                logger.info(f"Title {title_number} already downloaded: {xml_files[0]}")
+                logger.info(
+                    f"Title {title_number} already extracted on disk: {xml_files[0]}"
+                )
                 return xml_files[0]
 
         cache_key = f"olrc/downloads/title{title_number}@{self.release_point}.zip"
 
-        # Try GCS cache for the ZIP before hitting the OLRC API
+        # Try GCS cache for the ZIP before hitting the OLRC API. Track the
+        # source so the post-extract log line names where the bytes came from.
         zip_bytes: bytes | None = None
+        source = "OLRC"
         if self._cache and not force:
             zip_bytes = self._cache.get_bytes(cache_key)
             if zip_bytes:
-                logger.info(f"Title {title_number} ZIP from cache")
+                source = "GCS cache"
 
         if zip_bytes is None:
             url = self.get_title_url(title_number)
-            logger.info(f"Downloading Title {title_number} from {url}")
+            logger.info(f"Fetching Title {title_number} from OLRC: {url}")
 
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -172,7 +176,9 @@ class OLRCDownloader:
 
             xml_files = list(xml_dir.glob("*.xml"))
             if xml_files:
-                logger.info(f"Title {title_number} downloaded: {xml_files[0]}")
+                logger.info(
+                    f"Title {title_number} loaded from {source}: {xml_files[0]}"
+                )
                 return xml_files[0]
             else:
                 logger.error(
@@ -262,19 +268,21 @@ class OLRCDownloader:
             xml_files = list(rp_dir.glob("*.xml"))
             if xml_files:
                 logger.info(
-                    f"Title {title_number}@{release_point} already downloaded: "
-                    f"{xml_files[0]}"
+                    f"Title {title_number}@{release_point} already extracted "
+                    f"on disk: {xml_files[0]}"
                 )
                 return xml_files[0]
 
         cache_key = f"olrc/downloads/title{title_number}@{release_point}.zip"
 
-        # Try GCS cache for the ZIP
+        # Try GCS cache for the ZIP. Track the source so the post-extract log
+        # line names where the bytes came from.
         zip_bytes: bytes | None = None
+        source = "OLRC"
         if self._cache and not force:
             zip_bytes = self._cache.get_bytes(cache_key)
             if zip_bytes:
-                logger.info(f"Title {title_number}@{release_point} ZIP from cache")
+                source = "GCS cache"
 
         if zip_bytes is None:
             # Parse the release point
@@ -287,7 +295,9 @@ class OLRCDownloader:
                 public_law=public_law,
                 title_number=title_number,
             )
-            logger.info(f"Downloading Title {title_number}@{release_point} from {url}")
+            logger.info(
+                f"Fetching Title {title_number}@{release_point} from OLRC: {url}"
+            )
 
             max_retries = 3
             for attempt in range(1, max_retries + 1):
@@ -350,7 +360,8 @@ class OLRCDownloader:
             xml_files = list(rp_dir.glob("*.xml"))
             if xml_files:
                 logger.info(
-                    f"Title {title_number}@{release_point} downloaded: {xml_files[0]}"
+                    f"Title {title_number}@{release_point} loaded from "
+                    f"{source}: {xml_files[0]}"
                 )
                 return xml_files[0]
             else:
