@@ -302,6 +302,11 @@ class BootstrapService:
             if revision is None:
                 revision = await self._create_revision(release_point)
 
+            # Commit so the revision row is visible to the parallel worker
+            # sessions opened below — they run in separate transactions and
+            # would otherwise hit a FK violation on section_snapshot.revision_id.
+            await self.session.commit()
+
             # Step 4: Ingest titles in parallel — each gets its own session.
             sem = asyncio.Semaphore(self._concurrency)
 
