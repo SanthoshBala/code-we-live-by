@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date, datetime
 from pathlib import Path
@@ -135,7 +136,7 @@ class USCodeIngestionService:
 
     async def _ingest_parse_result(
         self, result: USLMParseResult, force: bool = False
-    ) -> dict:
+    ) -> dict[str, int]:
         """Ingest parsed USLM data into the database.
 
         Args:
@@ -187,8 +188,9 @@ class USCodeIngestionService:
         force: bool = False,
     ) -> USCodeSection:
         """Insert or update a section record."""
-        # Normalize the parsed section to get structured data
-        normalized = normalize_parsed_section(parsed)
+        # Normalize the parsed section to get structured data (CPU-bound; offload
+        # to thread pool so the event loop stays free for concurrent DB work).
+        normalized = await asyncio.to_thread(normalize_parsed_section, parsed)
 
         # Extract text content (prefer normalized, fall back to raw)
         text_content = normalized.normalized_text or parsed.text_content

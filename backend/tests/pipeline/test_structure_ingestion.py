@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.us_code import SectionGroup
 from pipeline.olrc.group_service import upsert_group, upsert_groups_from_parse_result
 from pipeline.olrc.parser import (
     ParsedGroup,
@@ -24,16 +25,26 @@ def mock_session():
 
 
 def _mock_not_found():
-    """Return a mock result where scalar_one_or_none returns None."""
+    """Return a mock result for scalar_one_or_none (None) and scalars (empty)."""
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalars.return_value = []
     return mock_result
 
 
 def _mock_found(record):
-    """Return a mock result where scalar_one_or_none returns a record."""
+    """Return a mock result for scalar_one_or_none and scalars with one record."""
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = record
+    mock_result.scalars.return_value = [record]
+    return mock_result
+
+
+def _mock_scalars(records: list) -> MagicMock:
+    """Return a mock result whose scalars() yields the given records."""
+    mock_result = MagicMock()
+    mock_result.scalars.return_value = records
+    mock_result.scalar_one_or_none.return_value = None
     return mock_result
 
 
@@ -260,7 +271,9 @@ class TestIngestParseResult:
     async def test_end_to_end_orchestration(
         self, mock_session, minimal_parse_result
     ) -> None:
-        """Test that all groups are upserted."""
+        """Fresh seed: CTE returns nothing; all 3 groups are inserted."""
+        # First execute: CTE pre-load (empty — fresh seed)
+        # Subsequent executes: per-group SELECT in upsert_group (not found → insert)
         mock_session.execute.return_value = _mock_not_found()
 
         group_lookup = await upsert_groups_from_parse_result(
@@ -278,22 +291,19 @@ class TestIngestParseResult:
         assert len(group_lookup) == 0
 
     @pytest.mark.asyncio
-    async def test_created_vs_updated_stats(self, mock_session) -> None:
-        """Test that existing groups are returned without re-adding."""
-        existing_title = MagicMock()
+    async def test_preloads_existing_groups_on_rerun(self, mock_session) -> None:
+        """Re-run: CTE pre-loads all groups; no per-group SELECTs or inserts."""
+        existing_title = MagicMock(spec=SectionGroup)
         existing_title.group_id = 1
+        existing_title.parent_id = None
+        existing_title.group_type = "title"
+        existing_title.number = "17"
 
-        call_count = 0
-
-        async def side_effect(*_args, **_kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _mock_found(existing_title)
-            else:
-                return _mock_not_found()
-
-        mock_session.execute = AsyncMock(side_effect=side_effect)
+        existing_chapter = MagicMock(spec=SectionGroup)
+        existing_chapter.group_id = 2
+        existing_chapter.parent_id = 1
+        existing_chapter.group_type = "chapter"
+        existing_chapter.number = "1"
 
         title_group = ParsedGroup(
             group_type="title",
@@ -309,10 +319,63 @@ class TestIngestParseResult:
             key="title:17/chapter:1",
         )
 
+        mock_session.execute.return_value = _mock_scalars(
+            [existing_title, existing_chapter]
+        )
+
+        group_lookup = await upsert_groups_from_parse_result(
+            mock_session, [title_group, chapter_group]
+        )
+
+        assert group_lookup["title:17"] is existing_title
+        assert group_lookup["title:17/chapter:1"] is existing_chapter
+        # Only the CTE pre-load query was issued; no per-group SELECTs or INSERTs
+        mock_session.execute.assert_called_once()
+        mock_session.add.assert_not_called()
+        mock_session.flush.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_partial_rerun_inserts_missing_groups(self, mock_session) -> None:
+        """Partial re-run: pre-load has title but not chapter; chapter is inserted."""
+        existing_title = MagicMock(spec=SectionGroup)
+        existing_title.group_id = 1
+        existing_title.parent_id = None
+        existing_title.group_type = "title"
+        existing_title.number = "17"
+
+        title_group = ParsedGroup(
+            group_type="title",
+            number="17",
+            name="Copyrights",
+            key="title:17",
+        )
+        chapter_group = ParsedGroup(
+            group_type="chapter",
+            number="1",
+            name="Subject Matter",
+            parent_key="title:17",
+            key="title:17/chapter:1",
+        )
+
+        call_count = 0
+
+        async def side_effect(*_args, **_kwargs) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # CTE pre-load returns only the title
+                return _mock_scalars([existing_title])
+            else:
+                # Per-group SELECT for chapter: not found → insert
+                return _mock_not_found()
+
+        mock_session.execute = AsyncMock(side_effect=side_effect)
+
         group_lookup = await upsert_groups_from_parse_result(
             mock_session, [title_group, chapter_group], force=True
         )
 
         assert len(group_lookup) == 2
-        # Title was existing, chapter was new
         assert group_lookup["title:17"] is existing_title
+        # Chapter was missing from pre-load; one upsert_group SELECT was issued
+        assert mock_session.execute.call_count == 2

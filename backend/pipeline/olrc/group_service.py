@@ -115,6 +115,18 @@ def _get_positive_law_date(title_number: int) -> date | None:
     return POSITIVE_LAW_DATES.get(title_number)
 
 
+def _compute_positive_law_date(parsed: ParsedGroup) -> date | None:
+    """Compute the positive_law_date value for a ParsedGroup."""
+    if parsed.group_type != "title":
+        return None
+    positive_law_date = None
+    if parsed.positive_law_date:
+        positive_law_date = _parse_citation_date(parsed.positive_law_date)
+    if parsed.is_positive_law and not positive_law_date:
+        positive_law_date = _get_positive_law_date(int(parsed.number))
+    return positive_law_date
+
+
 async def upsert_group(
     session: AsyncSession,
     parsed: ParsedGroup,
@@ -126,12 +138,7 @@ async def upsert_group(
     Returns:
         Tuple of (group record, was_created).
     """
-    positive_law_date = None
-    if parsed.group_type == "title":
-        if parsed.positive_law_date:
-            positive_law_date = _parse_citation_date(parsed.positive_law_date)
-        if parsed.is_positive_law and not positive_law_date:
-            positive_law_date = _get_positive_law_date(int(parsed.number))
+    positive_law_date = _compute_positive_law_date(parsed)
 
     if parent_id is not None:
         stmt = select(SectionGroup).where(
@@ -179,6 +186,11 @@ async def upsert_groups_from_parse_result(
 ) -> dict[str, SectionGroup]:
     """Upsert all groups from a parse result, resolving parent_key → parent_id.
 
+    Pre-loads all existing groups for the title hierarchy in a single recursive
+    CTE query to eliminate per-group SELECTs on re-runs. On fresh seeds the CTE
+    returns nothing and new groups are inserted one at a time (flush required to
+    obtain DB-generated group_id for child foreign keys).
+
     Args:
         session: Database session.
         groups: Parsed groups (parents-before-children order).
@@ -187,16 +199,60 @@ async def upsert_groups_from_parse_result(
     Returns:
         Dict mapping group key → SectionGroup record.
     """
+    if not groups:
+        return {}
+
+    # Pre-load the full group hierarchy for this title in one round-trip.
+    # Key: (parent_id, group_type, number) → SectionGroup
+    preloaded: dict[tuple[int | None, str, str], SectionGroup] = {}
+    root = next((g for g in groups if g.parent_key is None), None)
+    if root is not None:
+        sg_cte = (
+            select(SectionGroup.group_id)
+            .where(
+                SectionGroup.parent_id.is_(None),
+                SectionGroup.group_type == root.group_type,
+                SectionGroup.number == root.number,
+            )
+            .cte(name="sg_hierarchy", recursive=True)
+        )
+        sg_cte = sg_cte.union_all(
+            select(SectionGroup.group_id).where(
+                SectionGroup.parent_id == sg_cte.c.group_id
+            )
+        )
+        result = await session.execute(
+            select(SectionGroup).where(
+                SectionGroup.group_id.in_(select(sg_cte.c.group_id))
+            )
+        )
+        for sg in result.scalars():
+            preloaded[(sg.parent_id, sg.group_type, sg.number)] = sg
+
     group_lookup: dict[str, SectionGroup] = {}
 
     for parsed_group in groups:
-        parent_id = None
+        parent_id: int | None = None
         if parsed_group.parent_key:
             parent_record = group_lookup.get(parsed_group.parent_key)
             if parent_record:
                 parent_id = parent_record.group_id
 
-        group_record, _ = await upsert_group(session, parsed_group, parent_id, force)
+        cached = preloaded.get((parent_id, parsed_group.group_type, parsed_group.number))
+        if cached is not None:
+            if force:
+                cached.name = parsed_group.name
+                cached.sort_order = parsed_group.sort_order
+                cached.is_positive_law = parsed_group.is_positive_law
+                cached.positive_law_date = _compute_positive_law_date(parsed_group)
+                cached.positive_law_citation = parsed_group.positive_law_citation
+            group_record = cached
+        else:
+            # Group not yet in DB — insert and flush to materialise group_id
+            # so child groups can reference it as parent_id.
+            group_record, _ = await upsert_group(session, parsed_group, parent_id, force)
+            preloaded[(parent_id, parsed_group.group_type, parsed_group.number)] = group_record
+
         group_lookup[parsed_group.key] = group_record
 
     return group_lookup
