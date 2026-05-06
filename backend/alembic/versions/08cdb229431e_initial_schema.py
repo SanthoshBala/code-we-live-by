@@ -1513,6 +1513,65 @@ def upgrade() -> None:
     )
     op.create_index("idx_text_span_session", "text_span", ["session_id"], unique=False)
     op.create_index("idx_text_span_type", "text_span", ["span_type"], unique=False)
+    op.create_table(
+        "law_bill_action",
+        sa.Column("action_id", sa.Integer(), nullable=False),
+        sa.Column("law_id", sa.Integer(), nullable=False),
+        sa.Column("sort_order", sa.Integer(), nullable=False),
+        sa.Column("action_date", sa.Date(), nullable=True),
+        sa.Column("action_code", sa.String(length=50), nullable=True),
+        sa.Column("action_type", sa.String(length=100), nullable=True),
+        sa.Column("text", sa.Text(), nullable=False),
+        sa.Column("chamber", sa.String(length=50), nullable=True),
+        sa.Column(
+            "congressional_record_refs",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
+        sa.Column("event_type", sa.String(length=50), nullable=False),
+        sa.Column("is_milestone", sa.Boolean(), nullable=False),
+        sa.Column("vote_yeas", sa.Integer(), nullable=True),
+        sa.Column("vote_nays", sa.Integer(), nullable=True),
+        sa.Column("vote_not_voting", sa.Integer(), nullable=True),
+        sa.Column("event_title", sa.String(length=300), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["law_id"],
+            ["public_law.law_id"],
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("action_id"),
+    )
+    op.create_index(
+        "idx_law_bill_action_law_id", "law_bill_action", ["law_id"], unique=False
+    )
+    op.create_index(
+        "idx_law_bill_action_sort",
+        "law_bill_action",
+        ["law_id", "sort_order"],
+        unique=False,
+    )
+    op.create_table(
+        "law_sponsor",
+        sa.Column("sponsor_id", sa.Integer(), nullable=False),
+        sa.Column("law_id", sa.Integer(), nullable=False),
+        sa.Column("sort_order", sa.Integer(), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=False),
+        sa.Column("party", sa.String(length=20), nullable=True),
+        sa.Column("state", sa.String(length=10), nullable=True),
+        sa.Column("bioguide_id", sa.String(length=20), nullable=True),
+        sa.Column("is_primary", sa.Boolean(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["law_id"],
+            ["public_law.law_id"],
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("sponsor_id"),
+    )
+    op.create_index("idx_law_sponsor_law_id", "law_sponsor", ["law_id"], unique=False)
     # ### end Alembic commands ###
 
 
@@ -1674,4 +1733,9 @@ def downgrade() -> None:
     )
     op.drop_index("idx_bill_congress", table_name="bill")
     op.drop_table("bill")
+    op.drop_index("idx_law_sponsor_law_id", table_name="law_sponsor")
+    op.drop_table("law_sponsor")
+    op.drop_index("idx_law_bill_action_sort", table_name="law_bill_action")
+    op.drop_index("idx_law_bill_action_law_id", table_name="law_bill_action")
+    op.drop_table("law_bill_action")
     # ### end Alembic commands ###
