@@ -45,7 +45,9 @@ class _RevisionCache:
         cls._head_id = head_id
         cls._chain = chain
         cls._cached_at = time.monotonic()
-        logger.debug("Revision cache set: head_id=%d, chain length=%d", head_id, len(chain))
+        logger.debug(
+            "Revision cache set: head_id=%d, chain length=%d", head_id, len(chain)
+        )
 
     @classmethod
     def invalidate(cls) -> None:

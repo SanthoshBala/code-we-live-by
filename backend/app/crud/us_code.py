@@ -144,13 +144,13 @@ async def get_all_titles(
 
     sections_by_title: dict[int, int] = {}
     if head_id is not None and chain:
-            # For each (title_number, section_number), find the snapshot at the
-            # most recent revision in the chain. Use raw SQL with DISTINCT ON
-            # for efficiency — avoids loading 97k+ ORM objects.
-            # Revision chain is ordered newest-first, so we order by
-            # array_position to get the newest snapshot per section.
-            result = await session.execute(
-                text("""
+        # For each (title_number, section_number), find the snapshot at the
+        # most recent revision in the chain. Use raw SQL with DISTINCT ON
+        # for efficiency — avoids loading 97k+ ORM objects.
+        # Revision chain is ordered newest-first, so we order by
+        # array_position to get the newest snapshot per section.
+        result = await session.execute(
+            text("""
                     SELECT title_number, count(*) AS sec_count
                     FROM (
                         SELECT DISTINCT ON (title_number, section_number)
@@ -163,10 +163,10 @@ async def get_all_titles(
                     WHERE NOT is_deleted
                     GROUP BY title_number
                 """),
-                {"chain": chain},
-            )
-            for row in result:
-                sections_by_title[row[0]] = row[1]
+            {"chain": chain},
+        )
+        for row in result:
+            sections_by_title[row[0]] = row[1]
 
     # Count child groups per title in one query
     child_counts_stmt = (
@@ -253,8 +253,8 @@ async def get_title_structure(
     sections_by_group: dict[int, list[SectionState]] = {}
 
     if head_id is not None and chain:
-            result = await session.execute(
-                text("""
+        result = await session.execute(
+            text("""
                     SELECT DISTINCT ON (title_number, section_number)
                         section_number, heading, normalized_notes,
                         is_deleted, group_id, sort_order
@@ -264,30 +264,30 @@ async def get_title_structure(
                     ORDER BY title_number, section_number,
                         array_position(:chain, revision_id)
                 """),
-                {"chain": chain, "title": title_number},
+            {"chain": chain, "title": title_number},
+        )
+        for row in result:
+            if row.is_deleted:
+                continue
+            state = SectionState(
+                title_number=title_number,
+                section_number=row.section_number,
+                heading=row.heading,
+                text_content=None,
+                text_hash=None,
+                normalized_provisions=None,
+                notes=None,
+                normalized_notes=row.normalized_notes,
+                notes_hash=None,
+                full_citation=None,
+                snapshot_id=0,
+                revision_id=0,
+                is_deleted=row.is_deleted,
+                group_id=row.group_id,
+                sort_order=row.sort_order,
             )
-            for row in result:
-                if row.is_deleted:
-                    continue
-                state = SectionState(
-                    title_number=title_number,
-                    section_number=row.section_number,
-                    heading=row.heading,
-                    text_content=None,
-                    text_hash=None,
-                    normalized_provisions=None,
-                    notes=None,
-                    normalized_notes=row.normalized_notes,
-                    notes_hash=None,
-                    full_citation=None,
-                    snapshot_id=0,
-                    revision_id=0,
-                    is_deleted=row.is_deleted,
-                    group_id=row.group_id,
-                    sort_order=row.sort_order,
-                )
-                if state.group_id is not None:
-                    sections_by_group.setdefault(state.group_id, []).append(state)
+            if state.group_id is not None:
+                sections_by_group.setdefault(state.group_id, []).append(state)
 
     # Build the tree
     title_obj = all_groups[title_group.group_id]
