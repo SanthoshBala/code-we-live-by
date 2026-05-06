@@ -131,6 +131,34 @@ export default function LawDiffViewer({
     [diffs]
   );
 
+  // Compute total line change counts across all sections
+  const totalAdded = useMemo(
+    () =>
+      diffs.reduce(
+        (sum, d) =>
+          sum +
+          d.hunks.reduce(
+            (s, h) => s + h.lines.filter((l) => l.type === 'added').length,
+            0
+          ),
+        0
+      ),
+    [diffs]
+  );
+  const totalRemoved = useMemo(
+    () =>
+      diffs.reduce(
+        (sum, d) =>
+          sum +
+          d.hunks.reduce(
+            (s, h) => s + h.lines.filter((l) => l.type === 'removed').length,
+            0
+          ),
+        0
+      ),
+    [diffs]
+  );
+
   if (isLoading) {
     return <p className="text-gray-500">Computing diffs...</p>;
   }
@@ -156,7 +184,31 @@ export default function LawDiffViewer({
   }
 
   return (
-    <div className="flex h-[calc(100vh-14rem)] gap-6">
+    <div className="flex flex-col gap-3">
+      {/* Summary bar — total lines added/removed */}
+      {(totalAdded > 0 || totalRemoved > 0) && (
+        <div className="flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-2 text-sm">
+          <span className="font-medium text-gray-700">
+            {diffs.length} section{diffs.length !== 1 ? 's' : ''} changed
+          </span>
+          <span className="text-gray-300">·</span>
+          {totalAdded > 0 && (
+            <span className="font-mono font-medium text-green-600">
+              +{totalAdded} lines added
+            </span>
+          )}
+          {totalAdded > 0 && totalRemoved > 0 && (
+            <span className="text-gray-300">·</span>
+          )}
+          {totalRemoved > 0 && (
+            <span className="font-mono font-medium text-red-600">
+              −{totalRemoved} lines removed
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="flex h-[calc(100vh-17rem)] gap-6">
       {/* Left sidebar — affected sections tree (independently scrollable) */}
       <div className="hidden w-72 shrink-0 overflow-y-auto lg:block">
         <h2 className="sticky top-0 z-10 mb-2 bg-white px-3 pb-1 text-sm font-semibold text-gray-900">
@@ -190,6 +242,7 @@ export default function LawDiffViewer({
             <UnifiedDiffCard diff={diff} />
           </div>
         ))}
+      </div>
       </div>
     </div>
   );

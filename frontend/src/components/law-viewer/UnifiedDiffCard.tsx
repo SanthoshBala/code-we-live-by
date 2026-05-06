@@ -587,6 +587,16 @@ export default function UnifiedDiffCard({ diff }: UnifiedDiffCardProps) {
   // Deduplicate change types for badges
   const changeTypes = [...new Set(diff.amendments.map((a) => a.change_type))];
 
+  // Count added/removed lines from hunks
+  const linesAdded = diff.hunks.reduce(
+    (sum, h) => sum + h.lines.filter((l) => l.type === 'added').length,
+    0
+  );
+  const linesRemoved = diff.hunks.reduce(
+    (sum, h) => sum + h.lines.filter((l) => l.type === 'removed').length,
+    0
+  );
+
   // Build collapsed regions between/around hunks
   // Each region is identified by: regionIndex, startProvisionIdx, endProvisionIdx
   type Region =
@@ -683,6 +693,19 @@ export default function UnifiedDiffCard({ diff }: UnifiedDiffCardProps) {
         {diff.amendments.some((a) => a.needs_review) && (
           <span className="text-xs font-medium text-amber-600">
             Needs Review
+          </span>
+        )}
+        {(linesAdded > 0 || linesRemoved > 0) && (
+          <span className="ml-auto font-mono text-xs">
+            {linesAdded > 0 && (
+              <span className="text-green-600">+{linesAdded}</span>
+            )}
+            {linesAdded > 0 && linesRemoved > 0 && (
+              <span className="text-gray-400"> </span>
+            )}
+            {linesRemoved > 0 && (
+              <span className="text-red-600">−{linesRemoved}</span>
+            )}
           </span>
         )}
       </div>
