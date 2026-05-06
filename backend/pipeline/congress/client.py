@@ -6,8 +6,9 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -330,6 +331,90 @@ class MemberVoteInfo:
             party=data.get("voteParty"),
             state=data.get("voteState"),
             vote_cast=data.get("voteCast", ""),
+        )
+
+
+# Matches "CR 2/12/2013 H439-440" or "CR H481" or "CR S1234-1235"
+_CR_REF_PATTERN = re.compile(r"CR\s+(?:(\d{1,2}/\d{1,2}/\d{4})\s+)?([A-Z]\d+(?:-\d+)?)")
+
+
+def _parse_cr_refs(text: str) -> list[str]:
+    """Extract Congressional Record page citations from an action text string.
+
+    Returns a list of raw citation strings like "CR H439-440" or
+    "CR 2/12/2013 H439-440", suitable for constructing deep links to
+    congress.gov or GPO govinfo.
+    """
+    return [m.group(0) for m in _CR_REF_PATTERN.finditer(text)]
+
+
+@dataclass
+class RecordedVote:
+    """A recorded (roll call) vote linked from a bill action."""
+
+    chamber: str | None
+    congress: int | None
+    date: str | None  # ISO date string from API
+    roll_number: int | None
+    session: int | None
+    url: str | None  # Full URL to the vote record
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> RecordedVote:
+        return cls(
+            chamber=data.get("chamber"),
+            congress=_safe_int(data.get("congress")),
+            date=data.get("date"),
+            roll_number=_safe_int(data.get("rollNumber")),
+            session=_safe_int(data.get("session")),
+            url=data.get("url"),
+        )
+
+
+@dataclass
+class BillAction:
+    """A single action from a bill's action history (Congress.gov /actions endpoint)."""
+
+    action_date: date | None
+    action_code: str | None
+    action_type: str | None  # e.g. "President", "Floor", "Committee"
+    text: str
+    chamber: str | None  # "House", "Senate", or None
+    congressional_record_refs: list[str]  # parsed CR citations from text
+    recorded_votes: list[RecordedVote] = field(default_factory=list)
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> BillAction:
+        action_date: date | None = None
+        date_str = data.get("actionDate", "")
+        if date_str:
+            with contextlib.suppress(ValueError):
+                action_date = date.fromisoformat(date_str)
+
+        text = data.get("text", "")
+        cr_refs = _parse_cr_refs(text)
+
+        # Derive chamber from sourceSystem when not explicitly provided
+        chamber: str | None = None
+        source = data.get("sourceSystem", {})
+        source_name = (source.get("name") or "").lower()
+        if "senate" in source_name:
+            chamber = "Senate"
+        elif "house" in source_name:
+            chamber = "House"
+
+        recorded_votes = [
+            RecordedVote.from_api_response(v) for v in data.get("recordedVotes", [])
+        ]
+
+        return cls(
+            action_date=action_date,
+            action_code=data.get("actionCode"),
+            action_type=data.get("type"),
+            text=text,
+            chamber=chamber,
+            congressional_record_refs=cr_refs,
+            recorded_votes=recorded_votes,
         )
 
 
@@ -677,6 +762,65 @@ class CongressClient:
                     logger.warning(f"Law PL {congress}-{law_number} not found")
                     return None
                 raise
+
+    async def get_bill_actions(
+        self,
+        congress: int,
+        bill_type: str,
+        bill_number: int,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> list[BillAction]:
+        """Fetch all actions for a bill from Congress.gov.
+
+        Actions represent the chronological history of a bill: introduction,
+        committee referrals, floor votes, presidential action, etc.
+
+        Args:
+            congress: Congress number (e.g., 113).
+            bill_type: Bill type code (e.g., "hr", "s", "hjres").
+            bill_number: Bill number.
+            page_size: Results per page (max 250).
+
+        Returns:
+            List of BillAction objects in chronological order.
+        """
+        url = (
+            f"{self.base_url}/bill/{congress}/{bill_type.lower()}/{bill_number}/actions"
+        )
+        results: list[BillAction] = []
+        offset = 0
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            while True:
+                params: dict[str, Any] = {
+                    "api_key": self.api_key,
+                    "format": "json",
+                    "limit": page_size,
+                    "offset": offset,
+                }
+                logger.info(
+                    f"Fetching bill actions for {congress}/{bill_type}/{bill_number} "
+                    f"(offset={offset})"
+                )
+                response = await self._request_with_retry(
+                    client, "GET", url, params=params
+                )
+                data = response.json()
+
+                actions = data.get("actions", [])
+                for action_data in actions:
+                    results.append(BillAction.from_api_response(action_data))
+
+                pagination = data.get("pagination", {})
+                count = pagination.get("count", 0)
+                if offset + page_size >= count or not actions:
+                    break
+                offset += page_size
+
+        logger.info(
+            f"Fetched {len(results)} actions for {bill_type.upper()} {bill_number}"
+        )
+        return results
 
     async def get_house_votes(
         self,
