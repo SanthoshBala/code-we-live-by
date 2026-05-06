@@ -13,7 +13,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from typing import NamedTuple
 
 from sqlalchemy import insert, select
@@ -194,7 +194,9 @@ async def ingest_title(
     # round-trip per object (plus RETURNING for the PK); for large titles
     # (1000+ sections) that serialises hundreds of network round-trips, which
     # was the dominant cost (~90% of wall-clock per title in Cloud Run).
-    now = datetime.now(UTC)
+    now = (
+        datetime.utcnow()
+    )  # naive, matching TimestampMixin / TIMESTAMP WITHOUT TIME ZONE
     snapshot_dicts = []
     for row in rows:
         group_id = None
