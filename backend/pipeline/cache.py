@@ -150,6 +150,22 @@ class PipelineCache:
             except Exception as e:
                 logger.warning(f"GCS write failed for {key}: {e}")
 
+    def delete(self, key: str) -> None:
+        """Delete a cache entry from both local and GCS."""
+        local = self._local_path(key)
+        if local.exists():
+            local.unlink()
+            logger.debug(f"Cache deleted locally: {key}")
+
+        if self._init_gcs() and self._gcs_bucket is not None:
+            try:
+                blob = self._gcs_bucket.blob(key)
+                if blob.exists():
+                    blob.delete()
+                    logger.debug(f"Cache deleted from GCS: {key}")
+            except Exception as e:
+                logger.warning(f"GCS delete failed for {key}: {e}")
+
     # =========================================================================
     # Local-only helpers (for directory-level checks like OLRC extraction)
     # =========================================================================
