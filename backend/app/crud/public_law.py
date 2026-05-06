@@ -209,7 +209,6 @@ def _find_line_number(provisions: list[dict[str, Any]], old_text: str) -> int | 
     Normalises whitespace for matching since amendment text and provision
     content may differ in spacing.
     """
-    import re
 
     def normalise(s: str) -> str:
         return re.sub(r"\s+", " ", s).strip().lower()
@@ -400,7 +399,6 @@ def _parse_redesignation(text: str) -> list[tuple[int, str]] | None:
 
     Returns None if the text doesn't match a redesignation pattern.
     """
-    import re
 
     ORDINALS = {
         "first": 0,
@@ -452,7 +450,6 @@ def _parse_struck_subsections(full_match: str) -> list[str] | None:
     Returns a list of single-letter/number markers like ['a', 'b'], or None
     if the instruction doesn't match this pattern.
     """
-    import re
 
     # Match patterns like:
     #   "striking subsections (a) and (b)"
@@ -478,7 +475,6 @@ def _find_subsection_range(
     same-level marker that is NOT in the target set.  "Same-level" means
     the same marker style as the struck markers (e.g. lowercase letters).
     """
-    import re
 
     marker_set = {f"({m})" for m in markers}
 
@@ -543,7 +539,6 @@ def _apply_amendments_to_provisions(
        to those subsections and replaces them with new_text lines.
     """
     import copy
-    import re
 
     patched = copy.deepcopy(provisions)
 
@@ -727,7 +722,6 @@ def _strip_leading_marker(content: str) -> str:
 
     E.g. "(a) Each preliminary…" → "Each preliminary…"
     """
-    import re
 
     return re.sub(r"^\([a-zA-Z0-9]+\)\s*", "", content)
 
@@ -1094,7 +1088,10 @@ async def _resolve_bill_type_and_number(
 async def _load_history_from_db(
     session: AsyncSession,
     law_id: int,
-) -> tuple[list[TimelineEventSchema], list[SponsorSchema], list[ChamberVoteSchema]] | None:
+) -> (
+    tuple[list[TimelineEventSchema], list[SponsorSchema], list[ChamberVoteSchema]]
+    | None
+):
     """Return (timeline, sponsors, chamber_votes) from cached DB rows, or None if empty."""
     action_stmt = (
         select(LawBillAction)
@@ -1127,8 +1124,13 @@ async def _load_history_from_db(
             )
         )
 
-        if row.event_type in ("house_vote", "senate_vote") and row.vote_yeas is not None:
-            ch = row.chamber or ("House" if row.event_type == "house_vote" else "Senate")
+        if (
+            row.event_type in ("house_vote", "senate_vote")
+            and row.vote_yeas is not None
+        ):
+            ch = row.chamber or (
+                "House" if row.event_type == "house_vote" else "Senate"
+            )
             vote_by_chamber[ch] = ChamberVoteSchema(
                 chamber=ch,
                 yeas=row.vote_yeas,

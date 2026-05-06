@@ -14,8 +14,9 @@ request.
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "a1b2c3d4e5f6"
@@ -84,9 +85,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("sponsor_id"),
     )
-    op.create_index(
-        "idx_law_sponsor_law_id", "law_sponsor", ["law_id"], unique=False
-    )
+    op.create_index("idx_law_sponsor_law_id", "law_sponsor", ["law_id"], unique=False)
 
 
 def downgrade() -> None:

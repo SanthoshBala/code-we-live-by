@@ -312,9 +312,7 @@ class LawSponsor(Base, TimestampMixin):
 
     law: Mapped["PublicLaw"] = relationship(back_populates="cached_sponsors")
 
-    __table_args__ = (
-        Index("idx_law_sponsor_law_id", "law_id"),
-    )
+    __table_args__ = (Index("idx_law_sponsor_law_id", "law_id"),)
 
     def __repr__(self) -> str:
         return f"<LawSponsor(law={self.law_id}, name={self.name!r}, primary={self.is_primary})>"

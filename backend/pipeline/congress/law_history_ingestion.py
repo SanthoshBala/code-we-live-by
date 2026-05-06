@@ -77,7 +77,9 @@ class LawHistoryIngestionService:
                 existing = await self._count_existing(law.law_id)
                 if existing > 0:
                     log.status = "skipped"
-                    log.details = f"Already seeded ({existing} actions). Use --force to re-seed."
+                    log.details = (
+                        f"Already seeded ({existing} actions). Use --force to re-seed."
+                    )
                     await self.session.commit()
                     return log
 
@@ -91,7 +93,9 @@ class LawHistoryIngestionService:
             bill_ref = await self._resolve_bill_ref(law, congress_client)
             if bill_ref is None:
                 log.status = "failed"
-                log.error_message = f"Could not resolve bill reference for PL {congress}-{law_number}"
+                log.error_message = (
+                    f"Could not resolve bill reference for PL {congress}-{law_number}"
+                )
                 await self.session.commit()
                 return log
 
@@ -165,7 +169,9 @@ class LawHistoryIngestionService:
         failed = 0
 
         for law in laws:
-            child_log = await self.seed_law(law.congress, int(law.law_number), force=force)
+            child_log = await self.seed_law(
+                law.congress, int(law.law_number), force=force
+            )
             total_processed += child_log.records_processed or 0
             total_created += child_log.records_created or 0
             if child_log.status == "failed":
@@ -205,8 +211,10 @@ class LawHistoryIngestionService:
     async def _count_existing(self, law_id: int) -> int:
         from sqlalchemy import func
 
-        stmt = select(func.count()).select_from(LawBillAction).where(
-            LawBillAction.law_id == law_id
+        stmt = (
+            select(func.count())
+            .select_from(LawBillAction)
+            .where(LawBillAction.law_id == law_id)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one()
