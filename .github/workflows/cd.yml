@@ -249,7 +249,7 @@ jobs:
             --region "$GCP_REGION" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
-            --memory 4Gi \
+            --memory 16Gi \
             --task-timeout 60m \
             --command "bash" \
             --args "scripts/seed.sh" \
