@@ -336,21 +336,25 @@ class OLRCDownloader:
             if zip_bytes is None:
                 return None
 
-            # Some titles don't exist at older release points (e.g., Title 54
-            # was enacted in P.L. 113-287, so it's absent from RP 113-21). The
-            # OLRC serves an HTML error page with HTTP 200 in that case, so
-            # validate the ZIP magic bytes before caching — otherwise the
-            # bogus HTML gets stored in GCS and every retry fails the same way.
-            if not zip_bytes.startswith((b"PK\x03\x04", b"PK\x05\x06")):
-                logger.warning(
-                    f"Title {title_number}@{release_point}: response is not a "
-                    "ZIP (likely not codified at this release point), skipping"
-                )
-                return None
+        # Validate ZIP magic bytes regardless of source (OLRC or GCS cache).
+        # The OLRC returns HTTP 200 with an HTML error page for titles that
+        # don't exist at a given release point (e.g. Title 54 was enacted in
+        # P.L. 113-287, so it's absent from RP 113-21). Stale cache entries
+        # written before this check was added would otherwise surface as a
+        # confusing BadZipFile ERROR below.
+        if not zip_bytes.startswith((b"PK\x03\x04", b"PK\x05\x06")):
+            logger.info(
+                f"Title {title_number}@{release_point}: not a ZIP "
+                "(not codified at this release point), skipping"
+            )
+            # Evict the stale cache entry so future runs don't repeat this.
+            if self._cache and source == "GCS cache":
+                self._cache.delete(cache_key)
+            return None
 
-            # Store in cache
-            if self._cache:
-                self._cache.put_bytes(cache_key, zip_bytes)
+        # Cache valid ZIPs (only reached after magic-byte validation passes).
+        if self._cache and source == "OLRC":
+            self._cache.put_bytes(cache_key, zip_bytes)
 
         # Extract ZIP
         try:
@@ -371,9 +375,9 @@ class OLRCDownloader:
                     f"Title {title_number}@{release_point}"
                 )
                 return None
-        except zipfile.BadZipFile as e:
+        except zipfile.BadZipFile:
             logger.error(
-                f"Invalid ZIP file for Title {title_number}@{release_point}: {e}"
+                f"Title {title_number}@{release_point}: corrupt ZIP from {source}"
             )
             return None
 
