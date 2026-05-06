@@ -1614,7 +1614,9 @@ class TestMultiSentenceSplitting:
         assert result.provisions[1].marker is None
         # Continuation line is indented one level deeper, flush with the text
         # portion of line 0 (not the marker). Fixes: github.com/SanthoshBala/code-we-live-by/issues/122
-        assert result.provisions[1].indent_level == result.provisions[0].indent_level + 1
+        assert (
+            result.provisions[1].indent_level == result.provisions[0].indent_level + 1
+        )
 
     def test_xml_single_sentence_unchanged(self) -> None:
         """Single-sentence content still produces exactly one line."""
@@ -1787,7 +1789,9 @@ class TestMultiSentenceSplitting:
         assert result.provisions[1].content.startswith("No exemption")
         assert result.provisions[1].marker is None
         # Continuation line must be one level deeper (flush with text, not marker).
-        assert result.provisions[1].indent_level == result.provisions[0].indent_level + 1
+        assert (
+            result.provisions[1].indent_level == result.provisions[0].indent_level + 1
+        )
 
     def test_fallback_single_sentence_unchanged(self) -> None:
         """Fallback single-sentence list items remain on one line."""
