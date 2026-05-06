@@ -26,7 +26,6 @@ from pipeline.chrono.checkpoint import CheckpointResult, validate_checkpoint
 from pipeline.chrono.revision_builder import RevisionBuilder
 from pipeline.legal_parser.law_change_service import LawChangeService
 from pipeline.olrc.downloader import OLRCDownloader
-from pipeline.olrc.parser import USLMParser
 from pipeline.olrc.rp_ingestor import RPIngestor
 from pipeline.olrc.snapshot_service import SnapshotService
 from pipeline.timeline import TimelineBuilder, TimelineEvent, TimelineEventType
@@ -60,11 +59,10 @@ class PlayForwardEngine:
         self,
         session: AsyncSession,
         downloader: OLRCDownloader,
-        parser: USLMParser,
     ):
         self.session = session
         self.timeline_builder = TimelineBuilder(session)
-        self.rp_ingestor = RPIngestor(session, downloader, parser)
+        self.rp_ingestor = RPIngestor(session, downloader)
         self.revision_builder = RevisionBuilder(session)
         self.snapshot_service = SnapshotService(session)
         self.law_change_service = LawChangeService(session)

@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
+from typing import NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,7 @@ from app.models.snapshot import SectionSnapshot
 from pipeline.olrc.downloader import OLRCDownloader
 from pipeline.olrc.group_service import upsert_groups_from_parse_result
 from pipeline.olrc.normalized_section import normalize_parsed_section
-from pipeline.olrc.parser import USLMParser, compute_text_hash
+from pipeline.olrc.parser import ParsedSection, USLMParser, compute_text_hash
 from pipeline.olrc.release_point import parse_release_point_identifier
 
 logger = logging.getLogger(__name__)
@@ -36,71 +37,35 @@ SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 ALL_TITLES = list(range(1, 55))
 
 
-async def ingest_title(
-    session: AsyncSession,
-    downloader: OLRCDownloader,
-    parser: USLMParser,
+class _SectionRow(NamedTuple):
+    """Pre-computed data for one SectionSnapshot row, built in a thread pool."""
+
+    section_number: str
+    heading: str | None
+    text_content: str | None
+    normalized_provisions: list | None
+    notes: str | None
+    normalized_notes: dict | None
+    text_hash: str | None
+    notes_hash: str | None
+    full_citation: str | None
+    parent_group_key: str | None
+    sort_order: int | None
+
+
+def _build_snapshot_rows(
+    sections: list[ParsedSection],
     title_num: int,
-    rp_identifier: str,
-    revision_id: int,
-) -> int | None:
-    """Download, parse, and store snapshots for one title.
+) -> list[_SectionRow]:
+    """Normalize sections and build snapshot row data.
 
-    Shared helper used by both BootstrapService and RPIngestor.
-
-    Args:
-        session: Database session.
-        downloader: OLRC downloader instance.
-        parser: USLM parser instance.
-        title_num: US Code title number to ingest.
-        rp_identifier: Release point identifier (e.g., "113-21").
-        revision_id: The revision ID to attach snapshots to.
-
-    Returns:
-        Number of sections ingested, or None if the title was skipped.
+    Runs in a thread pool — see ingest_title for context. Calls
+    normalize_parsed_section which is CPU-bound text processing (~2s for
+    large titles). Returns plain data so the caller can build ORM objects
+    on the event loop after group_ids are resolved.
     """
-    # Check if this title already has snapshots at this revision
-    stmt = (
-        select(SectionSnapshot.snapshot_id)
-        .where(
-            SectionSnapshot.revision_id == revision_id,
-            SectionSnapshot.title_number == title_num,
-        )
-        .limit(1)
-    )
-    result = await session.execute(stmt)
-    if result.scalar_one_or_none() is not None:
-        logger.info(f"Title {title_num}: already ingested, skipping")
-        return 0
-
-    # Download
-    try:
-        xml_path = await downloader.download_title_at_release_point(
-            title_num, rp_identifier
-        )
-    except Exception:
-        logger.warning(f"Title {title_num}: download failed, skipping", exc_info=True)
-        return None
-
-    if xml_path is None:
-        logger.info(f"Title {title_num}: not available at {rp_identifier}, skipping")
-        return None
-
-    # Parse
-    try:
-        parse_result = parser.parse_file(xml_path)
-    except Exception:
-        logger.error(f"Title {title_num}: parse failed, skipping", exc_info=True)
-        return None
-
-    # Upsert SectionGroup hierarchy for navigation
-    group_lookup = await upsert_groups_from_parse_result(session, parse_result.groups)
-
-    # Create snapshots with group_id for navigation
-    # Note: duplicate section numbers are allowed — Congress occasionally
-    # enacts two provisions with the same number (see pipeline/olrc/README.md).
-    count = 0
-    for section in parse_result.sections:
+    rows: list[_SectionRow] = []
+    for section in sections:
         try:
             normalized = normalize_parsed_section(section)
         except Exception:
@@ -122,33 +87,126 @@ async def ingest_title(
         if normalized.section_notes is not None:
             notes_json = normalized.section_notes.model_dump(mode="json")
 
-        # Resolve group_id from parsed section's parent_group_key
+        rows.append(
+            _SectionRow(
+                section_number=section.section_number,
+                heading=section.heading,
+                text_content=text_content,
+                normalized_provisions=provisions_json,
+                notes=section.notes,
+                normalized_notes=notes_json,
+                text_hash=compute_text_hash(text_content) if text_content else None,
+                notes_hash=compute_text_hash(section.notes) if section.notes else None,
+                full_citation=section.full_citation,
+                parent_group_key=section.parent_group_key,
+                sort_order=section.sort_order,
+            )
+        )
+    return rows
+
+
+async def ingest_title(
+    session: AsyncSession,
+    downloader: OLRCDownloader,
+    title_num: int,
+    rp_identifier: str,
+    revision_id: int,
+) -> int | None:
+    """Download, parse, and store snapshots for one title.
+
+    Shared helper used by both BootstrapService and RPIngestor.
+
+    The two CPU-bound steps — XML parsing and section normalization — are
+    offloaded to the thread pool via asyncio.to_thread so the event loop
+    remains free for concurrent DB work on other titles. Each call creates
+    its own USLMParser instance, making concurrent invocations thread-safe.
+
+    Args:
+        session: Database session.
+        downloader: OLRC downloader instance.
+        title_num: US Code title number to ingest.
+        rp_identifier: Release point identifier (e.g., "113-21").
+        revision_id: The revision ID to attach snapshots to.
+
+    Returns:
+        Number of sections ingested, or None if the title was skipped.
+    """
+    # Check if this title already has snapshots at this revision
+    stmt = (
+        select(SectionSnapshot.snapshot_id)
+        .where(
+            SectionSnapshot.revision_id == revision_id,
+            SectionSnapshot.title_number == title_num,
+        )
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    if result.scalar_one_or_none() is not None:
+        logger.info(f"Title {title_num}: already ingested, skipping")
+        return 0
+
+    # Download (async I/O)
+    try:
+        xml_path = await downloader.download_title_at_release_point(
+            title_num, rp_identifier
+        )
+    except Exception:
+        logger.warning(f"Title {title_num}: download failed, skipping", exc_info=True)
+        return None
+
+    if xml_path is None:
+        logger.info(f"Title {title_num}: not available at {rp_identifier}, skipping")
+        return None
+
+    # Parse in thread pool (CPU-bound XML parsing, ~3-4s for large titles).
+    # USLMParser() is instantiated here on the event loop and its bound
+    # parse_file method is dispatched to the thread — each call gets its own
+    # instance so concurrent invocations from asyncio.gather are safe.
+    try:
+        parse_result = await asyncio.to_thread(USLMParser().parse_file, xml_path)
+    except Exception:
+        logger.error(f"Title {title_num}: parse failed, skipping", exc_info=True)
+        return None
+
+    # Upsert SectionGroup hierarchy for navigation (async DB work — runs while
+    # other titles can be parsing concurrently in the thread pool).
+    group_lookup = await upsert_groups_from_parse_result(session, parse_result.groups)
+
+    # Normalize + build row data in thread pool (CPU-bound, ~2s for large titles).
+    # Note: duplicate section numbers are allowed — Congress occasionally
+    # enacts two provisions with the same number (see pipeline/olrc/README.md).
+    rows = await asyncio.to_thread(
+        _build_snapshot_rows, parse_result.sections, title_num
+    )
+
+    # Build ORM objects and flush (event loop — group_ids now resolved).
+    for row in rows:
         group_id = None
-        if section.parent_group_key:
-            group_record = group_lookup.get(section.parent_group_key)
+        if row.parent_group_key:
+            group_record = group_lookup.get(row.parent_group_key)
             if group_record:
                 group_id = group_record.group_id
 
         snapshot = SectionSnapshot(
             revision_id=revision_id,
             title_number=title_num,
-            section_number=section.section_number,
-            heading=section.heading,
-            text_content=text_content,
-            normalized_provisions=provisions_json,
-            notes=section.notes,
-            normalized_notes=notes_json,
-            text_hash=compute_text_hash(text_content) if text_content else None,
-            notes_hash=compute_text_hash(section.notes) if section.notes else None,
-            full_citation=section.full_citation,
+            section_number=row.section_number,
+            heading=row.heading,
+            text_content=row.text_content,
+            normalized_provisions=row.normalized_provisions,
+            notes=row.notes,
+            normalized_notes=row.normalized_notes,
+            text_hash=row.text_hash,
+            notes_hash=row.notes_hash,
+            full_citation=row.full_citation,
             is_deleted=False,
             group_id=group_id,
-            sort_order=section.sort_order,
+            sort_order=row.sort_order,
         )
         session.add(snapshot)
-        count += 1
 
     await session.flush()
+    count = len(rows)
     logger.info(f"Title {title_num}: {count} sections ingested")
     return count
 
@@ -172,13 +230,11 @@ class BootstrapService:
         self,
         session: AsyncSession,
         downloader: OLRCDownloader,
-        parser: USLMParser,
         session_factory: SessionFactory | None = None,
         concurrency: int = 2,
     ) -> None:
         self.session = session
         self.downloader = downloader
-        self.parser = parser
         # concurrency=2 balances parallelism against peak memory — large titles (e.g.
         # 26, 42) hold substantial parsed XML in memory simultaneously. Raise if the
         # Cloud Run job has more than 4Gi and ingestion bottlenecks on download I/O.
@@ -254,7 +310,6 @@ class BootstrapService:
                     count = await ingest_title(
                         s,
                         self.downloader,
-                        self.parser,
                         title_num,
                         rp_identifier,
                         revision.revision_id,

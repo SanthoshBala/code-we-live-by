@@ -75,11 +75,15 @@ def _make_mock_downloader(
     return downloader
 
 
-def _make_mock_parser(parse_result: USLMParseResult | None = None) -> MagicMock:
-    """Create a mock USLMParser."""
-    parser = MagicMock()
-    parser.parse_file.return_value = parse_result or _make_parse_result()
-    return parser
+def _make_parser_mock(parse_result: USLMParseResult | None = None) -> MagicMock:
+    """Create a USLMParser instance mock with a configured parse_file return value.
+
+    Patch bootstrap.USLMParser with return_value=this to control what ingest_title
+    parses without going through the real XML pipeline.
+    """
+    instance = MagicMock()
+    instance.parse_file.return_value = parse_result or _make_parse_result()
+    return instance
 
 
 # ---------------------------------------------------------------------------
@@ -120,13 +124,16 @@ class TestCreateInitialCommit:
         """Verify CodeRevision is created with correct fields."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
+        mock_parser = _make_parser_mock()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             result = await service.create_initial_commit("113-21", titles=[17])
 
@@ -160,14 +167,17 @@ class TestCreateInitialCommit:
             _make_parsed_section("101", "First section", "Content A"),
             _make_parsed_section("102", "Second section", "Content B"),
         ]
-        parser = _make_mock_parser(_make_parse_result(sections=sections))
+        mock_parser = _make_parser_mock(_make_parse_result(sections=sections))
         downloader = _make_mock_downloader()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             result = await service.create_initial_commit("113-21", titles=[17])
 
@@ -191,15 +201,10 @@ class TestCreateInitialCommit:
         """Title download returns None -> skipped, no error."""
         session = _make_mock_session()
         downloader = _make_mock_downloader(xml_path=None)
-        parser = _make_mock_parser()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
-        ):
-            result = await service.create_initial_commit("113-21", titles=[99])
+        result = await service.create_initial_commit("113-21", titles=[99])
 
         assert result.titles_skipped == 1
         assert result.titles_processed == 0
@@ -210,7 +215,6 @@ class TestCreateInitialCommit:
         """If revision already ingested, returns early."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
 
         # Mock: release point exists, revision exists and is Ingested
         from app.models.release_point import OLRCReleasePoint
@@ -241,7 +245,7 @@ class TestCreateInitialCommit:
 
         session.execute = AsyncMock(side_effect=fake_execute)
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
         result = await service.create_initial_commit("113-21", titles=[17])
 
         assert result.revision_id == 42
@@ -255,7 +259,7 @@ class TestCreateInitialCommit:
         """If revision status is Failed, resumes ingestion."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
+        mock_parser = _make_parser_mock()
 
         from app.models.release_point import OLRCReleasePoint
         from app.models.revision import CodeRevision
@@ -280,17 +284,20 @@ class TestCreateInitialCommit:
             elif call_count == 2:
                 result.scalar_one_or_none.return_value = mock_rev
             else:
-                # For _ingest_title idempotency check
+                # For ingest_title idempotency check
                 result.scalar_one_or_none.return_value = None
             return result
 
         session.execute = AsyncMock(side_effect=fake_execute)
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             result = await service.create_initial_commit("113-21", titles=[17])
 
@@ -316,14 +323,17 @@ class TestSnapshotFieldMapping:
 
         session = _make_mock_session()
         sections = [_make_parsed_section(text_content=text)]
-        parser = _make_mock_parser(_make_parse_result(sections=sections))
+        mock_parser = _make_parser_mock(_make_parse_result(sections=sections))
         downloader = _make_mock_downloader()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
@@ -346,14 +356,17 @@ class TestSnapshotFieldMapping:
 
         session = _make_mock_session()
         sections = [_make_parsed_section(notes=notes)]
-        parser = _make_mock_parser(_make_parse_result(sections=sections))
+        mock_parser = _make_parser_mock(_make_parse_result(sections=sections))
         downloader = _make_mock_downloader()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
@@ -373,14 +386,17 @@ class TestSnapshotFieldMapping:
         """Verify notes_hash is None when notes are absent."""
         session = _make_mock_session()
         sections = [_make_parsed_section(notes=None)]
-        parser = _make_mock_parser(_make_parse_result(sections=sections))
+        mock_parser = _make_parser_mock(_make_parse_result(sections=sections))
         downloader = _make_mock_downloader()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
@@ -399,14 +415,17 @@ class TestSnapshotFieldMapping:
         """Verify full_citation is preserved on snapshot."""
         session = _make_mock_session()
         sections = [_make_parsed_section(full_citation="17 U.S.C. § 101")]
-        parser = _make_mock_parser(_make_parse_result(sections=sections))
+        mock_parser = _make_parser_mock(_make_parse_result(sections=sections))
         downloader = _make_mock_downloader()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
@@ -429,15 +448,10 @@ class TestSnapshotFieldMapping:
         downloader.download_title_at_release_point = AsyncMock(
             side_effect=Exception("Network error")
         )
-        parser = _make_mock_parser()
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
-        ):
-            result = await service.create_initial_commit("113-21", titles=[17])
+        result = await service.create_initial_commit("113-21", titles=[17])
 
         assert result.titles_skipped == 1
         assert result.titles_processed == 0
@@ -447,15 +461,13 @@ class TestSnapshotFieldMapping:
         """Parser raising an exception should skip the title, not fail."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = MagicMock()
-        parser.parse_file.side_effect = Exception("Parse error")
 
-        service = BootstrapService(session, downloader, parser)
+        mock_parser = MagicMock()
+        mock_parser.parse_file.side_effect = Exception("Parse error")
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
-        ):
+        service = BootstrapService(session, downloader)
+
+        with patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser):
             result = await service.create_initial_commit("113-21", titles=[17])
 
         assert result.titles_skipped == 1
@@ -471,24 +483,32 @@ class TestSnapshotFieldMapping:
             _make_parsed_section("2", "Penalties", "Content C"),
         ]
 
-        call_count = 0
+        # Return title-specific paths so parse_file can key on them (thread-safe).
+        def fake_download(title_num: int, _rp: str) -> Path:
+            return Path(f"/fake/title{title_num}.xml")
 
-        def fake_parse_file(_path: object) -> USLMParseResult:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+        downloader = MagicMock()
+        downloader.download_title_at_release_point = AsyncMock(
+            side_effect=fake_download
+        )
+
+        mock_parser = MagicMock()
+
+        def fake_parse_file(path: Path) -> USLMParseResult:
+            if "17" in str(path):
                 return _make_parse_result(title_number=17, sections=sections_17)
             return _make_parse_result(title_number=18, sections=sections_18)
 
-        parser = MagicMock()
-        parser.parse_file.side_effect = fake_parse_file
-        downloader = _make_mock_downloader()
+        mock_parser.parse_file.side_effect = fake_parse_file
 
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(session, downloader)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             result = await service.create_initial_commit("113-21", titles=[17, 18])
 
@@ -501,14 +521,17 @@ class TestSnapshotFieldMapping:
         """Semaphore limits concurrency; all titles still complete."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
+        mock_parser = _make_parser_mock()
 
         # concurrency=2 with 5 titles — all should still complete
-        service = BootstrapService(session, downloader, parser, concurrency=2)
+        service = BootstrapService(session, downloader, concurrency=2)
 
-        with patch(
-            "pipeline.olrc.bootstrap.normalize_parsed_section",
-            side_effect=lambda s: s,
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
         ):
             result = await service.create_initial_commit(
                 "113-21", titles=[17, 18, 26, 42, 50]

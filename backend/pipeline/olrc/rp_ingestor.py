@@ -21,7 +21,6 @@ from app.models.revision import CodeRevision
 from pipeline.olrc.bootstrap import ALL_TITLES, ingest_title
 from pipeline.olrc.diff_engine import RevisionDiffEngine, RevisionDiffResult
 from pipeline.olrc.downloader import OLRCDownloader
-from pipeline.olrc.parser import USLMParser
 from pipeline.olrc.release_point import parse_release_point_identifier
 
 logger = logging.getLogger(__name__)
@@ -48,11 +47,9 @@ class RPIngestor:
         self,
         session: AsyncSession,
         downloader: OLRCDownloader,
-        parser: USLMParser,
     ) -> None:
         self.session = session
         self.downloader = downloader
-        self.parser = parser
 
     async def ingest_release_point(
         self,
@@ -122,7 +119,6 @@ class RPIngestor:
                 count = await ingest_title(
                     self.session,
                     self.downloader,
-                    self.parser,
                     title_num,
                     rp_identifier,
                     revision.revision_id,
