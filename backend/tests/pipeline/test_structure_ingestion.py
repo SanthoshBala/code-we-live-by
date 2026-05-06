@@ -37,6 +37,13 @@ def _mock_found(record):
     return mock_result
 
 
+def _mock_scalars_result(records: list):
+    """Return a mock result where .scalars() returns the given records."""
+    mock_result = MagicMock()
+    mock_result.scalars.return_value = records
+    return mock_result
+
+
 class TestUpsertGroup:
     """Tests for upsert_group function."""
 
@@ -260,8 +267,9 @@ class TestIngestParseResult:
     async def test_end_to_end_orchestration(
         self, mock_session, minimal_parse_result
     ) -> None:
-        """Test that all groups are upserted."""
-        mock_session.execute.return_value = _mock_not_found()
+        """Test that all groups are upserted (one bulk SELECT per depth level)."""
+        # 3 groups at 3 depths → 3 SELECT calls, each returning nothing (all new)
+        mock_session.execute.return_value = _mock_scalars_result([])
 
         group_lookup = await upsert_groups_from_parse_result(
             mock_session, minimal_parse_result.groups
@@ -269,6 +277,8 @@ class TestIngestParseResult:
 
         # 3 groups (title + chapter + subchapter)
         assert len(group_lookup) == 3
+        # One flush per depth level (3 levels)
+        assert mock_session.flush.call_count == 3
 
     @pytest.mark.asyncio
     async def test_empty_results(self, mock_session) -> None:
@@ -282,16 +292,19 @@ class TestIngestParseResult:
         """Test that existing groups are returned without re-adding."""
         existing_title = MagicMock()
         existing_title.group_id = 1
+        existing_title.parent_id = None
+        existing_title.group_type = "title"
+        existing_title.number = "17"
 
         call_count = 0
 
         async def side_effect(*_args, **_kwargs):
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
-                return _mock_found(existing_title)
-            else:
-                return _mock_not_found()
+            if call_count == 1:  # depth 0: title found
+                return _mock_scalars_result([existing_title])
+            else:  # depth 1: chapter not found
+                return _mock_scalars_result([])
 
         mock_session.execute = AsyncMock(side_effect=side_effect)
 
@@ -316,3 +329,6 @@ class TestIngestParseResult:
         assert len(group_lookup) == 2
         # Title was existing, chapter was new
         assert group_lookup["title:17"] is existing_title
+        # One SELECT per depth level (2 levels), one flush per level
+        assert mock_session.execute.call_count == 2
+        assert mock_session.flush.call_count == 2

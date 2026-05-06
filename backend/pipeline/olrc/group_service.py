@@ -8,7 +8,7 @@ import logging
 import re
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.us_code import SectionGroup
@@ -172,12 +172,30 @@ async def upsert_group(
     return group, True
 
 
+def _compute_positive_law_date(parsed: ParsedGroup) -> date | None:
+    """Compute the positive law enactment date for a title group."""
+    if parsed.group_type != "title":
+        return None
+    if parsed.positive_law_date:
+        return _parse_citation_date(parsed.positive_law_date)
+    if parsed.is_positive_law:
+        try:
+            return _get_positive_law_date(int(parsed.number))
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
 async def upsert_groups_from_parse_result(
     session: AsyncSession,
     groups: list[ParsedGroup],
     force: bool = False,
 ) -> dict[str, SectionGroup]:
     """Upsert all groups from a parse result, resolving parent_key → parent_id.
+
+    Processes groups level-by-level (one bulk SELECT + one flush per tree depth)
+    instead of one round-trip per group, which is critical on cloud deployments
+    where each DB round-trip adds ~10-20ms of latency.
 
     Args:
         session: Database session.
@@ -187,16 +205,96 @@ async def upsert_groups_from_parse_result(
     Returns:
         Dict mapping group key → SectionGroup record.
     """
+    if not groups:
+        return {}
+
     group_lookup: dict[str, SectionGroup] = {}
 
-    for parsed_group in groups:
-        parent_id = None
-        if parsed_group.parent_key:
-            parent_record = group_lookup.get(parsed_group.parent_key)
-            if parent_record:
-                parent_id = parent_record.group_id
+    # Assign tree depth to each group.  Parents appear before children per contract,
+    # so by the time we process group G its parent_key is already in key_to_depth.
+    key_to_depth: dict[str, int] = {}
+    for g in groups:
+        key_to_depth[g.key] = (
+            0 if not g.parent_key else key_to_depth.get(g.parent_key, -1) + 1
+        )
 
-        group_record, _ = await upsert_group(session, parsed_group, parent_id, force)
-        group_lookup[parsed_group.key] = group_record
+    # Bucket groups by depth so we can batch SELECT + flush per level.
+    depth_to_groups: dict[int, list[ParsedGroup]] = {}
+    for g in groups:
+        depth_to_groups.setdefault(key_to_depth[g.key], []).append(g)
+
+    for depth in sorted(depth_to_groups.keys()):
+        level_groups = depth_to_groups[depth]
+
+        # Resolve parent_ids — all depth-(d-1) records are already flushed.
+        resolved: list[tuple[int | None, ParsedGroup]] = []
+        for pg in level_groups:
+            parent_id: int | None = None
+            if pg.parent_key:
+                parent_rec = group_lookup.get(pg.parent_key)
+                if parent_rec:
+                    parent_id = parent_rec.group_id
+            resolved.append((parent_id, pg))
+
+        # ---- Bulk SELECT for this level ----------------------------------------
+        # Split into null-parent groups (titles) and non-null-parent groups, because
+        # PostgreSQL's tuple-IN syntax cannot match NULLs.
+
+        null_pairs = [(pg.group_type, pg.number) for pid, pg in resolved if pid is None]
+        non_null_triples = [
+            (pid, pg.group_type, pg.number) for pid, pg in resolved if pid is not None
+        ]
+
+        existing_by_key: dict[tuple[int | None, str, str], SectionGroup] = {}
+
+        if null_pairs:
+            stmt = select(SectionGroup).where(
+                SectionGroup.parent_id.is_(None),
+                tuple_(SectionGroup.group_type, SectionGroup.number).in_(null_pairs),
+            )
+            result = await session.execute(stmt)
+            for rec in result.scalars():
+                existing_by_key[(None, rec.group_type, rec.number)] = rec
+
+        if non_null_triples:
+            stmt = select(SectionGroup).where(
+                tuple_(
+                    SectionGroup.parent_id,
+                    SectionGroup.group_type,
+                    SectionGroup.number,
+                ).in_(non_null_triples)
+            )
+            result = await session.execute(stmt)
+            for rec in result.scalars():
+                existing_by_key[(rec.parent_id, rec.group_type, rec.number)] = rec
+
+        # ---- Upsert each group at this level ------------------------------------
+        for parent_id, pg in resolved:
+            existing = existing_by_key.get((parent_id, pg.group_type, pg.number))
+
+            if existing:
+                if force:
+                    existing.name = pg.name
+                    existing.sort_order = pg.sort_order
+                    existing.is_positive_law = pg.is_positive_law
+                    existing.positive_law_date = _compute_positive_law_date(pg)
+                    existing.positive_law_citation = pg.positive_law_citation
+                group_lookup[pg.key] = existing
+            else:
+                new_group = SectionGroup(
+                    parent_id=parent_id,
+                    group_type=pg.group_type,
+                    number=pg.number,
+                    name=pg.name,
+                    sort_order=pg.sort_order,
+                    is_positive_law=pg.is_positive_law,
+                    positive_law_date=_compute_positive_law_date(pg),
+                    positive_law_citation=pg.positive_law_citation,
+                )
+                session.add(new_group)
+                group_lookup[pg.key] = new_group
+
+        # One flush per level assigns PKs that the next depth's parent_ids need.
+        await session.flush()
 
     return group_lookup
