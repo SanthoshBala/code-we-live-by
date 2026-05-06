@@ -174,14 +174,14 @@ class BootstrapService:
         downloader: OLRCDownloader,
         parser: USLMParser,
         session_factory: SessionFactory | None = None,
-        concurrency: int = 4,
+        concurrency: int = 2,
     ) -> None:
         self.session = session
         self.downloader = downloader
         self.parser = parser
-        # concurrency=4 keeps DB connection pressure low on Cloud Run's shared pool
-        # (each worker opens one connection). Raise to 8-10 if the pool allows it and
-        # ingestion bottlenecks on download I/O rather than DB writes.
+        # concurrency=2 balances parallelism against peak memory — large titles (e.g.
+        # 26, 42) hold substantial parsed XML in memory simultaneously. Raise if the
+        # Cloud Run job has more than 4Gi and ingestion bottlenecks on download I/O.
         self._concurrency = concurrency
 
         if session_factory is not None:
