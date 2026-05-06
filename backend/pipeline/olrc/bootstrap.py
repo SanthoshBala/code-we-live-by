@@ -13,10 +13,10 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import NamedTuple
 
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import RevisionStatus, RevisionType
@@ -189,7 +189,13 @@ async def ingest_title(
 
     t_normalize = time.monotonic()
 
-    # Build ORM objects and flush (event loop — group_ids now resolved).
+    # Bulk-insert all snapshots in one executemany call instead of individual
+    # session.add() + flush() per row. The ORM UoW emits a separate INSERT
+    # round-trip per object (plus RETURNING for the PK); for large titles
+    # (1000+ sections) that serialises hundreds of network round-trips, which
+    # was the dominant cost (~90% of wall-clock per title in Cloud Run).
+    now = datetime.now(UTC)
+    snapshot_dicts = []
     for row in rows:
         group_id = None
         if row.parent_group_key:
@@ -197,33 +203,36 @@ async def ingest_title(
             if group_record:
                 group_id = group_record.group_id
 
-        snapshot = SectionSnapshot(
-            revision_id=revision_id,
-            title_number=title_num,
-            section_number=row.section_number,
-            heading=row.heading,
-            text_content=row.text_content,
-            normalized_provisions=row.normalized_provisions,
-            notes=row.notes,
-            normalized_notes=row.normalized_notes,
-            text_hash=row.text_hash,
-            notes_hash=row.notes_hash,
-            full_citation=row.full_citation,
-            is_deleted=False,
-            group_id=group_id,
-            sort_order=row.sort_order,
+        snapshot_dicts.append(
+            {
+                "revision_id": revision_id,
+                "title_number": title_num,
+                "section_number": row.section_number,
+                "heading": row.heading,
+                "text_content": row.text_content,
+                "normalized_provisions": row.normalized_provisions,
+                "notes": row.notes,
+                "normalized_notes": row.normalized_notes,
+                "text_hash": row.text_hash,
+                "notes_hash": row.notes_hash,
+                "full_citation": row.full_citation,
+                "is_deleted": False,
+                "group_id": group_id,
+                "sort_order": row.sort_order if row.sort_order is not None else 0,
+                "created_at": now,
+                "updated_at": now,
+            }
         )
-        session.add(snapshot)
 
-    await session.flush()
-    t_flush = time.monotonic()
+    await session.execute(insert(SectionSnapshot), snapshot_dicts)
+    t_insert = time.monotonic()
 
     count = len(rows)
     logger.info(
         f"Title {title_num}: {count} sections ingested "
         f"[download={t_download - t0:.1f}s parse={t_parse - t_download:.1f}s "
         f"groups={t_groups - t_parse:.1f}s normalize={t_normalize - t_groups:.1f}s "
-        f"flush={t_flush - t_normalize:.1f}s total={t_flush - t0:.1f}s]"
+        f"insert={t_insert - t_normalize:.1f}s total={t_insert - t0:.1f}s]"
     )
     return count
 
