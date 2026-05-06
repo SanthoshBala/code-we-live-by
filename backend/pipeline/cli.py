@@ -3283,11 +3283,10 @@ async def chrono_bootstrap_command(
         print(f"Auto-detected oldest release point: {release_point}")
 
     downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
-    parser = USLMParser()
 
     async with async_session_maker() as session:
         service = BootstrapService(
-            session, downloader, parser, session_factory=async_session_maker
+            session, downloader, session_factory=async_session_maker
         )
         result = await service.create_initial_commit(
             release_point, titles=titles, force=force
@@ -3319,7 +3318,6 @@ async def chrono_ingest_rp_command(
     from pipeline.olrc.rp_ingestor import RPIngestor
 
     downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
-    parser = USLMParser()
 
     async with async_session_maker() as session:
         # Auto-detect parent revision if not specified
@@ -3356,7 +3354,7 @@ async def chrono_ingest_rp_command(
                 return 1
             sequence_number = parent.sequence_number + 1
 
-        ingestor = RPIngestor(session, downloader, parser)
+        ingestor = RPIngestor(session, downloader)
         rp_result = await ingestor.ingest_release_point(
             release_point,
             parent_revision_id=parent_revision_id,
@@ -3683,10 +3681,9 @@ async def chrono_advance_command(
     from pipeline.chrono.play_forward import PlayForwardEngine
 
     downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
-    parser = USLMParser()
 
     async with async_session_maker() as session:
-        engine = PlayForwardEngine(session, downloader, parser)
+        engine = PlayForwardEngine(session, downloader)
         try:
             result = await engine.advance(count=count)
         except RuntimeError as exc:
@@ -3716,10 +3713,9 @@ async def chrono_advance_to_command(
     from pipeline.chrono.play_forward import PlayForwardEngine
 
     downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
-    parser = USLMParser()
 
     async with async_session_maker() as session:
-        engine = PlayForwardEngine(session, downloader, parser)
+        engine = PlayForwardEngine(session, downloader)
         try:
             result = await engine.advance_to(release_point)
         except (RuntimeError, ValueError) as exc:
@@ -3750,10 +3746,9 @@ async def chrono_validate_command(
     from pipeline.chrono.play_forward import PlayForwardEngine
 
     downloader = OLRCDownloader(cache=_cli_cache)
-    parser = USLMParser()
 
     async with async_session_maker() as session:
-        engine = PlayForwardEngine(session, downloader, parser)
+        engine = PlayForwardEngine(session, downloader)
         try:
             checkpoint = await engine.validate_at_rp(release_point)
         except ValueError as exc:

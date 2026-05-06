@@ -134,8 +134,7 @@ def _make_section(
 def _make_engine(session: AsyncMock) -> PlayForwardEngine:
     """Create a PlayForwardEngine with mock dependencies."""
     downloader = MagicMock()
-    parser = MagicMock()
-    engine = PlayForwardEngine(session, downloader, parser)
+    engine = PlayForwardEngine(session, downloader)
     return engine
 
 

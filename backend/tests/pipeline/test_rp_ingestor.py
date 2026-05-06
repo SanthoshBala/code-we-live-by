@@ -72,13 +72,6 @@ def _make_mock_downloader(
     return downloader
 
 
-def _make_mock_parser(parse_result: USLMParseResult | None = None) -> MagicMock:
-    """Create a mock USLMParser."""
-    parser = MagicMock()
-    parser.parse_file.return_value = parse_result or _make_parse_result()
-    return parser
-
-
 def _make_mock_diff_result() -> MagicMock:
     """Create a mock RevisionDiffResult."""
     from pipeline.olrc.diff_engine import RevisionDiffResult
@@ -128,9 +121,7 @@ class TestRPIngestor:
         """Verify CodeRevision is created with parent link and sequence_number."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
-
-        ingestor = RPIngestor(session, downloader, parser)
+        ingestor = RPIngestor(session, downloader)
 
         with (
             patch(
@@ -174,9 +165,7 @@ class TestRPIngestor:
         """Parsed sections become snapshots via ingest_title."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
-
-        ingestor = RPIngestor(session, downloader, parser)
+        ingestor = RPIngestor(session, downloader)
 
         with (
             patch(
@@ -207,9 +196,7 @@ class TestRPIngestor:
         """Diff engine should be called after ingestion."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
-
-        ingestor = RPIngestor(session, downloader, parser)
+        ingestor = RPIngestor(session, downloader)
 
         with (
             patch(
@@ -242,8 +229,6 @@ class TestRPIngestor:
         """Already-ingested RP returns early without re-processing."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
-
         from app.models.release_point import OLRCReleasePoint
         from app.models.revision import CodeRevision
 
@@ -271,7 +256,7 @@ class TestRPIngestor:
 
         session.execute = AsyncMock(side_effect=fake_execute)
 
-        ingestor = RPIngestor(session, downloader, parser)
+        ingestor = RPIngestor(session, downloader)
         result = await ingestor.ingest_release_point(
             "113-37",
             parent_revision_id=1,
@@ -289,8 +274,6 @@ class TestRPIngestor:
         """Failed status resumes ingestion."""
         session = _make_mock_session()
         downloader = _make_mock_downloader()
-        parser = _make_mock_parser()
-
         from app.models.release_point import OLRCReleasePoint
         from app.models.revision import CodeRevision
 
@@ -319,7 +302,7 @@ class TestRPIngestor:
 
         session.execute = AsyncMock(side_effect=fake_execute)
 
-        ingestor = RPIngestor(session, downloader, parser)
+        ingestor = RPIngestor(session, downloader)
 
         with (
             patch(
