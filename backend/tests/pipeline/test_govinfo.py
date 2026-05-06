@@ -1,7 +1,8 @@
 """Tests for GovInfo API client."""
 
+import asyncio
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -156,3 +157,175 @@ class TestGovInfoClient:
         package_id = client.build_package_id(118, 5, "private")
 
         assert package_id == "PLAW-118pvt5"
+
+
+def _make_detail(congress: int, law_number: int) -> PLAWPackageDetail:
+    return PLAWPackageDetail(
+        package_id=f"PLAW-{congress}publ{law_number}",
+        congress=congress,
+        law_number=law_number,
+        law_type="public",
+        title=f"Test Law {law_number}",
+        short_title=None,
+        date_issued=datetime(2024, 1, 1),
+        government_author=None,
+        publisher=None,
+        collection_code="PLAW",
+        doc_class="publ",
+        pdf_url=None,
+        xml_url=None,
+        htm_url=None,
+        bill_id=None,
+        statutes_at_large_citation=None,
+        committees=[],
+    )
+
+
+class TestPublicLawIngestionServiceParallelism:
+    """Tests for parallel law detail fetching in PublicLawIngestionService."""
+
+    @pytest.mark.asyncio
+    async def test_ingest_congress_fetches_in_parallel(self) -> None:
+        """All get_public_law_detail calls are issued concurrently via gather."""
+        from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+        details = [_make_detail(119, n) for n in range(1, 4)]
+        law_infos = [
+            PLAWPackageInfo(
+                package_id=d.package_id,
+                congress=d.congress,
+                law_number=d.law_number,
+                law_type=d.law_type,
+                title=d.title,
+                last_modified=datetime(2024, 1, 1),
+            )
+            for d in details
+        ]
+
+        call_order: list[str] = []
+        fetch_started: list[asyncio.Event] = [asyncio.Event() for _ in details]
+        fetch_unblock = asyncio.Event()
+
+        async def fake_get_detail(package_id: str) -> PLAWPackageDetail:
+            idx = next(i for i, d in enumerate(details) if d.package_id == package_id)
+            fetch_started[idx].set()
+            await fetch_unblock.wait()
+            call_order.append(package_id)
+            return details[idx]
+
+        mock_session = MagicMock()
+        mock_session.add = MagicMock()
+        mock_session.flush = AsyncMock()
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+        mock_session.commit = AsyncMock()
+
+        service = PublicLawIngestionService(session=mock_session, api_key="test-key")
+        service.client.get_public_laws_for_congress = AsyncMock(return_value=law_infos)
+        service.client.get_public_law_detail = fake_get_detail
+
+        async def run() -> None:
+            # Unblock fetches once all have started (proving overlap)
+            await asyncio.gather(*[e.wait() for e in fetch_started])
+            fetch_unblock.set()
+
+        await asyncio.gather(
+            service.ingest_congress(119),
+            run(),
+        )
+
+        # All three fetches started before any completed — they overlapped
+        assert len(call_order) == 3
+
+    @pytest.mark.asyncio
+    async def test_ingest_congress_skips_failed_fetches(self) -> None:
+        """A fetch failure for one law is logged and skipped; others succeed."""
+        from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+        good_detail = _make_detail(119, 2)
+        law_infos = [
+            PLAWPackageInfo(
+                package_id=f"PLAW-119publ{n}",
+                congress=119,
+                law_number=n,
+                law_type="public",
+                title=f"Law {n}",
+                last_modified=datetime(2024, 1, 1),
+            )
+            for n in (1, 2)
+        ]
+
+        async def fake_get_detail(package_id: str) -> PLAWPackageDetail:
+            if package_id == "PLAW-119publ1":
+                raise RuntimeError("network error")
+            return good_detail
+
+        mock_session = MagicMock()
+        mock_session.add = MagicMock()
+        mock_session.flush = AsyncMock()
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+        mock_session.commit = AsyncMock()
+
+        service = PublicLawIngestionService(session=mock_session, api_key="test-key")
+        service.client.get_public_laws_for_congress = AsyncMock(return_value=law_infos)
+        service.client.get_public_law_detail = fake_get_detail
+
+        log = await service.ingest_congress(119)
+
+        assert log.status == "completed"
+        assert log.records_created == 1  # only the successful one
+
+    @pytest.mark.asyncio
+    async def test_ingest_recent_laws_fetches_in_parallel(self) -> None:
+        """ingest_recent_laws also issues detail fetches concurrently."""
+        from pipeline.govinfo.ingestion import PublicLawIngestionService
+
+        details = [_make_detail(119, n) for n in range(1, 4)]
+        law_infos = [
+            PLAWPackageInfo(
+                package_id=d.package_id,
+                congress=d.congress,
+                law_number=d.law_number,
+                law_type=d.law_type,
+                title=d.title,
+                last_modified=datetime(2024, 1, 1),
+            )
+            for d in details
+        ]
+
+        fetch_started: list[asyncio.Event] = [asyncio.Event() for _ in details]
+        fetch_unblock = asyncio.Event()
+        call_order: list[str] = []
+
+        async def fake_get_detail(package_id: str) -> PLAWPackageDetail:
+            idx = next(i for i, d in enumerate(details) if d.package_id == package_id)
+            fetch_started[idx].set()
+            await fetch_unblock.wait()
+            call_order.append(package_id)
+            return details[idx]
+
+        mock_session = MagicMock()
+        mock_session.add = MagicMock()
+        mock_session.flush = AsyncMock()
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+        mock_session.commit = AsyncMock()
+
+        service = PublicLawIngestionService(session=mock_session, api_key="test-key")
+        service.client.get_public_laws = AsyncMock(return_value=law_infos)
+        service.client.get_public_law_detail = fake_get_detail
+
+        async def run() -> None:
+            await asyncio.gather(*[e.wait() for e in fetch_started])
+            fetch_unblock.set()
+
+        await asyncio.gather(
+            service.ingest_recent_laws(days=7),
+            run(),
+        )
+
+        assert len(call_order) == 3

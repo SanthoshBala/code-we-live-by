@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date, datetime
 from typing import TYPE_CHECKING
@@ -70,25 +71,33 @@ class PublicLawIngestionService:
             updated = 0
             skipped = 0
 
-            for law_info in laws:
-                try:
-                    # Get detailed info for each law
-                    detail = await self.client.get_public_law_detail(
-                        law_info.package_id
-                    )
+            # Fetch all law details in parallel, respecting API rate limits
+            sem = asyncio.Semaphore(10)
 
-                    # Upsert the law
-                    was_created = await self._upsert_public_law(detail, force)
+            async def _fetch_detail(package_id: str) -> PLAWPackageDetail:
+                async with sem:
+                    return await self.client.get_public_law_detail(package_id)
+
+            fetch_results = await asyncio.gather(
+                *[_fetch_detail(law.package_id) for law in laws],
+                return_exceptions=True,
+            )
+
+            # Upsert sequentially to avoid session contention
+            for law_info, result in zip(laws, fetch_results, strict=True):
+                if isinstance(result, BaseException):
+                    logger.error(f"Error fetching {law_info.package_id}: {result}")
+                    continue
+                try:
+                    was_created = await self._upsert_public_law(result, force)
                     if was_created is True:
                         created += 1
                     elif was_created is False:
                         updated += 1
                     else:
                         skipped += 1
-
                 except Exception as e:
                     logger.error(f"Error ingesting {law_info.package_id}: {e}")
-                    continue
 
             log.status = "completed"
             log.completed_at = datetime.utcnow()
@@ -199,12 +208,25 @@ class PublicLawIngestionService:
             updated = 0
             skipped = 0
 
-            for law_info in laws:
+            # Fetch all law details in parallel, respecting API rate limits
+            sem = asyncio.Semaphore(10)
+
+            async def _fetch_detail(package_id: str) -> PLAWPackageDetail:
+                async with sem:
+                    return await self.client.get_public_law_detail(package_id)
+
+            fetch_results = await asyncio.gather(
+                *[_fetch_detail(law.package_id) for law in laws],
+                return_exceptions=True,
+            )
+
+            # Upsert sequentially to avoid session contention
+            for law_info, result in zip(laws, fetch_results, strict=True):
+                if isinstance(result, BaseException):
+                    logger.error(f"Error fetching {law_info.package_id}: {result}")
+                    continue
                 try:
-                    detail = await self.client.get_public_law_detail(
-                        law_info.package_id
-                    )
-                    was_created = await self._upsert_public_law(detail, force)
+                    was_created = await self._upsert_public_law(result, force)
                     if was_created is True:
                         created += 1
                     elif was_created is False:
@@ -213,7 +235,6 @@ class PublicLawIngestionService:
                         skipped += 1
                 except Exception as e:
                     logger.error(f"Error ingesting {law_info.package_id}: {e}")
-                    continue
 
             log.status = "completed"
             log.completed_at = datetime.utcnow()
