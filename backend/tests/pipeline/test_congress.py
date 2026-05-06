@@ -733,7 +733,10 @@ class TestCBOEstimate:
         assert est.title == "Cost Estimate for H.R. 1234"
         assert est.url == "https://www.cbo.gov/publication/56789"
         assert est.pub_date == date(2021, 4, 1)
-        assert est.description == "CBO estimates this bill would cost $1.2 billion over 10 years."
+        assert (
+            est.description
+            == "CBO estimates this bill would cost $1.2 billion over 10 years."
+        )
 
     def test_from_api_response_minimal(self) -> None:
         """Parse a minimal CBO estimate with no optional fields."""
