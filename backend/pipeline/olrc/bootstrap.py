@@ -131,6 +131,8 @@ async def ingest_title(
     Returns:
         Number of sections ingested, or None if the title was skipped.
     """
+    t0 = time.monotonic()
+
     # Check if this title already has snapshots at this revision
     stmt = (
         select(SectionSnapshot.snapshot_id)
@@ -158,6 +160,8 @@ async def ingest_title(
         logger.info(f"Title {title_num}: not available at {rp_identifier}, skipping")
         return None
 
+    t_download = time.monotonic()
+
     # Parse in thread pool (CPU-bound XML parsing, ~3-4s for large titles).
     # USLMParser() is instantiated here on the event loop and its bound
     # parse_file method is dispatched to the thread — each call gets its own
@@ -168,9 +172,13 @@ async def ingest_title(
         logger.error(f"Title {title_num}: parse failed, skipping", exc_info=True)
         return None
 
+    t_parse = time.monotonic()
+
     # Upsert SectionGroup hierarchy for navigation (async DB work — runs while
     # other titles can be parsing concurrently in the thread pool).
     group_lookup = await upsert_groups_from_parse_result(session, parse_result.groups)
+
+    t_groups = time.monotonic()
 
     # Normalize + build row data in thread pool (CPU-bound, ~2s for large titles).
     # Note: duplicate section numbers are allowed — Congress occasionally
@@ -178,6 +186,8 @@ async def ingest_title(
     rows = await asyncio.to_thread(
         _build_snapshot_rows, parse_result.sections, title_num
     )
+
+    t_normalize = time.monotonic()
 
     # Build ORM objects and flush (event loop — group_ids now resolved).
     for row in rows:
@@ -206,8 +216,15 @@ async def ingest_title(
         session.add(snapshot)
 
     await session.flush()
+    t_flush = time.monotonic()
+
     count = len(rows)
-    logger.info(f"Title {title_num}: {count} sections ingested")
+    logger.info(
+        f"Title {title_num}: {count} sections ingested "
+        f"[download={t_download - t0:.1f}s parse={t_parse - t_download:.1f}s "
+        f"groups={t_groups - t_parse:.1f}s normalize={t_normalize - t_groups:.1f}s "
+        f"flush={t_flush - t_normalize:.1f}s total={t_flush - t0:.1f}s]"
+    )
     return count
 
 
