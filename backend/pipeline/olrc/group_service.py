@@ -265,5 +265,5 @@ async def upsert_groups_from_parse_result(
             positive_law_date=row["positive_law_date"],
             positive_law_citation=g.positive_law_citation,
         )
-        for g, row in zip(groups, rows)
+        for g, row in zip(groups, rows, strict=True)
     }

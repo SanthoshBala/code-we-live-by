@@ -27,9 +27,10 @@ import uuid
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers
 revision: str = "a8b9c0d1e2f3"
@@ -71,59 +72,85 @@ def upgrade() -> None:
     # ------------------------------------------------------------------ #
     # 1. Add temporary UUID shadow columns (nullable for now)              #
     # ------------------------------------------------------------------ #
-    op.add_column("section_group", sa.Column("_new_gid", UUID(as_uuid=True), nullable=True))
-    op.add_column("section_group", sa.Column("_new_pid", UUID(as_uuid=True), nullable=True))
-    op.add_column("us_code_section", sa.Column("_new_gid", UUID(as_uuid=True), nullable=True))
-    op.add_column("section_snapshot", sa.Column("_new_gid", UUID(as_uuid=True), nullable=True))
+    op.add_column(
+        "section_group", sa.Column("_new_gid", UUID(as_uuid=True), nullable=True)
+    )
+    op.add_column(
+        "section_group", sa.Column("_new_pid", UUID(as_uuid=True), nullable=True)
+    )
+    op.add_column(
+        "us_code_section", sa.Column("_new_gid", UUID(as_uuid=True), nullable=True)
+    )
+    op.add_column(
+        "section_snapshot", sa.Column("_new_gid", UUID(as_uuid=True), nullable=True)
+    )
 
     # ------------------------------------------------------------------ #
     # 2. Backfill shadow columns using the computed UUID mapping           #
     # ------------------------------------------------------------------ #
     if id_map:
         # Use a temporary table for the bulk update — avoids giant IN() lists.
-        conn.execute(text(
-            "CREATE TEMPORARY TABLE _gid_map (old_id integer PRIMARY KEY, new_id uuid NOT NULL)"
-        ))
+        conn.execute(
+            text(
+                "CREATE TEMPORARY TABLE _gid_map (old_id integer PRIMARY KEY, new_id uuid NOT NULL)"
+            )
+        )
         conn.execute(
             text("INSERT INTO _gid_map VALUES (:old_id, :new_id)"),
             [{"old_id": k, "new_id": str(v)} for k, v in id_map.items()],
         )
 
-        conn.execute(text("""
+        conn.execute(
+            text("""
             UPDATE section_group sg
             SET    _new_gid = m.new_id
             FROM   _gid_map m
             WHERE  sg.group_id = m.old_id
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE section_group sg
             SET    _new_pid = m.new_id
             FROM   _gid_map m
             WHERE  sg.parent_id = m.old_id
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE us_code_section ucs
             SET    _new_gid = m.new_id
             FROM   _gid_map m
             WHERE  ucs.group_id = m.old_id
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             UPDATE section_snapshot ss
             SET    _new_gid = m.new_id
             FROM   _gid_map m
             WHERE  ss.group_id = m.old_id
-        """))
+        """)
+        )
 
         conn.execute(text("DROP TABLE _gid_map"))
 
     # ------------------------------------------------------------------ #
     # 3. Drop FK constraints and indexes that reference the old columns    #
     # ------------------------------------------------------------------ #
-    op.drop_constraint("fk_section_group_parent_id_section_group", "section_group", type_="foreignkey")
-    op.drop_constraint("fk_us_code_section_group_id_section_group", "us_code_section", type_="foreignkey")
+    op.drop_constraint(
+        "fk_section_group_parent_id_section_group", "section_group", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "fk_us_code_section_group_id_section_group",
+        "us_code_section",
+        type_="foreignkey",
+    )
     # section_snapshot FK was added via add_column with inline ForeignKey,
     # so PostgreSQL named it with the standard convention.
-    op.drop_constraint("section_snapshot_group_id_fkey", "section_snapshot", type_="foreignkey")
+    op.drop_constraint(
+        "section_snapshot_group_id_fkey", "section_snapshot", type_="foreignkey"
+    )
 
     op.drop_constraint("uq_section_group_child", "section_group", type_="unique")
     op.drop_index("idx_section_group_parent", "section_group")
@@ -164,20 +191,26 @@ def upgrade() -> None:
     # ------------------------------------------------------------------ #
     op.create_foreign_key(
         "fk_section_group_parent_id_section_group",
-        "section_group", "section_group",
-        ["parent_id"], ["group_id"],
+        "section_group",
+        "section_group",
+        ["parent_id"],
+        ["group_id"],
         ondelete="CASCADE",
     )
     op.create_foreign_key(
         "fk_us_code_section_group_id_section_group",
-        "us_code_section", "section_group",
-        ["group_id"], ["group_id"],
+        "us_code_section",
+        "section_group",
+        ["group_id"],
+        ["group_id"],
         ondelete="SET NULL",
     )
     op.create_foreign_key(
         "fk_section_snapshot_group_id_section_group",
-        "section_snapshot", "section_group",
-        ["group_id"], ["group_id"],
+        "section_snapshot",
+        "section_group",
+        ["group_id"],
+        ["group_id"],
         ondelete="SET NULL",
     )
 
@@ -185,11 +218,14 @@ def upgrade() -> None:
     # 9. Recreate unique constraint and indexes                            #
     # ------------------------------------------------------------------ #
     op.create_unique_constraint(
-        "uq_section_group_child", "section_group",
+        "uq_section_group_child",
+        "section_group",
         ["parent_id", "group_type", "number"],
     )
     op.create_index("idx_section_group_parent", "section_group", ["parent_id"])
-    op.create_index("idx_section_group_sort", "section_group", ["parent_id", "sort_order"])
+    op.create_index(
+        "idx_section_group_sort", "section_group", ["parent_id", "sort_order"]
+    )
     op.create_index("idx_section_group", "us_code_section", ["group_id"])
     op.create_index("idx_section_sort", "us_code_section", ["group_id", "sort_order"])
     op.create_index("idx_section_snapshot_group", "section_snapshot", ["group_id"])

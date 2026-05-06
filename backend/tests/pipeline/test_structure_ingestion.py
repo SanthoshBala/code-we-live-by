@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.us_code import SectionGroup
 from pipeline.olrc.group_service import (
     _GROUP_NS,
     group_id_from_key,
@@ -129,7 +128,9 @@ class TestUpsertGroup:
             parent_key="title:17",
             key="title:17/chapter:1",
         )
-        group, was_created = await upsert_group(mock_session, parsed, parent_id=parent_uuid)
+        group, was_created = await upsert_group(
+            mock_session, parsed, parent_id=parent_uuid
+        )
 
         assert was_created is True
         added = mock_session.add.call_args[0][0]
@@ -152,7 +153,9 @@ class TestUpsertGroup:
             parent_key="title:17/chapter:1",
             key="title:17/chapter:1/subchapter:I",
         )
-        group, was_created = await upsert_group(mock_session, parsed, parent_id=parent_uuid)
+        group, was_created = await upsert_group(
+            mock_session, parsed, parent_id=parent_uuid
+        )
 
         assert was_created is True
         added = mock_session.add.call_args[0][0]
@@ -316,9 +319,7 @@ class TestIngestParseResult:
         self, mock_session: AsyncMock, minimal_parse_result: USLMParseResult
     ) -> None:
         """All groups are inserted in exactly one session.execute call."""
-        await upsert_groups_from_parse_result(
-            mock_session, minimal_parse_result.groups
-        )
+        await upsert_groups_from_parse_result(mock_session, minimal_parse_result.groups)
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
@@ -363,9 +364,7 @@ class TestIngestParseResult:
         self, mock_session: AsyncMock, minimal_parse_result: USLMParseResult
     ) -> None:
         """No flush is ever needed — UUIDs are pre-computed."""
-        await upsert_groups_from_parse_result(
-            mock_session, minimal_parse_result.groups
-        )
+        await upsert_groups_from_parse_result(mock_session, minimal_parse_result.groups)
         mock_session.flush.assert_not_called()
 
     @pytest.mark.asyncio
