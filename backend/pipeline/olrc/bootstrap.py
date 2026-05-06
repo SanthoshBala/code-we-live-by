@@ -231,13 +231,13 @@ class BootstrapService:
         session: AsyncSession,
         downloader: OLRCDownloader,
         session_factory: SessionFactory | None = None,
-        concurrency: int = 2,
+        concurrency: int = 4,
     ) -> None:
         self.session = session
         self.downloader = downloader
-        # concurrency=2 balances parallelism against peak memory — large titles (e.g.
-        # 26, 42) hold substantial parsed XML in memory simultaneously. Raise if the
-        # Cloud Run job has more than 4Gi and ingestion bottlenecks on download I/O.
+        # concurrency=4 — the 16Gi/4-CPU Cloud Run config (PR #152) showed
+        # peak utilization under 20% at concurrency=2, so 4 fits comfortably
+        # while halving wall-clock on the cold-cache first run.
         self._concurrency = concurrency
 
         if session_factory is not None:
