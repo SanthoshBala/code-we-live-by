@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -164,7 +165,7 @@ class USCodeIngestionService:
 
         # Ingest sections
         for section in result.sections:
-            group_id = None
+            group_id: uuid.UUID | None = None
             if section.parent_group_key:
                 group_record = group_lookup.get(section.parent_group_key)
                 if group_record:
@@ -183,7 +184,7 @@ class USCodeIngestionService:
     async def _upsert_section(
         self,
         parsed: ParsedSection,
-        group_id: int | None,
+        group_id: uuid.UUID | None,
         title_number: int,
         force: bool = False,
     ) -> USCodeSection:

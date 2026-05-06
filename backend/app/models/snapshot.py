@@ -4,6 +4,7 @@ Only stores sections that changed at a given revision. For unchanged sections,
 walk the parent revision chain to find the most recent snapshot.
 """
 
+import uuid
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
@@ -13,7 +14,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -79,8 +80,8 @@ class SectionSnapshot(Base, TimestampMixin):
         nullable=False,
         doc="True if the section was repealed/removed at this revision",
     )
-    group_id: Mapped[int | None] = mapped_column(
-        Integer,
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("section_group.group_id", ondelete="SET NULL"),
         nullable=True,
         doc="SectionGroup this snapshot belongs to (for navigation)",
