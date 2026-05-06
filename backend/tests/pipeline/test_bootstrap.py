@@ -66,6 +66,14 @@ def _make_mock_session() -> AsyncMock:
     return session
 
 
+def _get_snapshot_dicts(session: AsyncMock) -> list[dict]:
+    """Extract snapshot insert dicts from session.execute bulk-insert calls."""
+    for call in session.execute.call_args_list:
+        if len(call.args) == 2 and isinstance(call.args[1], list):
+            return call.args[1]
+    return []
+
+
 def _make_mock_downloader(
     xml_path: Path | None = Path("/fake/title17.xml"),
 ) -> MagicMock:
@@ -142,12 +150,11 @@ class TestCreateInitialCommit:
         assert result.titles_processed == 1
         assert result.total_sections == 1
 
-        # Verify session.add was called with OLRCReleasePoint and CodeRevision
+        # Verify session.add was called with OLRCReleasePoint and CodeRevision.
+        # Snapshots are bulk-inserted via session.execute(), not session.add().
         add_calls = session.add.call_args_list
-        # Should have at least: release_point, revision, snapshot(s)
-        assert len(add_calls) >= 3
+        assert len(add_calls) >= 2
 
-        # Check the revision object was added
         added_objects = [call.args[0] for call in add_calls]
         from app.models.revision import CodeRevision
 
@@ -183,18 +190,12 @@ class TestCreateInitialCommit:
 
         assert result.total_sections == 2
 
-        # Check snapshot objects were added
-        add_calls = session.add.call_args_list
-        added_objects = [call.args[0] for call in add_calls]
-
-        from app.models.snapshot import SectionSnapshot
-
-        snapshots = [o for o in added_objects if isinstance(o, SectionSnapshot)]
+        # Snapshots are bulk-inserted via session.execute(insert(...), dicts).
+        snapshots = _get_snapshot_dicts(session)
         assert len(snapshots) == 2
-        assert snapshots[0].section_number == "101"
-        assert snapshots[1].section_number == "102"
-        assert snapshots[0].title_number == 17
-        assert snapshots[1].title_number == 17
+        section_numbers = {s["section_number"] for s in snapshots}
+        assert section_numbers == {"101", "102"}
+        assert all(s["title_number"] == 17 for s in snapshots)
 
     @pytest.mark.asyncio
     async def test_skip_unavailable_titles(self) -> None:
@@ -275,8 +276,11 @@ class TestCreateInitialCommit:
 
         call_count = 0
 
-        def fake_execute(_stmt):
+        def fake_execute(*args):
             nonlocal call_count
+            # Bulk inserts (2 positional args) don't increment the select counter.
+            if len(args) == 2 and isinstance(args[1], list):
+                return MagicMock()
             call_count += 1
             result = MagicMock()
             if call_count == 1:
@@ -337,16 +341,9 @@ class TestSnapshotFieldMapping:
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
-        # Find the snapshot that was added
-        from app.models.snapshot import SectionSnapshot
-
-        added = [
-            call.args[0]
-            for call in session.add.call_args_list
-            if isinstance(call.args[0], SectionSnapshot)
-        ]
-        assert len(added) == 1
-        assert added[0].text_hash == expected_hash
+        snapshots = _get_snapshot_dicts(session)
+        assert len(snapshots) == 1
+        assert snapshots[0]["text_hash"] == expected_hash
 
     @pytest.mark.asyncio
     async def test_snapshot_notes_hash(self) -> None:
@@ -370,16 +367,10 @@ class TestSnapshotFieldMapping:
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
-        from app.models.snapshot import SectionSnapshot
-
-        added = [
-            call.args[0]
-            for call in session.add.call_args_list
-            if isinstance(call.args[0], SectionSnapshot)
-        ]
-        assert len(added) == 1
-        assert added[0].notes_hash == expected_hash
-        assert added[0].notes == notes
+        snapshots = _get_snapshot_dicts(session)
+        assert len(snapshots) == 1
+        assert snapshots[0]["notes_hash"] == expected_hash
+        assert snapshots[0]["notes"] == notes
 
     @pytest.mark.asyncio
     async def test_snapshot_no_notes_hash_when_none(self) -> None:
@@ -400,15 +391,9 @@ class TestSnapshotFieldMapping:
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
-        from app.models.snapshot import SectionSnapshot
-
-        added = [
-            call.args[0]
-            for call in session.add.call_args_list
-            if isinstance(call.args[0], SectionSnapshot)
-        ]
-        assert len(added) == 1
-        assert added[0].notes_hash is None
+        snapshots = _get_snapshot_dicts(session)
+        assert len(snapshots) == 1
+        assert snapshots[0]["notes_hash"] is None
 
     @pytest.mark.asyncio
     async def test_snapshot_full_citation(self) -> None:
@@ -429,16 +414,10 @@ class TestSnapshotFieldMapping:
         ):
             await service.create_initial_commit("113-21", titles=[17])
 
-        from app.models.snapshot import SectionSnapshot
-
-        added = [
-            call.args[0]
-            for call in session.add.call_args_list
-            if isinstance(call.args[0], SectionSnapshot)
-        ]
-        assert len(added) == 1
-        assert added[0].full_citation == "17 U.S.C. § 101"
-        assert added[0].is_deleted is False
+        snapshots = _get_snapshot_dicts(session)
+        assert len(snapshots) == 1
+        assert snapshots[0]["full_citation"] == "17 U.S.C. § 101"
+        assert snapshots[0]["is_deleted"] is False
 
     @pytest.mark.asyncio
     async def test_download_failure_skips_title(self) -> None:
