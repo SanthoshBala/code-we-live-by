@@ -1612,7 +1612,11 @@ class TestMultiSentenceSplitting:
         assert result.provisions[0].marker == "(a)"
         assert result.provisions[1].content == "Second sentence continues here."
         assert result.provisions[1].marker is None
-        assert result.provisions[1].indent_level == result.provisions[0].indent_level
+        # Continuation line is indented one level deeper, flush with the text
+        # portion of line 0 (not the marker). Fixes: github.com/SanthoshBala/code-we-live-by/issues/122
+        assert (
+            result.provisions[1].indent_level == result.provisions[0].indent_level + 1
+        )
 
     def test_xml_single_sentence_unchanged(self) -> None:
         """Single-sentence content still produces exactly one line."""
@@ -1784,6 +1788,10 @@ class TestMultiSentenceSplitting:
         assert result.provisions[0].marker == "(a)"
         assert result.provisions[1].content.startswith("No exemption")
         assert result.provisions[1].marker is None
+        # Continuation line must be one level deeper (flush with text, not marker).
+        assert (
+            result.provisions[1].indent_level == result.provisions[0].indent_level + 1
+        )
 
     def test_fallback_single_sentence_unchanged(self) -> None:
         """Fallback single-sentence list items remain on one line."""
@@ -1836,6 +1844,46 @@ class TestMultiSentenceSplitting:
         # This should produce 2 lines
         assert result.provision_count == 2
         assert "et seq." in result.provisions[0].content
+
+    def test_xml_no_heading_continuation_indent_2usc31_2(self) -> None:
+        """Continuation lines of a no-heading provision are indented one level
+        deeper than the marker line (flush with the text portion).
+
+        Regression test for 2 U.S.C. § 31-2 L18-19 being flush with the marker
+        instead of the text. See: github.com/SanthoshBala/code-we-live-by/issues/122
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        # Mimics the structure of 2 U.S.C. § 31-2 where (a) has multiple sentences
+        section = ParsedSection(
+            section_number="31-2",
+            heading="Lump-sum payments",
+            full_citation="2 U.S.C. § 31-2",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content=(
+                        "Each Member of the House of Representatives may receive a lump-sum payment. "
+                        "Such payment shall be in lieu of any other payment. "
+                        "The amount shall be determined by the Committee."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.provision_count == 3
+        # First line: marker + first sentence at base indent
+        assert result.provisions[0].marker == "(a)"
+        marker_indent = result.provisions[0].indent_level
+        # Continuation lines (L18-19 equivalent) must be one level deeper
+        assert result.provisions[1].indent_level == marker_indent + 1
+        assert result.provisions[2].indent_level == marker_indent + 1
 
 
 class TestNoteRefsToSchemas:
