@@ -19,8 +19,11 @@ from app.core.law_history_helpers import (
 )
 from app.models.public_law import Bill, LawBillAction, LawSponsor, PublicLaw
 from app.schemas.law_history import (
+    AmendmentSchema,
+    CBOEstimateSchema,
     ChamberVoteSchema,
     LegislativeHistorySchema,
+    RelatedBillSchema,
     SponsorSchema,
     TimelineEventSchema,
 )
@@ -1190,6 +1193,9 @@ async def get_law_history(
     timeline_events: list[TimelineEventSchema] = []
     sponsors: list[SponsorSchema] = []
     chamber_votes: list[ChamberVoteSchema] = []
+    amendments: list[AmendmentSchema] = []
+    cbo_estimates: list[CBOEstimateSchema] = []
+    related_bills: list[RelatedBillSchema] = []
 
     cached = await _load_history_from_db(session, law.law_id)
     if cached is not None:
@@ -1294,6 +1300,81 @@ async def get_law_history(
                         )
                     )
 
+                # --- Amendments ----------------------------------------------
+                try:
+                    raw_amendments = await congress_client.get_bill_amendments(
+                        congress, bill_type_lower, bill_number_int
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to fetch amendments: {exc}")
+                    raw_amendments = []
+
+                for amdt in raw_amendments:
+                    amendments.append(
+                        AmendmentSchema(
+                            amendment_number=amdt.amendment_number,
+                            sponsor=amdt.sponsor,
+                            description=amdt.description,
+                            purpose=amdt.purpose,
+                            proposed_date=amdt.proposed_date,
+                            action_date=amdt.action_date,
+                            status=amdt.status,
+                        )
+                    )
+                    # Also surface each amendment as a non-milestone timeline event
+                    amdt_title = f"Amendment {amdt.amendment_number}"
+                    if amdt.sponsor:
+                        amdt_title += f" ({amdt.sponsor})"
+                    timeline_events.append(
+                        TimelineEventSchema(
+                            event_type="amendment",
+                            date=amdt.proposed_date or amdt.action_date,
+                            title=amdt_title,
+                            description=amdt.description or amdt.purpose or "",
+                            chamber=None,
+                            is_milestone=False,
+                        )
+                    )
+
+                # --- CBO estimates -------------------------------------------
+                try:
+                    raw_estimates = await congress_client.get_bill_cbo_estimates(
+                        congress, bill_type_lower, bill_number_int
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to fetch CBO estimates: {exc}")
+                    raw_estimates = []
+
+                for est in raw_estimates:
+                    cbo_estimates.append(
+                        CBOEstimateSchema(
+                            title=est.title,
+                            url=est.url,
+                            pub_date=est.pub_date,
+                            description=est.description,
+                        )
+                    )
+
+                # --- Related bills -------------------------------------------
+                try:
+                    raw_related = await congress_client.get_related_bills(
+                        congress, bill_type_lower, bill_number_int
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to fetch related bills: {exc}")
+                    raw_related = []
+
+                for rb in raw_related:
+                    related_bills.append(
+                        RelatedBillSchema(
+                            congress=rb.congress,
+                            bill_type=rb.bill_type,
+                            bill_number=rb.bill_number,
+                            title=rb.title,
+                            relationship_details=rb.relationship_details,
+                        )
+                    )
+
     # --- Determine status and president --------------------------------------
     presidential_action = law.presidential_action
     president_name = law.president
@@ -1317,4 +1398,7 @@ async def get_law_history(
         enacted_date=law.enacted_date,
         status=status,
         congress_url=law.congress_url,
+        amendments=amendments,
+        cbo_estimates=cbo_estimates,
+        related_bills=related_bills,
     )

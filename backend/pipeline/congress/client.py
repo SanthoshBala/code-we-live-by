@@ -418,6 +418,106 @@ class BillAction:
         )
 
 
+@dataclass
+class BillAmendment:
+    """An amendment to a bill from the Congress.gov /amendments endpoint."""
+
+    amendment_number: str
+    sponsor: str | None
+    description: str | None
+    purpose: str | None
+    proposed_date: date | None
+    action_date: date | None
+    status: str | None  # "adopted", "rejected", "withdrawn", "pending"
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> BillAmendment:
+        def _parse_date(key: str) -> date | None:
+            val = data.get(key, "")
+            if val:
+                with contextlib.suppress(ValueError):
+                    return date.fromisoformat(val[:10])
+            return None
+
+        # Congress.gov returns nested "latestAction" for action_date
+        latest_action = data.get("latestAction", {})
+        action_date_str = latest_action.get("actionDate", "")
+        action_date: date | None = None
+        if action_date_str:
+            with contextlib.suppress(ValueError):
+                action_date = date.fromisoformat(action_date_str[:10])
+
+        # Sponsor may be under "sponsors" list or "sponsor" dict
+        sponsor: str | None = None
+        sponsors = data.get("sponsors", [])
+        if sponsors:
+            sponsor = sponsors[0].get("fullName") or sponsors[0].get("name")
+        elif data.get("sponsor"):
+            sponsor = data["sponsor"].get("fullName") or data["sponsor"].get("name")
+
+        return cls(
+            amendment_number=data.get("number", ""),
+            sponsor=sponsor,
+            description=data.get("description"),
+            purpose=data.get("purpose"),
+            proposed_date=_parse_date("proposedDate"),
+            action_date=action_date,
+            status=data.get("status") or (latest_action.get("text") or None),
+        )
+
+
+@dataclass
+class CBOEstimate:
+    """A CBO cost estimate from the Congress.gov /costestimates endpoint."""
+
+    title: str
+    url: str | None
+    pub_date: date | None
+    description: str | None
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> CBOEstimate:
+        pub_date: date | None = None
+        pub_date_str = data.get("pubDate", "")
+        if pub_date_str:
+            with contextlib.suppress(ValueError):
+                pub_date = date.fromisoformat(pub_date_str[:10])
+
+        return cls(
+            title=data.get("title", ""),
+            url=data.get("url"),
+            pub_date=pub_date,
+            description=data.get("description"),
+        )
+
+
+@dataclass
+class RelatedBill:
+    """A related bill from the Congress.gov /relatedbills endpoint."""
+
+    congress: int
+    bill_type: str
+    bill_number: int
+    title: str | None
+    relationship_details: str | None
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> RelatedBill:
+        # Relationship type is under relationshipDetails list
+        rel_details = data.get("relationshipDetails", [])
+        relationship: str | None = None
+        if rel_details:
+            relationship = rel_details[0].get("type")
+
+        return cls(
+            congress=_safe_int(data.get("congress")) or 0,
+            bill_type=(data.get("type") or "").upper(),
+            bill_number=_safe_int(data.get("number")) or 0,
+            title=data.get("title"),
+            relationship_details=relationship,
+        )
+
+
 class CongressClient:
     """Client for the Congress.gov API.
 
@@ -978,4 +1078,184 @@ class CongressClient:
                 offset += page_size
 
         logger.info(f"Fetched {len(results)} member votes")
+        return results
+
+    async def get_bill_amendments(
+        self,
+        congress: int,
+        bill_type: str,
+        bill_number: int,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> list[BillAmendment]:
+        """Fetch all amendments for a bill from Congress.gov.
+
+        Args:
+            congress: Congress number (e.g., 117).
+            bill_type: Bill type code (e.g., "hr", "s").
+            bill_number: Bill number.
+            page_size: Results per page (max 250).
+
+        Returns:
+            List of BillAmendment objects.
+        """
+        url = f"{self.base_url}/bill/{congress}/{bill_type.lower()}/{bill_number}/amendments"
+        results: list[BillAmendment] = []
+        offset = 0
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            while True:
+                params: dict[str, Any] = {
+                    "api_key": self.api_key,
+                    "format": "json",
+                    "limit": page_size,
+                    "offset": offset,
+                }
+                logger.info(
+                    f"Fetching amendments for {congress}/{bill_type}/{bill_number} "
+                    f"(offset={offset})"
+                )
+                try:
+                    response = await self._request_with_retry(
+                        client, "GET", url, params=params
+                    )
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        break
+                    raise
+                data = response.json()
+
+                amendments = data.get("amendments", [])
+                for item in amendments:
+                    results.append(BillAmendment.from_api_response(item))
+
+                pagination = data.get("pagination", {})
+                count = pagination.get("count", 0)
+                if offset + page_size >= count or not amendments:
+                    break
+                offset += page_size
+
+        logger.info(
+            f"Fetched {len(results)} amendments for {bill_type.upper()} {bill_number}"
+        )
+        return results
+
+    async def get_bill_cbo_estimates(
+        self,
+        congress: int,
+        bill_type: str,
+        bill_number: int,
+    ) -> list[CBOEstimate]:
+        """Fetch CBO cost estimates for a bill from Congress.gov.
+
+        Args:
+            congress: Congress number.
+            bill_type: Bill type code (e.g., "hr", "s").
+            bill_number: Bill number.
+
+        Returns:
+            List of CBOEstimate objects; empty if none exist.
+        """
+        url = (
+            f"{self.base_url}/bill/{congress}/{bill_type.lower()}/{bill_number}"
+            "/costestimates"
+        )
+        results: list[CBOEstimate] = []
+        offset = 0
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            while True:
+                params: dict[str, Any] = {
+                    "api_key": self.api_key,
+                    "format": "json",
+                    "limit": DEFAULT_PAGE_SIZE,
+                    "offset": offset,
+                }
+                logger.info(
+                    f"Fetching CBO estimates for {congress}/{bill_type}/{bill_number}"
+                )
+                try:
+                    response = await self._request_with_retry(
+                        client, "GET", url, params=params
+                    )
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        break
+                    raise
+                data = response.json()
+
+                estimates = data.get("costEstimates", [])
+                for item in estimates:
+                    results.append(CBOEstimate.from_api_response(item))
+
+                pagination = data.get("pagination", {})
+                count = pagination.get("count", 0)
+                if offset + DEFAULT_PAGE_SIZE >= count or not estimates:
+                    break
+                offset += DEFAULT_PAGE_SIZE
+
+        logger.info(
+            f"Fetched {len(results)} CBO estimates for {bill_type.upper()} {bill_number}"
+        )
+        return results
+
+    async def get_related_bills(
+        self,
+        congress: int,
+        bill_type: str,
+        bill_number: int,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> list[RelatedBill]:
+        """Fetch related bills for a bill from Congress.gov.
+
+        Args:
+            congress: Congress number.
+            bill_type: Bill type code (e.g., "hr", "s").
+            bill_number: Bill number.
+            page_size: Results per page (max 250).
+
+        Returns:
+            List of RelatedBill objects; may span different Congresses.
+        """
+        url = (
+            f"{self.base_url}/bill/{congress}/{bill_type.lower()}/{bill_number}"
+            "/relatedbills"
+        )
+        results: list[RelatedBill] = []
+        offset = 0
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            while True:
+                params: dict[str, Any] = {
+                    "api_key": self.api_key,
+                    "format": "json",
+                    "limit": page_size,
+                    "offset": offset,
+                }
+                logger.info(
+                    f"Fetching related bills for {congress}/{bill_type}/{bill_number} "
+                    f"(offset={offset})"
+                )
+                try:
+                    response = await self._request_with_retry(
+                        client, "GET", url, params=params
+                    )
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        break
+                    raise
+                data = response.json()
+
+                related = data.get("relatedBills", [])
+                for item in related:
+                    results.append(RelatedBill.from_api_response(item))
+
+                pagination = data.get("pagination", {})
+                count = pagination.get("count", 0)
+                if offset + page_size >= count or not related:
+                    break
+                offset += page_size
+
+        logger.info(
+            f"Fetched {len(results)} related bills for {bill_type.upper()} {bill_number}"
+        )
         return results
