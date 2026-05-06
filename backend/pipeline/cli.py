@@ -2731,6 +2731,43 @@ Examples:
         help="Release point identifier to validate against (e.g., '113-37')",
     )
 
+    seed_law_history_parser = subparsers.add_parser(
+        "seed-law-history",
+        help="Seed bill actions and sponsors for a single public law into the DB",
+    )
+    seed_law_history_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g. 117)",
+    )
+    seed_law_history_parser.add_argument(
+        "law_number",
+        type=int,
+        help="Public law number (e.g. 169)",
+    )
+    seed_law_history_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Delete existing rows and re-fetch from Congress.gov",
+    )
+
+    seed_congress_law_history_parser = subparsers.add_parser(
+        "seed-congress-law-history",
+        help="Seed bill actions and sponsors for all public laws in a congress",
+    )
+    seed_congress_law_history_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number (e.g. 117)",
+    )
+    seed_congress_law_history_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Delete existing rows and re-fetch from Congress.gov",
+    )
+
     args = parser.parse_args()
 
     # Initialize shared pipeline cache (local-only unless GCS_CACHE_BUCKET is set)
@@ -3121,9 +3158,84 @@ Examples:
             )
         )
 
+    elif args.command == "seed-law-history":
+        return asyncio.run(
+            seed_law_history_command(
+                congress=args.congress,
+                law_number=args.law_number,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "seed-congress-law-history":
+        return asyncio.run(
+            seed_congress_law_history_command(
+                congress=args.congress,
+                force=args.force,
+            )
+        )
+
     else:
         parser.print_help()
         return 1
+
+
+async def seed_law_history_command(
+    congress: int,
+    law_number: int,
+    force: bool = False,
+) -> int:
+    """Seed bill actions and sponsors for a single public law.
+
+    Args:
+        congress: Congress number.
+        law_number: Public law number.
+        force: If True, delete existing rows and re-fetch.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.congress.law_history_ingestion import LawHistoryIngestionService
+
+    async with async_session_maker() as session:
+        service = LawHistoryIngestionService(session, cache=_cli_cache)
+        log = await service.seed_law(congress, law_number, force=force)
+
+        if log.status in ("completed", "skipped"):
+            logger.info(f"PL {congress}-{law_number}: {log.status} — {log.details}")
+            return 0
+        else:
+            logger.error(f"PL {congress}-{law_number}: {log.error_message}")
+            return 1
+
+
+async def seed_congress_law_history_command(
+    congress: int,
+    force: bool = False,
+) -> int:
+    """Seed bill actions and sponsors for all public laws in a congress.
+
+    Args:
+        congress: Congress number.
+        force: If True, delete existing rows and re-fetch.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.congress.law_history_ingestion import LawHistoryIngestionService
+
+    async with async_session_maker() as session:
+        service = LawHistoryIngestionService(session, cache=_cli_cache)
+        log = await service.seed_congress(congress, force=force)
+
+        if log.status in ("completed", "skipped"):
+            logger.info(f"Congress {congress}: {log.status} — {log.details}")
+            return 0
+        else:
+            logger.error(f"Congress {congress}: {log.error_message}")
+            return 1
 
 
 async def chrono_timeline_command(
