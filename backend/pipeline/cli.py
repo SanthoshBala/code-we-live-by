@@ -3286,7 +3286,9 @@ async def chrono_bootstrap_command(
     parser = USLMParser()
 
     async with async_session_maker() as session:
-        service = BootstrapService(session, downloader, parser)
+        service = BootstrapService(
+            session, downloader, parser, session_factory=async_session_maker
+        )
         result = await service.create_initial_commit(
             release_point, titles=titles, force=force
         )
