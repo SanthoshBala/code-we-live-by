@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLawMeta, useLawText, useLawDiffs, useLawHistory } from '@/hooks/useLaw';
+import {
+  useLawMeta,
+  useLawText,
+  useLawDiffs,
+  useLawHistory,
+} from '@/hooks/useLaw';
 import { fetchLawText } from '@/lib/api';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';

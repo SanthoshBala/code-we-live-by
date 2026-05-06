@@ -252,56 +252,56 @@ export interface SectionDiff {
 // --- Legislative history types ---
 
 export type HistoryEventType =
-    | 'introduced'
-    | 'committee_referral'
-    | 'house_vote'
-    | 'senate_vote'
-    | 'presidential_action'
-    | 'other';
+  | 'introduced'
+  | 'committee_referral'
+  | 'house_vote'
+  | 'senate_vote'
+  | 'presidential_action'
+  | 'other';
 
 export type LawStatus = 'enacted' | 'vetoed' | 'pending';
 
 /** A single event in a bill's legislative timeline. */
 export interface TimelineEvent {
-    event_type: HistoryEventType;
-    date: string | null;
-    title: string;
-    description: string;
-    chamber: string | null;
-    is_milestone: boolean;
-    vote_yeas: number | null;
-    vote_nays: number | null;
-    vote_not_voting: number | null;
-    congressional_record_refs: string[];
+  event_type: HistoryEventType;
+  date: string | null;
+  title: string;
+  description: string;
+  chamber: string | null;
+  is_milestone: boolean;
+  vote_yeas: number | null;
+  vote_nays: number | null;
+  vote_not_voting: number | null;
+  congressional_record_refs: string[];
 }
 
 /** A bill sponsor or cosponsor. */
 export interface Sponsor {
-    name: string;
-    party: string | null;
-    state: string | null;
-    bioguide_id: string | null;
-    is_primary: boolean;
+  name: string;
+  party: string | null;
+  state: string | null;
+  bioguide_id: string | null;
+  is_primary: boolean;
 }
 
 /** Aggregated vote totals for one chamber's final passage vote. */
 export interface ChamberVote {
-    chamber: string;
-    yeas: number;
-    nays: number;
-    not_voting: number;
+  chamber: string;
+  yeas: number;
+  nays: number;
+  not_voting: number;
 }
 
 /** Full legislative history response for a public law. */
 export interface LegislativeHistory {
-    timeline: TimelineEvent[];
-    sponsors: Sponsor[];
-    chamber_votes: ChamberVote[];
-    presidential_action: string | null;
-    president_name: string | null;
-    enacted_date: string | null;
-    status: LawStatus;
-    congress_url: string | null;
+  timeline: TimelineEvent[];
+  sponsors: Sponsor[];
+  chamber_votes: ChamberVote[];
+  presidential_action: string | null;
+  president_name: string | null;
+  enacted_date: string | null;
+  status: LawStatus;
+  congress_url: string | null;
 }
 
 /** Full section view returned by the section detail endpoint. */
