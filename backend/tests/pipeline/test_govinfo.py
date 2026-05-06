@@ -216,7 +216,9 @@ class TestPublicLawIngestionServiceParallelism:
         mock_session = MagicMock()
         mock_session.add = MagicMock()
         mock_session.flush = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
         mock_session.commit = AsyncMock()
 
         service = PublicLawIngestionService(session=mock_session, api_key="test-key")
@@ -262,7 +264,9 @@ class TestPublicLawIngestionServiceParallelism:
         mock_session = MagicMock()
         mock_session.add = MagicMock()
         mock_session.flush = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
         mock_session.commit = AsyncMock()
 
         service = PublicLawIngestionService(session=mock_session, api_key="test-key")
@@ -306,7 +310,9 @@ class TestPublicLawIngestionServiceParallelism:
         mock_session = MagicMock()
         mock_session.add = MagicMock()
         mock_session.flush = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
+        mock_session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
         mock_session.commit = AsyncMock()
 
         service = PublicLawIngestionService(session=mock_session, api_key="test-key")

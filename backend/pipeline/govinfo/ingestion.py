@@ -79,12 +79,12 @@ class PublicLawIngestionService:
                     return await self.client.get_public_law_detail(package_id)
 
             fetch_results = await asyncio.gather(
-                *[_fetch_detail(l.package_id) for l in laws],
+                *[_fetch_detail(law.package_id) for law in laws],
                 return_exceptions=True,
             )
 
             # Upsert sequentially to avoid session contention
-            for law_info, result in zip(laws, fetch_results):
+            for law_info, result in zip(laws, fetch_results, strict=True):
                 if isinstance(result, BaseException):
                     logger.error(f"Error fetching {law_info.package_id}: {result}")
                     continue
@@ -216,12 +216,12 @@ class PublicLawIngestionService:
                     return await self.client.get_public_law_detail(package_id)
 
             fetch_results = await asyncio.gather(
-                *[_fetch_detail(l.package_id) for l in laws],
+                *[_fetch_detail(law.package_id) for law in laws],
                 return_exceptions=True,
             )
 
             # Upsert sequentially to avoid session contention
-            for law_info, result in zip(laws, fetch_results):
+            for law_info, result in zip(laws, fetch_results, strict=True):
                 if isinstance(result, BaseException):
                     logger.error(f"Error fetching {law_info.package_id}: {result}")
                     continue
