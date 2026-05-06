@@ -237,22 +237,38 @@ async def seed_laws_command() -> int:
     print(f"\nSeeding {len(SEED_LAWS)} Public Laws...")
     print()
 
-    failed = 0
-    async with async_session_maker() as session:
-        service = PublicLawIngestionService(session, cache=_cli_cache)
-        for congress, law_number, _default_title, short_name in SEED_LAWS:
-            label = f"PL {congress}-{law_number}"
+    async def _ingest_one(
+        congress: int, law_number: int, short_name: str
+    ) -> tuple[str, str, str]:
+        label = f"PL {congress}-{law_number}"
+        async with async_session_maker() as session:
+            service = PublicLawIngestionService(session, cache=_cli_cache)
             try:
                 log = await service.ingest_law(congress, law_number, force=False)
                 if log.status in ("completed", "skipped"):
                     status = "ok" if log.status == "completed" else "exists"
-                    print(f"  [{status:<6}] {label:<14} {short_name}")
+                    return (label, short_name, status)
                 else:
-                    print(f"  [FAIL  ] {label:<14} {short_name}: {log.error_message}")
-                    failed += 1
+                    return (label, short_name, f"FAIL\x00{log.error_message}")
             except Exception as exc:
-                print(f"  [ERROR ] {label:<14} {short_name}: {exc}")
-                failed += 1
+                return (label, short_name, f"ERROR\x00{exc}")
+
+    tasks = [
+        _ingest_one(congress, law_number, short_name)
+        for congress, law_number, _default_title, short_name in SEED_LAWS
+    ]
+    results = await asyncio.gather(*tasks)
+
+    failed = 0
+    for label, short_name, status in results:
+        if status.startswith("FAIL\x00"):
+            print(f"  [FAIL  ] {label:<14} {short_name}: {status[5:]}")
+            failed += 1
+        elif status.startswith("ERROR\x00"):
+            print(f"  [ERROR ] {label:<14} {short_name}: {status[6:]}")
+            failed += 1
+        else:
+            print(f"  [{status:<6}] {label:<14} {short_name}")
 
     print()
     if failed:
