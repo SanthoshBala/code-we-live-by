@@ -325,6 +325,18 @@ class OLRCDownloader:
             if zip_bytes is None:
                 return None
 
+            # Some titles don't exist at older release points (e.g., Title 54
+            # was enacted in P.L. 113-287, so it's absent from RP 113-21). The
+            # OLRC serves an HTML error page with HTTP 200 in that case, so
+            # validate the ZIP magic bytes before caching — otherwise the
+            # bogus HTML gets stored in GCS and every retry fails the same way.
+            if not zip_bytes.startswith((b"PK\x03\x04", b"PK\x05\x06")):
+                logger.warning(
+                    f"Title {title_number}@{release_point}: response is not a "
+                    "ZIP (likely not codified at this release point), skipping"
+                )
+                return None
+
             # Store in cache
             if self._cache:
                 self._cache.put_bytes(cache_key, zip_bytes)
