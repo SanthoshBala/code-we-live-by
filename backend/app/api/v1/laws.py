@@ -7,12 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.public_law import (
     compute_law_diffs,
+    get_law_history,
     get_law_metadata,
     get_law_text,
     get_laws_list,
     parse_law_amendments,
 )
 from app.models.base import get_async_session
+from app.schemas.law_history import LegislativeHistorySchema
 from app.schemas.law_viewer import (
     LawSummarySchema,
     LawTextSchema,
@@ -86,3 +88,24 @@ async def read_law_diffs(
 ) -> list[SectionDiffSchema]:
     """Compute per-section unified diffs for a law's amendments."""
     return await compute_law_diffs(session, congress, law_number)
+
+
+@router.get("/{congress}/{law_number}/history")
+async def read_law_history(
+    congress: int,
+    law_number: int,
+    session: AsyncSession = Depends(get_async_session),
+) -> LegislativeHistorySchema:
+    """Return the legislative history timeline for a public law.
+
+    Aggregates bill actions, sponsors, and vote data from the Congress.gov API
+    and maps them to a PR-conversation-style timeline. Requires CONGRESS_API_KEY
+    to be configured; returns 503 if the API is unavailable.
+    """
+    result = await get_law_history(session, congress, law_number)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Law PL {congress}-{law_number} not found",
+        )
+    return result
