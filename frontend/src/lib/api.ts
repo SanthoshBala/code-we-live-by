@@ -4,6 +4,7 @@ import type {
   SectionView,
   LawSummary,
   LawText,
+  LegislativeHistory,
   ParsedAmendment,
   SectionDiff,
   HeadRevision,
@@ -163,6 +164,22 @@ export async function fetchLawDiffs(
   if (!res.ok) {
     throw new Error(
       `Failed to fetch diffs for PL ${congress}-${lawNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
+/** Fetch the legislative history timeline for a public law. */
+export async function fetchLawHistory(
+  congress: number,
+  lawNumber: string
+): Promise<LegislativeHistory> {
+  const res = await fetch(
+    `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/history`
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch history for PL ${congress}-${lawNumber}: ${res.status}`
     );
   }
   return res.json();

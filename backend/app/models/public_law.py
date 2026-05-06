@@ -4,6 +4,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     ForeignKey,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, enum_column
@@ -82,6 +84,16 @@ class PublicLaw(Base, TimestampMixin):
         back_populates="law",
         primaryjoin="PublicLaw.law_id == Vote.law_id",
         cascade="all, delete-orphan",
+    )
+    bill_actions: Mapped[list["LawBillAction"]] = relationship(
+        back_populates="law",
+        cascade="all, delete-orphan",
+        order_by="LawBillAction.sort_order",
+    )
+    cached_sponsors: Mapped[list["LawSponsor"]] = relationship(
+        back_populates="law",
+        cascade="all, delete-orphan",
+        order_by="LawSponsor.sort_order",
     )
 
     __table_args__ = (
@@ -234,3 +246,73 @@ class ProposedChange(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<ProposedChange({self.change_type.value} by bill {self.bill_id})>"
+
+
+class LawBillAction(Base, TimestampMixin):
+    """A cached bill action (timeline event) for a public law.
+
+    Populated by the seed-law-history pipeline command so the History tab
+    can serve responses from the DB instead of hitting the Congress.gov API
+    on every request.
+    """
+
+    __tablename__ = "law_bill_action"
+
+    action_id: Mapped[int] = mapped_column(primary_key=True)
+    law_id: Mapped[int] = mapped_column(
+        ForeignKey("public_law.law_id", ondelete="CASCADE"), nullable=False
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    action_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    action_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    action_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    chamber: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    congressional_record_refs: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_milestone: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    vote_yeas: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vote_nays: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vote_not_voting: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    event_title: Mapped[str] = mapped_column(String(300), nullable=False)
+
+    law: Mapped["PublicLaw"] = relationship(back_populates="bill_actions")
+
+    __table_args__ = (
+        Index("idx_law_bill_action_law_id", "law_id"),
+        Index("idx_law_bill_action_sort", "law_id", "sort_order"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<LawBillAction(law={self.law_id}, type={self.event_type}, order={self.sort_order})>"
+
+
+class LawSponsor(Base, TimestampMixin):
+    """A cached sponsor or cosponsor for a public law.
+
+    Populated by the seed-law-history pipeline command. Stored separately
+    from the Sponsorship model (which requires a full Legislator FK) so we
+    can cache sponsor display data without first ingesting all legislators.
+    """
+
+    __tablename__ = "law_sponsor"
+
+    sponsor_id: Mapped[int] = mapped_column(primary_key=True)
+    law_id: Mapped[int] = mapped_column(
+        ForeignKey("public_law.law_id", ondelete="CASCADE"), nullable=False
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    party: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    bioguide_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    law: Mapped["PublicLaw"] = relationship(back_populates="cached_sponsors")
+
+    __table_args__ = (Index("idx_law_sponsor_law_id", "law_id"),)
+
+    def __repr__(self) -> str:
+        return f"<LawSponsor(law={self.law_id}, name={self.name!r}, primary={self.is_primary})>"

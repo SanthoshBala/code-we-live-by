@@ -1,11 +1,12 @@
 """Tests for Congress.gov API client."""
 
-from datetime import UTC, datetime
-from unittest.mock import patch
+from datetime import UTC, date, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from pipeline.congress.client import (
+    BillAction,
     CongressClient,
     HouseVoteDetail,
     HouseVoteInfo,
@@ -14,6 +15,7 @@ from pipeline.congress.client import (
     MemberTerm,
     MemberVoteInfo,
     SponsorInfo,
+    _parse_cr_refs,
 )
 
 
@@ -429,3 +431,236 @@ class TestMemberVoteInfo:
         info = MemberVoteInfo.from_api_response(data)
 
         assert info.vote_cast == "Not Voting"
+
+
+class TestParseCRRefs:
+    """Tests for Congressional Record reference parsing."""
+
+    def test_no_refs(self) -> None:
+        """Text without CR citations returns empty list."""
+        assert _parse_cr_refs("Signed by President.") == []
+
+    def test_ref_without_date(self) -> None:
+        """Parse CR reference with page only."""
+        result = _parse_cr_refs("Considered in House. CR H481.")
+        assert result == ["CR H481"]
+
+    def test_ref_with_date(self) -> None:
+        """Parse CR reference with date and page range."""
+        result = _parse_cr_refs("Debate. CR 2/12/2013 H439-440.")
+        assert result == ["CR 2/12/2013 H439-440"]
+
+    def test_senate_page(self) -> None:
+        """Parse Senate CR page reference."""
+        result = _parse_cr_refs("Senate debate. CR S1234.")
+        assert result == ["CR S1234"]
+
+    def test_multiple_refs(self) -> None:
+        """Parse multiple CR references from one text string."""
+        text = "Debate in House CR H439-440. Senate CR S567."
+        result = _parse_cr_refs(text)
+        assert len(result) == 2
+        assert "CR H439-440" in result
+        assert "CR S567" in result
+
+    def test_empty_text(self) -> None:
+        """Empty text returns empty list."""
+        assert _parse_cr_refs("") == []
+
+
+class TestBillAction:
+    """Tests for BillAction dataclass."""
+
+    def test_from_api_response_presidential_signature(self) -> None:
+        """Parse a presidential signature action."""
+        data = {
+            "actionCode": "36000",
+            "actionDate": "2013-08-09",
+            "type": "President",
+            "text": "Signed by President.",
+            "sourceSystem": {"code": 2, "name": "House floor actions"},
+        }
+
+        action = BillAction.from_api_response(data)
+
+        assert action.action_date == date(2013, 8, 9)
+        assert action.action_code == "36000"
+        assert action.action_type == "President"
+        assert action.text == "Signed by President."
+        assert action.chamber == "House"
+        assert action.congressional_record_refs == []
+
+    def test_from_api_response_with_cr_refs(self) -> None:
+        """Parse action that includes Congressional Record citations."""
+        data = {
+            "actionDate": "2013-02-12",
+            "type": "Floor",
+            "text": "Considered in House. CR 2/12/2013 H439-440.",
+            "sourceSystem": {"code": 2, "name": "House floor actions"},
+        }
+
+        action = BillAction.from_api_response(data)
+
+        assert action.action_date == date(2013, 2, 12)
+        assert action.congressional_record_refs == ["CR 2/12/2013 H439-440"]
+        assert action.chamber == "House"
+
+    def test_from_api_response_senate_chamber(self) -> None:
+        """Chamber is inferred as Senate from sourceSystem."""
+        data = {
+            "actionDate": "2013-07-31",
+            "type": "Floor",
+            "text": "Passed Senate without amendment.",
+            "sourceSystem": {"code": 0, "name": "Senate"},
+        }
+
+        action = BillAction.from_api_response(data)
+
+        assert action.chamber == "Senate"
+
+    def test_from_api_response_with_recorded_vote(self) -> None:
+        """Parse action that includes a recorded vote link."""
+        data = {
+            "actionDate": "2013-02-13",
+            "type": "Floor",
+            "text": "On passage Passed by the Yeas and Nays.",
+            "sourceSystem": {"code": 2, "name": "House floor actions"},
+            "recordedVotes": [
+                {
+                    "chamber": "House",
+                    "congress": 113,
+                    "date": "2013-02-13T17:38:00Z",
+                    "rollNumber": 47,
+                    "session": 1,
+                    "url": "http://clerk.house.gov/evs/2013/roll047.xml",
+                }
+            ],
+        }
+
+        action = BillAction.from_api_response(data)
+
+        assert len(action.recorded_votes) == 1
+        vote = action.recorded_votes[0]
+        assert vote.chamber == "House"
+        assert vote.roll_number == 47
+        assert vote.session == 1
+
+    def test_from_api_response_missing_date(self) -> None:
+        """Action with missing date sets action_date to None."""
+        data = {
+            "type": "IntroReferral",
+            "text": "Referred to committee.",
+            "sourceSystem": {},
+        }
+
+        action = BillAction.from_api_response(data)
+
+        assert action.action_date is None
+        assert action.congressional_record_refs == []
+
+    def test_from_api_response_unknown_source_system(self) -> None:
+        """Unknown sourceSystem leaves chamber as None."""
+        data = {
+            "actionDate": "2013-01-03",
+            "type": "IntroReferral",
+            "text": "Introduced in House.",
+            "sourceSystem": {"code": 9, "name": "Library of Congress"},
+        }
+
+        action = BillAction.from_api_response(data)
+
+        assert action.chamber is None
+
+
+class TestGetBillActions:
+    """Tests for CongressClient.get_bill_actions()."""
+
+    @pytest.mark.asyncio
+    async def test_fetches_all_pages(self) -> None:
+        """get_bill_actions fetches all pages when results exceed page size."""
+        page1 = {
+            "actions": [
+                {
+                    "actionDate": "2013-01-03",
+                    "type": "IntroReferral",
+                    "text": "Introduced in House.",
+                    "sourceSystem": {"name": "House floor actions"},
+                }
+            ],
+            "pagination": {"count": 2},
+        }
+        page2 = {
+            "actions": [
+                {
+                    "actionDate": "2013-08-09",
+                    "actionCode": "36000",
+                    "type": "President",
+                    "text": "Signed by President.",
+                    "sourceSystem": {"name": "House floor actions"},
+                }
+            ],
+            "pagination": {"count": 2},
+        }
+
+        mock_response1 = MagicMock()
+        mock_response1.json.return_value = page1
+        mock_response1.raise_for_status = MagicMock()
+
+        mock_response2 = MagicMock()
+        mock_response2.json.return_value = page2
+        mock_response2.raise_for_status = MagicMock()
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(side_effect=[mock_response1, mock_response2]),
+        ):
+            client = CongressClient(api_key="test-key")
+            actions = await client.get_bill_actions(113, "hr", 267, page_size=1)
+
+        assert len(actions) == 2
+        assert actions[0].action_type == "IntroReferral"
+        assert actions[1].action_type == "President"
+        assert actions[1].action_code == "36000"
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_for_no_actions(self) -> None:
+        """get_bill_actions returns empty list when API returns no actions."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"actions": [], "pagination": {"count": 0}}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            client = CongressClient(api_key="test-key")
+            actions = await client.get_bill_actions(113, "hr", 267)
+
+        assert actions == []
+
+    @pytest.mark.asyncio
+    async def test_cr_refs_parsed_in_actions(self) -> None:
+        """CR references in action text are parsed correctly."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "actions": [
+                {
+                    "actionDate": "2013-02-12",
+                    "type": "Floor",
+                    "text": "Debate. CR 2/12/2013 H439-440. CR H481.",
+                    "sourceSystem": {"name": "House floor actions"},
+                }
+            ],
+            "pagination": {"count": 1},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        with patch(
+            "pipeline.congress.client.CongressClient._request_with_retry",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            client = CongressClient(api_key="test-key")
+            actions = await client.get_bill_actions(113, "hr", 267)
+
+        assert len(actions) == 1
+        assert len(actions[0].congressional_record_refs) == 2

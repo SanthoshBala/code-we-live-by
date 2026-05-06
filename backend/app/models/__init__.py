@@ -29,7 +29,14 @@ from app.models.legislator import (
     Sponsorship,
     Vote,
 )
-from app.models.public_law import Bill, LawChange, ProposedChange, PublicLaw
+from app.models.public_law import (
+    Bill,
+    LawBillAction,
+    LawChange,
+    LawSponsor,
+    ProposedChange,
+    PublicLaw,
+)
 from app.models.release_point import OLRCReleasePoint
 from app.models.revision import CodeRevision
 from app.models.snapshot import SectionSnapshot
@@ -84,6 +91,8 @@ __all__ = [
     "PublicLaw",
     "Bill",
     "LawChange",
+    "LawBillAction",
+    "LawSponsor",
     "ProposedChange",
     # Legislator
     "Legislator",

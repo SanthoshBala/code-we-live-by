@@ -4,13 +4,26 @@ from __future__ import annotations
 
 import importlib
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.models.public_law import PublicLaw
+from app.core.law_history_helpers import (
+    build_event_title,
+    classify_action,
+    parse_vote_tally,
+)
+from app.models.public_law import Bill, LawBillAction, LawSponsor, PublicLaw
+from app.schemas.law_history import (
+    ChamberVoteSchema,
+    LegislativeHistorySchema,
+    SponsorSchema,
+    TimelineEventSchema,
+)
 from app.schemas.law_viewer import (
     DiffHunkSchema,
     DiffLineSchema,
@@ -196,7 +209,6 @@ def _find_line_number(provisions: list[dict[str, Any]], old_text: str) -> int | 
     Normalises whitespace for matching since amendment text and provision
     content may differ in spacing.
     """
-    import re
 
     def normalise(s: str) -> str:
         return re.sub(r"\s+", " ", s).strip().lower()
@@ -387,7 +399,6 @@ def _parse_redesignation(text: str) -> list[tuple[int, str]] | None:
 
     Returns None if the text doesn't match a redesignation pattern.
     """
-    import re
 
     ORDINALS = {
         "first": 0,
@@ -439,7 +450,6 @@ def _parse_struck_subsections(full_match: str) -> list[str] | None:
     Returns a list of single-letter/number markers like ['a', 'b'], or None
     if the instruction doesn't match this pattern.
     """
-    import re
 
     # Match patterns like:
     #   "striking subsections (a) and (b)"
@@ -465,7 +475,6 @@ def _find_subsection_range(
     same-level marker that is NOT in the target set.  "Same-level" means
     the same marker style as the struck markers (e.g. lowercase letters).
     """
-    import re
 
     marker_set = {f"({m})" for m in markers}
 
@@ -530,7 +539,6 @@ def _apply_amendments_to_provisions(
        to those subsections and replaces them with new_text lines.
     """
     import copy
-    import re
 
     patched = copy.deepcopy(provisions)
 
@@ -714,7 +722,6 @@ def _strip_leading_marker(content: str) -> str:
 
     E.g. "(a) Each preliminary…" → "Each preliminary…"
     """
-    import re
 
     return re.sub(r"^\([a-zA-Z0-9]+\)\s*", "", content)
 
@@ -1024,3 +1031,290 @@ def _build_note_hunks(
             lines=lines,
         )
     ]
+
+
+# ---------------------------------------------------------------------------
+# Legislative history
+# ---------------------------------------------------------------------------
+
+
+async def _resolve_bill_type_and_number(
+    law: PublicLaw,
+    congress_client: Any,
+) -> tuple[str, int] | None:
+    """Return (bill_type_lower, bill_number_int) for making Congress.gov API calls.
+
+    Tries origin_bill relationship first, then falls back to get_law_bill_info().
+    Returns None if neither source has the data.
+    """
+    bill: Bill | None = law.origin_bill
+    if bill is not None and bill.bill_number:
+        bill_type = bill.bill_type.value.lower()
+        try:
+            return bill_type, int(bill.bill_number)
+        except ValueError:
+            pass
+
+    # Fallback: ask Congress.gov for the originating bill
+    try:
+        law_number_int = int(law.law_number)
+        data = await congress_client.get_law_bill_info(
+            law.congress, law_number_int, "pub"
+        )
+    except Exception:
+        return None
+
+    if data is None:
+        return None
+
+    # Response shape: {"congress": {..., "originChamberCode": ..., ...},
+    #                  "request": {...}}  — the law endpoint returns bill ref inline
+    # The actual bill reference is nested under "congress" key as "bills" list
+    congress_data = data.get("congress", {})
+    bills = congress_data.get("bills", [])
+    if not bills:
+        return None
+    bill_ref = bills[0]
+    b_type = (bill_ref.get("type") or "").lower()
+    b_number = bill_ref.get("number")
+    if not b_type or not b_number:
+        return None
+    try:
+        return b_type, int(b_number)
+    except (ValueError, TypeError):
+        return None
+
+
+async def _load_history_from_db(
+    session: AsyncSession,
+    law_id: int,
+) -> (
+    tuple[list[TimelineEventSchema], list[SponsorSchema], list[ChamberVoteSchema]]
+    | None
+):
+    """Return (timeline, sponsors, chamber_votes) from cached DB rows, or None if empty."""
+    action_stmt = (
+        select(LawBillAction)
+        .where(LawBillAction.law_id == law_id)
+        .order_by(LawBillAction.sort_order)
+    )
+    action_result = await session.execute(action_stmt)
+    cached_actions = action_result.scalars().all()
+
+    if not cached_actions:
+        return None
+
+    timeline_events: list[TimelineEventSchema] = []
+    vote_by_chamber: dict[str, ChamberVoteSchema] = {}
+
+    for row in cached_actions:
+        date_str: str | None = row.action_date.isoformat() if row.action_date else None
+        timeline_events.append(
+            TimelineEventSchema(
+                event_type=row.event_type,
+                date=date_str,
+                title=row.event_title,
+                description=row.text,
+                chamber=row.chamber,
+                is_milestone=row.is_milestone,
+                vote_yeas=row.vote_yeas,
+                vote_nays=row.vote_nays,
+                vote_not_voting=row.vote_not_voting,
+                congressional_record_refs=list(row.congressional_record_refs or []),
+            )
+        )
+
+        if (
+            row.event_type in ("house_vote", "senate_vote")
+            and row.vote_yeas is not None
+        ):
+            ch = row.chamber or (
+                "House" if row.event_type == "house_vote" else "Senate"
+            )
+            vote_by_chamber[ch] = ChamberVoteSchema(
+                chamber=ch,
+                yeas=row.vote_yeas,
+                nays=row.vote_nays or 0,
+                not_voting=row.vote_not_voting or 0,
+            )
+
+    sponsor_stmt = (
+        select(LawSponsor)
+        .where(LawSponsor.law_id == law_id)
+        .order_by(LawSponsor.sort_order)
+    )
+    sponsor_result = await session.execute(sponsor_stmt)
+    cached_sponsors = sponsor_result.scalars().all()
+
+    sponsors: list[SponsorSchema] = [
+        SponsorSchema(
+            name=s.name,
+            party=s.party,
+            state=s.state,
+            bioguide_id=s.bioguide_id,
+            is_primary=s.is_primary,
+        )
+        for s in cached_sponsors
+    ]
+
+    return timeline_events, sponsors, list(vote_by_chamber.values())
+
+
+async def get_law_history(
+    session: AsyncSession,
+    congress: int,
+    law_number: int,
+) -> LegislativeHistorySchema | None:
+    """Fetch the legislative history for a public law.
+
+    Checks cached DB rows (law_bill_action / law_sponsor) first; falls back to
+    the live Congress.gov API if the cache is empty. Returns None if the law is
+    not found in the database.
+    """
+    from app.core.president_lookup import get_president_by_date
+
+    stmt = (
+        select(PublicLaw)
+        .where(
+            PublicLaw.congress == congress,
+            PublicLaw.law_number == str(law_number),
+        )
+        .options(selectinload(PublicLaw.origin_bill))
+    )
+    result = await session.execute(stmt)
+    law: PublicLaw | None = result.scalar_one_or_none()
+    if law is None:
+        return None
+
+    # --- Try DB cache first --------------------------------------------------
+    timeline_events: list[TimelineEventSchema] = []
+    sponsors: list[SponsorSchema] = []
+    chamber_votes: list[ChamberVoteSchema] = []
+
+    cached = await _load_history_from_db(session, law.law_id)
+    if cached is not None:
+        timeline_events, sponsors, chamber_votes = cached
+    else:
+        # --- Fall back to live Congress.gov API ------------------------------
+        try:
+            congress_mod = importlib.import_module("pipeline.congress.client")
+            congress_client = congress_mod.CongressClient()
+        except (ValueError, ImportError) as exc:
+            logger.warning(f"Congress.gov API unavailable: {exc}")
+            congress_client = None
+
+        if congress_client is not None:
+            bill_ref = await _resolve_bill_type_and_number(law, congress_client)
+            if bill_ref is not None:
+                bill_type_lower, bill_number_int = bill_ref
+
+                try:
+                    raw_actions = await congress_client.get_bill_actions(
+                        congress, bill_type_lower, bill_number_int
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to fetch bill actions: {exc}")
+                    raw_actions = []
+
+                seen_intro = False
+                seen_committee = False
+                vote_by_chamber: dict[str, ChamberVoteSchema] = {}
+
+                for action in raw_actions:
+                    event_type, is_milestone = classify_action(
+                        action.action_type,
+                        action.text,
+                        action.chamber,
+                        seen_intro,
+                        seen_committee,
+                    )
+
+                    if event_type == "introduced":
+                        seen_intro = True
+                    if event_type == "committee_referral":
+                        seen_committee = True
+
+                    yeas, nays, not_voting = parse_vote_tally(action.text)
+                    title = build_event_title(event_type, action.text, action.chamber)
+
+                    if event_type in ("house_vote", "senate_vote") and yeas is not None:
+                        ch = action.chamber or (
+                            "House" if event_type == "house_vote" else "Senate"
+                        )
+                        vote_by_chamber[ch] = ChamberVoteSchema(
+                            chamber=ch,
+                            yeas=yeas,
+                            nays=nays or 0,
+                            not_voting=not_voting or 0,
+                        )
+
+                    timeline_events.append(
+                        TimelineEventSchema(
+                            event_type=event_type,
+                            date=action.action_date,
+                            title=title,
+                            description=action.text,
+                            chamber=action.chamber,
+                            is_milestone=is_milestone,
+                            vote_yeas=yeas,
+                            vote_nays=nays,
+                            vote_not_voting=not_voting,
+                            congressional_record_refs=action.congressional_record_refs,
+                        )
+                    )
+
+                chamber_votes = list(vote_by_chamber.values())
+
+                try:
+                    sponsor_info, cosponsors = await congress_client.get_bill_sponsors(
+                        congress, bill_type_lower, bill_number_int
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to fetch sponsors: {exc}")
+                    sponsor_info, cosponsors = None, []
+
+                if sponsor_info:
+                    sponsors.append(
+                        SponsorSchema(
+                            name=sponsor_info.full_name,
+                            party=sponsor_info.party,
+                            state=sponsor_info.state,
+                            bioguide_id=sponsor_info.bioguide_id,
+                            is_primary=True,
+                        )
+                    )
+                for cs in cosponsors:
+                    sponsors.append(
+                        SponsorSchema(
+                            name=cs.full_name,
+                            party=cs.party,
+                            state=cs.state,
+                            bioguide_id=cs.bioguide_id,
+                            is_primary=False,
+                        )
+                    )
+
+    # --- Determine status and president --------------------------------------
+    presidential_action = law.presidential_action
+    president_name = law.president
+
+    if president_name is None and law.enacted_date:
+        president_name = get_president_by_date(law.enacted_date)
+
+    if law.veto_date and not law.veto_override_date:
+        status: str = "vetoed"
+    elif law.enacted_date:
+        status = "enacted"
+    else:
+        status = "pending"
+
+    return LegislativeHistorySchema(
+        timeline=timeline_events,
+        sponsors=sponsors,
+        chamber_votes=chamber_votes,
+        presidential_action=presidential_action,
+        president_name=president_name,
+        enacted_date=law.enacted_date,
+        status=status,
+        congress_url=law.congress_url,
+    )

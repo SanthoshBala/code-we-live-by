@@ -3,16 +3,23 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLawMeta, useLawText, useLawDiffs } from '@/hooks/useLaw';
+import {
+  useLawMeta,
+  useLawText,
+  useLawDiffs,
+  useLawHistory,
+} from '@/hooks/useLaw';
 import { fetchLawText } from '@/lib/api';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
 import LawTextViewer from '@/components/law-viewer/LawTextViewer';
 import LawDiffViewer from '@/components/law-viewer/LawDiffViewer';
+import LegislativeHistoryTab from '@/components/law-viewer/LegislativeHistoryTab';
 import LawLine from '@/components/ui/LawLine';
 
 const TABS = [
   { id: 'diff', label: 'Amendments' },
+  { id: 'history', label: 'History' },
   { id: 'htm', label: 'HTM' },
   { id: 'xml', label: 'XML' },
 ];
@@ -65,6 +72,13 @@ export default function LawViewerPage() {
     congress,
     lawNumber,
     activeTab === 'diff'
+  );
+
+  // History fetched lazily when the History tab is active
+  const { data: history, isLoading: historyLoading } = useLawHistory(
+    congress,
+    lawNumber,
+    activeTab === 'history'
   );
 
   if (metaLoading) return <p className="text-gray-500">Loading law text...</p>;
@@ -132,6 +146,17 @@ export default function LawViewerPage() {
         {activeTab === 'diff' && (
           <LawDiffViewer diffs={diffs ?? []} isLoading={diffsLoading} />
         )}
+
+        {activeTab === 'history' &&
+          (historyLoading ? (
+            <p className="text-gray-500">Loading legislative history...</p>
+          ) : history ? (
+            <LegislativeHistoryTab history={history} />
+          ) : (
+            <p className="py-8 text-center text-sm text-gray-500">
+              No legislative history available for this law.
+            </p>
+          ))}
       </div>
     </div>
   );
