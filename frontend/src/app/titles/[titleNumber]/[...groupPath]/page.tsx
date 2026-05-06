@@ -2,8 +2,11 @@
 
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
-import { useLatestRevisionForTitle } from '@/hooks/useLatestRevision';
-import { revisionLabel } from '@/lib/revisionLabel';
+import {
+  useLatestRevisionForTitle,
+  useRevisionById,
+} from '@/hooks/useLatestRevision';
+import { useRevision } from '@/hooks/useRevision';
 import type {
   SectionGroupTree,
   DirectoryItem,
@@ -83,12 +86,16 @@ export default function GroupDirectoryPage() {
   const params = useParams<{ titleNumber: string; groupPath: string[] }>();
   const titleNumber = Number(params.titleNumber);
   const groupPath = params.groupPath;
+  const { revision, withRev } = useRevision();
   const {
     data: structure,
     isLoading,
     error,
-  } = useTitleStructure(titleNumber, true);
+  } = useTitleStructure(titleNumber, true, revision);
   const { data: latestRevision } = useLatestRevisionForTitle(titleNumber);
+  const { data: historicalRevision } = useRevisionById(revision);
+  const revisionData =
+    revision !== undefined ? historicalRevision : latestRevision;
 
   if (isLoading) {
     return <p className="text-gray-500">Loading...</p>;
@@ -107,7 +114,7 @@ export default function GroupDirectoryPage() {
 
   // Build breadcrumbs
   const breadcrumbs: BreadcrumbSegment[] = [
-    { label: `Title ${titleNumber}`, href: `/titles/${titleNumber}` },
+    { label: `Title ${titleNumber}`, href: withRev(`/titles/${titleNumber}`) },
   ];
   let pathSoFar = `/titles/${titleNumber}`;
   for (let i = 0; i < pairs.length; i++) {
@@ -116,7 +123,7 @@ export default function GroupDirectoryPage() {
     if (i < pairs.length - 1) {
       breadcrumbs.push({
         label: `${capitalizeGroupType(pair.type)} ${pair.number}`,
-        href: pathSoFar,
+        href: withRev(pathSoFar),
       });
     } else {
       breadcrumbs.push({
@@ -134,7 +141,7 @@ export default function GroupDirectoryPage() {
     items.push({
       id: `${capitalizeGroupType(child.group_type)} ${child.number}`,
       name: child.name,
-      href: `${pathSoFar}/${child.group_type}/${child.number}`,
+      href: withRev(`${pathSoFar}/${child.group_type}/${child.number}`),
       kind: 'folder' as const,
       status: detectStatus(child.name),
       sectionCount: allSections.length,
@@ -148,7 +155,7 @@ export default function GroupDirectoryPage() {
     items.push({
       id: `\u00A7\u2009${s.section_number}`,
       name: s.heading,
-      href: `/sections/${titleNumber}/${s.section_number}`,
+      href: withRev(`/sections/${titleNumber}/${s.section_number}`),
       kind: 'folder' as const,
       status: s.status ?? detectStatus(s.heading),
       lastAmendmentLaw: s.last_amendment_law ?? null,
@@ -161,7 +168,8 @@ export default function GroupDirectoryPage() {
       title={group.name}
       breadcrumbs={breadcrumbs}
       items={items}
-      revisionLabel={latestRevision ? revisionLabel(latestRevision) : null}
+      revisionData={revisionData ?? null}
+      revision={revision}
     />
   );
 }

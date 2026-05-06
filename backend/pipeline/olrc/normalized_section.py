@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from app.models.enums import LawLevel, SourceRelationship
+from app.models.enums import LawLevel, NoteRefType, SourceRelationship
 from app.schemas import (
     ActSchema,
     AmendmentSchema,
@@ -25,6 +25,7 @@ from app.schemas import (
     CodeReferenceSchema,
     LawPathComponent,
     NoteCategoryEnum,
+    NoteReferenceSchema,
     PublicLawSchema,
     SectionNoteSchema,
     SectionNotesSchema,
@@ -35,6 +36,7 @@ from app.schemas import (
 if TYPE_CHECKING:
     from pipeline.olrc.parser import (
         ActRef,
+        NoteRef,
         ParsedSection,
         ParsedSubsection,
         SourceCreditRef,
@@ -506,6 +508,45 @@ def citations_from_source_credit_refs(
         order += 1
 
     return citations
+
+
+def note_refs_to_schemas(refs: list[NoteRef]) -> list[NoteReferenceSchema]:
+    """Convert NoteRef objects from parser to NoteReferenceSchema objects.
+
+    Args:
+        refs: List of NoteRef from parser (extracted from notes sections).
+
+    Returns:
+        List of NoteReferenceSchema objects for use in SectionNoteSchema.
+    """
+    schemas: list[NoteReferenceSchema] = []
+
+    for ref in refs:
+        # Map ref_type string to NoteRefType enum
+        ref_type_map = {
+            "public_law": NoteRefType.PUBLIC_LAW,
+            "act": NoteRefType.ACT,
+            "usc_section": NoteRefType.USC_SECTION,
+            "statute": NoteRefType.STATUTE,
+        }
+        ref_type = ref_type_map.get(ref.ref_type, NoteRefType.PUBLIC_LAW)
+
+        schema = NoteReferenceSchema(
+            ref_type=ref_type,
+            href=ref.href,
+            display_text=ref.display_text,
+            congress=ref.congress,
+            law_number=ref.law_number,
+            act_date=ref.act_date,
+            act_chapter=ref.act_chapter,
+            usc_title=ref.usc_title,
+            usc_section=ref.usc_section,
+            stat_volume=ref.stat_volume,
+            stat_page=ref.stat_page,
+        )
+        schemas.append(schema)
+
+    return schemas
 
 
 def _is_reference_not_marker(text: str, match_start: int) -> bool:
@@ -2035,6 +2076,10 @@ def normalize_parsed_section(
     if parsed_section.notes:
         notes.raw_notes = parsed_section.notes
         _parse_notes_structure(parsed_section.notes, notes, citations=citations)
+
+    # Convert notes refs to schemas (Task 1.17b)
+    if parsed_section.notes_refs:
+        notes.references = note_refs_to_schemas(parsed_section.notes_refs)
 
     # Populate the section with normalized data
     parsed_section.provisions = lines

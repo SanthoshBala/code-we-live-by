@@ -6,6 +6,7 @@ import pytest
 from lxml import etree
 
 from pipeline.olrc.parser import (
+    NoteRef,
     USLMParser,
     _clean_bracket_heading,
     compute_text_hash,
@@ -597,3 +598,347 @@ class TestChapterGroups:
         assert non_title_groups[0].group_type == "chapter"
         # Chapter's parent should be the title
         assert "title:17" in non_title_groups[0].parent_key
+
+
+class TestExtractNotesRefs:
+    """Tests for _extract_notes_refs method (Task 1.17b)."""
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    @pytest.fixture
+    def xml_with_public_law_refs(self, tmp_path: Path) -> Path:
+        """Create XML with Public Law references in notes."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>Test Chapter</heading>
+        <section identifier="/us/usc/t17/s106" number="106">
+          <heading>Exclusive rights</heading>
+          <content><p>Test content.</p></content>
+          <notes>
+            <note>
+              <heading>References in Text</heading>
+              <p>The Music Modernization Act, referred to in subsec. (a),
+              is <ref href="/us/pl/115/264">Pub. L. 115–264</ref>,
+              Oct. 11, 2018, 132 Stat. 3676.</p>
+              <p>See also <ref href="/us/pl/94/553">Pub. L. 94–553</ref>,
+              the Copyright Act of 1976.</p>
+            </note>
+          </notes>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_pl_refs.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    @pytest.fixture
+    def xml_with_usc_section_refs(self, tmp_path: Path) -> Path:
+        """Create XML with US Code section references in notes."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>Test Chapter</heading>
+        <section identifier="/us/usc/t17/s107" number="107">
+          <heading>Limitations</heading>
+          <content><p>Test content.</p></content>
+          <notes>
+            <note>
+              <heading>References in Text</heading>
+              <p>For the definition of "work made for hire",
+              see <ref href="/us/usc/t17/s101">17 U.S.C. 101</ref>.</p>
+              <p>The exclusive rights are defined in
+              <ref href="/us/usc/t17/s106">section 106 of this title</ref>.</p>
+            </note>
+          </notes>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_usc_refs.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    @pytest.fixture
+    def xml_with_statute_refs(self, tmp_path: Path) -> Path:
+        """Create XML with Statutes at Large references in notes."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>Test Chapter</heading>
+        <section identifier="/us/usc/t17/s108" number="108">
+          <heading>Reproduction</heading>
+          <content><p>Test content.</p></content>
+          <notes>
+            <note>
+              <heading>Amendment History</heading>
+              <p>For the original enactment, see
+              <ref href="/us/stat/90/2546">90 Stat. 2546</ref>.</p>
+            </note>
+          </notes>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_stat_refs.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    @pytest.fixture
+    def xml_with_act_refs(self, tmp_path: Path) -> Path:
+        """Create XML with pre-1957 Act references in notes."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/42</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t42" number="42">
+      <heading>PUBLIC HEALTH</heading>
+      <chapter identifier="/us/usc/t42/ch7" number="7">
+        <heading>SOCIAL SECURITY</heading>
+        <section identifier="/us/usc/t42/s401" number="401">
+          <heading>Trust Funds</heading>
+          <content><p>Test content.</p></content>
+          <notes>
+            <note>
+              <heading>References in Text</heading>
+              <p>The Social Security Act, referred to in text, is
+              <ref href="/us/act/1935-08-14/ch531">act Aug. 14, 1935, ch. 531</ref>,
+              49 Stat. 620.</p>
+            </note>
+          </notes>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_act_refs.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    @pytest.fixture
+    def xml_with_mixed_refs(self, tmp_path: Path) -> Path:
+        """Create XML with multiple types of references in notes."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>Test Chapter</heading>
+        <section identifier="/us/usc/t17/s109" number="109">
+          <heading>Distribution</heading>
+          <content><p>Test content.</p></content>
+          <notes>
+            <note>
+              <heading>References in Text</heading>
+              <p>The Copyright Act, <ref href="/us/pl/94/553">Pub. L. 94–553</ref>,
+              amended <ref href="/us/usc/t17/s106">section 106</ref>.
+              See <ref href="/us/stat/90/2546">90 Stat. 2546</ref> for details.</p>
+            </note>
+          </notes>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_mixed_refs.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    def test_extract_public_law_refs(
+        self, parser: USLMParser, xml_with_public_law_refs: Path
+    ) -> None:
+        """Test extraction of Public Law references from notes."""
+        result = parser.parse_file(xml_with_public_law_refs)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+
+        # Should have extracted 2 Public Law refs
+        assert len(section.notes_refs) == 2
+
+        # Check first ref (Pub. L. 115-264)
+        ref1 = section.notes_refs[0]
+        assert ref1.ref_type == "public_law"
+        assert ref1.congress == 115
+        assert ref1.law_number == 264
+        assert "Pub. L. 115–264" in ref1.display_text
+
+        # Check second ref (Pub. L. 94-553)
+        ref2 = section.notes_refs[1]
+        assert ref2.ref_type == "public_law"
+        assert ref2.congress == 94
+        assert ref2.law_number == 553
+
+    def test_extract_usc_section_refs(
+        self, parser: USLMParser, xml_with_usc_section_refs: Path
+    ) -> None:
+        """Test extraction of US Code section references from notes."""
+        result = parser.parse_file(xml_with_usc_section_refs)
+
+        section = result.sections[0]
+        assert len(section.notes_refs) == 2
+
+        # Check first ref (17 U.S.C. 101)
+        ref1 = section.notes_refs[0]
+        assert ref1.ref_type == "usc_section"
+        assert ref1.usc_title == 17
+        assert ref1.usc_section == "101"
+
+        # Check second ref (section 106)
+        ref2 = section.notes_refs[1]
+        assert ref2.ref_type == "usc_section"
+        assert ref2.usc_title == 17
+        assert ref2.usc_section == "106"
+
+    def test_extract_statute_refs(
+        self, parser: USLMParser, xml_with_statute_refs: Path
+    ) -> None:
+        """Test extraction of Statutes at Large references from notes."""
+        result = parser.parse_file(xml_with_statute_refs)
+
+        section = result.sections[0]
+        assert len(section.notes_refs) == 1
+
+        ref = section.notes_refs[0]
+        assert ref.ref_type == "statute"
+        assert ref.stat_volume == 90
+        assert ref.stat_page == 2546
+
+    def test_extract_act_refs(
+        self, parser: USLMParser, xml_with_act_refs: Path
+    ) -> None:
+        """Test extraction of pre-1957 Act references from notes."""
+        result = parser.parse_file(xml_with_act_refs)
+
+        section = result.sections[0]
+        assert len(section.notes_refs) == 1
+
+        ref = section.notes_refs[0]
+        assert ref.ref_type == "act"
+        assert ref.act_date == "1935-08-14"
+        assert ref.act_chapter == 531
+
+    def test_extract_mixed_refs(
+        self, parser: USLMParser, xml_with_mixed_refs: Path
+    ) -> None:
+        """Test extraction of multiple types of references from notes."""
+        result = parser.parse_file(xml_with_mixed_refs)
+
+        section = result.sections[0]
+        assert len(section.notes_refs) == 3
+
+        # Check types are correctly identified
+        ref_types = [ref.ref_type for ref in section.notes_refs]
+        assert "public_law" in ref_types
+        assert "usc_section" in ref_types
+        assert "statute" in ref_types
+
+    def test_no_refs_when_no_notes(self, parser: USLMParser, tmp_path: Path) -> None:
+        """Test that no refs are extracted when section has no notes."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>Test</heading>
+        <section identifier="/us/usc/t17/s101" number="101">
+          <heading>Test</heading>
+          <content><p>No notes here.</p></content>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_no_notes.xml"
+        xml_path.write_text(xml_content)
+
+        result = parser.parse_file(xml_path)
+        section = result.sections[0]
+        assert len(section.notes_refs) == 0
+
+
+class TestNoteRefDataclass:
+    """Tests for NoteRef dataclass."""
+
+    def test_public_law_ref(self) -> None:
+        """Test creating a Public Law reference."""
+        ref = NoteRef(
+            ref_type="public_law",
+            href="/us/pl/115/264",
+            display_text="Pub. L. 115–264",
+            congress=115,
+            law_number=264,
+        )
+        assert ref.ref_type == "public_law"
+        assert ref.congress == 115
+        assert ref.law_number == 264
+        assert ref.usc_title is None
+
+    def test_usc_section_ref(self) -> None:
+        """Test creating a US Code section reference."""
+        ref = NoteRef(
+            ref_type="usc_section",
+            href="/us/usc/t17/s106",
+            display_text="section 106",
+            usc_title=17,
+            usc_section="106",
+        )
+        assert ref.ref_type == "usc_section"
+        assert ref.usc_title == 17
+        assert ref.usc_section == "106"
+        assert ref.congress is None
+
+    def test_statute_ref(self) -> None:
+        """Test creating a Statutes at Large reference."""
+        ref = NoteRef(
+            ref_type="statute",
+            href="/us/stat/90/2546",
+            display_text="90 Stat. 2546",
+            stat_volume=90,
+            stat_page=2546,
+        )
+        assert ref.ref_type == "statute"
+        assert ref.stat_volume == 90
+        assert ref.stat_page == 2546
+
+    def test_act_ref(self) -> None:
+        """Test creating a pre-1957 Act reference."""
+        ref = NoteRef(
+            ref_type="act",
+            href="/us/act/1935-08-14/ch531",
+            display_text="act Aug. 14, 1935, ch. 531",
+            act_date="1935-08-14",
+            act_chapter=531,
+        )
+        assert ref.ref_type == "act"
+        assert ref.act_date == "1935-08-14"
+        assert ref.act_chapter == 531

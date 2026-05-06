@@ -9,6 +9,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field, computed_field
 
+from app.models.enums import NoteRefType
 from app.schemas.public_law import PublicLawSchema, SourceLawSchema
 from app.schemas.revision import HeadRevisionSchema
 
@@ -122,6 +123,83 @@ class ShortTitleSchema(BaseModel):
     public_law: str | None = Field(None, description="Associated Public Law reference")
 
 
+class NoteReferenceSchema(BaseModel):
+    """A hyperlink reference extracted from section notes.
+
+    Represents a `<ref href="...">` element from USLM XML notes sections.
+    These enable linking from notes to referenced laws and sections.
+
+    Example hrefs:
+    - /us/pl/115/264 → Pub. L. 115-264 (Music Modernization Act)
+    - /us/act/1935-08-14/ch531 → Social Security Act
+    - /us/usc/t17/s106 → 17 U.S.C. § 106
+    - /us/stat/134/501 → 134 Stat. 501
+    """
+
+    ref_type: NoteRefType = Field(..., description="Type of reference")
+    href: str = Field(..., description="The href value from the XML ref element")
+    display_text: str = Field("", description="The display text from the ref element")
+
+    # Parsed target fields (populated based on ref_type)
+    congress: int | None = Field(None, description="Congress number (for PUBLIC_LAW)")
+    law_number: int | None = Field(
+        None, description="Law number within congress (for PUBLIC_LAW)"
+    )
+    act_date: str | None = Field(
+        None, description="Act date (for ACT, e.g., 1935-08-14)"
+    )
+    act_chapter: int | None = Field(None, description="Act chapter number (for ACT)")
+    usc_title: int | None = Field(None, description="US Code title (for USC_SECTION)")
+    usc_section: str | None = Field(
+        None, description="US Code section (for USC_SECTION, e.g., '106')"
+    )
+    stat_volume: int | None = Field(
+        None, description="Statutes at Large volume (for STATUTE)"
+    )
+    stat_page: int | None = Field(
+        None, description="Statutes at Large page (for STATUTE)"
+    )
+
+    # Position within the note content (for highlighting/linking)
+    start_char: int | None = Field(
+        None, description="Start character position in note content"
+    )
+    end_char: int | None = Field(
+        None, description="End character position in note content"
+    )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def target_id(self) -> str:
+        """Return a normalized identifier for the reference target.
+
+        Examples:
+        - PUBLIC_LAW: 'PL 115-264'
+        - ACT: 'Act of 1935-08-14 ch. 531'
+        - USC_SECTION: '17 USC 106'
+        - STATUTE: '134 Stat. 501'
+        """
+        if (
+            self.ref_type == NoteRefType.PUBLIC_LAW
+            and self.congress
+            and self.law_number
+        ):
+            return f"PL {self.congress}-{self.law_number}"
+        elif self.ref_type == NoteRefType.ACT and self.act_date and self.act_chapter:
+            return f"Act of {self.act_date} ch. {self.act_chapter}"
+        elif (
+            self.ref_type == NoteRefType.USC_SECTION
+            and self.usc_title
+            and self.usc_section
+        ):
+            return f"{self.usc_title} USC {self.usc_section}"
+        elif (
+            self.ref_type == NoteRefType.STATUTE and self.stat_volume and self.stat_page
+        ):
+            return f"{self.stat_volume} Stat. {self.stat_page}"
+        return self.href
+
+
 class NoteCategoryEnum(enum.StrEnum):
     """Category of a section note in the US Code.
 
@@ -164,6 +242,10 @@ class SectionNoteSchema(BaseModel):
     )
     category: NoteCategoryEnum = Field(
         ..., description="Which section this note belongs to"
+    )
+    references: list[NoteReferenceSchema] = Field(
+        default_factory=list,
+        description="Hyperlinks to laws and sections found in this note (Task 1.17b)",
     )
 
     def to_display(self, indent_width: int = 4) -> str:
@@ -238,6 +320,15 @@ class SectionNotesSchema(BaseModel):
     )
 
     # =========================================================================
+    # HYPERLINK REFERENCES - Links to laws/sections found in notes (Task 1.17b)
+    # =========================================================================
+
+    references: list[NoteReferenceSchema] = Field(
+        default_factory=list,
+        description="All hyperlinks to laws and sections found in notes",
+    )
+
+    # =========================================================================
     # SECTION STATUS - Metadata about the section's current state
     # =========================================================================
 
@@ -274,6 +365,12 @@ class SectionNotesSchema(BaseModel):
     def has_amendments(self) -> bool:
         """Return True if any amendments were parsed."""
         return len(self.amendments) > 0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def has_references(self) -> bool:
+        """Return True if any hyperlink references were parsed."""
+        return len(self.references) > 0
 
     @computed_field  # type: ignore[prop-decorator]
     @property
