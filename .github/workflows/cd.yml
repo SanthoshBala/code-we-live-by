@@ -20,6 +20,28 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
+  # Detect whether this commit touches seed-related files to skip the expensive
+  # seed job (API ingestion + pipeline runs) on unrelated changes.
+  check-seed:
+    name: Check if seed needed
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      seed_needed: ${{ steps.check.outputs.seed_needed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Check seed-related file changes
+        id: check
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -qE '^backend/(alembic|pipeline)/|^backend/scripts/seed\.sh'; then
+            echo "seed_needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "seed_needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-backend:
     name: Build Backend Image
     needs: ci
@@ -61,9 +83,11 @@ jobs:
             sleep 5
           done
 
+  # Runs in parallel with build-backend — only needs the currently-deployed
+  # backend URL, not the newly-built image.
   build-frontend:
     name: Build Frontend Image
-    needs: build-backend
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -111,9 +135,9 @@ jobs:
             sleep 5
           done
 
-  deploy:
-    name: Deploy
-    needs: build-frontend
+  deploy-backend:
+    name: Deploy Backend
+    needs: build-backend
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -144,22 +168,41 @@ jobs:
             --memory 512Mi \
             --quiet
 
-      - name: Run migrations and seed database
+      - name: Run migrations
         run: |
-          gcloud run jobs deploy cwlb-seed \
+          gcloud run jobs deploy cwlb-migrate \
             --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
             --region "$GCP_REGION" \
-            --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
-            --memory 2Gi \
-            --task-timeout 30m \
+            --memory 512Mi \
+            --task-timeout 5m \
             --command "bash" \
-            --args "scripts/seed.sh" \
+            --args "scripts/migrate.sh" \
             --quiet
-          gcloud run jobs execute cwlb-seed \
+          gcloud run jobs execute cwlb-migrate \
             --region "$GCP_REGION" \
             --wait \
             --quiet
+
+  # Runs in parallel with seed — frontend deploy and seeding are independent.
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: [build-frontend, deploy-backend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: Deploy frontend to Cloud Run
         run: |
@@ -176,4 +219,42 @@ jobs:
             --min-instances 0 \
             --max-instances 3 \
             --memory 512Mi \
+            --quiet
+
+  # Only runs when alembic/, pipeline/, or seed.sh changed. Wipes and reseeds
+  # from scratch — see backend/scripts/seed.sh.
+  seed:
+    name: Seed Database
+    needs: [deploy-backend, check-seed]
+    if: needs.check-seed.outputs.seed_needed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Run seed job
+        run: |
+          gcloud run jobs deploy cwlb-seed \
+            --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
+            --region "$GCP_REGION" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
+            --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
+            --memory 2Gi \
+            --task-timeout 30m \
+            --command "bash" \
+            --args "scripts/seed.sh" \
+            --quiet
+          gcloud run jobs execute cwlb-seed \
+            --region "$GCP_REGION" \
+            --wait \
             --quiet
