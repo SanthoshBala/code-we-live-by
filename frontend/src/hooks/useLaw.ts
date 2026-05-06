@@ -5,6 +5,7 @@ import {
   fetchLawText,
   fetchLawAmendments,
   fetchLawDiffs,
+  fetchLawHistory,
 } from '@/lib/api';
 
 /** Fetches all public law summaries. */
@@ -59,6 +60,19 @@ export function useLawDiffs(
   return useQuery({
     queryKey: ['lawDiffs', congress, lawNumber],
     queryFn: () => fetchLawDiffs(congress, lawNumber),
+    enabled,
+  });
+}
+
+/** Fetches the legislative history timeline for a single law. Only fires when enabled. */
+export function useLawHistory(
+  congress: number,
+  lawNumber: string,
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: ['lawHistory', congress, lawNumber],
+    queryFn: () => fetchLawHistory(congress, lawNumber),
     enabled,
   });
 }
