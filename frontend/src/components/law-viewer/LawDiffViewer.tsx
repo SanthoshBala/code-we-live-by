@@ -209,40 +209,40 @@ export default function LawDiffViewer({
       )}
 
       <div className="flex h-[calc(100vh-17rem)] gap-6">
-      {/* Left sidebar — affected sections tree (independently scrollable) */}
-      <div className="hidden w-72 shrink-0 overflow-y-auto lg:block">
-        <h2 className="sticky top-0 z-10 mb-2 bg-white px-3 pb-1 text-sm font-semibold text-gray-900">
-          Amended Sections
-        </h2>
-        <AffectedSectionsTree
-          amendments={allAmendments}
-          activeSection={activeSection}
-          onSectionClick={handleSectionClick}
-        />
-      </div>
+        {/* Left sidebar — affected sections tree (independently scrollable) */}
+        <div className="hidden w-72 shrink-0 overflow-y-auto lg:block">
+          <h2 className="sticky top-0 z-10 mb-2 bg-white px-3 pb-1 text-sm font-semibold text-gray-900">
+            Amended Sections
+          </h2>
+          <AffectedSectionsTree
+            amendments={allAmendments}
+            activeSection={activeSection}
+            onSectionClick={handleSectionClick}
+          />
+        </div>
 
-      {/* Main panel — unified diff cards per section */}
-      <div
-        ref={mainPanelRef}
-        className="min-w-0 flex-1 space-y-6 overflow-y-auto"
-      >
-        {diffs.map((diff) => (
-          <div
-            key={diff.section_key}
-            ref={(el) => {
-              if (el) sectionRefs.current.set(diff.section_key, el);
-            }}
-          >
-            <h3 className="mb-3">
-              <SectionBreadcrumb
-                titleNumber={diff.title_number}
-                sectionNumber={diff.section_number}
-              />
-            </h3>
-            <UnifiedDiffCard diff={diff} />
-          </div>
-        ))}
-      </div>
+        {/* Main panel — unified diff cards per section */}
+        <div
+          ref={mainPanelRef}
+          className="min-w-0 flex-1 space-y-6 overflow-y-auto"
+        >
+          {diffs.map((diff) => (
+            <div
+              key={diff.section_key}
+              ref={(el) => {
+                if (el) sectionRefs.current.set(diff.section_key, el);
+              }}
+            >
+              <h3 className="mb-3">
+                <SectionBreadcrumb
+                  titleNumber={diff.title_number}
+                  sectionNumber={diff.section_number}
+                />
+              </h3>
+              <UnifiedDiffCard diff={diff} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
