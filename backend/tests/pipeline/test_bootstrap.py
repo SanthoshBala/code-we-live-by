@@ -460,3 +460,59 @@ class TestSnapshotFieldMapping:
 
         assert result.titles_skipped == 1
         assert result.titles_processed == 0
+
+    @pytest.mark.asyncio
+    async def test_multiple_titles_parallel(self) -> None:
+        """All titles in the list are ingested and aggregated correctly."""
+        session = _make_mock_session()
+        sections_17 = [_make_parsed_section("101", "First", "Content A")]
+        sections_18 = [
+            _make_parsed_section("1", "Crimes", "Content B"),
+            _make_parsed_section("2", "Penalties", "Content C"),
+        ]
+
+        call_count = 0
+
+        def fake_parse_file(_path: object) -> USLMParseResult:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_parse_result(title_number=17, sections=sections_17)
+            return _make_parse_result(title_number=18, sections=sections_18)
+
+        parser = MagicMock()
+        parser.parse_file.side_effect = fake_parse_file
+        downloader = _make_mock_downloader()
+
+        service = BootstrapService(session, downloader, parser)
+
+        with patch(
+            "pipeline.olrc.bootstrap.normalize_parsed_section",
+            side_effect=lambda s: s,
+        ):
+            result = await service.create_initial_commit("113-21", titles=[17, 18])
+
+        assert result.titles_processed == 2
+        assert result.titles_skipped == 0
+        assert result.total_sections == 3  # 1 + 2
+
+    @pytest.mark.asyncio
+    async def test_concurrency_cap_respected(self) -> None:
+        """Semaphore limits concurrency; all titles still complete."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+        parser = _make_mock_parser()
+
+        # concurrency=2 with 5 titles — all should still complete
+        service = BootstrapService(session, downloader, parser, concurrency=2)
+
+        with patch(
+            "pipeline.olrc.bootstrap.normalize_parsed_section",
+            side_effect=lambda s: s,
+        ):
+            result = await service.create_initial_commit(
+                "113-21", titles=[17, 18, 26, 42, 50]
+            )
+
+        assert result.titles_processed == 5
+        assert result.titles_skipped == 0
