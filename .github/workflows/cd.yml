@@ -251,7 +251,7 @@ jobs:
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
             --cpu 4 \
             --memory 16Gi \
-            --task-timeout 60m \
+            --task-timeout 120m \
             --command "bash" \
             --args "scripts/seed.sh" \
             --quiet
