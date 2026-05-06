@@ -252,6 +252,7 @@ jobs:
             --cpu 4 \
             --memory 16Gi \
             --task-timeout 120m \
+            --max-retries 2 \
             --command "bash" \
             --args "scripts/seed.sh" \
             --quiet
