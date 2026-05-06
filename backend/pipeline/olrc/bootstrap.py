@@ -7,8 +7,11 @@ SectionSnapshot records for each section, creating the root CodeRevision
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import date
 
@@ -26,6 +29,8 @@ from pipeline.olrc.parser import USLMParser, compute_text_hash
 from pipeline.olrc.release_point import parse_release_point_identifier
 
 logger = logging.getLogger(__name__)
+
+SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 
 # Default title range: all 54 titles of the US Code
 ALL_TITLES = list(range(1, 55))
@@ -168,10 +173,28 @@ class BootstrapService:
         session: AsyncSession,
         downloader: OLRCDownloader,
         parser: USLMParser,
+        session_factory: SessionFactory | None = None,
+        concurrency: int = 4,
     ) -> None:
         self.session = session
         self.downloader = downloader
         self.parser = parser
+        # concurrency=4 keeps DB connection pressure low on Cloud Run's shared pool
+        # (each worker opens one connection). Raise to 8-10 if the pool allows it and
+        # ingestion bottlenecks on download I/O rather than DB writes.
+        self._concurrency = concurrency
+
+        if session_factory is not None:
+            self._session_factory = session_factory
+        else:
+            # Fallback wraps self.session — only safe with mock sessions in tests.
+            _sess = session
+
+            @asynccontextmanager
+            async def _default_factory() -> AsyncIterator[AsyncSession]:
+                yield _sess
+
+            self._session_factory = _default_factory
 
     async def create_initial_commit(
         self,
@@ -223,20 +246,45 @@ class BootstrapService:
             if revision is None:
                 revision = await self._create_revision(release_point)
 
-            # Step 4: Ingest titles
+            # Step 4: Ingest titles in parallel — each gets its own session.
+            sem = asyncio.Semaphore(self._concurrency)
+
+            async def _ingest_one(title_num: int) -> int | None:
+                async with sem, self._session_factory() as s:
+                    count = await ingest_title(
+                        s,
+                        self.downloader,
+                        self.parser,
+                        title_num,
+                        rp_identifier,
+                        revision.revision_id,
+                    )
+                    await s.commit()
+                    return count
+
+            gather_results = await asyncio.gather(
+                *[_ingest_one(t) for t in title_list],
+                return_exceptions=True,
+            )
+
+            # Re-raise the first unexpected exception so the outer handler
+            # can mark the revision as FAILED.
+            first_exc = next(
+                (r for r in gather_results if isinstance(r, BaseException)), None
+            )
+            if first_exc is not None:
+                raise first_exc
+
             titles_processed = 0
             titles_skipped = 0
             total_sections = 0
 
-            for title_num in title_list:
-                count = await self._ingest_title(
-                    title_num, rp_identifier, revision.revision_id
-                )
-                if count is None:
+            for item in gather_results:
+                if item is None:
                     titles_skipped += 1
                 else:
                     titles_processed += 1
-                    total_sections += count
+                    total_sections += item
 
             # Step 5: Mark complete
             revision.status = RevisionStatus.INGESTED.value
@@ -330,19 +378,3 @@ class BootstrapService:
         self.session.add(revision)
         await self.session.flush()
         return revision
-
-    async def _ingest_title(
-        self,
-        title_num: int,
-        rp_identifier: str,
-        revision_id: int,
-    ) -> int | None:
-        """Download, parse, and store snapshots for one title."""
-        return await ingest_title(
-            self.session,
-            self.downloader,
-            self.parser,
-            title_num,
-            rp_identifier,
-            revision_id,
-        )
