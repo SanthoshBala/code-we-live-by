@@ -82,7 +82,8 @@ export default function TitleDirectoryPage() {
   } = useTitleStructure(titleNumber, true, revision);
   const { data: latestRevision } = useLatestRevisionForTitle(titleNumber);
   const { data: historicalRevision } = useRevisionById(revision);
-  const revisionData = revision !== undefined ? historicalRevision : latestRevision;
+  const revisionData =
+    revision !== undefined ? historicalRevision : latestRevision;
 
   if (isLoading) {
     return <p className="text-gray-500">Loading...</p>;
