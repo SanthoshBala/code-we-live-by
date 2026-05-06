@@ -1686,7 +1686,8 @@ def normalize_section(
             else:
                 # No header detected - split multi-sentence content onto
                 # separate lines.  The first sentence stays with the marker;
-                # subsequent sentences get their own lines at the same indent.
+                # subsequent sentences are indented one level deeper, flush
+                # with the text portion of the first line (not the marker).
                 if item_content:
                     sentences = _split_into_sentences(
                         item_content, start_offset=marker_end
@@ -1707,14 +1708,17 @@ def normalize_section(
                     ) in enumerate(real_sentences):
                         if i == 0:
                             full_content = f"{marker_text} {sentence_text}"
+                            line_indent = indent_level
                         else:
                             full_content = sentence_text
+                            # Continuation lines align with the text, not the marker.
+                            line_indent = indent_level + 1
                         line_number += 1
                         lines.append(
                             ParsedLine(
                                 line_number=line_number,
                                 content=full_content,
-                                indent_level=indent_level,
+                                indent_level=line_indent,
                                 marker=marker_text if i == 0 else None,
                                 is_header=False,
                                 start_char=pos if i == 0 else start_char,
@@ -1962,7 +1966,7 @@ def _normalize_subsection_recursive(
         # No heading - marker and content on one line.
         # Split multi-sentence content so each sentence gets its own line.
         # The first sentence stays with the marker; subsequent sentences
-        # appear on their own lines at the same indent level.
+        # appear indented one level deeper, flush with the text (not the marker).
         if subsection.content:
             sentences = _split_into_sentences(subsection.content)
             real_sentences = [
@@ -1979,9 +1983,13 @@ def _normalize_subsection_recursive(
                         else sentence_text
                     )
                     marker = subsection.marker if subsection.marker else None
+                    line_indent = base_indent
                 else:
                     content = sentence_text
                     marker = None
+                    # Indent one level deeper so continuation lines align with
+                    # the text portion of the first line, not the marker.
+                    line_indent = base_indent + 1
 
                 line_counter[0] += 1
                 start_pos = char_pos[0]
@@ -1990,7 +1998,7 @@ def _normalize_subsection_recursive(
                     ParsedLine(
                         line_number=line_counter[0],
                         content=content,
-                        indent_level=base_indent,
+                        indent_level=line_indent,
                         marker=marker,
                         is_header=False,
                         start_char=start_pos,
