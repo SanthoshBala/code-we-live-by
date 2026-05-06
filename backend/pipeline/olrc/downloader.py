@@ -200,6 +200,7 @@ class OLRCDownloader:
         Returns:
             Dictionary mapping title numbers to their XML file paths.
         """
+
         async def _one(n: int) -> tuple[int, Path | None]:
             return n, await self.download_title(n, force=force)
 
