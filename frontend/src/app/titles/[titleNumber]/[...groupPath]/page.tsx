@@ -2,7 +2,10 @@
 
 import { useParams } from 'next/navigation';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
-import { useLatestRevisionForTitle } from '@/hooks/useLatestRevision';
+import {
+  useLatestRevisionForTitle,
+  useRevisionById,
+} from '@/hooks/useLatestRevision';
 import { useRevision } from '@/hooks/useRevision';
 import type {
   SectionGroupTree,
@@ -90,6 +93,8 @@ export default function GroupDirectoryPage() {
     error,
   } = useTitleStructure(titleNumber, true, revision);
   const { data: latestRevision } = useLatestRevisionForTitle(titleNumber);
+  const { data: historicalRevision } = useRevisionById(revision);
+  const revisionData = revision !== undefined ? historicalRevision : latestRevision;
 
   if (isLoading) {
     return <p className="text-gray-500">Loading...</p>;
@@ -162,7 +167,7 @@ export default function GroupDirectoryPage() {
       title={group.name}
       breadcrumbs={breadcrumbs}
       items={items}
-      revisionData={latestRevision ?? null}
+      revisionData={revisionData ?? null}
       revision={revision}
     />
   );
