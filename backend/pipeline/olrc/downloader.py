@@ -200,11 +200,12 @@ class OLRCDownloader:
         Returns:
             Dictionary mapping title numbers to their XML file paths.
         """
-        results = {}
-        for title_number in PHASE_1_TITLES:
-            path = await self.download_title(title_number, force=force)
-            results[title_number] = path
-        return results
+
+        async def _one(n: int) -> tuple[int, Path | None]:
+            return n, await self.download_title(n, force=force)
+
+        pairs = await asyncio.gather(*[_one(n) for n in PHASE_1_TITLES])
+        return dict(pairs)
 
     def get_downloaded_titles(self) -> list[int]:
         """Get list of title numbers that have been downloaded.
