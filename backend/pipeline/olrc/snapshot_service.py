@@ -7,6 +7,7 @@ These are used by the diff engine, API, and frontend.
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,7 +37,7 @@ class SectionState:
     snapshot_id: int
     revision_id: int
     is_deleted: bool
-    group_id: int | None = None
+    group_id: uuid.UUID | None = None
     sort_order: int = 0
 
 

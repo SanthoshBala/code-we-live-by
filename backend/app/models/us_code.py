@@ -1,5 +1,6 @@
 """US Code models: SectionGroup, Section, Line."""
 
+import uuid
 from datetime import date
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -14,7 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -36,9 +37,11 @@ class SectionGroup(Base, TimestampMixin):
 
     __tablename__ = "section_group"
 
-    group_id: Mapped[int] = mapped_column(primary_key=True)
-    parent_id: Mapped[int | None] = mapped_column(
-        ForeignKey("section_group.group_id", ondelete="CASCADE"), nullable=True
+    group_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("section_group.group_id", ondelete="CASCADE"),
+        nullable=True,
     )
     group_type: Mapped[str] = mapped_column(String(50), nullable=False)
     number: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -92,8 +95,10 @@ class USCodeSection(Base, TimestampMixin):
     __tablename__ = "us_code_section"
 
     section_id: Mapped[int] = mapped_column(primary_key=True)
-    group_id: Mapped[int | None] = mapped_column(
-        ForeignKey("section_group.group_id", ondelete="SET NULL"), nullable=True
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("section_group.group_id", ondelete="SET NULL"),
+        nullable=True,
     )
     title_number: Mapped[int] = mapped_column(Integer, nullable=False)
     section_number: Mapped[str] = mapped_column(String(50), nullable=False)

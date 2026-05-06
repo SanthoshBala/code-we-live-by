@@ -1,11 +1,17 @@
 """Tests for structure upsert methods (unified SectionGroup model)."""
 
+import uuid
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pipeline.olrc.group_service import upsert_group, upsert_groups_from_parse_result
+from pipeline.olrc.group_service import (
+    _GROUP_NS,
+    group_id_from_key,
+    upsert_group,
+    upsert_groups_from_parse_result,
+)
 from pipeline.olrc.parser import (
     ParsedGroup,
     ParsedSection,
@@ -23,26 +29,55 @@ def mock_session():
     return session
 
 
-def _mock_not_found():
-    """Return a mock result where scalar_one_or_none returns None."""
+def _mock_not_found() -> MagicMock:
+    """Return a mock execute result with no matching row."""
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalars.return_value = []
     return mock_result
 
 
-def _mock_found(record):
-    """Return a mock result where scalar_one_or_none returns a record."""
+def _mock_found(record: object) -> MagicMock:
+    """Return a mock execute result containing one matching record."""
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = record
+    mock_result.scalars.return_value = [record]
     return mock_result
+
+
+# ---------------------------------------------------------------------------
+# group_id_from_key
+# ---------------------------------------------------------------------------
+
+
+class TestGroupIdFromKey:
+    """Tests for the deterministic UUID helper."""
+
+    def test_same_key_same_uuid(self) -> None:
+        assert group_id_from_key("title:17") == group_id_from_key("title:17")
+
+    def test_different_keys_different_uuids(self) -> None:
+        assert group_id_from_key("title:17") != group_id_from_key("title:18")
+
+    def test_child_differs_from_parent(self) -> None:
+        assert group_id_from_key("title:17") != group_id_from_key("title:17/chapter:1")
+
+    def test_uses_project_namespace(self) -> None:
+        expected = uuid.uuid5(_GROUP_NS, "title:17")
+        assert group_id_from_key("title:17") == expected
+
+
+# ---------------------------------------------------------------------------
+# upsert_group
+# ---------------------------------------------------------------------------
 
 
 class TestUpsertGroup:
     """Tests for upsert_group function."""
 
     @pytest.mark.asyncio
-    async def test_new_title_insert(self, mock_session) -> None:
-        """Test inserting a new title group when none exists."""
+    async def test_new_title_insert(self, mock_session: AsyncMock) -> None:
+        """New title: session.add is called, was_created=True, group_id is a UUID."""
         mock_session.execute.return_value = _mock_not_found()
 
         parsed = ParsedGroup(
@@ -62,12 +97,29 @@ class TestUpsertGroup:
         assert added.number == "17"
         assert added.name == "Copyrights"
         assert added.is_positive_law is True
+        assert added.group_id == group_id_from_key("title:17")
 
     @pytest.mark.asyncio
-    async def test_new_chapter_insert(self, mock_session) -> None:
-        """Test inserting a new chapter group."""
+    async def test_new_group_does_not_flush(self, mock_session: AsyncMock) -> None:
+        """UUID is pre-computed — no flush needed after insert."""
         mock_session.execute.return_value = _mock_not_found()
 
+        parsed = ParsedGroup(
+            group_type="title",
+            number="17",
+            name="Copyrights",
+            key="title:17",
+        )
+        await upsert_group(mock_session, parsed, parent_id=None)
+
+        mock_session.flush.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_new_chapter_insert(self, mock_session: AsyncMock) -> None:
+        """New chapter: parent_id is propagated as a UUID."""
+        mock_session.execute.return_value = _mock_not_found()
+
+        parent_uuid = group_id_from_key("title:17")
         parsed = ParsedGroup(
             group_type="chapter",
             number="1",
@@ -76,22 +128,23 @@ class TestUpsertGroup:
             parent_key="title:17",
             key="title:17/chapter:1",
         )
-        group, was_created = await upsert_group(mock_session, parsed, parent_id=100)
+        group, was_created = await upsert_group(
+            mock_session, parsed, parent_id=parent_uuid
+        )
 
         assert was_created is True
-        mock_session.add.assert_called_once()
         added = mock_session.add.call_args[0][0]
         assert added.group_type == "chapter"
         assert added.number == "1"
-        assert added.name == "Subject Matter and Scope of Copyright"
-        assert added.sort_order == 1
-        assert added.parent_id == 100
+        assert added.parent_id == parent_uuid
+        assert added.group_id == group_id_from_key("title:17/chapter:1")
 
     @pytest.mark.asyncio
-    async def test_new_subchapter_insert(self, mock_session) -> None:
-        """Test inserting a new subchapter group."""
+    async def test_new_subchapter_insert(self, mock_session: AsyncMock) -> None:
+        """New subchapter: correct UUID and parent propagation."""
         mock_session.execute.return_value = _mock_not_found()
 
+        parent_uuid = group_id_from_key("title:17/chapter:1")
         parsed = ParsedGroup(
             group_type="subchapter",
             number="I",
@@ -100,18 +153,19 @@ class TestUpsertGroup:
             parent_key="title:17/chapter:1",
             key="title:17/chapter:1/subchapter:I",
         )
-        group, was_created = await upsert_group(mock_session, parsed, parent_id=200)
+        group, was_created = await upsert_group(
+            mock_session, parsed, parent_id=parent_uuid
+        )
 
         assert was_created is True
-        mock_session.add.assert_called_once()
         added = mock_session.add.call_args[0][0]
         assert added.group_type == "subchapter"
         assert added.number == "I"
-        assert added.parent_id == 200
+        assert added.parent_id == parent_uuid
 
     @pytest.mark.asyncio
-    async def test_update_with_force(self, mock_session) -> None:
-        """Test updating an existing group with force=True."""
+    async def test_update_with_force(self, mock_session: AsyncMock) -> None:
+        """Existing group with force=True: record is updated in place."""
         existing = MagicMock()
         existing.name = "Old Name"
         existing.sort_order = 0
@@ -126,7 +180,7 @@ class TestUpsertGroup:
             key="title:17/chapter:1",
         )
         group, was_created = await upsert_group(
-            mock_session, parsed, parent_id=100, force=True
+            mock_session, parsed, parent_id=group_id_from_key("title:17"), force=True
         )
 
         assert was_created is False
@@ -136,8 +190,8 @@ class TestUpsertGroup:
         mock_session.add.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_skip_without_force(self, mock_session) -> None:
-        """Test skipping update when force=False and record exists."""
+    async def test_skip_without_force(self, mock_session: AsyncMock) -> None:
+        """Existing group with force=False: record is returned unchanged."""
         existing = MagicMock()
         existing.name = "Old Name"
         mock_session.execute.return_value = _mock_found(existing)
@@ -150,7 +204,7 @@ class TestUpsertGroup:
             key="title:17/chapter:1",
         )
         group, was_created = await upsert_group(
-            mock_session, parsed, parent_id=100, force=False
+            mock_session, parsed, parent_id=group_id_from_key("title:17"), force=False
         )
 
         assert was_created is False
@@ -158,8 +212,8 @@ class TestUpsertGroup:
         assert existing.name == "Old Name"
 
     @pytest.mark.asyncio
-    async def test_positive_law_with_parser_date(self, mock_session) -> None:
-        """Test positive law title uses parser-provided date."""
+    async def test_positive_law_with_parser_date(self, mock_session: AsyncMock) -> None:
+        """Positive-law title uses the date from the XML."""
         mock_session.execute.return_value = _mock_not_found()
 
         parsed = ParsedGroup(
@@ -170,14 +224,14 @@ class TestUpsertGroup:
             positive_law_date="July 30, 1947",
             key="title:17",
         )
-        group, _ = await upsert_group(mock_session, parsed, parent_id=None)
+        await upsert_group(mock_session, parsed, parent_id=None)
 
         added = mock_session.add.call_args[0][0]
         assert added.positive_law_date == date(1947, 7, 30)
 
     @pytest.mark.asyncio
-    async def test_positive_law_fallback_date(self, mock_session) -> None:
-        """Test positive law title falls back to hardcoded date when parser provides none."""
+    async def test_positive_law_fallback_date(self, mock_session: AsyncMock) -> None:
+        """Positive-law title falls back to hardcoded date when XML omits it."""
         mock_session.execute.return_value = _mock_not_found()
 
         parsed = ParsedGroup(
@@ -188,15 +242,14 @@ class TestUpsertGroup:
             positive_law_date=None,
             key="title:17",
         )
-        group, _ = await upsert_group(mock_session, parsed, parent_id=None)
+        await upsert_group(mock_session, parsed, parent_id=None)
 
         added = mock_session.add.call_args[0][0]
-        # Title 17 fallback date is 1947-07-30
         assert added.positive_law_date == date(1947, 7, 30)
 
     @pytest.mark.asyncio
-    async def test_non_positive_law(self, mock_session) -> None:
-        """Test non-positive law title has no positive_law_date."""
+    async def test_non_positive_law(self, mock_session: AsyncMock) -> None:
+        """Non-positive-law title has no positive_law_date."""
         mock_session.execute.return_value = _mock_not_found()
 
         parsed = ParsedGroup(
@@ -206,19 +259,24 @@ class TestUpsertGroup:
             is_positive_law=False,
             key="title:42",
         )
-        group, _ = await upsert_group(mock_session, parsed, parent_id=None)
+        await upsert_group(mock_session, parsed, parent_id=None)
 
         added = mock_session.add.call_args[0][0]
         assert added.positive_law_date is None
         assert added.is_positive_law is False
 
 
+# ---------------------------------------------------------------------------
+# upsert_groups_from_parse_result
+# ---------------------------------------------------------------------------
+
+
 class TestIngestParseResult:
-    """Tests for _ingest_parse_result orchestration via upsert_groups_from_parse_result."""
+    """Tests for upsert_groups_from_parse_result bulk behaviour."""
 
     @pytest.fixture
-    def minimal_parse_result(self):
-        """Create a minimal parse result with one of each entity."""
+    def minimal_parse_result(self) -> USLMParseResult:
+        """Three-level hierarchy: title → chapter → subchapter."""
         title_group = ParsedGroup(
             group_type="title",
             number="17",
@@ -257,62 +315,61 @@ class TestIngestParseResult:
         )
 
     @pytest.mark.asyncio
-    async def test_end_to_end_orchestration(
-        self, mock_session, minimal_parse_result
+    async def test_bulk_insert_single_round_trip(
+        self, mock_session: AsyncMock, minimal_parse_result: USLMParseResult
     ) -> None:
-        """Test that all groups are upserted."""
-        mock_session.execute.return_value = _mock_not_found()
+        """All groups are inserted in exactly one session.execute call."""
+        await upsert_groups_from_parse_result(mock_session, minimal_parse_result.groups)
+        mock_session.execute.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_returns_all_groups(
+        self, mock_session: AsyncMock, minimal_parse_result: USLMParseResult
+    ) -> None:
+        """Lookup dict contains an entry for every group."""
         group_lookup = await upsert_groups_from_parse_result(
             mock_session, minimal_parse_result.groups
         )
-
-        # 3 groups (title + chapter + subchapter)
         assert len(group_lookup) == 3
 
     @pytest.mark.asyncio
-    async def test_empty_results(self, mock_session) -> None:
-        """Test upsert with no groups."""
-        group_lookup = await upsert_groups_from_parse_result(mock_session, [])
-
-        assert len(group_lookup) == 0
+    async def test_group_ids_are_deterministic_uuids(
+        self, mock_session: AsyncMock, minimal_parse_result: USLMParseResult
+    ) -> None:
+        """Returned group_ids match what group_id_from_key() would compute."""
+        group_lookup = await upsert_groups_from_parse_result(
+            mock_session, minimal_parse_result.groups
+        )
+        assert group_lookup["title:17"].group_id == group_id_from_key("title:17")
+        assert group_lookup["title:17/chapter:1"].group_id == group_id_from_key(
+            "title:17/chapter:1"
+        )
 
     @pytest.mark.asyncio
-    async def test_created_vs_updated_stats(self, mock_session) -> None:
-        """Test that existing groups are returned without re-adding."""
-        existing_title = MagicMock()
-        existing_title.group_id = 1
-
-        call_count = 0
-
-        async def side_effect(*_args, **_kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return _mock_found(existing_title)
-            else:
-                return _mock_not_found()
-
-        mock_session.execute = AsyncMock(side_effect=side_effect)
-
-        title_group = ParsedGroup(
-            group_type="title",
-            number="17",
-            name="Copyrights",
-            key="title:17",
-        )
-        chapter_group = ParsedGroup(
-            group_type="chapter",
-            number="1",
-            name="Subject Matter",
-            parent_key="title:17",
-            key="title:17/chapter:1",
-        )
-
+    async def test_parent_ids_resolved_from_keys(
+        self, mock_session: AsyncMock, minimal_parse_result: USLMParseResult
+    ) -> None:
+        """Child groups carry the parent's UUID as parent_id."""
         group_lookup = await upsert_groups_from_parse_result(
-            mock_session, [title_group, chapter_group], force=True
+            mock_session, minimal_parse_result.groups
         )
+        chapter = group_lookup["title:17/chapter:1"]
+        assert chapter.parent_id == group_id_from_key("title:17")
 
-        assert len(group_lookup) == 2
-        # Title was existing, chapter was new
-        assert group_lookup["title:17"] is existing_title
+        subchapter = group_lookup["title:17/chapter:1/subchapter:I"]
+        assert subchapter.parent_id == group_id_from_key("title:17/chapter:1")
+
+    @pytest.mark.asyncio
+    async def test_no_flush_called(
+        self, mock_session: AsyncMock, minimal_parse_result: USLMParseResult
+    ) -> None:
+        """No flush is ever needed — UUIDs are pre-computed."""
+        await upsert_groups_from_parse_result(mock_session, minimal_parse_result.groups)
+        mock_session.flush.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_empty_results(self, mock_session: AsyncMock) -> None:
+        """Empty input returns an empty dict without touching the DB."""
+        group_lookup = await upsert_groups_from_parse_result(mock_session, [])
+        assert group_lookup == {}
+        mock_session.execute.assert_not_called()

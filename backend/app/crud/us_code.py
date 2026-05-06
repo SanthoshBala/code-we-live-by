@@ -5,6 +5,7 @@ revision parameter for time-travel queries. Group hierarchy comes from
 SectionGroup (populated by both ingestion and bootstrap).
 """
 
+import uuid
 from typing import Any
 
 from sqlalchemy import func, select, text, tuple_
@@ -76,7 +77,7 @@ def _build_section_summary(state: SectionState) -> SectionSummarySchema:
 
 def _build_group_tree(
     group: SectionGroup,
-    sections_by_group: dict[int, list[SectionState]],
+    sections_by_group: dict[uuid.UUID, list[SectionState]],
 ) -> SectionGroupTreeSchema:
     """Recursively build a SectionGroupTreeSchema from ORM objects."""
     child_trees = [
@@ -175,7 +176,7 @@ async def get_all_titles(
         .group_by(SectionGroup.parent_id)
     )
     child_counts_result = await session.execute(child_counts_stmt)
-    child_counts: dict[int | None, int] = {
+    child_counts: dict[uuid.UUID | None, int] = {
         row[0]: row[1] for row in child_counts_result.all()
     }
 
@@ -234,7 +235,7 @@ async def get_title_structure(
     all_groups = {g.group_id: g for g in groups_result.scalars().unique().all()}
 
     # Build parent->children mapping
-    children_by_parent: dict[int, list[SectionGroup]] = {}
+    children_by_parent: dict[uuid.UUID | None, list[SectionGroup]] = {}
     for g in all_groups.values():
         if g.parent_id is not None and g.parent_id in all_groups:
             children_by_parent.setdefault(g.parent_id, []).append(g)
@@ -250,7 +251,7 @@ async def get_title_structure(
     # text_content and normalized_provisions avoids transferring ~3-15MB
     # of unused data from the database.
     head_id, chain = await _resolve_head_and_chain(session, revision_id)
-    sections_by_group: dict[int, list[SectionState]] = {}
+    sections_by_group: dict[uuid.UUID, list[SectionState]] = {}
 
     if head_id is not None and chain:
         result = await session.execute(
