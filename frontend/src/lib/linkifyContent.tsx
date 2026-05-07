@@ -77,7 +77,7 @@ export function linkifyContent(
     const display = text.slice(match.index, match.index + match.length);
     const href = refToHref(match.ref);
 
-    if (href && match.ref.resolvable) {
+    if (href && match.ref.resolvable !== false) {
       parts.push(
         <Link key={match.index} href={withRev(href)} className={linkClass}>
           {display}
