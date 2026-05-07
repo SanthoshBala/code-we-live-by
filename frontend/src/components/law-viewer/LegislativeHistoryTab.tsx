@@ -1,5 +1,7 @@
 import type { LegislativeHistory } from '@/lib/types';
+import CBOEstimatesPanel from './CBOEstimatesPanel';
 import LegislativeHistoryTimeline from './LegislativeHistoryTimeline';
+import RelatedBillsPanel from './RelatedBillsPanel';
 import SponsorsSidebar from './SponsorsSidebar';
 import VotesSidebar from './VotesSidebar';
 
@@ -123,6 +125,8 @@ export default function LegislativeHistoryTab({
         <div className="col-span-1 flex flex-col gap-4">
           <PresidentialActionCard history={history} />
           <VotesSidebar votes={history.chamber_votes} />
+          <CBOEstimatesPanel estimates={history.cbo_estimates ?? []} />
+          <RelatedBillsPanel bills={history.related_bills ?? []} />
           <SponsorsSidebar sponsors={history.sponsors} />
         </div>
       </div>
