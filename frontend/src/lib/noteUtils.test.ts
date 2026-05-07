@@ -97,8 +97,7 @@ describe('findNoteLinks', () => {
   const lookup = buildCrossRefLookup(allNotes, basePath);
 
   it('detects named note reference with direction', () => {
-    const content =
-      'See Effective and Termination Date note below.';
+    const content = 'See Effective and Termination Date note below.';
     const matches = findNoteLinks(content, lookup, 'editorial', basePath);
     expect(matches).toHaveLength(1);
     expect(matches[0].text).toBe('Effective and Termination Date note below');

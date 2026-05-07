@@ -183,8 +183,7 @@ describe('NotesViewer', () => {
             lines: [
               {
                 line_number: 1,
-                content:
-                  'See Effective and Termination Date note below.',
+                content: 'See Effective and Termination Date note below.',
                 indent_level: 0,
                 marker: null,
                 is_header: false,

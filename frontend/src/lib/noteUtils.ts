@@ -105,7 +105,12 @@ export function findNoteLinks(
     );
     let m: RegExpExecArray | null;
     while ((m = pattern.exec(content)) !== null) {
-      matches.push({ start: m.index, end: m.index + m[0].length, url: ref.url, text: m[0] });
+      matches.push({
+        start: m.index,
+        end: m.index + m[0].length,
+        url: ref.url,
+        text: m[0],
+      });
     }
   }
 
@@ -119,10 +124,17 @@ export function findNoteLinks(
   while ((dm = dirPattern.exec(content)) !== null) {
     const start = dm.index;
     const end = dm.index + dm[0].length;
-    const alreadyCovered = matches.some((m) => start >= m.start && end <= m.end);
+    const alreadyCovered = matches.some(
+      (m) => start >= m.start && end <= m.end
+    );
     if (alreadyCovered) continue;
     const direction = dm[1].toLowerCase() as 'below' | 'above';
-    const url = getDirectionalUrl(direction, currentCategory, availableCategories, basePath);
+    const url = getDirectionalUrl(
+      direction,
+      currentCategory,
+      availableCategories,
+      basePath
+    );
     if (url) {
       matches.push({ start, end, url, text: dm[0] });
     }

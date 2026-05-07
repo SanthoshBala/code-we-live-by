@@ -24,7 +24,6 @@ function renderContent(
   const segments = findNoteLinks(content, crossRefs, note.category, basePath);
   if (segments.length === 0) return content;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nodes: any[] = [];
   let pos = 0;
   for (const seg of segments) {

@@ -1,5 +1,9 @@
 import type { SectionNote } from '@/lib/types';
-import { buildCrossRefLookup, slugify, type CrossRefLookup } from '@/lib/noteUtils';
+import {
+  buildCrossRefLookup,
+  slugify,
+  type CrossRefLookup,
+} from '@/lib/noteUtils';
 import NoteBlock from './NoteBlock';
 
 interface SectionNotesProps {
