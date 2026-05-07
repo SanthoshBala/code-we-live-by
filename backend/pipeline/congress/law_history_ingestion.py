@@ -56,6 +56,7 @@ class LawHistoryIngestionService:
             DataIngestionLog with status and counts.
         """
         log = DataIngestionLog(
+            source="Congress.gov",
             operation=f"seed-law-history-{congress}-{law_number}",
             status="started",
             records_processed=0,
@@ -151,6 +152,7 @@ class LawHistoryIngestionService:
             Aggregate DataIngestionLog.
         """
         log = DataIngestionLog(
+            source="Congress.gov",
             operation=f"seed-congress-law-history-{congress}",
             status="started",
             records_processed=0,
