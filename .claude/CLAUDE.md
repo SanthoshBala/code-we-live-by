@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Pre-commit hooks**: Ruff (lint + format) and Prettier run automatically on commit via `.pre-commit-config.yaml`. If not installed, run `cd backend && uv run pre-commit install`.
 - **Before pushing**: Always run `uv run mypy app --ignore-missing-imports && uv run pytest` in the backend directory. After pushing, check CI status with `gh run list --branch <branch> --limit 1` and `gh run view <run-id> --log-failed`.
 - **GitHub issue labels**: When creating GitHub issues, apply the `bug` label for bugfix issues and the `enhancement` label for feature issues (e.g., `gh issue create --label bug ...` or `gh issue create --label enhancement ...`).
+- **PR-to-issue linking**: Every PR body must include `Closes #N` or `Fixes #N` so the motivating issue auto-closes on merge.
 
 ## Project Overview
 

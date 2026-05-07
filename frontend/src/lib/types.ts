@@ -90,12 +90,35 @@ export interface CodeLine {
   is_signature?: boolean;
 }
 
+export type NoteRefType = 'public_law' | 'act' | 'usc_section' | 'statute';
+
+/** A hyperlink reference extracted from section note XML (<ref href="...">). */
+export interface NoteReference {
+  ref_type: NoteRefType;
+  href: string;
+  display_text: string;
+  congress?: number | null;
+  law_number?: number | null;
+  act_date?: string | null;
+  act_chapter?: number | null;
+  usc_title?: number | null;
+  usc_section?: string | null;
+  stat_volume?: number | null;
+  stat_page?: number | null;
+  start_char?: number | null;
+  end_char?: number | null;
+  target_id: string;
+  /** Whether the referenced target exists in our DB. Absent = treat as true. */
+  resolvable?: boolean;
+}
+
 /** A structured note attached to a section. */
 export interface SectionNote {
   header: string;
   content: string;
   lines: CodeLine[];
   category: 'historical' | 'editorial' | 'statutory';
+  references?: NoteReference[];
 }
 
 /** An amendment record for a section. */
