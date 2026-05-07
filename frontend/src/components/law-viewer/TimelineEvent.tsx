@@ -1,4 +1,7 @@
-import type { TimelineEvent as TimelineEventType } from '@/lib/types';
+import type {
+  AmendmentStatus,
+  TimelineEvent as TimelineEventType,
+} from '@/lib/types';
 
 interface TimelineEventProps {
   event: TimelineEventType;
@@ -73,6 +76,20 @@ function EventIcon({
           <rect x="6" y="9" width="4" height="3" />
         </svg>
       );
+    case 'amendment':
+      return (
+        <svg
+          className={cls}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <circle cx="8" cy="8" r="3" />
+          <line x1="1" y1="8" x2="5" y2="8" />
+          <line x1="11" y1="8" x2="15" y2="8" />
+        </svg>
+      );
     default:
       return (
         <svg
@@ -115,6 +132,10 @@ function EventBadge({
       label = 'INTRODUCED';
       cls = 'bg-green-50 text-green-700 ring-green-200';
       break;
+    case 'amendment':
+      label = 'AMENDMENT';
+      cls = 'bg-orange-50 text-orange-700 ring-orange-200';
+      break;
     default:
       label = 'EVENT';
       cls = 'bg-gray-50 text-gray-600 ring-gray-200';
@@ -142,6 +163,52 @@ function VoteTally({ event }: { event: TimelineEventType }) {
   );
 }
 
+function AmendmentStatusBadge({
+  status,
+}: {
+  status: AmendmentStatus | null | undefined;
+}) {
+  if (!status) return null;
+
+  const configs: Record<
+    AmendmentStatus,
+    { label: string; cls: string; prefix: string }
+  > = {
+    adopted: {
+      label: 'Adopted',
+      cls: 'text-green-700 bg-green-50 ring-green-200',
+      prefix: '✓',
+    },
+    rejected: {
+      label: 'Rejected',
+      cls: 'text-red-700 bg-red-50 ring-red-200',
+      prefix: '✗',
+    },
+    withdrawn: {
+      label: 'Withdrawn',
+      cls: 'text-gray-600 bg-gray-50 ring-gray-200',
+      prefix: '—',
+    },
+    pending: {
+      label: 'Pending',
+      cls: 'text-yellow-700 bg-yellow-50 ring-yellow-200',
+      prefix: '●',
+    },
+  };
+
+  const config = configs[status];
+  if (!config) return null;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${config.cls}`}
+    >
+      <span aria-hidden="true">{config.prefix}</span>
+      {config.label}
+    </span>
+  );
+}
+
 /** A single row in the legislative history timeline. */
 export default function TimelineEvent({ event }: TimelineEventProps) {
   const iconColor =
@@ -154,7 +221,9 @@ export default function TimelineEvent({ event }: TimelineEventProps) {
           ? 'text-blue-600'
           : event.event_type === 'committee_referral'
             ? 'text-amber-600'
-            : 'text-gray-400';
+            : event.event_type === 'amendment'
+              ? 'text-orange-500'
+              : 'text-gray-400';
 
   return (
     <div
@@ -175,6 +244,9 @@ export default function TimelineEvent({ event }: TimelineEventProps) {
           {event.event_type === 'house_vote' ||
           event.event_type === 'senate_vote' ? (
             <VoteTally event={event} />
+          ) : null}
+          {event.event_type === 'amendment' ? (
+            <AmendmentStatusBadge status={event.amendment_status} />
           ) : null}
         </div>
 

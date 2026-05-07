@@ -257,7 +257,10 @@ export type HistoryEventType =
   | 'house_vote'
   | 'senate_vote'
   | 'presidential_action'
+  | 'amendment'
   | 'other';
+
+export type AmendmentStatus = 'adopted' | 'rejected' | 'withdrawn' | 'pending';
 
 export type LawStatus = 'enacted' | 'vetoed' | 'pending';
 
@@ -273,6 +276,7 @@ export interface TimelineEvent {
   vote_nays: number | null;
   vote_not_voting: number | null;
   congressional_record_refs: string[];
+  amendment_status?: AmendmentStatus | null;
 }
 
 /** A bill sponsor or cosponsor. */
@@ -292,6 +296,34 @@ export interface ChamberVote {
   not_voting: number;
 }
 
+/** A legislative amendment to a bill (from the history API). */
+export interface HistoryAmendment {
+  amendment_number: string;
+  sponsor: string | null;
+  description: string | null;
+  purpose: string | null;
+  proposed_date: string | null;
+  action_date: string | null;
+  status: string | null;
+}
+
+/** A CBO cost estimate for a bill. */
+export interface CBOEstimate {
+  title: string;
+  url: string | null;
+  pub_date: string | null;
+  description: string | null;
+}
+
+/** A bill related to this legislation. */
+export interface RelatedBill {
+  congress: number;
+  bill_type: string;
+  bill_number: number;
+  title: string | null;
+  relationship_details: string | null;
+}
+
 /** Full legislative history response for a public law. */
 export interface LegislativeHistory {
   timeline: TimelineEvent[];
@@ -302,6 +334,9 @@ export interface LegislativeHistory {
   enacted_date: string | null;
   status: LawStatus;
   congress_url: string | null;
+  amendments: HistoryAmendment[];
+  cbo_estimates: CBOEstimate[];
+  related_bills: RelatedBill[];
 }
 
 /** Full section view returned by the section detail endpoint. */
