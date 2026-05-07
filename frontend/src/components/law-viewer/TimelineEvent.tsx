@@ -1,4 +1,7 @@
-import type { AmendmentStatus, TimelineEvent as TimelineEventType } from '@/lib/types';
+import type {
+  AmendmentStatus,
+  TimelineEvent as TimelineEventType,
+} from '@/lib/types';
 
 interface TimelineEventProps {
   event: TimelineEventType;
@@ -160,14 +163,37 @@ function VoteTally({ event }: { event: TimelineEventType }) {
   );
 }
 
-function AmendmentStatusBadge({ status }: { status: AmendmentStatus | null | undefined }) {
+function AmendmentStatusBadge({
+  status,
+}: {
+  status: AmendmentStatus | null | undefined;
+}) {
   if (!status) return null;
 
-  const configs: Record<AmendmentStatus, { label: string; cls: string; prefix: string }> = {
-    adopted: { label: 'Adopted', cls: 'text-green-700 bg-green-50 ring-green-200', prefix: '✓' },
-    rejected: { label: 'Rejected', cls: 'text-red-700 bg-red-50 ring-red-200', prefix: '✗' },
-    withdrawn: { label: 'Withdrawn', cls: 'text-gray-600 bg-gray-50 ring-gray-200', prefix: '—' },
-    pending: { label: 'Pending', cls: 'text-yellow-700 bg-yellow-50 ring-yellow-200', prefix: '●' },
+  const configs: Record<
+    AmendmentStatus,
+    { label: string; cls: string; prefix: string }
+  > = {
+    adopted: {
+      label: 'Adopted',
+      cls: 'text-green-700 bg-green-50 ring-green-200',
+      prefix: '✓',
+    },
+    rejected: {
+      label: 'Rejected',
+      cls: 'text-red-700 bg-red-50 ring-red-200',
+      prefix: '✗',
+    },
+    withdrawn: {
+      label: 'Withdrawn',
+      cls: 'text-gray-600 bg-gray-50 ring-gray-200',
+      prefix: '—',
+    },
+    pending: {
+      label: 'Pending',
+      cls: 'text-yellow-700 bg-yellow-50 ring-yellow-200',
+      prefix: '●',
+    },
   };
 
   const config = configs[status];

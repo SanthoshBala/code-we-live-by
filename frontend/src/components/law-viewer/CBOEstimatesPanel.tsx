@@ -5,8 +5,18 @@ interface CBOEstimatesPanelProps {
 }
 
 const MONTH_ABBRS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 function formatPubDate(dateStr: string | null): string {
@@ -18,7 +28,9 @@ function formatPubDate(dateStr: string | null): string {
 }
 
 /** GitHub-style CI-checks panel listing CBO cost estimates for a bill. */
-export default function CBOEstimatesPanel({ estimates }: CBOEstimatesPanelProps) {
+export default function CBOEstimatesPanel({
+  estimates,
+}: CBOEstimatesPanelProps) {
   if (estimates.length === 0) return null;
 
   return (
@@ -35,7 +47,9 @@ export default function CBOEstimatesPanel({ estimates }: CBOEstimatesPanelProps)
               <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <p className="text-xs font-medium text-gray-800">{est.title}</p>
+                  <p className="text-xs font-medium text-gray-800">
+                    {est.title}
+                  </p>
                   {est.pub_date && (
                     <span className="font-mono text-[11px] text-gray-400">
                       {formatPubDate(est.pub_date)}
