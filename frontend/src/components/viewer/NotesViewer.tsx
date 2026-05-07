@@ -45,9 +45,8 @@ export default function NotesViewer({
     return <p className="text-red-600">Failed to load section.</p>;
   }
 
-  const filtered = (data.notes?.notes ?? []).filter(
-    (n) => n.category === category
-  );
+  const allNotes: SectionNote[] = data.notes?.notes ?? [];
+  const filtered = allNotes.filter((n) => n.category === category);
 
   const fullCitation = data.full_citation ?? '';
   const heading = data.heading ?? '';
@@ -61,12 +60,16 @@ export default function NotesViewer({
     );
   }
 
+  const basePath = `/sections/${titleNumber}/${encodeURIComponent(sectionNumber)}`;
+
   return (
     <SectionNotes
       notes={filtered}
       fullCitation={fullCitation}
       heading={heading}
       categoryLabel={categoryLabel}
+      allNotes={allNotes}
+      basePath={basePath}
     />
   );
 }
