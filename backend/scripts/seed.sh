@@ -27,6 +27,9 @@ uv run python -m pipeline.cli chrono-bootstrap
 echo "=== Ingesting Congress 113 laws ==="
 uv run python -m pipeline.cli govinfo-ingest-congress 113
 
+echo "=== Seeding legislative history for Congress 113 ==="
+uv run python -m pipeline.cli seed-congress-law-history 113
+
 echo "=== Advancing chronological pipeline (2 revisions) ==="
 uv run python -m pipeline.cli chrono-advance --count 2
 
