@@ -169,6 +169,64 @@ describe('NotesViewer', () => {
     });
   });
 
+  it('hyperlinks cross-references to other note categories', async () => {
+    const crossRefData: SectionView = {
+      ...sectionData,
+      title_number: 50,
+      section_number: '541',
+      notes: {
+        ...sectionData.notes!,
+        notes: [
+          {
+            header: 'References in Text',
+            content: '',
+            lines: [
+              {
+                line_number: 1,
+                content:
+                  'See Effective and Termination Date note below.',
+                indent_level: 0,
+                marker: null,
+                is_header: false,
+              },
+            ],
+            category: 'editorial',
+          },
+          {
+            header: 'Effective and Termination Date',
+            content: 'Act expires on Jan. 1, 2030.',
+            lines: [],
+            category: 'statutory',
+          },
+        ],
+      },
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(crossRefData), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    render(
+      <NotesViewer
+        titleNumber={50}
+        sectionNumber="541"
+        file="EDITORIAL_NOTES"
+      />,
+      { wrapper }
+    );
+    await waitFor(() => {
+      expect(screen.getByText('References in Text')).toBeInTheDocument();
+    });
+    const link = screen.getByRole('link', {
+      name: /Effective and Termination Date note below/i,
+    });
+    expect(link).toHaveAttribute(
+      'href',
+      '/sections/50/541/STATUTORY_NOTES#effective-and-termination-date'
+    );
+  });
+
   it('shows error state on fetch failure', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('', { status: 500 })

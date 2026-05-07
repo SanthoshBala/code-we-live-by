@@ -1,4 +1,5 @@
 import type { SectionNote } from '@/lib/types';
+import { buildCrossRefLookup, slugify, type CrossRefLookup } from '@/lib/noteUtils';
 import NoteBlock from './NoteBlock';
 
 interface SectionNotesProps {
@@ -6,6 +7,8 @@ interface SectionNotesProps {
   fullCitation: string;
   heading: string;
   categoryLabel: string;
+  allNotes?: SectionNote[];
+  basePath?: string;
 }
 
 /** Count lines a note will render. */
@@ -20,8 +23,13 @@ export default function SectionNotes({
   fullCitation,
   heading,
   categoryLabel,
+  allNotes,
+  basePath,
 }: SectionNotesProps) {
   if (notes.length === 0) return null;
+
+  const crossRefs: CrossRefLookup =
+    allNotes && basePath ? buildCrossRefLookup(allNotes, basePath) : new Map();
 
   const docstring = [fullCitation, heading, categoryLabel];
   const blankLineNumber = docstring.length + 1;
@@ -54,7 +62,7 @@ export default function SectionNotes({
         lineNumber += noteLineCount(note);
 
         return (
-          <div key={i}>
+          <div key={i} id={slugify(note.header)}>
             <div className="flex">
               <span className="w-10 shrink-0 select-none text-right text-gray-400">
                 {headerLineNum}
@@ -62,7 +70,12 @@ export default function SectionNotes({
               <span className="mx-2 select-none text-gray-400">|</span>
               <span className="font-semibold text-gray-900">{note.header}</span>
             </div>
-            <NoteBlock note={note} lineNumberOffset={contentOffset} />
+            <NoteBlock
+              note={note}
+              lineNumberOffset={contentOffset}
+              crossRefs={crossRefs}
+              basePath={basePath}
+            />
           </div>
         );
       })}
