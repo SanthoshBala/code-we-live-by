@@ -144,6 +144,10 @@ class LawHistoryIngestionService:
     ) -> DataIngestionLog:
         """Seed bill actions and sponsors for all laws in a congress.
 
+        Each child law is processed in its own session so that long-running
+        Congress.gov API calls between iterations do not leave the parent
+        session holding a connection that Cloud SQL eventually times out.
+
         Args:
             congress: Congress number.
             force: If True, re-seed even if data already exists.
@@ -151,6 +155,8 @@ class LawHistoryIngestionService:
         Returns:
             Aggregate DataIngestionLog.
         """
+        from app.models.base import async_session_maker
+
         log = DataIngestionLog(
             source="Congress.gov",
             operation=f"seed-congress-law-history-{congress}",
@@ -160,39 +166,63 @@ class LawHistoryIngestionService:
             records_updated=0,
         )
         self.session.add(log)
-        await self.session.flush()
+        await self.session.commit()
+        log_id = log.log_id
 
-        stmt = select(PublicLaw).where(PublicLaw.congress == congress)
+        stmt = select(PublicLaw.congress, PublicLaw.law_number).where(
+            PublicLaw.congress == congress
+        )
         result = await self.session.execute(stmt)
-        laws = result.scalars().all()
+        law_refs = [(row[0], int(row[1])) for row in result.all()]
 
         total_created = 0
         total_processed = 0
         failed = 0
 
-        for law in laws:
-            child_log = await self.seed_law(
-                law.congress, int(law.law_number), force=force
-            )
+        for law_congress, law_number in law_refs:
+            try:
+                async with async_session_maker() as sub_session:
+                    sub_service = LawHistoryIngestionService(
+                        sub_session, cache=self.cache
+                    )
+                    child_log = await sub_service.seed_law(
+                        law_congress, law_number, force=force
+                    )
+            except Exception as exc:
+                failed += 1
+                logger.exception(
+                    "Unhandled error seeding PL %d-%d: %s",
+                    law_congress,
+                    law_number,
+                    exc,
+                )
+                continue
+
             total_processed += child_log.records_processed or 0
             total_created += child_log.records_created or 0
             if child_log.status == "failed":
                 failed += 1
                 logger.warning(
-                    "Failed to seed PL %d-%s: %s",
-                    law.congress,
-                    law.law_number,
+                    "Failed to seed PL %d-%d: %s",
+                    law_congress,
+                    law_number,
                     child_log.error_message,
                 )
 
-        log.status = "failed" if failed > 0 and total_created == 0 else "completed"
-        log.records_processed = total_processed
-        log.records_created = total_created
-        log.details = (
-            f"{len(laws)} laws processed, {failed} failed, {total_created} rows created"
-        )
-        await self.session.commit()
-        return log
+        async with async_session_maker() as final_session:
+            final_log = await final_session.get(DataIngestionLog, log_id)
+            assert final_log is not None
+            final_log.status = (
+                "failed" if failed > 0 and total_created == 0 else "completed"
+            )
+            final_log.records_processed = total_processed
+            final_log.records_created = total_created
+            final_log.details = (
+                f"{len(law_refs)} laws processed, {failed} failed, "
+                f"{total_created} rows created"
+            )
+            await final_session.commit()
+            return final_log
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -254,11 +284,9 @@ class LawHistoryIngestionService:
         if data is None:
             return None
 
-        congress_data = data.get("congress", {})
-        bills = congress_data.get("bills", [])
-        if not bills:
-            return None
-        bill_ref = bills[0]
+        # /law/{congress}/{lawType}/{lawNumber} wraps the bill detail under "bill"
+        # (the law endpoints reuse the bill endpoint's response envelope).
+        bill_ref = data.get("bill") or {}
         b_type = (bill_ref.get("type") or "").lower()
         b_number = bill_ref.get("number")
         if not b_type or not b_number:

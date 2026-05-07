@@ -1070,14 +1070,9 @@ async def _resolve_bill_type_and_number(
     if data is None:
         return None
 
-    # Response shape: {"congress": {..., "originChamberCode": ..., ...},
-    #                  "request": {...}}  — the law endpoint returns bill ref inline
-    # The actual bill reference is nested under "congress" key as "bills" list
-    congress_data = data.get("congress", {})
-    bills = congress_data.get("bills", [])
-    if not bills:
-        return None
-    bill_ref = bills[0]
+    # /law/{congress}/{lawType}/{lawNumber} wraps the bill detail under "bill"
+    # (the law endpoints reuse the bill endpoint's response envelope).
+    bill_ref = data.get("bill") or {}
     b_type = (bill_ref.get("type") or "").lower()
     b_number = bill_ref.get("number")
     if not b_type or not b_number:
