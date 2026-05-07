@@ -185,7 +185,7 @@ export default function LawDiffViewer({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Summary bar — total lines added/removed */}
+      {/* Summary bar — total additions/removals */}
       {(totalAdded > 0 || totalRemoved > 0) && (
         <div className="flex items-center gap-3 rounded-md border border-gray-200 bg-gray-50 px-4 py-2 text-sm">
           <span className="font-medium text-gray-700">
@@ -194,7 +194,7 @@ export default function LawDiffViewer({
           <span className="text-gray-300">·</span>
           {totalAdded > 0 && (
             <span className="font-mono font-medium text-green-600">
-              +{totalAdded} lines added
+              +{totalAdded} additions
             </span>
           )}
           {totalAdded > 0 && totalRemoved > 0 && (
@@ -202,7 +202,7 @@ export default function LawDiffViewer({
           )}
           {totalRemoved > 0 && (
             <span className="font-mono font-medium text-red-600">
-              −{totalRemoved} lines removed
+              −{totalRemoved} removals
             </span>
           )}
         </div>
