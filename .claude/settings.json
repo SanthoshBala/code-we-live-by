@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:uscode.house.gov)",
+      "WebFetch(domain:api.govinfo.gov)",
+      "WebFetch(domain:www.govinfo.gov)",
+      "WebFetch(domain:api.congress.gov)",
+      "WebFetch(domain:www.congress.gov)",
+      "WebFetch(domain:www.law.cornell.edu)",
+      "WebFetch(domain:codeweliveby.org)"
+    ]
+  }
+}
