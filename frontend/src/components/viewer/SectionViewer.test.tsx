@@ -203,4 +203,32 @@ describe('SectionViewer', () => {
       'true'
     );
   });
+
+  it('shows omitted status when heading is "Omitted"', () => {
+    const omittedSection: SectionView = {
+      ...baseSectionData,
+      heading: 'Omitted',
+      is_repealed: false,
+      text_content: null,
+      provisions: null,
+      notes: {
+        ...baseSectionData.notes!,
+        amendments: [],
+        citations: [],
+        has_amendments: false,
+        has_citations: false,
+      },
+    };
+    mockUseSection.mockReturnValue({
+      data: omittedSection,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useSection>);
+
+    render(<SectionViewer titleNumber={2} sectionNumber="3" />);
+    // The omitted message should appear (rendered by SectionProvisions via statusMessage)
+    expect(
+      screen.getByText('This section has been editorially omitted.')
+    ).toBeInTheDocument();
+  });
 });
