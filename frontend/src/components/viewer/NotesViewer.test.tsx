@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NotesViewer from './NotesViewer';
 import type { SectionView } from '@/lib/types';
 
+vi.mock('@/hooks/useRevision', () => ({
+  useRevision: () => ({ revision: undefined, withRev: (href: string) => href }),
+}));
+
 const sectionData: SectionView = {
   title_number: 17,
   section_number: '106',

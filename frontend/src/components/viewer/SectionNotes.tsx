@@ -13,6 +13,7 @@ interface SectionNotesProps {
   categoryLabel: string;
   allNotes?: SectionNote[];
   basePath?: string;
+  withRev?: (href: string) => string;
 }
 
 /** Count lines a note will render. */
@@ -29,6 +30,7 @@ export default function SectionNotes({
   categoryLabel,
   allNotes,
   basePath,
+  withRev,
 }: SectionNotesProps) {
   if (notes.length === 0) return null;
 
@@ -79,6 +81,7 @@ export default function SectionNotes({
               lineNumberOffset={contentOffset}
               crossRefs={crossRefs}
               basePath={basePath}
+              withRev={withRev}
             />
           </div>
         );

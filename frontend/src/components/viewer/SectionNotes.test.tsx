@@ -204,4 +204,48 @@ describe('SectionNotes', () => {
     expect(indentSpan).toBeInTheDocument();
     expect(indentSpan!.textContent).toBe('\t\t');
   });
+
+  it('renders NoteReference entries as clickable links when withRev is provided', () => {
+    const notesWithRefs: SectionNote[] = [
+      {
+        header: 'References in Text',
+        content: '',
+        lines: [
+          {
+            line_number: 1,
+            content: 'See Pub. L. 94-553 for details.',
+            indent_level: 0,
+            marker: null,
+            is_header: false,
+          },
+        ],
+        references: [
+          {
+            ref_type: 'public_law' as const,
+            href: '/laws/94/553',
+            display_text: 'Pub. L. 94-553',
+            target_id: 'PL 94-553',
+            congress: 94,
+            law_number: 553,
+            resolvable: true,
+          },
+        ],
+        category: 'editorial',
+      },
+    ];
+
+    render(
+      <SectionNotes
+        notes={notesWithRefs}
+        fullCitation="17 U.S.C. § 106"
+        heading="Exclusive rights"
+        categoryLabel="Editorial Notes"
+        withRev={(href) => href}
+      />
+    );
+
+    const link = screen.getByRole('link', { name: 'Pub. L. 94-553' });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/laws/94/553');
+  });
 });
