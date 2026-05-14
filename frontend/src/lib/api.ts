@@ -66,7 +66,7 @@ export async function fetchSection(
 
 /** Fetch all public law summaries. */
 export async function fetchLaws(): Promise<LawSummary[]> {
-  const res = await fetch(`${API_BASE}/laws/`);
+  const res = await fetch(`${API_BASE}/laws/?limit=1000`);
   if (!res.ok) {
     throw new Error(`Failed to fetch laws: ${res.status}`);
   }

@@ -27,7 +27,7 @@ router = APIRouter()
 
 @router.get("")
 async def list_laws(
-    limit: int = Query(50, ge=1, le=200, description="Max results to return"),
+    limit: int = Query(500, ge=1, le=1000, description="Max results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     session: AsyncSession = Depends(get_async_session),
 ) -> list[LawSummarySchema]:
