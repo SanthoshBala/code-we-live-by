@@ -46,7 +46,7 @@ export default function SectionNotes({
           <span className="w-10 shrink-0 select-none text-right text-gray-400">
             {i + 1}
           </span>
-          <span className="mx-2 select-none text-gray-400">|</span>
+          <span className="mx-2 select-none text-gray-400">│</span>
           <span className="min-w-0 pl-[2ch] -indent-[2ch]">
             <span className="select-none"># </span>
             {text}
@@ -57,7 +57,7 @@ export default function SectionNotes({
         <span className="w-10 shrink-0 select-none text-right text-gray-400">
           {blankLineNumber}
         </span>
-        <span className="mx-2 select-none text-gray-400">|</span>
+        <span className="mx-2 select-none text-gray-400">│</span>
       </div>
       {notes.map((note, i) => {
         const headerLineNum = lineNumber;
@@ -71,7 +71,7 @@ export default function SectionNotes({
               <span className="w-10 shrink-0 select-none text-right text-gray-400">
                 {headerLineNum}
               </span>
-              <span className="mx-2 select-none text-gray-400">|</span>
+              <span className="mx-2 select-none text-gray-400">│</span>
               <span className="font-semibold text-gray-900">{note.header}</span>
             </div>
             <NoteBlock
