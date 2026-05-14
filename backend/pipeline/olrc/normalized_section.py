@@ -113,6 +113,33 @@ LEGAL_ABBREVIATIONS = {
     "eff.",
     "Mem.",
     "mem.",
+    # Congressional bill/report prefixes
+    "H.R.",
+    "S.",
+    "H.",
+    "H.J.Res.",
+    "S.J.Res.",
+    "H.Con.Res.",
+    "S.Con.Res.",
+    "H.Res.",
+    "S.Res.",
+    # Legislative citation components
+    "Cong.",
+    "Sess.",
+    "Jan.",
+    "Feb.",
+    "Mar.",
+    "Apr.",
+    "Aug.",
+    "Sep.",
+    "Sept.",
+    "Oct.",
+    "Nov.",
+    "Dec.",
+    "vol.",
+    "Vol.",
+    "pp.",
+    "p.",
 }
 
 # Pattern for list item markers: (a), (1), (A), (i), (I), etc.
@@ -669,16 +696,10 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
         if before.endswith(abbrev):
             return False
 
-    # Also check for single-letter abbreviations followed by period
-    # e.g., "U." in "U.S.C."
-    if (
-        pos >= 1
-        and text[pos - 1].isupper()
-        and (pos < 2 or not text[pos - 2].isalnum())
-    ):
-        # Single uppercase letter followed by period - likely abbreviation
-        # unless it's the end of a sentence like "Plan B."
-        pass  # Allow this for now, common abbreviations are in the list
+    # A single uppercase letter preceded by a period (e.g. "R." in "H.R.")
+    # is part of a dotted abbreviation — never a sentence boundary.
+    if pos >= 2 and text[pos - 1].isupper() and text[pos - 2] == ".":
+        return False
 
     # In amendment citations, a period after a parenthetical reference like
     # "(a)(2)." followed by "Pub. L." is not a sentence boundary.

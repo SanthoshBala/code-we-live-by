@@ -112,6 +112,61 @@ class TestSentenceBoundaryDetection:
         pos = text.index("). P") + 1  # period after )
         assert _is_sentence_boundary(text, pos) is False
 
+    def test_hr_abbreviation_not_boundary(self) -> None:
+        """H.R. (House Resolution) periods are not sentence boundaries.
+
+        Regression for issue #219: lines were splitting at 'H.R.' in
+        citation strings like '(H.R. Rep. No. 83, 90th Cong., 1st Sess.)'.
+        """
+        text = (
+            "The arguments are summarized at pp. 30–31 of this Committee’s "
+            "1967 report (H.R. Rep. No. 83, 90th Cong., 1st Sess.)."
+        )
+        # Period after R in H.R. must not be a sentence boundary
+        hr_pos = text.index("H.R.") + 3  # position of the '.' in 'R.'
+        assert _is_sentence_boundary(text, hr_pos) is False
+
+    def test_senate_bill_abbreviation_not_boundary(self) -> None:
+        """S. (Senate bill) period is not a sentence boundary.
+
+        Regression for issue #219: lines were splitting at '(S. Rep.' in
+        citation strings like '(S. Rep. No. 94-473, pp. 63-65)'.
+        """
+        text = (
+            "The provision was retained in the Senate report on S. 22 "
+            "(S. Rep. No. 94–473, pp. 63–65)."
+        )
+        # Period after S in '(S. Rep.' must not be a sentence boundary
+        s_pos = text.rindex("(S.") + 2  # position of the '.' after the second 'S'
+        assert _is_sentence_boundary(text, s_pos) is False
+
+    def test_cong_sess_abbreviations(self) -> None:
+        """Cong. and Sess. in congressional citations are not sentence boundaries."""
+        text = "H.R. Rep. No. 83, 90th Cong., 1st Sess., at p. 5."
+        cong_pos = text.index("Cong.") + 4
+        sess_pos = text.index("Sess.") + 4
+        assert _is_sentence_boundary(text, cong_pos) is False
+        assert _is_sentence_boundary(text, sess_pos) is False
+
+    def test_hr_citation_not_split(self) -> None:
+        """Full sentence with H.R. citation is not split mid-citation.
+
+        Regression for issue #219: the sentence from 17 U.S.C. §107 notes
+        should be kept as a single line.
+        """
+        from pipeline.olrc.normalized_section import _split_into_sentences
+
+        text = (
+            "The arguments on the question are summarized at pp. 30–31 of "
+            "this Committee’s 1967 report (H.R. Rep. No. 83, 90th Cong., "
+            "1st Sess.), and have not changed materially in the intervening years."
+        )
+        sentences = _split_into_sentences(text)
+        # Must be exactly one sentence — no split at H.R.
+        assert len(sentences) == 1
+        assert "H.R." in sentences[0][0]
+        assert "Sess." in sentences[0][0]
+
 
 class TestNormalizeSectionBasic:
     """Basic tests for section normalization."""
