@@ -64,7 +64,7 @@ function NoteLine({
       <span className="w-10 shrink-0 select-none text-right text-gray-400">
         {lineNumber}
       </span>
-      <span className="mx-2 select-none text-gray-400">|</span>
+      <span className="mx-2 select-none text-gray-400">│</span>
       {indent && (
         <span className="shrink-0 whitespace-pre text-gray-800">{indent}</span>
       )}
