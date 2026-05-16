@@ -23,6 +23,7 @@ const baseSectionData: SectionView = {
   last_modified_date: '2020-01-01',
   is_positive_law: true,
   is_repealed: false,
+  omitted: false,
   notes: {
     citations: [
       {
@@ -175,6 +176,48 @@ describe('SectionViewer', () => {
       })
     ).toBeInTheDocument();
     expect(screen.queryByText('Amendment History')).toBeNull();
+  });
+
+  it('shows editorially omitted message when omitted flag is true', () => {
+    const omittedData: SectionView = {
+      ...baseSectionData,
+      heading: 'Omitted',
+      text_content: null,
+      omitted: true,
+      is_repealed: false,
+      notes: { ...baseSectionData.notes!, amendments: [], citations: [], has_amendments: false, has_citations: false },
+    };
+    mockUseSection.mockReturnValue({
+      data: omittedData,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useSection>);
+
+    render(<SectionViewer titleNumber={2} sectionNumber="3" />);
+    expect(
+      screen.getByText('This section has been editorially omitted.')
+    ).toBeInTheDocument();
+  });
+
+  it('shows editorially omitted message when heading is "Omitted" even if flag is false', () => {
+    const omittedData: SectionView = {
+      ...baseSectionData,
+      heading: 'Omitted',
+      text_content: null,
+      omitted: false,
+      is_repealed: false,
+      notes: { ...baseSectionData.notes!, amendments: [], citations: [], has_amendments: false, has_citations: false },
+    };
+    mockUseSection.mockReturnValue({
+      data: omittedData,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useSection>);
+
+    render(<SectionViewer titleNumber={2} sectionNumber="3" />);
+    expect(
+      screen.getByText('This section has been editorially omitted.')
+    ).toBeInTheDocument();
   });
 
   it('switches between Code and History tabs', async () => {

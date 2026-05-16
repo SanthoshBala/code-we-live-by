@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useSection } from '@/hooks/useSection';
 import type { BreadcrumbSegment } from '@/lib/types';
+import { detectStatus } from '@/lib/statusStyles';
 import TabBar from '@/components/ui/TabBar';
 import SectionHeader from './SectionHeader';
 import type { LawReference } from './SectionHeader';
@@ -49,6 +50,12 @@ export default function SectionViewer({
   const shortTitles = data.notes?.short_titles ?? [];
   const hasHistory = amendments.length > 0 || citations.length > 0;
 
+  const status = data.is_repealed
+    ? 'repealed'
+    : data.omitted
+      ? 'omitted'
+      : detectStatus(data.heading);
+
   // Helper: find the short title associated with a public law ID
   const findShortTitle = (plId: string): string | null =>
     shortTitles.find((st) => st.public_law === plId)?.title ?? null;
@@ -92,7 +99,7 @@ export default function SectionViewer({
         heading={data.heading}
         breadcrumbs={breadcrumbs}
         isPositiveLaw={data.is_positive_law}
-        status={data.is_repealed ? 'repealed' : null}
+        status={status}
         enacted={enacted}
         lastAmended={lastAmended}
       />
@@ -105,7 +112,7 @@ export default function SectionViewer({
           heading={data.heading}
           textContent={data.text_content}
           provisions={data.provisions}
-          status={data.is_repealed ? 'repealed' : null}
+          status={status}
         />
       ) : (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
