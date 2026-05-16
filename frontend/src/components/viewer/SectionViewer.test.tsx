@@ -185,7 +185,13 @@ describe('SectionViewer', () => {
       text_content: null,
       omitted: true,
       is_repealed: false,
-      notes: { ...baseSectionData.notes!, amendments: [], citations: [], has_amendments: false, has_citations: false },
+      notes: {
+        ...baseSectionData.notes!,
+        amendments: [],
+        citations: [],
+        has_amendments: false,
+        has_citations: false,
+      },
     };
     mockUseSection.mockReturnValue({
       data: omittedData,
@@ -206,7 +212,13 @@ describe('SectionViewer', () => {
       text_content: null,
       omitted: false,
       is_repealed: false,
-      notes: { ...baseSectionData.notes!, amendments: [], citations: [], has_amendments: false, has_citations: false },
+      notes: {
+        ...baseSectionData.notes!,
+        amendments: [],
+        citations: [],
+        has_amendments: false,
+        has_citations: false,
+      },
     };
     mockUseSection.mockReturnValue({
       data: omittedData,
