@@ -112,6 +112,33 @@ class TestSentenceBoundaryDetection:
         pos = text.index("). P") + 1  # period after )
         assert _is_sentence_boundary(text, pos) is False
 
+    def test_hr_abbreviation_not_boundary(self) -> None:
+        """H.R. (House Resolution/Report) is not a sentence boundary."""
+        text = "summarized at pp. 30-31 of this report (H.R. Rep. No. 83, 90th Cong., 1st Sess.)"
+        # Period at end of "H.R." should NOT be a boundary — next word is "Rep."
+        pos = text.index("H.R.") + len("H.R.") - 1
+        assert _is_sentence_boundary(text, pos) is False
+
+    def test_senate_bill_abbreviation_not_boundary(self) -> None:
+        """S. (Senate bill/report) is not a sentence boundary."""
+        text = "retained in the Senate report on S. 22 (S. Rep. No. 94-473, pp. 63-65)."
+        # Period at "S. 22" — the "S." should not be a boundary
+        pos = text.index("S. 22") + 1
+        assert _is_sentence_boundary(text, pos) is False
+
+    def test_note_line_not_split_at_hr(self) -> None:
+        """A legislative note citation with H.R. should produce a single line, not two."""
+        text = (
+            "The arguments are summarized at pp. 30-31 of this Committee's 1967 report "
+            "(H.R. Rep. No. 83, 90th Cong., 1st Sess.), and have not changed materially."
+        )
+        sentences = _split_into_sentences(text)
+        # The whole text should be ONE sentence — not split at H.R.
+        plain = [s for s, _, _ in sentences if s != PARAGRAPH_BREAK_MARKER]
+        assert len(plain) == 1, f"Expected 1 sentence, got {len(plain)}: {plain}"
+        assert "H.R." in plain[0]
+        assert "Rep. No. 83" in plain[0]
+
 
 class TestNormalizeSectionBasic:
     """Basic tests for section normalization."""
