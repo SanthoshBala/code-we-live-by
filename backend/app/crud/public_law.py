@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Integer, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -52,7 +52,10 @@ async def get_laws_list(
     """
     stmt = (
         select(PublicLaw)
-        .order_by(PublicLaw.congress.desc(), PublicLaw.law_number.desc())
+        .order_by(
+            PublicLaw.congress.desc(),
+            cast(PublicLaw.law_number, Integer).desc(),
+        )
         .limit(limit)
         .offset(offset)
     )
