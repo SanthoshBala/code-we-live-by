@@ -528,6 +528,7 @@ gcs = [
 [package.dev-dependencies]
 dev = [
     { name = "aiosqlite" },
+    { name = "mypy" },
 ]
 
 [package.metadata]
@@ -557,7 +558,10 @@ requires-dist = [
 provides-extras = ["gcs", "dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "aiosqlite", specifier = ">=0.22.1" }]
+dev = [
+    { name = "aiosqlite", specifier = ">=0.22.1" },
+    { name = "mypy", specifier = ">=1.19.1" },
+]
 
 [[package]]
 name = "distlib"
