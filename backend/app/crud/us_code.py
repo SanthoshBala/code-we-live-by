@@ -452,6 +452,22 @@ async def get_section(
             max_year = max(a["year"] for a in amendments if "year" in a)
             last_modified_date = date(max_year, 1, 1)
 
+        # Fallback: derive last_modified_date from amendment citations when
+        # the amendments list is empty (e.g. stale ingestion or unstructured notes)
+        if last_modified_date is None and citations:
+            from pipeline.olrc.group_service import _parse_citation_date
+
+            amendment_dates = []
+            for c in citations:
+                if c.get("relationship") == "Amendment":
+                    law_data = c.get("law") or c.get("act")
+                    if law_data and law_data.get("date"):
+                        parsed = _parse_citation_date(law_data["date"])
+                        if parsed is not None:
+                            amendment_dates.append(parsed)
+            if amendment_dates:
+                last_modified_date = max(amendment_dates)
+
     # Find the revision that last *changed* this section's content.
     # Reuse the same chain to avoid re-fetching HEAD + CTE.
     last_revision = await get_last_changed_revision_for_section(

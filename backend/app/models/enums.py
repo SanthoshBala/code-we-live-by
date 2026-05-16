@@ -223,7 +223,7 @@ class RevisionStatus(enum.StrEnum):
     FAILED = "Failed"  # Ingestion failed
 
 
-class NoteRefType(str, enum.Enum):
+class NoteRefType(enum.StrEnum):
     """Type of hyperlink reference found in section notes.
 
     These correspond to different href patterns in USLM XML <ref> elements:
