@@ -65,8 +65,10 @@ jobs:
       - name: Build and push backend image
         run: |
           BACKEND_TAG="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
+          BACKEND_LATEST="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:latest"
           BUILD_ID=$(gcloud builds submit backend/ \
-            --tag "$BACKEND_TAG" \
+            --config backend/cloudbuild.yaml \
+            --substitutions "_IMAGE_TAG=$BACKEND_TAG,_IMAGE_LATEST=$BACKEND_LATEST" \
             --async --format='value(id)' --quiet)
           echo "Waiting for build $BUILD_ID..."
           while true; do
@@ -115,10 +117,14 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          IMAGE_TAG="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend:$GITHUB_SHA"
+          FRONTEND_BASE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend"
+          IMAGE_TAG="$FRONTEND_BASE:$GITHUB_SHA"
+          IMAGE_LATEST="$FRONTEND_BASE:latest"
+          DEPS_CACHE="$FRONTEND_BASE:cache-deps"
+          BUILD_CACHE="$FRONTEND_BASE:cache-build"
           BUILD_ID=$(gcloud builds submit frontend/ \
             --config frontend/cloudbuild.yaml \
-            --substitutions "_IMAGE_TAG=$IMAGE_TAG,_BACKEND_URL=${{ steps.backend-url.outputs.url }}" \
+            --substitutions "_IMAGE_TAG=$IMAGE_TAG,_IMAGE_LATEST=$IMAGE_LATEST,_DEPS_CACHE=$DEPS_CACHE,_BUILD_CACHE=$BUILD_CACHE,_BACKEND_URL=${{ steps.backend-url.outputs.url }}" \
             --async --format='value(id)' --quiet)
           echo "Waiting for build $BUILD_ID..."
           while true; do

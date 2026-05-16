@@ -1,0 +1,33 @@
+steps:
+    # Pull the previous :latest so Docker can reuse unchanged layers (most
+    # importantly the `uv sync` step). First-ever build has nothing to pull;
+    # ignore that case so the build proceeds without a cache.
+    - id: pull-cache
+      name: 'gcr.io/cloud-builders/docker'
+      entrypoint: 'bash'
+      args:
+          - '-c'
+          - |
+              docker pull ${_IMAGE_LATEST} || echo "No prior :latest image; building without cache"
+      waitFor: ['-']
+
+    - id: build
+      name: 'gcr.io/cloud-builders/docker'
+      args:
+          - 'build'
+          - '--cache-from'
+          - '${_IMAGE_LATEST}'
+          - '-t'
+          - '${_IMAGE_TAG}'
+          - '-t'
+          - '${_IMAGE_LATEST}'
+          - '.'
+      waitFor: ['pull-cache']
+
+images:
+    - '${_IMAGE_TAG}'
+    - '${_IMAGE_LATEST}'
+
+substitutions:
+    _IMAGE_TAG: ''
+    _IMAGE_LATEST: ''
