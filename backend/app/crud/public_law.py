@@ -1166,6 +1166,32 @@ async def _load_history_from_db(
     return timeline_events, sponsors, list(vote_by_chamber.values())
 
 
+async def _find_law_number_for_bill(
+    session: AsyncSession,
+    congress: int,
+    bill_type: str,
+    bill_number: int,
+) -> int | None:
+    """Return the law_number if this bill became a public law in our DB."""
+    stmt = (
+        select(PublicLaw.law_number)
+        .join(Bill, PublicLaw.bill_id == Bill.bill_id)
+        .where(
+            Bill.congress == congress,
+            Bill.bill_number == str(bill_number),
+            Bill.bill_type == bill_type,
+        )
+    )
+    result = await session.execute(stmt)
+    law_num_str = result.scalar_one_or_none()
+    if law_num_str is None:
+        return None
+    try:
+        return int(law_num_str)
+    except (ValueError, TypeError):
+        return None
+
+
 async def get_law_history(
     session: AsyncSession,
     congress: int,
@@ -1336,6 +1362,7 @@ async def get_law_history(
                             description=amdt.description or amdt.purpose or "",
                             chamber=None,
                             is_milestone=False,
+                            amendment_status=amdt.status,
                         )
                     )
 
@@ -1368,6 +1395,9 @@ async def get_law_history(
                     raw_related = []
 
                 for rb in raw_related:
+                    related_law_number = await _find_law_number_for_bill(
+                        session, rb.congress, rb.bill_type, rb.bill_number
+                    )
                     related_bills.append(
                         RelatedBillSchema(
                             congress=rb.congress,
@@ -1375,6 +1405,7 @@ async def get_law_history(
                             bill_number=rb.bill_number,
                             title=rb.title,
                             relationship_details=rb.relationship_details,
+                            law_number=related_law_number,
                         )
                     )
 

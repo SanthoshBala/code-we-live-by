@@ -29,6 +29,7 @@ class TimelineEventSchema(BaseModel):
     vote_nays: int | None = None
     vote_not_voting: int | None = None
     congressional_record_refs: list[str] = []
+    amendment_status: str | None = None
 
 
 class SponsorSchema(BaseModel):
@@ -79,6 +80,7 @@ class RelatedBillSchema(BaseModel):
     bill_number: int
     title: str | None
     relationship_details: str | None
+    law_number: int | None = None
 
 
 class LegislativeHistorySchema(BaseModel):
