@@ -345,6 +345,7 @@ export interface RelatedBill {
   bill_number: number;
   title: string | null;
   relationship_details: string | null;
+  law_number: number | null;
 }
 
 /** Full legislative history response for a public law. */

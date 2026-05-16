@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { RelatedBill } from '@/lib/types';
 
 interface RelatedBillsPanelProps {
@@ -32,7 +33,7 @@ function formatBillLabel(bill: RelatedBill): string {
   return `${typeLabel} ${bill.bill_number} (${bill.congress}th)`;
 }
 
-function billUrl(bill: RelatedBill): string {
+function congressGovUrl(bill: RelatedBill): string {
   const key = bill.bill_type.toLowerCase();
   const typePath = BILL_TYPE_PATHS[key] ?? key;
   return `https://www.congress.gov/bill/${bill.congress}th-congress/${typePath}/${bill.bill_number}`;
@@ -68,14 +69,23 @@ export default function RelatedBillsPanel({ bills }: RelatedBillsPanelProps) {
                 <path d="M12 6 L12 9 Q12 10 11 10 L5 10" />
               </svg>
               <div className="min-w-0 flex-1">
-                <a
-                  href={billUrl(bill)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-medium text-blue-600 hover:underline"
-                >
-                  {formatBillLabel(bill)}
-                </a>
+                {bill.law_number != null ? (
+                  <Link
+                    href={`/laws/${bill.congress}/${bill.law_number}`}
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    {formatBillLabel(bill)}
+                  </Link>
+                ) : (
+                  <a
+                    href={congressGovUrl(bill)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    {formatBillLabel(bill)}
+                  </a>
+                )}
                 {bill.title && (
                   <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
                     {bill.title}
