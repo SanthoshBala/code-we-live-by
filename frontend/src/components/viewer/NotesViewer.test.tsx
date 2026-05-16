@@ -15,6 +15,7 @@ const sectionData: SectionView = {
   last_modified_date: '2020-01-01',
   is_positive_law: true,
   is_repealed: false,
+  omitted: false,
   notes: {
     citations: [],
     amendments: [],

@@ -374,6 +374,7 @@ export interface SectionView {
   last_modified_date: string | null;
   is_positive_law: boolean;
   is_repealed: boolean;
+  omitted: boolean;
   notes: SectionNotes | null;
   last_revision?: HeadRevision | null;
 }
