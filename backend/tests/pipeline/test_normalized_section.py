@@ -1327,7 +1327,7 @@ class TestStripNoteMarkers:
 
     def test_strip_h2_markers_keeps_text(self) -> None:
         """[H2]...[/H2] wrappers are removed but the inner text is preserved."""
-        text = 'provided that: [H2]Brevity[/H2] (i) Poetry: ...'
+        text = "provided that: [H2]Brevity[/H2] (i) Poetry: ..."
         result = _strip_note_markers(text)
         assert "[H2]" not in result
         assert "[/H2]" not in result

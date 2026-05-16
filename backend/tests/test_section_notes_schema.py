@@ -1,7 +1,5 @@
 """Tests for SectionNotesSchema — specifically the raw_notes markup-stripping validator."""
 
-import pytest
-
 from app.schemas.us_code import SectionNotesSchema
 
 
