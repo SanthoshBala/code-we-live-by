@@ -1,21 +1,85 @@
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      [
-        'build',
-        '--build-arg',
-        'BACKEND_URL=${_BACKEND_URL}',
-        '-t',
-        '${_IMAGE_TAG}',
-        '.',
-      ]
+    # Pull cached intermediate stages plus the prior runtime image. `--cache-from`
+    # only sees layers that are actually pulled into the local daemon, so each
+    # stage we want to reuse needs its own tag in the registry.
+    - id: pull-cache
+      name: 'gcr.io/cloud-builders/docker'
+      entrypoint: 'bash'
+      args:
+          - '-c'
+          - |
+              docker pull ${_DEPS_CACHE} || echo "No deps cache"
+              docker pull ${_BUILD_CACHE} || echo "No build cache"
+              docker pull ${_IMAGE_LATEST} || echo "No runtime cache"
+              exit 0
+      waitFor: ['-']
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', '${_IMAGE_TAG}']
+    # Stage 1: deps — caches `npm ci` when package.json/package-lock.json
+    # haven't changed.
+    - id: build-deps
+      name: 'gcr.io/cloud-builders/docker'
+      args:
+          - 'build'
+          - '--target'
+          - 'deps'
+          - '--cache-from'
+          - '${_DEPS_CACHE}'
+          - '-t'
+          - '${_DEPS_CACHE}'
+          - '.'
+      waitFor: ['pull-cache']
+
+    # Stage 2: build — reuses the deps stage's node_modules layer. `COPY . .`
+    # invalidates after the deps layer, so `npm run build` still re-runs on
+    # code changes (Next.js incremental cache would address that separately).
+    - id: build-build
+      name: 'gcr.io/cloud-builders/docker'
+      args:
+          - 'build'
+          - '--target'
+          - 'build'
+          - '--build-arg'
+          - 'BACKEND_URL=${_BACKEND_URL}'
+          - '--cache-from'
+          - '${_DEPS_CACHE}'
+          - '--cache-from'
+          - '${_BUILD_CACHE}'
+          - '-t'
+          - '${_BUILD_CACHE}'
+          - '.'
+      waitFor: ['build-deps']
+
+    # Stage 3: runtime — final image. Passing all three cache sources lets
+    # Docker reuse the build stage's output when nothing in the build context
+    # changed.
+    - id: build-runtime
+      name: 'gcr.io/cloud-builders/docker'
+      args:
+          - 'build'
+          - '--build-arg'
+          - 'BACKEND_URL=${_BACKEND_URL}'
+          - '--cache-from'
+          - '${_DEPS_CACHE}'
+          - '--cache-from'
+          - '${_BUILD_CACHE}'
+          - '--cache-from'
+          - '${_IMAGE_LATEST}'
+          - '-t'
+          - '${_IMAGE_TAG}'
+          - '-t'
+          - '${_IMAGE_LATEST}'
+          - '.'
+      waitFor: ['build-build']
 
 images:
-  - '${_IMAGE_TAG}'
+    - '${_IMAGE_TAG}'
+    - '${_IMAGE_LATEST}'
+    - '${_DEPS_CACHE}'
+    - '${_BUILD_CACHE}'
 
 substitutions:
-  _BACKEND_URL: ''
-  _IMAGE_TAG: ''
+    _BACKEND_URL: ''
+    _IMAGE_TAG: ''
+    _IMAGE_LATEST: ''
+    _DEPS_CACHE: ''
+    _BUILD_CACHE: ''
