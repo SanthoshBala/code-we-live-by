@@ -31,7 +31,9 @@ def test_list_laws_returns_laws(mock_list: AsyncMock, client: TestClient) -> Non
 
 
 @patch("app.api.v1.laws.get_laws_list", new_callable=AsyncMock)
-def test_list_laws_passes_limit_to_crud(mock_list: AsyncMock, client: TestClient) -> None:
+def test_list_laws_passes_limit_to_crud(
+    mock_list: AsyncMock, client: TestClient
+) -> None:
     """The limit query param is forwarded to the CRUD layer."""
     mock_list.return_value = []
 
@@ -42,7 +44,9 @@ def test_list_laws_passes_limit_to_crud(mock_list: AsyncMock, client: TestClient
 
 
 @patch("app.api.v1.laws.get_laws_list", new_callable=AsyncMock)
-def test_list_laws_limit_exceeds_old_cap(mock_list: AsyncMock, client: TestClient) -> None:
+def test_list_laws_limit_exceeds_old_cap(
+    mock_list: AsyncMock, client: TestClient
+) -> None:
     """Limit of 500 is accepted (previously capped at 200, causing truncation)."""
     mock_list.return_value = []
 
