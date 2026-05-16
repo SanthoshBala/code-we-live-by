@@ -115,11 +115,11 @@ LEGAL_ABBREVIATIONS = {
     "mem.",
     # Congressional citation abbreviations
     "H.R.",  # House Resolution/Report (e.g., "H.R. Rep. No. 83")
-    "S.",    # Senate bill/report (e.g., "S. 22", "S. Rep. No. 94-473")
+    "S.",  # Senate bill/report (e.g., "S. 22", "S. Rep. No. 94-473")
     "Cong.",  # Congress (e.g., "90th Cong.")
     "Sess.",  # Session (e.g., "1st Sess.")
-    "pp.",   # Pages
-    "p.",    # Page
+    "pp.",  # Pages
+    "p.",  # Page
     "Jan.",
     "Feb.",
     "Mar.",
