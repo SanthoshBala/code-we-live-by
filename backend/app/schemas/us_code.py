@@ -5,9 +5,10 @@ the pipeline and application layers.
 """
 
 import enum
+import re
 from datetime import date
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.models.enums import NoteRefType
 from app.schemas.public_law import PublicLawSchema, SourceLawSchema
@@ -347,6 +348,26 @@ class SectionNotesSchema(BaseModel):
     # =========================================================================
 
     raw_notes: str = Field("", description="Full raw text of all notes (fallback)")
+
+    @field_validator("raw_notes", mode="before")
+    @classmethod
+    def strip_internal_markup_tokens(cls, v: object) -> object:
+        """Strip internal XML serialization markers before surfacing in the API.
+
+        These markers ([H2], [QC:N], etc.) are generated during XML ingestion
+        for intermediate processing by the notes normalizer and should not be
+        visible to API consumers.
+        """
+        if not isinstance(v, str):
+            return v
+        v = re.sub(r"\[NH\].*?\[/NH\]", "", v, flags=re.DOTALL)
+        v = re.sub(r"\[H1\].*?\[/H1\]", "", v, flags=re.DOTALL)
+        v = re.sub(r"\[H2\](.*?)\[/H2\]", r"\1", v, flags=re.DOTALL)
+        v = re.sub(r"\[QC:\d+\](.*?)\[/QC\]", r"\1", v, flags=re.DOTALL)
+        v = re.sub(r"\[SIG\](.*?)\[/SIG\]", r"\1", v, flags=re.DOTALL)
+        v = re.sub(r"\[PARA\]", "\n\n", v)
+        v = re.sub(r"\[/NH\]|\[/H1\]", "", v)
+        return v.strip()
 
     @computed_field  # type: ignore[prop-decorator]
     @property
