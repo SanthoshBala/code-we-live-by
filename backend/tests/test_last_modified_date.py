@@ -11,8 +11,6 @@ _parse_citation_date directly and running the equivalent selection logic.
 
 from datetime import date
 
-import pytest
-
 from pipeline.olrc.group_service import _parse_citation_date
 
 
