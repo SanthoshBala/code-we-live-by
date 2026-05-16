@@ -428,10 +428,18 @@ async def get_section(
             CodeLineSchema.model_validate(line) for line in state.normalized_provisions
         ]
 
-    # Derive is_positive_law and dates from notes when available
+    # Look up is_positive_law from the title-level SectionGroup
+    title_group_stmt = select(SectionGroup).where(
+        SectionGroup.group_type == "title",
+        SectionGroup.number == str(title_number),
+    )
+    title_group_result = await session.execute(title_group_stmt)
+    title_group = title_group_result.scalar_one_or_none()
+    is_positive_law = title_group.is_positive_law if title_group is not None else False
+
+    # Derive enacted_date and last_modified_date from notes when available
     enacted_date = None
     last_modified_date = None
-    is_positive_law = False
 
     if state.normalized_notes:
         # Extract enacted_date from first citation
