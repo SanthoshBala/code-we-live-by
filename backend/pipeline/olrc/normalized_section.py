@@ -1328,13 +1328,17 @@ def _strip_note_markers(text: str) -> str:
     Removes:
     - [NH]...[/NH] note header markers
     - [H1]...[/H1] bold header markers (cross-headings)
+    - [H2]...[/H2] italic sub-header markers (text kept)
+    - [QC:N]...[/QC] quoted-content markers (text kept)
     - Orphaned [/NH] and [/H1] closing markers
     """
     text = re.sub(r"\[NH\].*?\[/NH\]", "", text, flags=re.DOTALL)
     text = re.sub(r"\[H1\].*?\[/H1\]", "", text, flags=re.DOTALL)
     text = re.sub(r"\[/NH\]", "", text)
     text = re.sub(r"\[/H1\]", "", text)
-    # Clean up remaining inline markers for display
+    # Clean up remaining inline markers for display — keep their text content
+    text = re.sub(r"\[H2\](.*?)\[/H2\]", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"\[QC:\d+\](.*?)\[/QC\]", r"\1", text, flags=re.DOTALL)
     text = re.sub(r"\[SIG\](.*?)\[/SIG\]", r"\1", text, flags=re.DOTALL)
     text = re.sub(r"\[PARA\]", "\n\n", text)
     return text.strip()

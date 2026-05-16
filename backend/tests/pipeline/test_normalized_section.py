@@ -1325,6 +1325,31 @@ class TestStripNoteMarkers:
         text = "Just regular content with no markers."
         assert _strip_note_markers(text) == text
 
+    def test_strip_h2_markers_keeps_text(self) -> None:
+        """[H2]...[/H2] wrappers are removed but the inner text is preserved."""
+        text = 'provided that: [H2]Brevity[/H2] (i) Poetry: ...'
+        result = _strip_note_markers(text)
+        assert "[H2]" not in result
+        assert "[/H2]" not in result
+        assert "Brevity" in result
+
+    def test_strip_qc_markers_keeps_text(self) -> None:
+        """[QC:N]...[/QC] wrappers are removed but the inner text is preserved."""
+        text = 'provided that: [QC:1]"The amendments made by subsection (a) shall apply."[/QC] No Requirement'
+        result = _strip_note_markers(text)
+        assert "[QC:1]" not in result
+        assert "[/QC]" not in result
+        assert "amendments made by subsection" in result
+        assert "No Requirement" in result
+
+    def test_strip_qc_multilevel(self) -> None:
+        """[QC:N] with any level number is stripped."""
+        text = "[QC:1]First level.[/QC] [QC:2]Second level.[/QC]"
+        result = _strip_note_markers(text)
+        assert "[QC:" not in result
+        assert "First level." in result
+        assert "Second level." in result
+
 
 class TestStatutoryNotesHeaderParsing:
     """Tests for statutory notes correctly distinguishing headers from content.
