@@ -2593,7 +2593,10 @@ Examples:
     chrono_bootstrap_finalize_parser.add_argument(
         "release_point",
         type=str,
-        help="Release point identifier (e.g., '113-21')",
+        nargs="?",
+        default=None,
+        help="Release point identifier (e.g., '113-21'). "
+        "If omitted, auto-detects the current INGESTING bootstrap revision.",
     )
     chrono_bootstrap_finalize_parser.add_argument(
         "--dir",
@@ -3447,10 +3450,13 @@ async def chrono_bootstrap_command(
 
 
 async def chrono_bootstrap_finalize_command(
-    release_point: str,
+    release_point: str | None,
     download_dir: Path,
 ) -> int:
-    """Mark a bootstrap revision INGESTED after all fan-out tasks complete."""
+    """Mark a bootstrap revision INGESTED after all fan-out tasks complete.
+
+    If release_point is omitted, auto-detects the current INGESTING revision.
+    """
     from app.models.base import async_session_maker
     from pipeline.olrc.bootstrap import BootstrapService
 
@@ -3461,12 +3467,16 @@ async def chrono_bootstrap_finalize_command(
             session, downloader, session_factory=async_session_maker
         )
         try:
-            revision_id = await service.finalize_revision(release_point)
+            if release_point is None:
+                rp_identifier, revision_id = await service.finalize_latest_ingesting()
+            else:
+                revision_id = await service.finalize_revision(release_point)
+                rp_identifier = release_point
         except ValueError as exc:
             logger.error(str(exc))
             return 1
 
-    print(f"\nFinalized revision {revision_id} for {release_point} → INGESTED")
+    print(f"\nFinalized revision {revision_id} for {rp_identifier} → INGESTED")
     return 0
 
 

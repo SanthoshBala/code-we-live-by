@@ -898,3 +898,54 @@ class TestFinalizeRevision:
         service = BootstrapService(session, downloader)
         with pytest.raises(ValueError, match="FAILED"):
             await service.finalize_revision("113-21")
+
+
+class TestFinalizeLatestIngesting:
+    """Tests for BootstrapService.finalize_latest_ingesting (auto-detect)."""
+
+    @pytest.mark.asyncio
+    async def test_finds_and_marks_ingested(self) -> None:
+        """Finds the INGESTING revision and marks it INGESTED."""
+        from app.models.release_point import OLRCReleasePoint
+        from app.models.revision import CodeRevision
+
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        mock_rp = MagicMock(spec=OLRCReleasePoint)
+        mock_rp.full_identifier = "113-21"
+        mock_rp.release_point_id = 1
+
+        mock_rev = MagicMock(spec=CodeRevision)
+        mock_rev.revision_id = 7
+        mock_rev.status = RevisionStatus.INGESTING.value
+        mock_rev.is_ground_truth = True
+
+        mock_row = MagicMock()
+        mock_row.__iter__ = MagicMock(return_value=iter([mock_rev, mock_rp]))
+
+        mock_result = MagicMock()
+        mock_result.one_or_none.return_value = mock_row
+        session.execute = AsyncMock(return_value=mock_result)
+
+        service = BootstrapService(session, downloader)
+        rp_id, rev_id = await service.finalize_latest_ingesting()
+
+        assert rp_id == "113-21"
+        assert rev_id == 7
+        assert mock_rev.status == RevisionStatus.INGESTED.value
+        session.commit.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_raises_when_none_found(self) -> None:
+        """ValueError raised if no INGESTING revision exists."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        mock_result = MagicMock()
+        mock_result.one_or_none.return_value = None
+        session.execute = AsyncMock(return_value=mock_result)
+
+        service = BootstrapService(session, downloader)
+        with pytest.raises(ValueError, match="No INGESTING bootstrap revision"):
+            await service.finalize_latest_ingesting()

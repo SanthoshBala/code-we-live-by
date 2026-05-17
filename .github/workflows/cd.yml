@@ -36,7 +36,7 @@ jobs:
       - name: Check seed-related file changes
         id: check
         run: |
-          if git diff --name-only HEAD~1 HEAD | grep -qE '^backend/(alembic|pipeline)/|^backend/scripts/seed\.sh|^\.github/workflows/cd\.yml$'; then
+          if git diff --name-only HEAD~1 HEAD | grep -qE '^backend/(alembic|pipeline)/|^backend/scripts/seed|^\.github/workflows/cd\.yml$'; then
             echo "seed_needed=true" >> "$GITHUB_OUTPUT"
           else
             echo "seed_needed=false" >> "$GITHUB_OUTPUT"
@@ -227,8 +227,8 @@ jobs:
             --memory 512Mi \
             --quiet
 
-  # Only runs when alembic/, pipeline/, or seed.sh changed. Wipes and reseeds
-  # from scratch — see backend/scripts/seed.sh.
+  # Only runs when alembic/, pipeline/, or seed scripts changed.
+  # Three-phase fan-out pipeline: init → bootstrap (54 tasks) → finalize.
   seed:
     name: Seed Database
     needs: [deploy-backend, check-seed]
@@ -248,21 +248,64 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: Run seed job
+      - name: Phase 1 — Init (wipe DB + migrate)
         run: |
-          gcloud run jobs deploy cwlb-seed \
-            --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
+          gcloud run jobs deploy cwlb-seed-init \
+            --image "$IMAGE" \
+            --region "$GCP_REGION" \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest" \
+            --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
+            --memory 512Mi \
+            --cpu 1 \
+            --task-timeout 10m \
+            --max-retries 1 \
+            --command "bash" \
+            --args "scripts/seed_init.sh" \
+            --quiet
+          gcloud run jobs execute cwlb-seed-init \
+            --region "$GCP_REGION" \
+            --wait \
+            --quiet
+
+      - name: Phase 2 — Bootstrap fan-out (54 parallel tasks, one title each)
+        run: |
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
+          gcloud run jobs deploy cwlb-seed-bootstrap \
+            --image "$IMAGE" \
+            --region "$GCP_REGION" \
+            --tasks 54 \
+            --parallelism 54 \
+            --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest" \
+            --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
+            --memory 2Gi \
+            --cpu 1 \
+            --task-timeout 30m \
+            --max-retries 3 \
+            --command "bash" \
+            --args "scripts/seed_bootstrap.sh" \
+            --quiet
+          gcloud run jobs execute cwlb-seed-bootstrap \
+            --region "$GCP_REGION" \
+            --wait \
+            --quiet
+
+      - name: Phase 3 — Finalize (mark INGESTED + govinfo + law history + advance)
+        run: |
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
+          gcloud run jobs deploy cwlb-seed-finalize \
+            --image "$IMAGE" \
             --region "$GCP_REGION" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
-            --cpu 4 \
-            --memory 16Gi \
-            --task-timeout 120m \
-            --max-retries 2 \
+            --memory 8Gi \
+            --cpu 2 \
+            --task-timeout 90m \
+            --max-retries 1 \
             --command "bash" \
-            --args "scripts/seed.sh" \
+            --args "scripts/seed_finalize.sh" \
             --quiet
-          gcloud run jobs execute cwlb-seed \
+          gcloud run jobs execute cwlb-seed-finalize \
             --region "$GCP_REGION" \
             --wait \
             --quiet

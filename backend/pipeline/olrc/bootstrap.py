@@ -643,6 +643,48 @@ class BootstrapService:
         )
         return revision.revision_id
 
+    async def finalize_latest_ingesting(self) -> tuple[str, int]:
+        """Find and finalize the most recent INGESTING bootstrap revision.
+
+        Used when the release point identifier is not known at finalize time
+        (e.g. when called from seed_finalize.sh without an explicit RP arg).
+
+        Returns:
+            (rp_identifier, revision_id) of the finalized revision.
+
+        Raises:
+            ValueError: If no INGESTING bootstrap revision is found.
+        """
+        stmt = (
+            select(CodeRevision, OLRCReleasePoint)
+            .join(
+                OLRCReleasePoint,
+                CodeRevision.release_point_id == OLRCReleasePoint.release_point_id,
+            )
+            .where(
+                CodeRevision.status == RevisionStatus.INGESTING.value,
+                CodeRevision.is_ground_truth.is_(True),
+            )
+            .order_by(CodeRevision.revision_id.desc())
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        row = result.one_or_none()
+
+        if row is None:
+            raise ValueError(
+                "No INGESTING bootstrap revision found. "
+                "Ensure bootstrap fan-out tasks completed before finalizing."
+            )
+
+        revision, rp = row
+        revision.status = RevisionStatus.INGESTED.value
+        await self.session.commit()
+        logger.info(
+            f"Revision {revision.revision_id} for {rp.full_identifier} marked INGESTED"
+        )
+        return rp.full_identifier, revision.revision_id
+
     async def _ensure_revision_record(self, rp_identifier: str) -> CodeRevision:
         """Create + commit release point and revision records (task 0 only).
 
