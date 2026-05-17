@@ -163,6 +163,7 @@ class ParsedSubsection:
     content: str  # The text content (may include chapeau for list intros)
     children: list[ParsedSubsection] = field(default_factory=list)
     level: str = "subsection"  # subsection, paragraph, subparagraph, clause, subclause
+    continuation: list[str] = field(default_factory=list)  # Closing text after child list
 
 
 @dataclass
@@ -1083,12 +1084,24 @@ class USLMParser:
             ):
                 children.append(self._parse_subsection(child_elem, child_level))
 
+        # Collect continuation elements (closing text that follows a numbered list,
+        # e.g. the penalty clause in 18 U.S.C. § 1001(a))
+        continuation: list[str] = []
+        continuation_elems = elem.findall("{*}continuation") or elem.findall(
+            "continuation"
+        )
+        for cont_elem in continuation_elems:
+            cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
+            if cont_text:
+                continuation.append(cont_text)
+
         return ParsedSubsection(
             marker=marker,
             heading=heading,
             content=content,
             children=children,
             level=level,
+            continuation=continuation,
         )
 
     def _extract_subsections(
@@ -1128,6 +1141,16 @@ class USLMParser:
                     else ""
                 )
 
+                # Check for section-level continuation (closing text after the list)
+                section_continuation: list[str] = []
+                cont_elems = section_elem.findall("{*}continuation") or section_elem.findall(
+                    "continuation"
+                )
+                for cont_elem in cont_elems:
+                    cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
+                    if cont_text:
+                        section_continuation.append(cont_text)
+
                 # Parse each paragraph
                 children = []
                 for para_elem in para_elems:
@@ -1141,6 +1164,7 @@ class USLMParser:
                         content=chapeau_text,
                         children=children,
                         level="subsection",
+                        continuation=section_continuation,
                     )
                 )
 

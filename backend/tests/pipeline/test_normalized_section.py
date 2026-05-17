@@ -966,6 +966,156 @@ class TestNormalizeParsedSectionDirectParagraphs:
         assert result.provisions[4].indent_level == 2
 
 
+class TestNormalizeParsedSectionContinuation:
+    """Tests for <continuation> elements in parsed sections.
+
+    Regression tests for Issue #251: continuation text (closing statutory
+    clauses that follow a numbered list, e.g. penalty clauses) was silently
+    dropped from the normalized output.
+    """
+
+    def test_continuation_appended_after_children(self) -> None:
+        """Continuation text appears after child items at the same indent as the chapeau.
+
+        Models 18 U.S.C. § 1001(a): chapeau + three paragraphs + penalty clause.
+        The penalty clause (continuation) must appear at indent_level == 0,
+        matching the chapeau's indent level.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="1001",
+            heading="Statements or entries generally",
+            full_citation="18 U.S.C. § 1001",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="Whoever knowingly and willfully—",
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="falsifies a material fact;",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(2)",
+                            heading=None,
+                            content="makes any false statement; or",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(3)",
+                            heading=None,
+                            content="makes or uses any false writing;",
+                            level="paragraph",
+                        ),
+                    ],
+                    continuation=[
+                        "shall be fined under this title or imprisoned not more than 5 years, or both."
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Expected lines:
+        #   0: "(a) Whoever knowingly and willfully—"  indent 0
+        #   1: "(1) falsifies a material fact;"         indent 1
+        #   2: "(2) makes any false statement; or"      indent 1
+        #   3: "(3) makes or uses any false writing;"   indent 1
+        #   4: "shall be fined under this title..."     indent 0  (continuation)
+        assert result.provision_count == 5
+
+        chapeau_line = result.provisions[0]
+        assert "(a)" in chapeau_line.content
+        assert "knowingly" in chapeau_line.content
+        assert chapeau_line.indent_level == 0
+
+        assert result.provisions[1].indent_level == 1
+        assert "(1)" in result.provisions[1].content
+
+        assert result.provisions[2].indent_level == 1
+        assert "(2)" in result.provisions[2].content
+
+        assert result.provisions[3].indent_level == 1
+        assert "(3)" in result.provisions[3].content
+
+        continuation_line = result.provisions[4]
+        assert "shall be fined" in continuation_line.content
+        assert continuation_line.indent_level == 0
+        assert continuation_line.marker is None
+
+    def test_continuation_indent_matches_chapeau_not_children(self) -> None:
+        """Continuation is at the same indent as the enclosing chapeau, not the children."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="1001",
+            heading="Test",
+            full_citation="18 U.S.C. § 1001",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="Intro text—",
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="item one;",
+                            level="paragraph",
+                        ),
+                    ],
+                    continuation=["closing clause."],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Lines: chapeau (indent 0), child (indent 1), continuation (indent 0)
+        assert result.provision_count == 3
+        chapeau_indent = result.provisions[0].indent_level
+        child_indent = result.provisions[1].indent_level
+        continuation_indent = result.provisions[2].indent_level
+
+        assert child_indent > chapeau_indent
+        assert continuation_indent == chapeau_indent
+
+    def test_no_continuation_when_absent(self) -> None:
+        """Sections without continuation produce no extra lines at the end."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="102",
+            heading="Test",
+            full_citation="17 U.S.C. § 102",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="Single item.",
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+        assert result.provision_count == 1
+        assert result.provisions[0].content == "(a) Single item."
+
+
 class TestNormalizeNoteContent:
     """Tests for normalize_note_content function (notes parsing)."""
 

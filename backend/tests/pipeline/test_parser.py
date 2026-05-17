@@ -244,6 +244,97 @@ class TestUSLMParser:
         assert para2.children[0].marker == "(A)"
         assert para2.children[1].marker == "(B)"
 
+    def test_parse_subsection_continuation_element(self, parser: USLMParser) -> None:
+        """_parse_subsection collects <continuation> elements into the continuation field.
+
+        Regression test for Issue #251: continuation text (e.g. penalty clauses
+        closing a list of items) was silently dropped by the parser.
+        """
+        xml = """<subsection xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t18/s1001/a">
+          <num value="a">(a)</num>
+          <chapeau>Except as otherwise provided in this section, whoever, in any matter
+          within the jurisdiction of the executive, legislative, or judicial branch of
+          the Government of the United States, knowingly and willfully—</chapeau>
+          <paragraph identifier="/us/usc/t18/s1001/a/1">
+            <num value="1">(1)</num>
+            <content>falsifies, conceals, or covers up by any trick, scheme, or device
+            a material fact;</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t18/s1001/a/2">
+            <num value="2">(2)</num>
+            <content>makes any materially false, fictitious, or fraudulent statement
+            or representation; or</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t18/s1001/a/3">
+            <num value="3">(3)</num>
+            <content>makes or uses any false writing or document knowing the same to
+            contain any materially false, fictitious, or fraudulent statement or
+            entry;</content>
+          </paragraph>
+          <continuation>shall be fined under this title, imprisoned not more than 5
+          years or, if the offense involves international or domestic terrorism, not
+          more than 8 years, or both.</continuation>
+        </subsection>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "subsection")
+
+        assert result.marker == "(a)"
+        assert "knowingly and willfully" in result.content
+        assert len(result.children) == 3
+        assert len(result.continuation) == 1
+        assert "shall be fined" in result.continuation[0]
+        assert "imprisoned not more than 5" in result.continuation[0]
+
+    def test_parse_subsection_no_continuation(self, parser: USLMParser) -> None:
+        """_parse_subsection produces an empty continuation list when there is none."""
+        xml = """<subsection xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s101/a">
+          <num value="a">(a)</num>
+          <content>A work is created when fixed in a tangible medium.</content>
+        </subsection>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "subsection")
+
+        assert result.continuation == []
+
+    def test_extract_subsections_continuation_in_subsection(
+        self, parser: USLMParser
+    ) -> None:
+        """Continuation text inside a <subsection> element is captured and accessible.
+
+        Regression test for Issue #251: models 18 U.S.C. § 1001(a) where the
+        penalty clause follows three numbered paragraphs inside subsection (a).
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t18/s1001">
+          <num value="1001">§ 1001.</num>
+          <heading>Statements or entries generally</heading>
+          <subsection identifier="/us/usc/t18/s1001/a">
+            <num value="a">(a)</num>
+            <chapeau>Whoever knowingly and willfully—</chapeau>
+            <paragraph identifier="/us/usc/t18/s1001/a/1">
+              <num value="1">(1)</num>
+              <content>falsifies a material fact;</content>
+            </paragraph>
+            <paragraph identifier="/us/usc/t18/s1001/a/2">
+              <num value="2">(2)</num>
+              <content>makes any false statement; or</content>
+            </paragraph>
+            <continuation>shall be fined under this title or imprisoned not more
+            than 5 years, or both.</continuation>
+          </subsection>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 1
+        sub_a = subsections[0]
+        assert sub_a.marker == "(a)"
+        assert len(sub_a.children) == 2
+        assert len(sub_a.continuation) == 1
+        assert "shall be fined" in sub_a.continuation[0]
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
