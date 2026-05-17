@@ -7,17 +7,23 @@ set -euo pipefail
 
 echo "=== Wiping database schema ==="
 uv run python -c "
-import asyncio, asyncpg, os
+import asyncio, asyncpg, os, time
 
 async def wipe():
     url = os.environ['DATABASE_URL'].replace('postgresql+asyncpg://', 'postgresql://')
+    print('Connecting to database...', flush=True)
+    t0 = time.monotonic()
     conn = await asyncpg.connect(url)
+    print(f'Connected in {time.monotonic() - t0:.1f}s', flush=True)
     await conn.execute('DROP SCHEMA IF EXISTS public CASCADE')
+    print('Schema dropped', flush=True)
     await conn.execute('CREATE SCHEMA public')
+    print('Schema recreated', flush=True)
     await conn.close()
 
 asyncio.run(wipe())
 "
+echo "=== Database wiped ==="
 
 echo "=== Running migrations ==="
 uv run alembic upgrade head
