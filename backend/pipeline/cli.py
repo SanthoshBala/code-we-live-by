@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
+from pipeline.olrc.downloader import OLRCDownloader
 from pipeline.olrc.parser import USLMParser
 
 if TYPE_CHECKING:
@@ -186,27 +186,11 @@ async def ingest_titles_command(
         return 1 if failed > 0 else 0
 
 
-async def ingest_phase1(
-    download_dir: Path = Path("data/olrc"),
-    force_download: bool = False,
-    force_parse: bool = False,
-) -> int:
-    """Ingest Phase 1 US Code titles (backwards-compatible wrapper)."""
-    from pipeline.olrc.downloader import PHASE_1_TITLES
-
-    return await ingest_titles_command(
-        title_list=PHASE_1_TITLES,
-        download_dir=download_dir,
-        force_download=force_download,
-        force_parse=force_parse,
-    )
-
-
 # =============================================================================
 # Seed laws for local development
 # =============================================================================
 
-# Curated set of Public Laws spanning Phase 1 titles with varying complexity.
+# Curated set of Public Laws with varying complexity.
 # Each entry: (congress, law_number, default_title, short_name)
 SEED_LAWS: list[tuple[int, int, int | None, str]] = [
     # Simple (1-3 amendments)
@@ -1689,7 +1673,7 @@ async def initial_commit_command(
 
     Args:
         release_point: Release point identifier (e.g., "113-21").
-        titles: Title numbers to process (default: Phase 1 titles).
+        titles: Title numbers to process. If None, all titles 1-54 are used.
         download_dir: Directory for OLRC XML files.
 
     Returns:
@@ -1783,7 +1767,7 @@ async def validate_release_point_command(
 
     Args:
         release_point: Release point identifier (e.g., "113-22").
-        titles: Title numbers to validate (default: Phase 1 titles).
+        titles: Title numbers to validate. If None, all downloaded titles are validated.
         download_dir: Directory for OLRC XML files.
         verbose: If True, show per-section results.
 
@@ -1793,13 +1777,11 @@ async def validate_release_point_command(
     from app.models.base import async_session_maker
     from pipeline.legal_parser.release_point_validator import ReleasePointValidator
 
-    titles = titles or PHASE_1_TITLES
-
     async with async_session_maker() as session:
         validator = ReleasePointValidator(session, download_dir=download_dir)
         report = await validator.validate_against_release_point(
             release_point=release_point,
-            titles=titles,
+            titles=titles or list(range(1, 55)),
             verbose=verbose,
         )
 
@@ -1914,7 +1896,7 @@ def main() -> int:
         "--titles",
         type=int,
         nargs="+",
-        help="Title numbers to download (default: Phase 1 titles)",
+        help="Title numbers to download (e.g., '10 17 18'); if omitted, all titles 1-54",
     )
     download_parser.add_argument(
         "--dir",
@@ -1983,15 +1965,10 @@ def main() -> int:
         help="Ingest US Code titles into the database (all titles by default)",
     )
     ingest_titles_parser.add_argument(
-        "--phase1",
-        action="store_true",
-        help="Only ingest Phase 1 titles (10, 17, 18, 20, 22, 26, 42, 50)",
-    )
-    ingest_titles_parser.add_argument(
         "--titles",
         type=str,
         default=None,
-        help="Comma-separated title numbers to ingest (e.g., '10,17,18')",
+        help="Comma-separated title numbers to ingest (e.g., '10,17,18'); if omitted, all downloaded titles",
     )
     ingest_titles_parser.add_argument(
         "--dir",
@@ -2005,28 +1982,6 @@ def main() -> int:
         help="Re-download XML even if files exist",
     )
     ingest_titles_parser.add_argument(
-        "--force-parse",
-        action="store_true",
-        help="Re-parse and update existing records",
-    )
-
-    # Keep ingest-phase1 as an alias for backwards compatibility
-    ingest_phase1_parser = subparsers.add_parser(
-        "ingest-phase1",
-        help="(Deprecated: use ingest-titles --phase1) Ingest Phase 1 titles",
-    )
-    ingest_phase1_parser.add_argument(
-        "--dir",
-        type=Path,
-        default=Path("data/olrc"),
-        help="OLRC XML directory (default: data/olrc)",
-    )
-    ingest_phase1_parser.add_argument(
-        "--force-download",
-        action="store_true",
-        help="Re-download XML even if files exist",
-    )
-    ingest_phase1_parser.add_argument(
         "--force-parse",
         action="store_true",
         help="Re-parse and update existing records",
@@ -2450,7 +2405,7 @@ Examples:
         "--titles",
         type=int,
         nargs="+",
-        help="Title numbers to process (default: Phase 1 titles)",
+        help="Title numbers to process (e.g., '10 17 18'); if omitted, all titles 1-54",
     )
     initial_commit_parser.add_argument(
         "--dir",
@@ -2505,7 +2460,7 @@ Examples:
         "--titles",
         type=int,
         nargs="+",
-        help="Title numbers to validate (default: Phase 1 titles)",
+        help="Title numbers to validate (e.g., '10 17 18'); if omitted, all downloaded titles",
     )
     validate_rp_parser.add_argument(
         "--dir",
@@ -2831,7 +2786,7 @@ Examples:
     set_pipeline_cache(_cli_cache)
 
     if args.command == "download":
-        titles = args.titles or PHASE_1_TITLES
+        titles = args.titles or list(range(1, 55))
         logger.info(f"Downloading titles: {titles}")
         results = asyncio.run(download_titles(titles, args.dir, args.force))
 
@@ -2872,26 +2827,14 @@ Examples:
         )
 
     elif args.command == "ingest-titles":
-        if args.titles:
-            title_list = [int(t.strip()) for t in args.titles.split(",")]
-        elif args.phase1:
-            from pipeline.olrc.downloader import PHASE_1_TITLES as _p1
-
-            title_list = _p1
-        else:
-            title_list = None  # all titles
+        title_list = (
+            [int(t.strip()) for t in args.titles.split(",")]
+            if args.titles
+            else None  # all downloaded titles
+        )
         return asyncio.run(
             ingest_titles_command(
                 title_list=title_list,
-                download_dir=args.dir,
-                force_download=args.force_download,
-                force_parse=args.force_parse,
-            )
-        )
-
-    elif args.command == "ingest-phase1":
-        return asyncio.run(
-            ingest_phase1(
                 download_dir=args.dir,
                 force_download=args.force_download,
                 force_parse=args.force_parse,

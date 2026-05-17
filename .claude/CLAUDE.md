@@ -112,9 +112,6 @@ CWLB treats federal legislation as version control:
 - `PublicLaw` - Enacted legislation with metadata
 - `LawChange` - Diffs showing what each law modified
 
-### Phase 1 Titles (from Task 0.8):
-10, 17, 18, 20, 22, 26, 42, 50
-
 ## Plan Artifacts
 
 When implementation plans are created during planning:
