@@ -36,6 +36,42 @@ SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 # Default title range: all 54 titles of the US Code
 ALL_TITLES = list(range(1, 55))
 
+# Cloud Run Job fan-out: seconds between polls for the revision record
+_REVISION_POLL_INTERVAL: float = 5.0
+# Maximum seconds non-zero tasks wait for task 0 to commit revision records
+_REVISION_POLL_TIMEOUT: float = 120.0
+
+
+def partition_titles(
+    task_index: int,
+    task_count: int,
+    all_titles: list[int] | None = None,
+) -> list[int]:
+    """Return the title slice assigned to this Cloud Run Job task.
+
+    Uses round-robin distribution: task i processes all_titles[i::task_count].
+    With task_count=54, each task processes exactly one title.
+
+    Args:
+        task_index: 0-based task index (CLOUD_RUN_TASK_INDEX).
+        task_count: Total number of tasks (CLOUD_RUN_TASK_COUNT).
+        all_titles: Full title list. Defaults to ALL_TITLES (1–54).
+
+    Returns:
+        Titles assigned to this task, in ascending order.
+
+    Raises:
+        ValueError: If task_index or task_count are invalid.
+    """
+    if task_count < 1:
+        raise ValueError(f"task_count must be >= 1, got {task_count}")
+    if not (0 <= task_index < task_count):
+        raise ValueError(
+            f"task_index {task_index} out of range for task_count {task_count}"
+        )
+    titles = all_titles if all_titles is not None else ALL_TITLES
+    return titles[task_index::task_count]
+
 
 class _SectionRow(NamedTuple):
     """Pre-computed data for one SectionSnapshot row, built in a thread pool."""
@@ -260,6 +296,7 @@ class BootstrapService:
         downloader: OLRCDownloader,
         session_factory: SessionFactory | None = None,
         concurrency: int = 6,
+        poll_timeout: float = _REVISION_POLL_TIMEOUT,
     ) -> None:
         self.session = session
         self.downloader = downloader
@@ -268,6 +305,7 @@ class BootstrapService:
         # on a 4-CPU instance, targeting ~60% CPU while leaving headroom before
         # Cloud SQL write pressure becomes a factor on large titles (10/26).
         self._concurrency = concurrency
+        self._poll_timeout = poll_timeout
 
         if session_factory is not None:
             self._session_factory = session_factory
@@ -467,3 +505,214 @@ class BootstrapService:
         self.session.add(revision)
         await self.session.flush()
         return revision
+
+    # ------------------------------------------------------------------
+    # Cloud Run Job fan-out API
+    # ------------------------------------------------------------------
+
+    async def ingest_titles_for_task(
+        self,
+        rp_identifier: str,
+        task_index: int,
+        task_count: int,
+        force: bool = False,
+    ) -> BootstrapResult:
+        """Process one Cloud Run Job task's share of titles.
+
+        Task 0 creates + commits the release point and revision records so FK
+        constraints are satisfied before any task inserts snapshots. Non-zero
+        tasks poll until the revision record appears (up to
+        _REVISION_POLL_TIMEOUT seconds). Titles are processed sequentially
+        within the task — cloud-level parallelism comes from running many tasks.
+
+        Args:
+            rp_identifier: Release point identifier (e.g., "113-21").
+            task_index: 0-based task index (CLOUD_RUN_TASK_INDEX).
+            task_count: Total task count (CLOUD_RUN_TASK_COUNT).
+            force: Re-ingest even if the revision is already INGESTED.
+
+        Returns:
+            BootstrapResult with this task's ingestion statistics.
+        """
+        start_time = time.monotonic()
+        title_list = partition_titles(task_index, task_count)
+
+        if task_index == 0:
+            revision = await self._ensure_revision_record(rp_identifier)
+        else:
+            revision = await self._wait_for_revision_record(
+                rp_identifier, timeout=self._poll_timeout
+            )
+
+        if revision.status == RevisionStatus.INGESTED.value and not force:
+            elapsed = time.monotonic() - start_time
+            logger.info(
+                f"Task {task_index}: {rp_identifier} already INGESTED "
+                f"(revision {revision.revision_id}), skipping"
+            )
+            return BootstrapResult(
+                revision_id=revision.revision_id,
+                rp_identifier=rp_identifier,
+                titles_processed=0,
+                titles_skipped=0,
+                total_sections=0,
+                elapsed_seconds=elapsed,
+            )
+
+        titles_processed = 0
+        titles_skipped = 0
+        total_sections = 0
+
+        for title_num in title_list:
+            async with self._session_factory() as s:
+                try:
+                    count = await ingest_title(
+                        s,
+                        self.downloader,
+                        title_num,
+                        rp_identifier,
+                        revision.revision_id,
+                    )
+                    await s.commit()
+                except Exception:
+                    logger.error(
+                        f"Task {task_index}, title {title_num}: ingest failed",
+                        exc_info=True,
+                    )
+                    count = None
+
+            if count is None:
+                titles_skipped += 1
+            else:
+                titles_processed += 1
+                total_sections += count
+
+        elapsed = time.monotonic() - start_time
+        logger.info(
+            f"Task {task_index}/{task_count} complete: "
+            f"{titles_processed} titles, {total_sections} sections in {elapsed:.1f}s"
+        )
+        return BootstrapResult(
+            revision_id=revision.revision_id,
+            rp_identifier=rp_identifier,
+            titles_processed=titles_processed,
+            titles_skipped=titles_skipped,
+            total_sections=total_sections,
+            elapsed_seconds=elapsed,
+        )
+
+    async def finalize_revision(self, rp_identifier: str) -> int:
+        """Mark the bootstrap revision INGESTED after all fan-out tasks complete.
+
+        Call this after the Cloud Run Job finishes. Idempotent: if the revision
+        is already INGESTED it returns without error.
+
+        Args:
+            rp_identifier: Release point identifier (e.g., "113-21").
+
+        Returns:
+            revision_id that was finalized.
+
+        Raises:
+            ValueError: If no revision exists, or if it is in FAILED status.
+        """
+        release_point, revision = await self._get_or_create_records(rp_identifier)
+
+        if revision is None:
+            raise ValueError(
+                f"No revision found for {rp_identifier}. "
+                "Run fan-out tasks before finalizing."
+            )
+
+        if revision.status == RevisionStatus.INGESTED.value:
+            logger.info(
+                f"Revision {revision.revision_id} for {rp_identifier} already INGESTED"
+            )
+            return revision.revision_id
+
+        if revision.status == RevisionStatus.FAILED.value:
+            raise ValueError(
+                f"Revision {revision.revision_id} for {rp_identifier} has FAILED "
+                "status. Inspect task logs before retrying."
+            )
+
+        revision.status = RevisionStatus.INGESTED.value
+        await self.session.commit()
+        logger.info(
+            f"Revision {revision.revision_id} for {rp_identifier} marked INGESTED"
+        )
+        return revision.revision_id
+
+    async def _ensure_revision_record(self, rp_identifier: str) -> CodeRevision:
+        """Create + commit release point and revision records (task 0 only).
+
+        After committing, the rows are visible to all other Cloud Run task
+        sessions, satisfying the section_snapshot.revision_id FK constraint.
+        """
+        release_point, revision = await self._get_or_create_records(rp_identifier)
+
+        if release_point is None:
+            release_point = await self._upsert_release_point(rp_identifier)
+
+        if revision is None:
+            revision = await self._create_revision(release_point)
+
+        # Commit so the revision row is visible to all worker task sessions.
+        await self.session.commit()
+        return revision
+
+    async def _wait_for_revision_record(
+        self,
+        rp_identifier: str,
+        timeout: float = _REVISION_POLL_TIMEOUT,
+    ) -> CodeRevision:
+        """Poll until the revision record appears in the DB (tasks 1+ only).
+
+        Task 0 creates and commits the record. This lets other tasks block
+        until it is visible before inserting snapshots (FK constraint).
+
+        Args:
+            rp_identifier: Release point identifier.
+            timeout: Max seconds to wait before raising TimeoutError.
+
+        Raises:
+            TimeoutError: If the record doesn't appear within timeout seconds.
+        """
+        deadline = time.monotonic() + timeout
+        poll_count = 0
+
+        while time.monotonic() < deadline:
+            async with self._session_factory() as s:
+                rp_result = await s.execute(
+                    select(OLRCReleasePoint).where(
+                        OLRCReleasePoint.full_identifier == rp_identifier
+                    )
+                )
+                rp = rp_result.scalar_one_or_none()
+
+                if rp is not None:
+                    rev_result = await s.execute(
+                        select(CodeRevision).where(
+                            CodeRevision.release_point_id == rp.release_point_id
+                        )
+                    )
+                    revision = rev_result.scalar_one_or_none()
+                    if revision is not None:
+                        if poll_count > 0:
+                            logger.info(
+                                f"Revision record for {rp_identifier} found "
+                                f"after {poll_count} poll(s)"
+                            )
+                        return revision
+
+            poll_count += 1
+            logger.debug(
+                f"Waiting for revision record ({rp_identifier}), "
+                f"poll {poll_count} (next in {_REVISION_POLL_INTERVAL:.0f}s)"
+            )
+            await asyncio.sleep(_REVISION_POLL_INTERVAL)
+
+        raise TimeoutError(
+            f"Revision record for {rp_identifier} not found after {timeout:.0f}s. "
+            "Ensure task 0 completed successfully."
+        )

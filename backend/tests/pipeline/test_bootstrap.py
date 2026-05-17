@@ -1,4 +1,4 @@
-"""Tests for the bootstrap service (Task 1.19)."""
+"""Tests for the bootstrap service (Task 1.19) and Cloud Run fan-out (issue #181)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.models.enums import RevisionStatus, RevisionType
-from pipeline.olrc.bootstrap import BootstrapResult, BootstrapService
+from pipeline.olrc.bootstrap import (
+    ALL_TITLES,
+    BootstrapResult,
+    BootstrapService,
+    partition_titles,
+)
 from pipeline.olrc.parser import ParsedGroup, ParsedSection, USLMParseResult
 
 # ---------------------------------------------------------------------------
@@ -565,3 +570,331 @@ class TestSnapshotFieldMapping:
         assert "parent_commit" in events
         assert "worker_session_open" in events
         assert events.index("parent_commit") < events.index("worker_session_open")
+
+
+# ---------------------------------------------------------------------------
+# Tests: partition_titles
+# ---------------------------------------------------------------------------
+
+
+class TestPartitionTitles:
+    """Tests for the partition_titles helper used by Cloud Run fan-out."""
+
+    def test_single_task_gets_all_titles(self) -> None:
+        result = partition_titles(0, 1)
+        assert result == ALL_TITLES
+
+    def test_round_robin_two_tasks(self) -> None:
+        titles = list(range(1, 7))  # [1, 2, 3, 4, 5, 6]
+        task0 = partition_titles(0, 2, all_titles=titles)
+        task1 = partition_titles(1, 2, all_titles=titles)
+        assert task0 == [1, 3, 5]
+        assert task1 == [2, 4, 6]
+        assert sorted(task0 + task1) == titles
+
+    def test_54_tasks_one_title_each(self) -> None:
+        all_slices = [partition_titles(i, 54) for i in range(54)]
+        assert all(len(s) == 1 for s in all_slices)
+        combined = sorted(t for s in all_slices for t in s)
+        assert combined == ALL_TITLES
+
+    def test_uneven_split(self) -> None:
+        titles = list(range(1, 6))  # 5 titles, 3 tasks
+        task0 = partition_titles(0, 3, all_titles=titles)
+        task1 = partition_titles(1, 3, all_titles=titles)
+        task2 = partition_titles(2, 3, all_titles=titles)
+        assert sorted(task0 + task1 + task2) == titles
+
+    def test_invalid_task_count(self) -> None:
+        with pytest.raises(ValueError, match="task_count"):
+            partition_titles(0, 0)
+
+    def test_invalid_task_index(self) -> None:
+        with pytest.raises(ValueError, match="task_index"):
+            partition_titles(5, 5)  # index 5 out of range [0, 5)
+
+    def test_custom_all_titles(self) -> None:
+        custom = [10, 17, 26]
+        assert partition_titles(0, 3, all_titles=custom) == [10]
+        assert partition_titles(1, 3, all_titles=custom) == [17]
+        assert partition_titles(2, 3, all_titles=custom) == [26]
+
+
+# ---------------------------------------------------------------------------
+# Tests: ingest_titles_for_task
+# ---------------------------------------------------------------------------
+
+
+class TestIngestTitlesForTask:
+    """Tests for the Cloud Run Job fan-out ingestion method."""
+
+    @pytest.mark.asyncio
+    async def test_task0_creates_revision_and_ingests(self) -> None:
+        """Task 0 creates records and ingests its assigned title."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+        mock_parser = _make_parser_mock()
+
+        service = BootstrapService(session, downloader)
+
+        with (
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
+            patch("pipeline.olrc.bootstrap.partition_titles", return_value=[17]),
+        ):
+            result = await service.ingest_titles_for_task(
+                "113-21", task_index=0, task_count=1
+            )
+
+        assert result.rp_identifier == "113-21"
+        assert result.titles_processed == 1
+        assert result.total_sections == 1
+        # Task 0 must commit (to make revision visible)
+        session.commit.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_task0_returns_early_when_already_ingested(self) -> None:
+        """Task 0 returns early if revision is already INGESTED."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        from app.models.release_point import OLRCReleasePoint
+        from app.models.revision import CodeRevision
+
+        mock_rp = MagicMock(spec=OLRCReleasePoint)
+        mock_rp.release_point_id = 1
+
+        mock_rev = MagicMock(spec=CodeRevision)
+        mock_rev.revision_id = 42
+        mock_rev.status = RevisionStatus.INGESTED.value
+
+        call_count = 0
+
+        def fake_execute(_stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = (
+                mock_rp if call_count == 1 else mock_rev
+            )
+            return result
+
+        session.execute = AsyncMock(side_effect=fake_execute)
+
+        service = BootstrapService(session, downloader)
+
+        with patch("pipeline.olrc.bootstrap.partition_titles", return_value=[17]):
+            result = await service.ingest_titles_for_task(
+                "113-21", task_index=0, task_count=1
+            )
+
+        assert result.revision_id == 42
+        assert result.titles_processed == 0
+        downloader.download_title_at_release_point.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_nonzero_task_waits_then_ingests(self) -> None:
+        """Non-zero task polls for the revision record then ingests."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+        mock_parser = _make_parser_mock(_make_parse_result(title_number=18))
+
+        from app.models.release_point import OLRCReleasePoint
+        from app.models.revision import CodeRevision
+
+        mock_rp = MagicMock(spec=OLRCReleasePoint)
+        mock_rp.release_point_id = 1
+
+        mock_rev = MagicMock(spec=CodeRevision)
+        mock_rev.revision_id = 7
+        mock_rev.status = RevisionStatus.INGESTING.value
+
+        worker_session = _make_mock_session()
+        poll_call_count = 0
+
+        def fake_worker_execute(_stmt):
+            nonlocal poll_call_count
+            poll_call_count += 1
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = (
+                mock_rp if poll_call_count % 2 == 1 else mock_rev
+            )
+            return result
+
+        worker_session.execute = AsyncMock(side_effect=fake_worker_execute)
+
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def factory():
+            yield worker_session
+
+        service = BootstrapService(session, downloader, session_factory=factory)
+
+        with (
+            patch("pipeline.olrc.bootstrap.partition_titles", return_value=[18]),
+            patch("pipeline.olrc.bootstrap.USLMParser", return_value=mock_parser),
+            patch(
+                "pipeline.olrc.bootstrap.normalize_parsed_section",
+                side_effect=lambda s: s,
+            ),
+            patch("pipeline.olrc.bootstrap.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = await service.ingest_titles_for_task(
+                "113-21", task_index=1, task_count=2
+            )
+
+        assert result.titles_processed == 1
+        assert result.revision_id == 7
+
+    @pytest.mark.asyncio
+    async def test_nonzero_task_raises_on_timeout(self) -> None:
+        """Non-zero task raises TimeoutError if revision never appears."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        worker_session = _make_mock_session()
+        never_found = MagicMock()
+        never_found.scalar_one_or_none.return_value = None
+        worker_session.execute = AsyncMock(return_value=never_found)
+
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def factory():
+            yield worker_session
+
+        # poll_timeout=0.0 forces the while loop to exit immediately
+        service = BootstrapService(
+            session, downloader, session_factory=factory, poll_timeout=0.0
+        )
+
+        with (
+            patch("pipeline.olrc.bootstrap.partition_titles", return_value=[18]),
+            patch("pipeline.olrc.bootstrap.asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(TimeoutError, match="113-21"),
+        ):
+            await service.ingest_titles_for_task("113-21", task_index=1, task_count=2)
+
+
+# ---------------------------------------------------------------------------
+# Tests: finalize_revision
+# ---------------------------------------------------------------------------
+
+
+class TestFinalizeRevision:
+    """Tests for BootstrapService.finalize_revision."""
+
+    @pytest.mark.asyncio
+    async def test_marks_ingesting_as_ingested(self) -> None:
+        """INGESTING revision is updated to INGESTED."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        from app.models.release_point import OLRCReleasePoint
+        from app.models.revision import CodeRevision
+
+        mock_rp = MagicMock(spec=OLRCReleasePoint)
+        mock_rp.release_point_id = 1
+
+        mock_rev = MagicMock(spec=CodeRevision)
+        mock_rev.revision_id = 99
+        mock_rev.status = RevisionStatus.INGESTING.value
+
+        call_count = 0
+
+        def fake_execute(_stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = (
+                mock_rp if call_count == 1 else mock_rev
+            )
+            return result
+
+        session.execute = AsyncMock(side_effect=fake_execute)
+
+        service = BootstrapService(session, downloader)
+        revision_id = await service.finalize_revision("113-21")
+
+        assert revision_id == 99
+        assert mock_rev.status == RevisionStatus.INGESTED.value
+        session.commit.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_idempotent_when_already_ingested(self) -> None:
+        """Already INGESTED revision does not error."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        from app.models.release_point import OLRCReleasePoint
+        from app.models.revision import CodeRevision
+
+        mock_rp = MagicMock(spec=OLRCReleasePoint)
+        mock_rp.release_point_id = 1
+        mock_rev = MagicMock(spec=CodeRevision)
+        mock_rev.revision_id = 99
+        mock_rev.status = RevisionStatus.INGESTED.value
+
+        call_count = 0
+
+        def fake_execute(_stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = (
+                mock_rp if call_count == 1 else mock_rev
+            )
+            return result
+
+        session.execute = AsyncMock(side_effect=fake_execute)
+
+        service = BootstrapService(session, downloader)
+        revision_id = await service.finalize_revision("113-21")
+
+        assert revision_id == 99
+
+    @pytest.mark.asyncio
+    async def test_raises_when_no_revision(self) -> None:
+        """ValueError raised if no revision exists."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        service = BootstrapService(session, downloader)
+        with pytest.raises(ValueError, match="No revision found"):
+            await service.finalize_revision("113-21")
+
+    @pytest.mark.asyncio
+    async def test_raises_when_failed(self) -> None:
+        """ValueError raised if revision is in FAILED status."""
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        from app.models.release_point import OLRCReleasePoint
+        from app.models.revision import CodeRevision
+
+        mock_rp = MagicMock(spec=OLRCReleasePoint)
+        mock_rp.release_point_id = 1
+        mock_rev = MagicMock(spec=CodeRevision)
+        mock_rev.revision_id = 5
+        mock_rev.status = RevisionStatus.FAILED.value
+
+        call_count = 0
+
+        def fake_execute(_stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = (
+                mock_rp if call_count == 1 else mock_rev
+            )
+            return result
+
+        session.execute = AsyncMock(side_effect=fake_execute)
+
+        service = BootstrapService(session, downloader)
+        with pytest.raises(ValueError, match="FAILED"):
+            await service.finalize_revision("113-21")
