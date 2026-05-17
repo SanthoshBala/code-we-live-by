@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -2613,6 +2614,38 @@ Examples:
         default=Path("data/olrc"),
         help="OLRC XML directory (default: data/olrc)",
     )
+    chrono_bootstrap_parser.add_argument(
+        "--task-index",
+        type=int,
+        default=None,
+        dest="task_index",
+        help="Cloud Run Job task index (0-based). "
+        "Overridden by CLOUD_RUN_TASK_INDEX env var when running in Cloud Run.",
+    )
+    chrono_bootstrap_parser.add_argument(
+        "--task-count",
+        type=int,
+        default=None,
+        dest="task_count",
+        help="Total Cloud Run Job task count. "
+        "Overridden by CLOUD_RUN_TASK_COUNT env var when running in Cloud Run.",
+    )
+
+    chrono_bootstrap_finalize_parser = subparsers.add_parser(
+        "chrono-bootstrap-finalize",
+        help="Mark a bootstrap revision INGESTED after all fan-out tasks complete",
+    )
+    chrono_bootstrap_finalize_parser.add_argument(
+        "release_point",
+        type=str,
+        help="Release point identifier (e.g., '113-21')",
+    )
+    chrono_bootstrap_finalize_parser.add_argument(
+        "--dir",
+        type=Path,
+        default=Path("data/olrc"),
+        help="OLRC XML directory (default: data/olrc)",
+    )
 
     chrono_ingest_rp_parser = subparsers.add_parser(
         "chrono-ingest-rp",
@@ -3113,6 +3146,16 @@ Examples:
                 titles=title_list,
                 force=args.force,
                 download_dir=args.dir,
+                task_index=args.task_index,
+                task_count=args.task_count,
+            )
+        )
+
+    elif args.command == "chrono-bootstrap-finalize":
+        return asyncio.run(
+            chrono_bootstrap_finalize_command(
+                release_point=args.release_point,
+                download_dir=args.dir,
             )
         )
 
@@ -3392,14 +3435,31 @@ async def chrono_bootstrap_command(
     titles: list[int] | None,
     force: bool,
     download_dir: Path,
+    task_index: int | None = None,
+    task_count: int | None = None,
 ) -> int:
     """Bootstrap the chronological pipeline from an OLRC release point.
+
+    If CLOUD_RUN_TASK_INDEX / CLOUD_RUN_TASK_COUNT env vars are set (or
+    --task-index / --task-count flags), runs in Cloud Run Job fan-out mode:
+    each task processes its assigned title slice and exits. Call
+    chrono-bootstrap-finalize after all tasks complete to mark the revision
+    INGESTED. Otherwise runs the standard single-process path.
 
     If release_point is None, auto-detects the oldest available RP.
     """
     from app.models.base import async_session_maker
     from pipeline.olrc.bootstrap import BootstrapService
     from pipeline.olrc.release_point import ReleasePointRegistry
+
+    # Cloud Run sets these env vars for every task in a job.
+    env_task_index = os.environ.get("CLOUD_RUN_TASK_INDEX")
+    env_task_count = os.environ.get("CLOUD_RUN_TASK_COUNT")
+    if env_task_index is not None and env_task_count is not None:
+        task_index = int(env_task_index)
+        task_count = int(env_task_count)
+
+    fan_out_mode = task_index is not None and task_count is not None
 
     if release_point is None:
         registry = ReleasePointRegistry()
@@ -3416,17 +3476,54 @@ async def chrono_bootstrap_command(
         service = BootstrapService(
             session, downloader, session_factory=async_session_maker
         )
-        result = await service.create_initial_commit(
-            release_point, titles=titles, force=force
-        )
 
-    print(f"\nBootstrap result for {result.rp_identifier}:")
+        if fan_out_mode:
+            print(f"Fan-out mode: task {task_index}/{task_count} for {release_point}")
+            result = await service.ingest_titles_for_task(
+                release_point,
+                task_index=task_index,
+                task_count=task_count,
+                force=force,
+            )
+        else:
+            result = await service.create_initial_commit(
+                release_point, titles=titles, force=force
+            )
+
+    if fan_out_mode:
+        print(f"\nTask {task_index}/{task_count} result for {result.rp_identifier}:")
+    else:
+        print(f"\nBootstrap result for {result.rp_identifier}:")
     print(f"  Revision ID:      {result.revision_id}")
     print(f"  Titles processed: {result.titles_processed}")
     print(f"  Titles skipped:   {result.titles_skipped}")
     print(f"  Total sections:   {result.total_sections}")
     print(f"  Elapsed:          {result.elapsed_seconds:.1f}s")
 
+    return 0
+
+
+async def chrono_bootstrap_finalize_command(
+    release_point: str,
+    download_dir: Path,
+) -> int:
+    """Mark a bootstrap revision INGESTED after all fan-out tasks complete."""
+    from app.models.base import async_session_maker
+    from pipeline.olrc.bootstrap import BootstrapService
+
+    downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
+
+    async with async_session_maker() as session:
+        service = BootstrapService(
+            session, downloader, session_factory=async_session_maker
+        )
+        try:
+            revision_id = await service.finalize_revision(release_point)
+        except ValueError as exc:
+            logger.error(str(exc))
+            return 1
+
+    print(f"\nFinalized revision {revision_id} for {release_point} → INGESTED")
     return 0
 
 
