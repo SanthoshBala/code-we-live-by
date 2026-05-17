@@ -268,14 +268,14 @@ jobs:
             --wait \
             --quiet
 
-      - name: Phase 2 — Bootstrap fan-out (54 parallel tasks, one title each)
+      - name: Phase 2 — Bootstrap fan-out (54 tasks, 8 parallel)
         run: |
           IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
           gcloud run jobs deploy cwlb-seed-bootstrap \
             --image "$IMAGE" \
             --region "$GCP_REGION" \
             --tasks 54 \
-            --parallelism 54 \
+            --parallelism 8 \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
             --memory 2Gi \
