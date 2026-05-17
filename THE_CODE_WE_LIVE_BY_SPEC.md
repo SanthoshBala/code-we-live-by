@@ -1125,38 +1125,6 @@ ORDER BY l.line_number;
 - Data export usage (indicates research value)
 - Social sharing of specific laws/sections
 
-### Phase Success Criteria
-
-#### Phase 1 (MVP)
-- [ ] 5–10 titles ingested with 20 years of history
-- [ ] Code browsing with navigation and line-level view functional
-- [ ] Law viewer with diffs and metadata functional
-- [ ] Blame view showing line-by-line attribution functional
-- [ ] Basic search operational
-- [ ] Basic analytics (1–2 visualizations) operational
-- [ ] Public beta launched with 100+ users
-- [ ] <2s average page load time
-- [ ] <1% error rate
-
-#### Phase 2
-- [ ] Full historical depth for covered titles
-- [ ] Time travel fully optimized and intuitive
-- [ ] Comprehensive analytics dashboard with 5+ visualizations
-- [ ] Advanced search with filters and saved searches
-- [ ] Integration with Congress.gov, GovInfo, CFR
-- [ ] 10,000+ monthly active users
-- [ ] Positive user feedback (>4/5 average rating)
-- [ ] Featured in at least one major media outlet
-
-#### Phase 3
-- [ ] All 54 titles covered
-- [ ] Proposed bills ("Open PRs") feature launched
-- [ ] Dependency graph operational
-- [ ] Public API with 100+ registered users
-- [ ] 100,000+ monthly active users
-- [ ] Used in at least 10 educational institutions
-- [ ] Cited in at least 10 research papers or major journalism pieces
-
 ---
 
 ## 11. Privacy & User Data
@@ -1458,7 +1426,6 @@ When a title is enacted as positive law, it creates complex attribution scenario
 - [ ] Mobile optimization
 - [ ] Continuous data updates
 
-See [Appendix F](#appendix-f-estimated-effort) for effort and team-size estimates per phase.
 
 ---
 
@@ -1656,36 +1623,3 @@ to prepare derivative works based upon the copyrighted work;
 
 **Verdict**: Strong alternative that could be adopted in Phase 2 for enhanced functionality. Maintains the benefits of Section-as-File while adding subsection-level precision through anchors rather than file structure.
 
----
-
-## Appendix E: Risk Mitigation
-
-*(Technical risks are addressed in depth in [Section 13](#13-technical-challenges--mitigations). This appendix covers the remaining operational and product risks.)*
-
-### User Adoption Risk
-
-**Risk**: Users find the UI confusing or overwhelming.
-
-**Mitigation**:
-- User testing with target audiences (citizens, educators, journalists, researchers)
-- Progressive disclosure: start with simple browsing, reveal power features gradually
-- Onboarding tutorials and "How a Bill Becomes a Law" explainer
-- Iterate on UI based on user feedback after beta launch
-
----
-
-## Appendix F: Estimated Effort
-
-*Estimates assume a team with relevant expertise (legal tech, data engineering, full-stack web development). Adjust based on team composition and experience.*
-
-### Phase 1 (MVP): 6–9 months (3–5 people)
-- **Backend**: 3–4 months (2 engineers)
-- **Frontend**: 3–4 months (2 engineers)
-- **Data pipeline**: 3–4 months (1–2 engineers, can overlap with backend)
-- **QA/Testing**: 1–2 months (1 engineer + full team)
-
-### Phase 2: 6–9 months (3–5 people)
-- Feature development, analytics, optimization
-
-### Phase 3: Ongoing (2–4 people)
-- Expansion, maintenance, community engagement
