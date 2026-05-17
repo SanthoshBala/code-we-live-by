@@ -15,7 +15,7 @@ from sqlalchemy.orm import attributes
 from app.core.revision_cache import revision_cache
 from app.crud.revision import get_last_changed_revision_for_section
 from app.models.public_law import PublicLaw
-from app.models.us_code import SectionGroup
+from app.models.us_code import SectionGroup, USCodeSection
 from app.schemas.us_code import (
     CodeLineSchema,
     SectionGroupTreeSchema,
@@ -428,14 +428,12 @@ async def get_section(
             CodeLineSchema.model_validate(line) for line in state.normalized_provisions
         ]
 
-    # Look up is_positive_law from the title-level SectionGroup
-    title_group_stmt = select(SectionGroup).where(
-        SectionGroup.group_type == "title",
-        SectionGroup.number == str(title_number),
+    # Read is_positive_law from the persisted USCodeSection record
+    is_positive_law_stmt = select(USCodeSection.is_positive_law).where(
+        USCodeSection.title_number == title_number,
+        USCodeSection.section_number == section_number,
     )
-    title_group_result = await session.execute(title_group_stmt)
-    title_group = title_group_result.scalar_one_or_none()
-    is_positive_law = title_group.is_positive_law if title_group is not None else False
+    is_positive_law = await session.scalar(is_positive_law_stmt) or False
 
     # Derive enacted_date and last_modified_date from notes when available
     enacted_date = None
