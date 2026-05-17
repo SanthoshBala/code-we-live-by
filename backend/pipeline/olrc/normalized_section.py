@@ -1337,6 +1337,80 @@ def _parse_notes_structure(
     _parse_editorial_notes(raw_notes, notes)
     _parse_statutory_notes(raw_notes, notes)
 
+    # Fallback: some older sections use flat <note> elements without category
+    # wrapper headings ("Editorial Notes" / "Statutory Notes"), so none of the
+    # three parsers above match.  Parse all [NH]...[/NH] blocks directly.
+    if not notes.notes:
+        _parse_flat_notes(raw_notes, notes)
+
+
+def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
+    """Parse notes that lack category-wrapper headings (flat XML structure).
+
+    Some older US Code sections have <note> elements directly under <notes>
+    without an "Editorial Notes" or "Statutory Notes" wrapper.  The parser
+    emits [NH]Header[/NH] markers for each note heading but no category marker,
+    so the three category-aware parsers find nothing.
+
+    Category assignment uses the header text:
+    - Editorial: Amendments, Change of Name, References in Text, Codification,
+      Prior Provisions, Construction, Recodification, Effective Date of Repeal
+    - Statutory: everything else (effective dates, savings, miscellaneous, etc.)
+    """
+    EDITORIAL_HEADERS = {
+        "Amendments",
+        "Change Of Name",
+        "References In Text",
+        "Codification",
+        "Prior Provisions",
+        "Construction",
+        "Recodification",
+        "Effective Date Of Repeal",
+    }
+
+    header_pattern = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
+    header_positions: list[tuple[int, int, str]] = []
+    for match in header_pattern.finditer(raw_notes):
+        header = match.group(1).strip()
+        if not header:
+            continue
+        header_positions.append((match.start(), match.end(), header))
+
+    seen_headers: set[str] = set()
+    for i, (_start, end, header) in enumerate(header_positions):
+        if header in seen_headers:
+            continue
+        seen_headers.add(header)
+
+        content_end = (
+            header_positions[i + 1][0]
+            if i + 1 < len(header_positions)
+            else len(raw_notes)
+        )
+        raw_content = raw_notes[end:content_end]
+        content = _strip_note_markers(raw_content)
+
+        if not content or len(content) <= 30:
+            continue
+
+        category = (
+            NoteCategory.EDITORIAL
+            if header in EDITORIAL_HEADERS
+            else NoteCategory.STATUTORY
+        )
+
+        if header == "Amendments":
+            notes.amendments = _parse_amendments(content)
+
+        notes.notes.append(
+            SectionNote(
+                header=header,
+                content=content,
+                lines=normalize_note_content(raw_content),
+                category=category,
+            )
+        )
+
 
 def _strip_note_markers(text: str) -> str:
     """Strip note markers from text.
