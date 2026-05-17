@@ -1466,6 +1466,112 @@ class TestStatutoryNotesHeaderParsing:
         assert "congressional defense committees" in first_note.content
 
 
+class TestFlatNotesParser:
+    """Tests for _parse_flat_notes — fallback for sections without category wrappers.
+
+    Real-world example: 16 U.S.C. § 797 has individual <note> elements directly
+    under <notes> with no "Editorial Notes" or "Statutory Notes" wrapper heading,
+    so the three category-aware parsers all fail and notes.notes ends up empty.
+    """
+
+    def test_flat_amendments_note_is_editorial(self) -> None:
+        """Flat 'Amendments' note is categorised as EDITORIAL."""
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = (
+            "[NH]Amendments[/NH] "
+            "2005—Subsec. (e). Pub. L. 109–58, inserted text after first proviso. "
+            "1986—Subsec. (e). Pub. L. 99–495 inserted additional provisions."
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "Amendments"
+        assert notes.notes[0].category.value == "editorial"
+
+    def test_flat_statutory_note_is_statutory(self) -> None:
+        """Flat notes with non-editorial headers are categorised as STATUTORY."""
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = (
+            "[NH]Effective Date Of 1986 Amendment[/NH] "
+            "Pub. L. 99–495, § 18, Oct. 16, 1986, 100 Stat. 1259, provided that "
+            "the amendments shall take effect with respect to each license issued after enactment."
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "Effective Date Of 1986 Amendment"
+        assert notes.notes[0].category.value == "statutory"
+
+    def test_flat_notes_multiple_headers(self) -> None:
+        """Multiple flat notes are all parsed with correct categories."""
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = (
+            "[NH]Amendments[/NH] "
+            "2005—Subsec. (e). Pub. L. 109–58, inserted text after first proviso. "
+            "1986—Subsec. (e). Pub. L. 99–495 inserted additional provisions. "
+            "[NH]Change Of Name[/NH] "
+            "Department of War designated Department of the Army by act July 26, 1947. "
+            "[NH]Savings Provision[/NH] "
+            "Pub. L. 99–495, § 17(a), Oct. 16, 1986, 100 Stat. 1259, provided that "
+            "nothing in the Act shall be construed as authorizing the appropriation of water."
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 3
+        headers = [n.header for n in notes.notes]
+        assert "Amendments" in headers
+        assert "Change Of Name" in headers
+        assert "Savings Provision" in headers
+
+        editorial = [n for n in notes.notes if n.category.value == "editorial"]
+        statutory = [n for n in notes.notes if n.category.value == "statutory"]
+        assert len(editorial) == 2  # Amendments + Change Of Name
+        assert len(statutory) == 1  # Savings Provision
+
+    def test_flat_notes_fallback_in_parse_notes_structure(self) -> None:
+        """_parse_notes_structure triggers the flat fallback when no category headers exist.
+
+        This is the actual bug from 16 U.S.C. § 797: notes text contains [NH] markers
+        but no 'Editorial Notes' / 'Statutory Notes' wrapper.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Amendments[/NH] "
+            "2005—Subsec. (e). Pub. L. 109–58, inserted text after first proviso. "
+            "1986—Subsec. (e). Pub. L. 99–495 inserted additional provisions. "
+            "[NH]Savings Provision[/NH] "
+            "Pub. L. 99–495, § 17(a), Oct. 16, 1986, 100 Stat. 1259, provided that "
+            "nothing in the Act shall be construed as authorizing the appropriation of water."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        assert len(notes.notes) >= 2
+        headers = [n.header for n in notes.notes]
+        assert "Amendments" in headers
+        assert "Savings Provision" in headers
+
+    def test_flat_notes_short_content_skipped(self) -> None:
+        """Notes with content <= 30 characters are skipped."""
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = "[NH]Amendments[/NH] Too short."
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 0
+
+
 class TestCleanHeading:
     """Tests for _clean_heading function."""
 
