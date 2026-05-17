@@ -31,15 +31,15 @@ export default function Home() {
             </span>
           </div>
 
-          <div className="block rounded-lg border border-gray-200 bg-white p-6 opacity-50">
-            <h2 className="mb-2 text-xl font-semibold">Recent Laws</h2>
+          <Link
+            href="/laws"
+            className="block rounded-lg border border-gray-200 bg-white p-6 transition-colors hover:border-primary-500"
+          >
+            <h2 className="mb-2 text-xl font-semibold">Laws</h2>
             <p className="text-gray-600">
-              See the latest Public Laws and what they changed in the Code.
+              Browse Public Laws and see what each one changed in the Code.
             </p>
-            <span className="mt-2 inline-block text-xs text-gray-400">
-              Coming soon
-            </span>
-          </div>
+          </Link>
 
           <div className="block rounded-lg border border-gray-200 bg-white p-6 opacity-50">
             <h2 className="mb-2 text-xl font-semibold">Analytics</h2>

@@ -30,7 +30,7 @@ describe('Home', () => {
     render(<Home />);
     expect(screen.getByText('Browse Titles')).toBeInTheDocument();
     expect(screen.getByText('Search')).toBeInTheDocument();
-    expect(screen.getByText('Recent Laws')).toBeInTheDocument();
+    expect(screen.getByText('Laws')).toBeInTheDocument();
     expect(screen.getByText('Analytics')).toBeInTheDocument();
   });
 
@@ -40,9 +40,15 @@ describe('Home', () => {
     expect(link).toHaveAttribute('href', '/titles');
   });
 
+  it('links Laws card to /laws', () => {
+    render(<Home />);
+    const link = screen.getByText('Laws').closest('a');
+    expect(link).toHaveAttribute('href', '/laws');
+  });
+
   it('marks placeholder cards as coming soon', () => {
     render(<Home />);
     const badges = screen.getAllByText('Coming soon');
-    expect(badges).toHaveLength(3);
+    expect(badges).toHaveLength(2);
   });
 });
