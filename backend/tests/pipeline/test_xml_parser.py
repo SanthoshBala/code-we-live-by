@@ -18,11 +18,17 @@ from pipeline.legal_parser.xml_parser import (
 _DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "govinfo" / "plaw"
 
 _PL113_22_XML = _DATA_DIR / "PLAW-113publ22.xml"
+_PL113_59_XML = _DATA_DIR / "PLAW-113publ59.xml"
 _PL114_153_XML = _DATA_DIR / "PLAW-114publ153.xml"
 
 _skip_no_113_22 = pytest.mark.skipif(
     not _PL113_22_XML.exists(),
     reason="Cached PL 113-22 XML not available (run seed-laws first)",
+)
+
+_skip_no_113_59 = pytest.mark.skipif(
+    not _PL113_59_XML.exists(),
+    reason="Cached PL 113-59 XML not available (run seed-laws first)",
 )
 
 _skip_no_114_153 = pytest.mark.skipif(
@@ -137,6 +143,36 @@ class TestParsePL114_153:
         amendments = parser.parse(_load_pl114_153())
         for a in amendments:
             assert a.confidence >= 0.95
+
+
+@_skip_no_113_59
+class TestParsePL113_59:
+    """Regression tests for issue #197 — note-targeting amendment (38 USC 5101 note)."""
+
+    def _get_5101_amendment(self) -> object:
+        parser = XMLAmendmentParser(default_title=38)
+        amendments = parser.parse(_PL113_59_XML.read_text(encoding="utf-8"))
+        hits = [
+            a for a in amendments if a.section_ref and a.section_ref.section == "5101"
+        ]
+        assert hits, "Expected at least one amendment targeting § 5101"
+        return hits[0]
+
+    def test_is_note_flag_set(self) -> None:
+        a = self._get_5101_amendment()
+        assert a.section_ref is not None
+        assert a.section_ref.is_note is True
+
+    def test_old_new_text_extracted(self) -> None:
+        a = self._get_5101_amendment()
+        assert a.old_text == "December 31, 2013"
+        assert a.new_text == "December 31, 2014"
+
+    def test_section_ref_correct(self) -> None:
+        a = self._get_5101_amendment()
+        assert a.section_ref is not None
+        assert a.section_ref.title == 38
+        assert a.section_ref.section == "5101"
 
 
 # ---------------------------------------------------------------------------

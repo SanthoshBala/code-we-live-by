@@ -184,6 +184,7 @@ def _amendment_to_schema(amendment: Any) -> ParsedAmendmentSchema:
             section=amendment.section_ref.section,
             subsection_path=amendment.section_ref.subsection_path,
             display=str(amendment.section_ref),
+            is_note=amendment.section_ref.is_note,
         )
 
     position_qualifier = None
@@ -894,6 +895,44 @@ def _build_hunks(
     return hunks
 
 
+def _notes_to_provisions(normalized_notes: Any) -> list[dict[str, Any]]:
+    """Flatten normalized_notes into provision-like dicts for text diffing.
+
+    Used when an amendment targets a section note (``section_ref.is_note``).
+    Strips intermediate XML serialization markers then splits raw_notes by
+    line, yielding one provision dict per non-empty line.
+    """
+    from pipeline.olrc.normalized_section import _strip_note_markers
+
+    if not isinstance(normalized_notes, dict):
+        return []
+    raw = normalized_notes.get("raw_notes", "") or ""
+    if not raw:
+        return []
+    clean = _strip_note_markers(raw)
+    provisions: list[dict[str, Any]] = []
+    line_num = 1
+    char_offset = 0
+    for line in clean.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        provisions.append(
+            {
+                "line_number": line_num,
+                "content": stripped,
+                "indent_level": 0,
+                "marker": None,
+                "is_header": False,
+                "start_char": char_offset,
+                "end_char": char_offset + len(stripped),
+            }
+        )
+        line_num += 1
+        char_offset += len(stripped) + 1
+    return provisions
+
+
 async def compute_law_diffs(
     session: AsyncSession, congress: int, law_number: int
 ) -> list[SectionDiffSchema]:
@@ -931,15 +970,28 @@ async def compute_law_diffs(
     diffs: list[SectionDiffSchema] = []
 
     for (title, section), section_amendments in groups.items():
-        # Separate note amendments from text-modifying amendments
+        # Separate add-note, note-text-modify, and body-text amendments
         note_amendments = [a for a in section_amendments if a.change_type == "Add_Note"]
-        text_amendments = [a for a in section_amendments if a.change_type != "Add_Note"]
+        note_text_amendments = [
+            a
+            for a in section_amendments
+            if a.change_type != "Add_Note"
+            and a.section_ref is not None
+            and a.section_ref.is_note
+        ]
+        text_amendments = [
+            a
+            for a in section_amendments
+            if a.change_type != "Add_Note"
+            and not (a.section_ref is not None and a.section_ref.is_note)
+        ]
 
         # Use batch-fetched "before" state
         state = section_states.get((title, section))
         raw = state.normalized_provisions if state else None
+        heading = state.heading if state else ""
 
-        # Handle text-modifying amendments (normal diff flow)
+        # Handle body text-modifying amendments (normal diff flow)
         if text_amendments:
             if not isinstance(raw, list) or not raw:
                 diffs.append(
@@ -947,7 +999,7 @@ async def compute_law_diffs(
                         title_number=title,
                         section_number=section,
                         section_key=f"{title} U.S.C. § {section}",
-                        heading=state.heading if state else "",
+                        heading=heading,
                         hunks=[],
                         total_lines=0,
                         amendments=text_amendments,
@@ -964,7 +1016,7 @@ async def compute_law_diffs(
                         title_number=title,
                         section_number=section,
                         section_key=f"{title} U.S.C. § {section}",
-                        heading=state.heading if state else "",
+                        heading=heading,
                         hunks=hunks,
                         total_lines=len(after),
                         amendments=text_amendments,
@@ -972,7 +1024,33 @@ async def compute_law_diffs(
                     )
                 )
 
-        # Handle note amendments as a separate "STATUTORY NOTES" diff card
+        # Handle note-targeting text amendments (e.g. "38 U.S.C. 5101 note")
+        if note_text_amendments:
+            raw_notes_dict = state.normalized_notes if state else None
+            note_before = _notes_to_provisions(raw_notes_dict)
+            if note_before:
+                note_after = _apply_amendments_to_provisions(
+                    note_before, note_text_amendments
+                )
+                note_hunks = _build_hunks(note_before, note_after)
+                note_prov_lines = [_provision_to_diff_line(p) for p in note_after]
+            else:
+                note_hunks = []
+                note_prov_lines = []
+            diffs.append(
+                SectionDiffSchema(
+                    title_number=title,
+                    section_number=section,
+                    section_key=f"{title} U.S.C. § {section}",
+                    heading=((heading or "") + " — STATUTORY NOTES").lstrip(" —"),
+                    hunks=note_hunks,
+                    total_lines=len(note_prov_lines),
+                    amendments=note_text_amendments,
+                    all_provisions=note_prov_lines,
+                )
+            )
+
+        # Handle add-note amendments as a separate "STATUTORY NOTES" diff card
         if note_amendments:
             note_hunks = _build_note_hunks(note_amendments)
             note_lines = [line for hunk in note_hunks for line in hunk.lines]
