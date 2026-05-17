@@ -1,6 +1,8 @@
 # CWLB Implementation Tasks
 
-This document tracks the remaining implementation backlog, organized by phase and feature area. Completed tasks have been removed for clarity.
+This document tracks the granular implementation backlog — numbered tasks organized by phase and feature area. Completed tasks have been removed for clarity.
+
+For product vision, architecture, success criteria, risk mitigation, and effort estimates, see [`THE_CODE_WE_LIVE_BY_SPEC.md`](THE_CODE_WE_LIVE_BY_SPEC.md).
 
 **Completed milestones**: Phase 0 research (0.1-0.8, 0.11-0.14), infrastructure (1.1-1.2), core data pipeline (1.6-1.10), Milestone 1A (US Code Viewer).
 
@@ -798,78 +800,3 @@ This document tracks the remaining implementation backlog, organized by phase an
 - Task 1.20e (pre-2013 coverage) is a backlog item — not blocking any current work
 - Analytics queries (Task 2.7, 2.9, 2.11, 2.13) must be complete before visualizations (Task 2.8, 2.10, 2.12, 2.14)
 
----
-
-## Success Criteria by Phase
-
-### Phase 1 (MVP) Success
-- [ ] 5-10 titles ingested with 20 years of history
-- [ ] Code browsing with navigation and line-level view functional
-- [ ] Law viewer with diffs and metadata functional
-- [ ] Blame view showing line-by-line attribution functional
-- [ ] Basic search operational
-- [ ] Basic analytics (1-2 visualizations) operational
-- [ ] Public beta launched with 100+ users
-- [ ] <2s average page load time
-- [ ] <1% error rate
-
-### Phase 2 Success
-- [ ] Full historical depth for covered titles
-- [ ] Time travel fully optimized and intuitive
-- [ ] Comprehensive analytics dashboard with 5+ visualizations
-- [ ] Advanced search with filters and saved searches
-- [ ] Integration with Congress.gov, GovInfo, CFR
-- [ ] 10,000+ monthly active users
-- [ ] Positive user feedback (>4/5 average rating)
-- [ ] Featured in at least one major media outlet
-
-### Phase 3 Success
-- [ ] All 54 titles covered
-- [ ] Proposed bills ("Open PRs") feature launched
-- [ ] Dependency graph operational
-- [ ] Public API with 100+ registered users
-- [ ] 100,000+ monthly active users
-- [ ] Used in at least 10 educational institutions
-- [ ] Cited in at least 10 research papers or major journalism pieces
-
----
-
-## Risk Mitigation
-
-### Data Quality Risks
-- **Risk**: Parser incorrectly interprets legal language
-- **Mitigation**: Manual review process, user reporting, regular spot-checks
-
-### Performance Risks
-- **Risk**: Slow queries on large historical datasets
-- **Mitigation**: Aggressive caching, database optimization, pagination
-
-### Scalability Risks
-- **Risk**: Traffic spike overwhelms infrastructure
-- **Mitigation**: Auto-scaling, CDN, rate limiting, load testing
-
-### User Adoption Risks
-- **Risk**: Users find UI confusing or overwhelming
-- **Mitigation**: User testing, progressive disclosure, onboarding tutorials, iterate based on feedback
-
-### Legal/Accuracy Risks
-- **Risk**: Displaying incorrect law text damages credibility
-- **Mitigation**: Clear disclaimers, canonical source links, accuracy verification, user error reporting
-
----
-
-## Estimated Effort (Person-Months)
-
-**Phase 1 (MVP)**: 6-9 months (3-5 people)
-- Backend: 3-4 months (2 engineers)
-- Frontend: 3-4 months (2 engineers)
-- Data pipeline: 3-4 months (1-2 engineers, can overlap with backend)
-- QA/Testing: 1-2 months (1 engineer + all team)
-
-**Phase 2**: 6-9 months (3-5 people)
-- Feature development, analytics, optimization
-
-**Phase 3**: Ongoing (2-4 people)
-- Expansion, maintenance, community engagement
-
-**Note**: Estimates assume team has relevant expertise (legal tech, data engineering, full-stack web development). Adjust based on team composition and experience level.
