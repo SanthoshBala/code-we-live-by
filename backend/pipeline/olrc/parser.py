@@ -163,7 +163,9 @@ class ParsedSubsection:
     content: str  # The text content (may include chapeau for list intros)
     children: list[ParsedSubsection] = field(default_factory=list)
     level: str = "subsection"  # subsection, paragraph, subparagraph, clause, subclause
-    continuation: list[str] = field(default_factory=list)  # Closing text after child list
+    continuation: list[str] = field(
+        default_factory=list
+    )  # Closing text after child list
 
 
 @dataclass
@@ -1143,9 +1145,9 @@ class USLMParser:
 
                 # Check for section-level continuation (closing text after the list)
                 section_continuation: list[str] = []
-                cont_elems = section_elem.findall("{*}continuation") or section_elem.findall(
-                    "continuation"
-                )
+                cont_elems = section_elem.findall(
+                    "{*}continuation"
+                ) or section_elem.findall("continuation")
                 for cont_elem in cont_elems:
                     cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
                     if cont_text:
