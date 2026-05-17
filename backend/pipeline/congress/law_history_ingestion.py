@@ -256,7 +256,13 @@ class LawHistoryIngestionService:
             data = await congress_client.get_law_bill_info(
                 law.congress, law_number_int, "pub"
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "get_law_bill_info failed for PL %s-%s: %s",
+                law.congress,
+                law.law_number,
+                exc,
+            )
             return None
 
         if data is None:
