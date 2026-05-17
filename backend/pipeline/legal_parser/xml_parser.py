@@ -5,6 +5,7 @@ Parses amendments from GovInfo USLM XML using semantic tags
 Falls back gracefully when XML structure is incomplete.
 """
 
+import dataclasses
 import logging
 import re
 import xml.etree.ElementTree as ET
@@ -384,6 +385,10 @@ class XMLAmendmentParser:
                 if ref is not None:
                     if ref.subsection_path is None:
                         ref = self._augment_subsection(ref, section)
+                    # Detect "38 U.S.C. 5101 note" — display text ends with "note"
+                    # while the href only points to the section itself.
+                    if _element_text(ref_elem).lower().endswith(" note"):
+                        ref = dataclasses.replace(ref, is_note=True)
                     return ref
 
         # Fallback: parse plain text content

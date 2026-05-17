@@ -33,6 +33,7 @@ class SectionReference:
     title: int | None
     section: str
     subsection_path: str | None = None
+    is_note: bool = False
 
     def __str__(self) -> str:
         """Return formatted section reference."""

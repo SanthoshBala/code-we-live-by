@@ -42,6 +42,10 @@ class SectionReferenceSchema(BaseModel):
     section: str
     subsection_path: str | None = None
     display: str = Field("", description="Formatted display string")
+    is_note: bool = Field(
+        False,
+        description="True when the amendment targets a note to the section rather than its body",
+    )
 
 
 class PositionQualifierSchema(BaseModel):
