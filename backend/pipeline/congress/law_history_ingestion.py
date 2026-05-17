@@ -169,6 +169,7 @@ class LawHistoryIngestionService:
         total_created = 0
         total_processed = 0
         failed = 0
+        failure_reasons: list[str] = []
 
         for law in laws:
             child_log = await self.seed_law(
@@ -178,11 +179,13 @@ class LawHistoryIngestionService:
             total_created += child_log.records_created or 0
             if child_log.status == "failed":
                 failed += 1
+                reason = child_log.error_message or "unknown error"
+                failure_reasons.append(f"PL {law.congress}-{law.law_number}: {reason}")
                 logger.warning(
                     "Failed to seed PL %d-%s: %s",
                     law.congress,
                     law.law_number,
-                    child_log.error_message,
+                    reason,
                 )
 
         log.status = "failed" if failed > 0 and total_created == 0 else "completed"
@@ -191,6 +194,11 @@ class LawHistoryIngestionService:
         log.details = (
             f"{len(laws)} laws processed, {failed} failed, {total_created} rows created"
         )
+        if log.status == "failed" and failure_reasons:
+            # Surface the first reason so callers get a useful message rather than None
+            first = failure_reasons[0]
+            summary = f"{failed}/{len(laws)} laws failed — first: {first}"
+            log.error_message = summary
         await self.session.commit()
         return log
 
