@@ -1,7 +1,7 @@
 """Initial commit service — establish base state from first OLRC release point.
 
 This module creates the "initial commit" in the version control model by:
-1. Downloading the first OLRC release point for Phase 1 titles
+1. Downloading the first OLRC release point for the specified titles
 2. Parsing all sections (provisions + notes)
 3. Storing initial SectionHistory records (version_number=1)
 4. Creating OLRCReleasePoint record (is_initial=True)
@@ -19,7 +19,7 @@ from app.models import (
     USCodeSection,
 )
 from app.models.release_point import OLRCReleasePoint
-from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
+from pipeline.olrc.downloader import OLRCDownloader
 from pipeline.olrc.ingestion import USCodeIngestionService
 from pipeline.olrc.release_point import parse_release_point_identifier
 
@@ -54,12 +54,12 @@ class InitialCommitService:
 
         Args:
             release_point: Release point identifier (e.g., "113-21").
-            titles: Title numbers to process (default: Phase 1 titles).
+            titles: Title numbers to process. If None, all downloaded titles are used.
 
         Returns:
             The created OLRCReleasePoint record.
         """
-        titles = titles or PHASE_1_TITLES
+        titles = titles or list(range(1, 55))
         congress, law_identifier = parse_release_point_identifier(release_point)
 
         # Check if already exists

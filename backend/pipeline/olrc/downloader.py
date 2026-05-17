@@ -65,9 +65,6 @@ TITLE_XML_URL_PATTERN = (
     "xml_usc{title_number:02d}@{congress}-{public_law}.zip"
 )
 
-# Phase 1 target titles (from Task 0.8)
-PHASE_1_TITLES = [10, 17, 18, 20, 22, 26, 42, 50]
-
 
 class OLRCDownloader:
     """Download US Code XML files from the OLRC website."""
@@ -188,24 +185,6 @@ class OLRCDownloader:
         except zipfile.BadZipFile as e:
             logger.error(f"Invalid ZIP file for Title {title_number}: {e}")
             return None
-
-    async def download_phase1_titles(
-        self, force: bool = False
-    ) -> dict[int, Path | None]:
-        """Download all Phase 1 target titles.
-
-        Args:
-            force: If True, download even if files exist.
-
-        Returns:
-            Dictionary mapping title numbers to their XML file paths.
-        """
-
-        async def _one(n: int) -> tuple[int, Path | None]:
-            return n, await self.download_title(n, force=force)
-
-        pairs = await asyncio.gather(*[_one(n) for n in PHASE_1_TITLES])
-        return dict(pairs)
 
     def get_downloaded_titles(self) -> list[int]:
         """Get list of title numbers that have been downloaded.

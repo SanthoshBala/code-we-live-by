@@ -38,9 +38,6 @@ downloader = OLRCDownloader(download_dir="data/olrc")
 # Download a single title
 xml_path = await downloader.download_title(17)  # Title 17 - Copyrights
 
-# Download all Phase 1 titles
-results = await downloader.download_phase1_titles()
-
 # Check what's already downloaded
 downloaded = downloader.get_downloaded_titles()  # [17, 18, 26, ...]
 ```
@@ -99,8 +96,8 @@ async with AsyncSession(engine) as session:
     print(log.status)           # "completed"
     print(log.records_created)  # 171
 
-    # Ingest all Phase 1 titles
-    logs = await service.ingest_phase1_titles()
+    # Ingest a title
+    log = await service.ingest_title(17)
 ```
 
 **Features:**
@@ -148,7 +145,7 @@ from pipeline.olrc.initial_commit import InitialCommitService
 service = InitialCommitService(session)
 rp = await service.create_initial_commit(
     release_point="113-21",
-    titles=[10, 17, 18, 20, 22, 26, 42, 50],
+    titles=list(range(1, 55)),  # or omit for all titles
 )
 ```
 
@@ -205,7 +202,6 @@ Key constants that may need updates (see inline documentation for sources):
 | Constant | File | Description |
 |----------|------|-------------|
 | `DEFAULT_RELEASE_POINT` | downloader.py | OLRC release point (e.g., `119-72not60`) |
-| `PHASE_1_TITLES` | downloader.py | Priority titles for initial ingestion |
 | `POSITIVE_LAW_TITLES` | parser.py | Fallback list of positive law titles |
 
 ## Database Tables

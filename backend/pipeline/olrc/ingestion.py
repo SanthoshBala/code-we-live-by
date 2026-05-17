@@ -285,30 +285,3 @@ class USCodeIngestionService:
         self.session.add(section)
         await self.session.flush()
         return section
-
-    async def ingest_phase1_titles(
-        self, force_download: bool = False, force_parse: bool = False
-    ) -> list[DataIngestionLog]:
-        """Ingest all Phase 1 target titles.
-
-        Args:
-            force_download: If True, download even if files exist.
-            force_parse: If True, re-parse and update even if already ingested.
-
-        Returns:
-            List of ingestion log records.
-        """
-        from pipeline.olrc.downloader import PHASE_1_TITLES
-
-        logs = []
-        for title_number in PHASE_1_TITLES:
-            logger.info(f"Ingesting Title {title_number}...")
-            log = await self.ingest_title(
-                title_number,
-                force_download=force_download,
-                force_parse=force_parse,
-            )
-            logs.append(log)
-            logger.info(f"Title {title_number}: {log.status}")
-
-        return logs

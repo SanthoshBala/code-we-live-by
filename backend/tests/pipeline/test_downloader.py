@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from pipeline.olrc.downloader import PHASE_1_TITLES, OLRCDownloader
+from pipeline.olrc.downloader import OLRCDownloader
 
 
 class TestOLRCDownloader:
@@ -79,25 +79,6 @@ class TestOLRCDownloader:
         path = downloader.get_xml_path(99)
 
         assert path is None
-
-
-class TestPhase1Titles:
-    """Tests for Phase 1 title configuration."""
-
-    def test_phase1_titles_defined(self) -> None:
-        """Test that Phase 1 titles are defined."""
-        assert len(PHASE_1_TITLES) > 0
-
-    def test_phase1_titles_valid_range(self) -> None:
-        """Test that Phase 1 titles are in valid range (1-54)."""
-        for title in PHASE_1_TITLES:
-            assert 1 <= title <= 54
-
-    def test_phase1_includes_key_titles(self) -> None:
-        """Test that Phase 1 includes key titles for the project."""
-        # Title 17 (Copyrights) and Title 18 (Crimes) are commonly referenced
-        assert 17 in PHASE_1_TITLES
-        assert 18 in PHASE_1_TITLES
 
 
 class TestDownloadTitleAtReleasePoint:
