@@ -2125,6 +2125,29 @@ def _normalize_subsection_recursive(
             child, lines, line_counter, char_pos, child_indent
         )
 
+    # Emit continuation lines at the same indent as the chapeau/content.
+    # These are closing clauses that follow a numbered list (e.g. penalty
+    # text after sub-items in 18 U.S.C. § 1001(a)).
+    for cont_text in subsection.continuation:
+        sentences = _split_into_sentences(cont_text)
+        for sentence_text, _s_start, _s_end in sentences:
+            sentence_text = sentence_text.strip()
+            if sentence_text and sentence_text != PARAGRAPH_BREAK_MARKER:
+                line_counter[0] += 1
+                start_pos = char_pos[0]
+                char_pos[0] += len(sentence_text) + 1
+                lines.append(
+                    ParsedLine(
+                        line_number=line_counter[0],
+                        content=sentence_text,
+                        indent_level=base_indent,
+                        marker=None,
+                        is_header=False,
+                        start_char=start_pos,
+                        end_char=char_pos[0],
+                    )
+                )
+
 
 def normalize_parsed_section(
     parsed_section: ParsedSection,
