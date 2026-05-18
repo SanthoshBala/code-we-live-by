@@ -1722,6 +1722,91 @@ class TestFlatNotesParser:
         assert len(notes.notes) == 0
 
 
+class TestNoteTopicAmendmentParsing:
+    """Regression tests for issue #216: <note topic="amendments"> not parsed.
+
+    Two patterns appear in USLM XML for amendment notes that previously broke:
+    - Editorial wrapper + inner <note topic="amendments"><heading>Amendments</heading>
+    - Flat <note topic="amendments"> without a <heading> child at all
+    """
+
+    def _parse_xml_notes(self, xml_snippet: str) -> object:
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        notes_elem = etree.fromstring(xml_snippet)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+        return notes
+
+    def test_editorial_wrapper_with_plain_heading(self) -> None:
+        """17 USC 403 pattern: <note class="editorial"> + inner <heading>Amendments</heading>.
+
+        The inner heading has no class="smallCaps" but must still emit [NH] so
+        _parse_editorial_notes can find and categorise it.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note class="editorial">'
+            '<heading class="smallCaps">Editorial Notes</heading>'
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>1988—Pub. L. 100–568 amended section generally.</p>"
+            "</note>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        assert any(n.header == "Amendments" for n in notes.notes)
+        assert len(notes.amendments) == 1
+        assert notes.amendments[0].year == 1988
+
+    def test_flat_topic_note_without_heading(self) -> None:
+        """17 USC 1005 pattern: <note topic="amendments"> with no <heading> child.
+
+        The topic attribute alone must synthesise the [NH] header so the fallback
+        flat-notes parser can categorise the content.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="amendments">'
+            "<p>1993—Pub. L. 103–198 struck out at end"
+            ' "The Register shall submit a report."</p>'
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        assert any(n.header == "Amendments" for n in notes.notes)
+        assert len(notes.amendments) == 1
+        assert notes.amendments[0].year == 1993
+
+    def test_flat_topic_note_with_heading(self) -> None:
+        """<note topic="amendments"><heading>Amendments</heading>: heading takes precedence."""
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>1993—Pub. L. 103–198 struck out at end"
+            ' "The Register shall submit a report."</p>'
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        # Should not produce duplicate Amendments notes
+        amendment_notes = [n for n in notes.notes if n.header == "Amendments"]
+        assert len(amendment_notes) == 1
+        assert len(notes.amendments) >= 1
+
+
 class TestCleanHeading:
     """Tests for _clean_heading function."""
 
