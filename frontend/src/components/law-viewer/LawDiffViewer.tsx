@@ -8,10 +8,14 @@ import type {
   TitleStructure,
 } from '@/lib/types';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
+import { useLawStandaloneProvisions } from '@/hooks/useLaw';
 import AffectedSectionsTree from './AffectedSectionsTree';
 import UnifiedDiffCard from './UnifiedDiffCard';
+import StandaloneProvisionsPanel from './StandaloneProvisionsPanel';
 
 interface LawDiffViewerProps {
+  congress: number;
+  lawNumber: string;
   diffs: SectionDiff[];
   isLoading: boolean;
 }
@@ -118,12 +122,20 @@ function SectionBreadcrumb({
 
 /** Unified diff view of parsed amendments grouped by section. */
 export default function LawDiffViewer({
+  congress,
+  lawNumber,
   diffs,
   isLoading,
 }: LawDiffViewerProps) {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const mainPanelRef = useRef<HTMLDivElement>(null);
+
+  const { data: standaloneProvisions } = useLawStandaloneProvisions(
+    congress,
+    lawNumber,
+    !isLoading
+  );
 
   // Flatten amendments from all diffs for the sidebar tree
   const allAmendments = useMemo(
@@ -244,6 +256,10 @@ export default function LawDiffViewer({
           ))}
         </div>
       </div>
+
+      {standaloneProvisions && standaloneProvisions.length > 0 && (
+        <StandaloneProvisionsPanel provisions={standaloneProvisions} />
+      )}
     </div>
   );
 }

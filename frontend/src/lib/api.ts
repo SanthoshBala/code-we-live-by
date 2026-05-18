@@ -7,6 +7,7 @@ import type {
   LegislativeHistory,
   ParsedAmendment,
   SectionDiff,
+  StandaloneProvision,
   HeadRevision,
 } from './types';
 
@@ -180,6 +181,22 @@ export async function fetchLawHistory(
   if (!res.ok) {
     throw new Error(
       `Failed to fetch history for PL ${congress}-${lawNumber}: ${res.status}`
+    );
+  }
+  return res.json();
+}
+
+/** Fetch freestanding provisions from a law that don't amend the US Code. */
+export async function fetchLawStandaloneProvisions(
+  congress: number,
+  lawNumber: string
+): Promise<StandaloneProvision[]> {
+  const res = await fetch(
+    `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/standalone-provisions`
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch standalone provisions for PL ${congress}-${lawNumber}: ${res.status}`
     );
   }
   return res.json();
