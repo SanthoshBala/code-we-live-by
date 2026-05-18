@@ -1,10 +1,10 @@
-"""Pipeline for scraping and storing presidential signing statements."""
+"""Pipeline for fetching and storing presidential signing statements from GovInfo."""
 
-from pipeline.signing_statements.ingestion import SigningStatementIngestionService
-from pipeline.signing_statements.scraper import (
+from pipeline.signing_statements.fetcher import (
     SigningStatementResult,
     fetch_signing_statement,
 )
+from pipeline.signing_statements.ingestion import SigningStatementIngestionService
 
 __all__ = [
     "SigningStatementResult",

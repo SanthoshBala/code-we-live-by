@@ -1,10 +1,10 @@
-"""Tests for the presidential signing statement scraper (GovInfo CPD source)."""
+"""Tests for the presidential signing statement fetcher (GovInfo CPD source)."""
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pipeline.signing_statements.scraper import (
+from pipeline.signing_statements.fetcher import (
     SigningStatementResult,
     _fetch_statement_text,
     _search_govinfo,

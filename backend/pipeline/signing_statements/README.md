@@ -1,40 +1,42 @@
 # Signing Statements Pipeline
 
-Scrapes and stores presidential signing statements so the History tab can display them as collapsible comments attached to the presidential action event.
+Fetches and stores presidential signing statements so the History tab can display them as an inline blockquote on the presidential action event.
 
 ## Modules
 
 | Module | Role |
 |---|---|
-| `scraper.py` | HTTP scraper targeting the UCSB American Presidency Project |
-| `ingestion.py` | DB ingestion service — fetches via the scraper and persists on `PublicLaw` |
+| `fetcher.py` | GovInfo CPD API client — searches for and retrieves signing statement text |
+| `ingestion.py` | DB ingestion service — calls the fetcher and persists results on `PublicLaw` |
 
 ## Data Source
 
-**UCSB American Presidency Project** (`presidency.ucsb.edu`) — the most comprehensive public archive of presidential signing statements. No API key required.
+**GovInfo CPD** (`api.govinfo.gov`, collection code `CPD`) — the official government archive of the Compilation of Presidential Documents. Requires `GOVINFO_API_KEY`.
 
-Search URL pattern:
-```
-https://www.presidency.ucsb.edu/advanced-search?field-keywords=Public+Law+118-5&category2[]=50
-```
+The collection uses two package-ID prefixes depending on era:
+- `WCPD-YYYY-MM-DD` — Weekly Compilation (1993–2009, Clinton / Bush)
+- `DCPD-YYYYMMDDXXX` — Daily Compilation (2009–present, Obama onwards)
+
+Not every law receives a signing statement; most routine bills do not.
 
 ## Data Flow
 
 ```
-UCSB advanced search
-       ↓
-scraper.py: fetch_signing_statement(congress, law_number)
-       ↓ SigningStatementResult(text, source_url, title)
+GovInfo POST /search  →  filter collectionCode=CPD
+       ↓ granuleId
+GovInfo GET /packages/{pkg}/granules/{granule}/htm
+       ↓ plain text (leading whitespace stripped per line)
+fetcher.py: fetch_signing_statement(congress, law_number, title)
+       ↓ SigningStatementResult(text, source_url, title, date_issued)
 ingestion.py: SigningStatementIngestionService.seed_law(congress, law_number)
        ↓
 public_law.signing_statement  (Text)
-public_law.signing_statement_url  (String)
        ↓
-get_law_history() in crud/public_law.py attaches it to the presidential_action TimelineEventSchema
+get_law_history() attaches it to the presidential_action TimelineEventSchema
        ↓
 GET /api/v1/laws/{congress}/{law_number}/history  →  TimelineEvent.signing_statement
        ↓
-TimelineEvent.tsx renders collapsible <details> block
+TimelineEvent.tsx renders inline blockquote with expand/collapse toggle
 ```
 
 ## Usage
@@ -55,6 +57,5 @@ async def run(session: AsyncSession) -> None:
 
 ## Limitations
 
-- No public law has a signing statement by default; only a subset of laws receive one.
-- The scraper searches by "Public Law {congress}-{number}"; if UCSB's search returns a false positive, the wrong text may be stored. Validate manually for high-visibility laws.
-- UCSB HTML structure may change; update `_parse_search_results` and `_parse_statement_page` in `scraper.py` if the selectors break.
+- Only laws that received a formal signing statement will be populated; the majority of laws do not have one.
+- Search is by short title — if the title used in GovInfo differs from the law's `short_title`, the fetch will return `None`. The fallback queries by public law number (`"Public Law No. {congress}-{law_number}"`).

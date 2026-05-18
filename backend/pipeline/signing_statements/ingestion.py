@@ -1,8 +1,8 @@
 """DB ingestion service for presidential signing statements.
 
-Fetches signing statement text from UCSB and persists it on the
-PublicLaw row so the History tab can display it without hitting the
-scraper on every request.
+Fetches signing statement text from GovInfo CPD and persists it on the
+PublicLaw row so the History tab can display it without a live API call
+on every request.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.public_law import PublicLaw
-from pipeline.signing_statements.scraper import fetch_signing_statement
+from pipeline.signing_statements.fetcher import fetch_signing_statement
 
 logger = logging.getLogger(__name__)
 
