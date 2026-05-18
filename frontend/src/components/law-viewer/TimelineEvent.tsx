@@ -242,20 +242,10 @@ function SigningStatementQuote({ event }: { event: TimelineEventType }) {
   return (
     <blockquote className="border-primary-300 mt-2 border-l-2 bg-primary-50/40 px-3 py-2 text-sm italic text-gray-700">
       &ldquo;{excerpt}&rdquo;
-      <footer className="mt-1 flex items-baseline justify-between gap-2 not-italic">
+      <footer className="mt-1 not-italic">
         <span className="text-[11px] text-gray-500">
-          Presidential signing statement · GovInfo CPD
+          Presidential signing statement
         </span>
-        {event.signing_statement_url && (
-          <a
-            href={event.signing_statement_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mono shrink-0 text-[11px] font-medium text-primary-600 hover:underline"
-          >
-            Read statement →
-          </a>
-        )}
       </footer>
     </blockquote>
   );
