@@ -58,6 +58,10 @@ class PublicLaw(Base, TimestampMixin):
     )
     veto_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     veto_override_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    signing_statement: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signing_statement_url: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )
     sections_affected: Mapped[int] = mapped_column(Integer, default=0)
     sections_added: Mapped[int] = mapped_column(Integer, default=0)
     sections_modified: Mapped[int] = mapped_column(Integer, default=0)

@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import type {
   AmendmentStatus,
   TimelineEvent as TimelineEventType,
@@ -5,14 +8,16 @@ import type {
 
 interface TimelineEventProps {
   event: TimelineEventType;
+  view: 'condensed' | 'expanded';
 }
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
-  // dateStr is YYYY-MM-DD from the API
   const [year, month, day] = dateStr.split('-');
   return `${year}.${month}.${day}`;
 }
+
+// ── Icons ──────────────────────────────────────────────────────────────────
 
 function EventIcon({
   eventType,
@@ -106,7 +111,9 @@ function EventIcon({
   }
 }
 
-function EventBadge({
+// ── Kind tag ──────────────────────────────────────────────────────────────
+
+function KindTag({
   eventType,
 }: {
   eventType: TimelineEventType['event_type'];
@@ -118,50 +125,65 @@ function EventBadge({
     case 'house_vote':
     case 'senate_vote':
       label = 'VOTE';
-      cls = 'bg-blue-50 text-blue-700 ring-blue-200';
+      cls = 'bg-blue-100 text-blue-800';
       break;
     case 'committee_referral':
       label = 'COMMITTEE';
-      cls = 'bg-amber-50 text-amber-700 ring-amber-200';
+      cls = 'bg-amber-100 text-amber-800';
       break;
     case 'presidential_action':
       label = 'EXECUTIVE';
-      cls = 'bg-purple-50 text-purple-700 ring-purple-200';
+      cls = 'bg-purple-100 text-purple-800';
       break;
     case 'introduced':
       label = 'INTRODUCED';
-      cls = 'bg-green-50 text-green-700 ring-green-200';
+      cls = 'bg-emerald-100 text-emerald-800';
       break;
     case 'amendment':
       label = 'AMENDMENT';
-      cls = 'bg-orange-50 text-orange-700 ring-orange-200';
+      cls = 'bg-orange-100 text-orange-800';
       break;
     default:
       label = 'EVENT';
-      cls = 'bg-gray-50 text-gray-600 ring-gray-200';
+      cls = 'bg-gray-100 text-gray-700';
   }
 
   return (
     <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${cls}`}
+      className={`mono shrink-0 rounded px-1 text-[9px] font-semibold uppercase tracking-wider ${cls}`}
     >
       {label}
     </span>
   );
 }
 
-function VoteTally({ event }: { event: TimelineEventType }) {
-  if (event.vote_yeas == null && event.vote_nays == null) return null;
-  const passed = (event.vote_yeas ?? 0) > (event.vote_nays ?? 0);
-  return (
-    <span
-      className={`text-xs font-medium ${passed ? 'text-green-600' : 'text-red-600'}`}
-    >
-      {passed ? '✓' : '✗'} {event.vote_yeas}–{event.vote_nays}
-      {event.vote_not_voting != null ? `–${event.vote_not_voting}` : ''}
-    </span>
-  );
+// ── Icon circle colors ────────────────────────────────────────────────────
+
+function iconRingClass(eventType: TimelineEventType['event_type']): string {
+  switch (eventType) {
+    case 'presidential_action':
+      return 'border-purple-300 bg-purple-50 text-purple-700';
+    case 'introduced':
+      return 'border-emerald-300 bg-emerald-50 text-emerald-700';
+    case 'house_vote':
+    case 'senate_vote':
+      return 'border-blue-300 bg-blue-50 text-blue-700';
+    case 'committee_referral':
+      return 'border-amber-300 bg-amber-50 text-amber-700';
+    case 'amendment':
+      return 'border-orange-300 bg-orange-50 text-orange-700';
+    default:
+      return 'border-gray-200 bg-white text-gray-500';
+  }
 }
+
+function cardBorderClass(eventType: TimelineEventType['event_type']): string {
+  if (eventType === 'presidential_action')
+    return 'border-purple-200 bg-purple-50/30';
+  return 'border-gray-200 bg-gray-50/60';
+}
+
+// ── Amendment status ──────────────────────────────────────────────────────
 
 function AmendmentStatusBadge({
   status,
@@ -169,104 +191,162 @@ function AmendmentStatusBadge({
   status: AmendmentStatus | null | undefined;
 }) {
   if (!status) return null;
-
-  const configs: Record<
-    AmendmentStatus,
-    { label: string; cls: string; prefix: string }
-  > = {
+  const configs: Record<AmendmentStatus, { label: string; cls: string }> = {
     adopted: {
       label: 'Adopted',
       cls: 'text-green-700 bg-green-50 ring-green-200',
-      prefix: '✓',
     },
-    rejected: {
-      label: 'Rejected',
-      cls: 'text-red-700 bg-red-50 ring-red-200',
-      prefix: '✗',
-    },
+    rejected: { label: 'Rejected', cls: 'text-red-700 bg-red-50 ring-red-200' },
     withdrawn: {
       label: 'Withdrawn',
       cls: 'text-gray-600 bg-gray-50 ring-gray-200',
-      prefix: '—',
     },
     pending: {
       label: 'Pending',
       cls: 'text-yellow-700 bg-yellow-50 ring-yellow-200',
-      prefix: '●',
     },
   };
-
   const config = configs[status];
   if (!config) return null;
-
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${config.cls}`}
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${config.cls}`}
     >
-      <span aria-hidden="true">{config.prefix}</span>
       {config.label}
     </span>
   );
 }
 
-/** A single row in the legislative history timeline. */
-export default function TimelineEvent({ event }: TimelineEventProps) {
-  const iconColor =
-    event.event_type === 'presidential_action'
-      ? 'text-purple-600'
-      : event.event_type === 'introduced'
-        ? 'text-green-600'
-        : event.event_type === 'house_vote' ||
-            event.event_type === 'senate_vote'
-          ? 'text-blue-600'
-          : event.event_type === 'committee_referral'
-            ? 'text-amber-600'
-            : event.event_type === 'amendment'
-              ? 'text-orange-500'
-              : 'text-gray-400';
+// ── Vote tally ────────────────────────────────────────────────────────────
+
+function VoteTally({ event }: { event: TimelineEventType }) {
+  if (event.vote_yeas == null && event.vote_nays == null) return null;
+  const passed = (event.vote_yeas ?? 0) > (event.vote_nays ?? 0);
+  return (
+    <span
+      className={`mono text-[11px] font-semibold ${passed ? 'text-emerald-700' : 'text-red-700'}`}
+    >
+      {event.vote_yeas}–{event.vote_nays}
+      {event.vote_not_voting != null ? `–${event.vote_not_voting}` : ''}
+    </span>
+  );
+}
+
+// ── Signing statement blockquote ──────────────────────────────────────────
+
+function SigningStatementQuote({ event }: { event: TimelineEventType }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!event.signing_statement) return null;
+
+  const EXCERPT_LEN = 280;
+  const full = event.signing_statement;
+  const needsTruncation = full.length > EXCERPT_LEN;
+  const displayed =
+    expanded || !needsTruncation
+      ? full
+      : full.slice(0, EXCERPT_LEN).trimEnd() + '…';
 
   return (
-    <div
-      className={`flex gap-3 py-3 ${event.is_milestone ? '' : 'opacity-80'}`}
-    >
-      {/* Icon column */}
-      <div className={`mt-0.5 ${iconColor}`}>
+    <blockquote className="border-primary-300 mt-2 border-l-2 bg-primary-50/40 px-3 py-2 text-sm italic text-gray-700">
+      <p className="whitespace-pre-wrap">{displayed}</p>
+      <footer className="mt-1 flex items-baseline justify-between gap-2 not-italic">
+        <span className="text-[11px] text-gray-500">
+          Presidential signing statement
+        </span>
+        {needsTruncation && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="mono shrink-0 text-[11px] font-medium text-primary-600 hover:underline"
+          >
+            {expanded ? 'Show less ↑' : 'Read full statement ↓'}
+          </button>
+        )}
+      </footer>
+    </blockquote>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────
+
+/** A single entry in the legislative history Discussion panel. */
+export default function TimelineEvent({ event, view }: TimelineEventProps) {
+  const ring = iconRingClass(event.event_type);
+
+  if (view === 'condensed') {
+    return (
+      <li className="relative flex items-center gap-3 py-1.5">
+        {/* Circular icon */}
+        <span
+          className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${ring}`}
+        >
+          <EventIcon eventType={event.event_type} />
+        </span>
+
+        <span className="mono w-20 shrink-0 text-[11px] text-gray-400">
+          {formatDate(event.date)}
+        </span>
+
+        <KindTag eventType={event.event_type} />
+
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
+          {event.title}
+        </span>
+
+        {(event.event_type === 'house_vote' ||
+          event.event_type === 'senate_vote') && <VoteTally event={event} />}
+        {event.event_type === 'amendment' && (
+          <AmendmentStatusBadge status={event.amendment_status} />
+        )}
+      </li>
+    );
+  }
+
+  // Expanded pill-card
+  return (
+    <li className="relative flex items-start gap-3">
+      {/* Circular icon */}
+      <span
+        className={`relative z-10 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 ${ring}`}
+      >
         <EventIcon eventType={event.event_type} />
-      </div>
+      </span>
 
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-gray-900">
+      {/* Card body */}
+      <div
+        className={`min-w-0 flex-1 rounded-lg border px-3 py-2.5 ${cardBorderClass(event.event_type)}`}
+      >
+        {/* Title row */}
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-sm font-semibold text-gray-900">
             {event.title}
-          </span>
-          <EventBadge eventType={event.event_type} />
-          {event.event_type === 'house_vote' ||
-          event.event_type === 'senate_vote' ? (
-            <VoteTally event={event} />
-          ) : null}
-          {event.event_type === 'amendment' ? (
-            <AmendmentStatusBadge status={event.amendment_status} />
-          ) : null}
-        </div>
-
-        <div className="mt-0.5 flex items-center gap-2">
-          <span className="font-mono text-xs text-gray-400">
+          </p>
+          <span className="mono shrink-0 text-[11px] text-gray-400">
             {formatDate(event.date)}
           </span>
+        </div>
+
+        {/* Tags + meta row */}
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+          <KindTag eventType={event.event_type} />
           {event.chamber && (
-            <span className="text-xs text-gray-400">
+            <span className="text-[11px] text-gray-500">
               {event.chamber.toUpperCase()}
             </span>
           )}
+          {(event.event_type === 'house_vote' ||
+            event.event_type === 'senate_vote') && <VoteTally event={event} />}
+          {event.event_type === 'amendment' && (
+            <AmendmentStatusBadge status={event.amendment_status} />
+          )}
         </div>
 
-        {event.description && (
-          <p className="mt-1 text-xs leading-relaxed text-gray-600">
-            {event.description}
-          </p>
+        {/* Description — suppressed for presidential_action since the signing statement replaces it */}
+        {event.description && event.event_type !== 'presidential_action' && (
+          <p className="mt-1.5 text-sm text-gray-600">{event.description}</p>
         )}
 
+        {/* Congressional record refs */}
         {event.congressional_record_refs.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {event.congressional_record_refs.map((ref) => (
@@ -279,7 +359,12 @@ export default function TimelineEvent({ event }: TimelineEventProps) {
             ))}
           </div>
         )}
+
+        {/* Signing statement inline blockquote */}
+        {event.event_type === 'presidential_action' && (
+          <SigningStatementQuote event={event} />
+        )}
       </div>
-    </div>
+    </li>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useLawMeta,
@@ -29,8 +29,19 @@ export default function LawViewerPage() {
   const congress = Number(params.congress);
   const lawNumber = decodeURIComponent(params.lawNumber);
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState('diff');
+  const VALID_TABS = ['diff', 'history', 'htm', 'xml'] as const;
+  type TabId = (typeof VALID_TABS)[number];
+  const raw = searchParams.get('tab');
+  const activeTab: TabId = VALID_TABS.includes(raw as TabId)
+    ? (raw as TabId)
+    : 'diff';
+
+  function setActiveTab(tab: string) {
+    router.replace(`?tab=${tab}`, { scroll: false });
+  }
 
   // Metadata is always fetched (fast — no file I/O, just a DB query)
   const {
@@ -151,7 +162,7 @@ export default function LawViewerPage() {
           (historyLoading ? (
             <p className="text-gray-500">Loading legislative history...</p>
           ) : history ? (
-            <LegislativeHistoryTab history={history} />
+            <LegislativeHistoryTab history={history} lawMeta={lawMeta} />
           ) : (
             <p className="py-8 text-center text-sm text-gray-500">
               No legislative history available for this law.

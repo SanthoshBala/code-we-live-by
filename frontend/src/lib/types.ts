@@ -300,6 +300,8 @@ export interface TimelineEvent {
   vote_not_voting: number | null;
   congressional_record_refs: string[];
   amendment_status?: AmendmentStatus | null;
+  signing_statement?: string | null;
+  signing_statement_url?: string | null;
 }
 
 /** A bill sponsor or cosponsor. */

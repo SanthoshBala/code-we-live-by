@@ -1487,6 +1487,14 @@ async def get_law_history(
                         )
                     )
 
+    # --- Attach signing statement to the presidential_action event -----------
+    if law.signing_statement:
+        for evt in timeline_events:
+            if evt.event_type == "presidential_action":
+                evt.signing_statement = law.signing_statement
+                evt.signing_statement_url = law.signing_statement_url
+                break
+
     # --- Determine status and president --------------------------------------
     presidential_action = law.presidential_action
     president_name = law.president
