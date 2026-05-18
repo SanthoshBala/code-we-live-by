@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { formatLawDate } from '@/components/ui/LawLine';
 import PageHeader from '@/components/ui/PageHeader';
+import { fetchLawMeta } from '@/lib/api';
 import type { LawSummary } from '@/lib/types';
 
 type SortKey = 'enacted_date' | 'pl_id' | 'title' | 'sections_affected';
@@ -49,6 +51,7 @@ const columns: { key: SortKey; label: string; align: string }[] = [
 export default function LawsTable({ laws }: { laws: LawSummary[] }) {
   const [sortKey, setSortKey] = useState<SortKey>('enacted_date');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const queryClient = useQueryClient();
 
   const sorted = useMemo(() => {
     const copy = [...laws];
@@ -112,6 +115,14 @@ export default function LawsTable({ laws }: { laws: LawSummary[] }) {
                   <Link
                     href={`/laws/${law.congress}/${law.law_number}`}
                     className="font-medium text-primary-600 hover:text-primary-700"
+                    onMouseEnter={() => {
+                      queryClient.prefetchQuery({
+                        queryKey: ['lawMeta', law.congress, law.law_number],
+                        queryFn: () =>
+                          fetchLawMeta(law.congress, law.law_number),
+                        staleTime: 5 * 60 * 1000,
+                      });
+                    }}
                   >
                     PL {law.congress}-{law.law_number}
                   </Link>

@@ -11,6 +11,7 @@ type SortDir = 'asc' | 'desc';
 
 interface DirectoryTableProps {
   items: DirectoryItem[];
+  onItemMouseEnter?: (item: DirectoryItem) => void;
 }
 
 function compareItems(
@@ -45,7 +46,10 @@ function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 /** Table showing child items with sortable ID, Name, # Sections, Last Amendment, and Date columns. */
-export default function DirectoryTable({ items }: DirectoryTableProps) {
+export default function DirectoryTable({
+  items,
+  onItemMouseEnter,
+}: DirectoryTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('id');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -124,6 +128,9 @@ export default function DirectoryTable({ items }: DirectoryTableProps) {
             <tr
               key={item.href}
               className="border-b border-gray-100 hover:bg-gray-50"
+              onMouseEnter={
+                onItemMouseEnter ? () => onItemMouseEnter(item) : undefined
+              }
             >
               <td className="whitespace-nowrap py-2 pr-2">
                 <Link

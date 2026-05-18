@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import type { SectionSummary } from '@/lib/types';
 import { detectStatus } from '@/lib/statusStyles';
+import { fetchSection } from '@/lib/api';
 import TreeIndicator from './TreeIndicator';
 import FileIcon from './icons/FileIcon';
 
@@ -26,6 +28,7 @@ export default function SectionNode({
   isActive,
 }: SectionNodeProps) {
   const [expanded, setExpanded] = useState(!!isActive);
+  const queryClient = useQueryClient();
   const basePath = `/sections/${titleNumber}/${section.section_number}`;
   const noteCategories = section.note_categories ?? [];
   const noteFiles = NOTE_FILES.filter(({ category }) =>
@@ -46,6 +49,18 @@ export default function SectionNode({
         <Link
           href={basePath}
           className="min-w-0 truncate hover:text-primary-700"
+          onMouseEnter={() => {
+            queryClient.prefetchQuery({
+              queryKey: [
+                'section',
+                titleNumber,
+                section.section_number,
+                'head',
+              ],
+              queryFn: () => fetchSection(titleNumber, section.section_number),
+              staleTime: 5 * 60 * 1000,
+            });
+          }}
         >
           {section.heading}
         </Link>
