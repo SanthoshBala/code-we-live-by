@@ -168,6 +168,7 @@ jobs:
             --platform managed \
             --port 8080 \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
+            --set-env-vars "DEPLOY_SHA=$GITHUB_SHA" \
             --add-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
             --allow-unauthenticated \
             --min-instances 1 \
