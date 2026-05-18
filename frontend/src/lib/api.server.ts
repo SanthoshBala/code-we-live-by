@@ -12,17 +12,13 @@ function serverApiBase(): string {
 }
 
 export async function fetchTitlesServer(): Promise<TitleSummary[]> {
-  const res = await fetch(`${serverApiBase()}/titles/`, {
-    next: { revalidate: 300 },
-  });
+  const res = await fetch(`${serverApiBase()}/titles/`);
   if (!res.ok) throw new Error(`Failed to fetch titles: ${res.status}`);
   return res.json() as Promise<TitleSummary[]>;
 }
 
 export async function fetchLawsServer(): Promise<LawSummary[]> {
-  const res = await fetch(`${serverApiBase()}/laws/?limit=500`, {
-    next: { revalidate: 300 },
-  });
+  const res = await fetch(`${serverApiBase()}/laws/?limit=500`);
   if (!res.ok) throw new Error(`Failed to fetch laws: ${res.status}`);
   return res.json() as Promise<LawSummary[]>;
 }

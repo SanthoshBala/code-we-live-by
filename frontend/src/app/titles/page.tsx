@@ -2,9 +2,11 @@ import type { DirectoryItem } from '@/lib/types';
 import DirectoryView from '@/components/directory/DirectoryView';
 import { fetchTitlesServer } from '@/lib/api.server';
 
-export const revalidate = 300;
+// No backend available at build time, so skip static prerendering.
+// Data is still fetched server-side on every request (no client waterfall).
+export const dynamic = 'force-dynamic';
 
-/** All titles directory page (SSR with ISR). */
+/** All titles directory page (SSR). */
 export default async function TitlesPage() {
   const titles = await fetchTitlesServer();
 
