@@ -644,7 +644,7 @@ def test_cache_header_present_in_production() -> None:
         response = client.get("/api/v1/titles/")
 
     assert response.status_code == 200
-    assert "max-age=300" in response.headers.get("cache-control", "")
+    assert "max-age=3600" in response.headers.get("cache-control", "")
 
 
 def test_cache_header_nostore_in_debug() -> None:
