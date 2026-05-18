@@ -131,6 +131,29 @@ LEGAL_ABBREVIATIONS = {
     "Dec.",
 }
 
+# Compiled once: match any known abbreviation at the END of a string.
+# Sorted longest-first so overlapping patterns (e.g. "U.S.C." vs "U.S.") match correctly.
+_ABBREV_SUFFIX_RE = re.compile(
+    "(?:"
+    + "|".join(re.escape(a) for a in sorted(LEGAL_ABBREVIATIONS, key=len, reverse=True))
+    + ")$"
+)
+
+# Compiled once: match any known abbreviation (minus trailing ".") at the START of a string.
+# Used to detect ")(period)(space)(abbreviation)" — not a sentence boundary.
+_ABBREV_PREFIX_RE = re.compile(
+    "^(?:"
+    + "|".join(
+        re.escape(a[:-1])
+        for a in sorted(LEGAL_ABBREVIATIONS, key=len, reverse=True)
+        if len(a) > 1
+    )
+    + ")"
+)
+
+# Compiled once: sentence boundary requires whitespace then capital/open-paren/quote.
+_SENTENCE_FOLLOWS_RE = re.compile(r'\s+[A-Z("\'"\']')
+
 # Pattern for list item markers: (a), (1), (A), (i), (I), etc.
 # Also handles deeper nesting like (a)(1)(A)
 # This pattern is permissive; we filter out references in _is_reference_not_marker()
@@ -672,38 +695,20 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
         return True  # Only whitespace follows
 
     # Must be followed by whitespace + capital letter, open paren, or quote
-    follows_pattern = re.match(r'\s+[A-Z("\'"\']', remaining)
-    if not follows_pattern:
+    if not _SENTENCE_FOLLOWS_RE.match(remaining):
         return False
 
     # Check if this period is part of a known abbreviation
-    # Look back to find the word ending at this period
     before = text[: pos + 1]  # Include the period
-
-    # Check against known abbreviations
-    for abbrev in LEGAL_ABBREVIATIONS:
-        if before.endswith(abbrev):
-            return False
-
-    # Also check for single-letter abbreviations followed by period
-    # e.g., "U." in "U.S.C."
-    if (
-        pos >= 1
-        and text[pos - 1].isupper()
-        and (pos < 2 or not text[pos - 2].isalnum())
-    ):
-        # Single uppercase letter followed by period - likely abbreviation
-        # unless it's the end of a sentence like "Plan B."
-        pass  # Allow this for now, common abbreviations are in the list
+    if _ABBREV_SUFFIX_RE.search(before):
+        return False
 
     # In amendment citations, a period after a parenthetical reference like
     # "(a)(2)." followed by "Pub. L." is not a sentence boundary.
-    # Pattern: closing paren + period + spaces + known abbreviation start
     if pos >= 1 and text[pos - 1] == ")":
         after_stripped = remaining.lstrip()
-        for abbrev in LEGAL_ABBREVIATIONS:
-            if after_stripped.startswith(abbrev[:-1]):  # Match without trailing .
-                return False
+        if _ABBREV_PREFIX_RE.match(after_stripped):
+            return False
 
     return True
 
@@ -2168,6 +2173,22 @@ def normalize_parsed_section(
     Returns:
         The same ParsedSection with provision fields populated.
     """
+    # Fast path: repealed/reserved stubs have no subsections, no notes, no citations.
+    # Skip the full pipeline and return immediately with just the raw text fallback.
+    if (
+        not parsed_section.subsections
+        and not parsed_section.notes
+        and not parsed_section.source_credit_refs
+        and not parsed_section.act_refs
+        and not parsed_section.notes_refs
+    ):
+        if parsed_section.text_content:
+            fallback = normalize_section(parsed_section.text_content)
+            parsed_section.provisions = fallback.provisions
+            parsed_section.normalized_text = fallback.normalized_text
+        parsed_section.section_notes = SectionNotes()
+        return parsed_section
+
     lines: list[ParsedLine] = []
     line_counter = [0]  # Mutable counter
     char_pos = [0]  # Mutable position tracker
