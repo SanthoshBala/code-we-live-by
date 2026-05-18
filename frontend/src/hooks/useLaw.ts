@@ -6,6 +6,7 @@ import {
   fetchLawAmendments,
   fetchLawDiffs,
   fetchLawHistory,
+  fetchLawStandaloneProvisions,
 } from '@/lib/api';
 
 /** Fetches all public law summaries. */
@@ -73,6 +74,19 @@ export function useLawHistory(
   return useQuery({
     queryKey: ['lawHistory', congress, lawNumber],
     queryFn: () => fetchLawHistory(congress, lawNumber),
+    enabled,
+  });
+}
+
+/** Fetches freestanding provisions that don't amend the US Code. Only fires when enabled. */
+export function useLawStandaloneProvisions(
+  congress: number,
+  lawNumber: string,
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: ['lawStandaloneProvisions', congress, lawNumber],
+    queryFn: () => fetchLawStandaloneProvisions(congress, lawNumber),
     enabled,
   });
 }

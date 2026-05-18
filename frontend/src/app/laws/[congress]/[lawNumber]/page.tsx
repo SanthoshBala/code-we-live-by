@@ -155,7 +155,12 @@ export default function LawViewerPage() {
           ))}
 
         {activeTab === 'diff' && (
-          <LawDiffViewer diffs={diffs ?? []} isLoading={diffsLoading} />
+          <LawDiffViewer
+            congress={congress}
+            lawNumber={lawNumber}
+            diffs={diffs ?? []}
+            isLoading={diffsLoading}
+          />
         )}
 
         {activeTab === 'history' &&

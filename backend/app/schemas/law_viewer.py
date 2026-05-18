@@ -114,3 +114,15 @@ class SectionDiffSchema(BaseModel):
         default_factory=list,
         description="Full section lines for frontend expansion",
     )
+
+
+class StandaloneProvisionSchema(BaseModel):
+    """A freestanding provision from a Public Law that does not amend the US Code."""
+
+    section_num: str = Field(
+        ..., description="Section number within the law (e.g. 'Sec. 3')"
+    )
+    heading: str | None = Field(None, description="Section heading, if present")
+    text_excerpt: str = Field(..., description="First ~300 chars of the provision text")
+    full_text: str = Field(..., description="Full text content of the provision")
+    govinfo_url: str | None = Field(None, description="Link to the law on GovInfo")

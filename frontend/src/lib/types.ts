@@ -365,6 +365,15 @@ export interface LegislativeHistory {
   related_bills: RelatedBill[];
 }
 
+/** A freestanding provision from a Public Law that does not amend the US Code. */
+export interface StandaloneProvision {
+  section_num: string;
+  heading: string | null;
+  text_excerpt: string;
+  full_text: string;
+  govinfo_url: string | null;
+}
+
 /** Full section view returned by the section detail endpoint. */
 export interface SectionView {
   title_number: number;

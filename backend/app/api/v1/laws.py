@@ -9,6 +9,7 @@ from app.crud.public_law import (
     compute_law_diffs,
     get_law_history,
     get_law_metadata,
+    get_law_standalone_provisions,
     get_law_text,
     get_laws_list,
     parse_law_amendments,
@@ -20,6 +21,7 @@ from app.schemas.law_viewer import (
     LawTextSchema,
     ParsedAmendmentSchema,
     SectionDiffSchema,
+    StandaloneProvisionSchema,
 )
 
 router = APIRouter()
@@ -88,6 +90,21 @@ async def read_law_diffs(
 ) -> list[SectionDiffSchema]:
     """Compute per-section unified diffs for a law's amendments."""
     return await compute_law_diffs(session, congress, law_number)
+
+
+@router.get("/{congress}/{law_number}/standalone-provisions")
+async def read_standalone_provisions(
+    congress: int,
+    law_number: int,
+    session: AsyncSession = Depends(get_async_session),
+) -> list[StandaloneProvisionSchema]:
+    """Return freestanding provisions from a law that don't amend the US Code.
+
+    These are sections like naming acts, sunset clauses, standalone
+    appropriations, and definitions scoped to the act itself. They are not
+    included in the codified amendments diff view.
+    """
+    return await get_law_standalone_provisions(session, congress, law_number)
 
 
 @router.get("/{congress}/{law_number}/history")

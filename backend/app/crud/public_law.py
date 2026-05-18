@@ -36,6 +36,7 @@ from app.schemas.law_viewer import (
     PositionQualifierSchema,
     SectionDiffSchema,
     SectionReferenceSchema,
+    StandaloneProvisionSchema,
 )
 
 logger = logging.getLogger(__name__)
@@ -1115,6 +1116,130 @@ def _build_note_hunks(
             lines=lines,
         )
     ]
+
+
+# ---------------------------------------------------------------------------
+# Standalone provisions
+# ---------------------------------------------------------------------------
+
+_EXCERPT_LIMIT = 300
+_NS = "http://schemas.gpo.gov/xml/uslm"
+_INSTRUCTION_ROLES = frozenset({"instruction", "note"})
+
+
+def _uslm_tag(local: str) -> str:
+    return f"{{{_NS}}}{local}"
+
+
+def _iter_text(elem: Any) -> str:
+    """Return all text under *elem*, stripped."""
+    return "".join(elem.itertext()).strip()
+
+
+def _extract_standalone_provisions_from_xml(
+    xml_text: str, congress: int, law_number: int
+) -> list[StandaloneProvisionSchema]:
+    """Parse freestanding sections from USLM XML that are not amending instructions.
+
+    A "freestanding" section is any top-level <section> that:
+    - does not carry role="instruction" or role="note"
+    - is not a sidenote-only section already captured as Add_Note
+    - does not contain any <amendingAction> descendant
+
+    These are provisions like sunset clauses, naming acts, standalone
+    appropriations, and definitions scoped to the act itself.
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+
+    action_tag = _uslm_tag("amendingAction")
+    section_tag = _uslm_tag("section")
+    num_tag = _uslm_tag("num")
+    heading_tag = _uslm_tag("heading")
+    sidenote_tag = _uslm_tag("sidenote")
+
+    govinfo_url = (
+        f"https://www.govinfo.gov/content/pkg/PLAW-{congress}publ{law_number}"
+        f"/htm/PLAW-{congress}publ{law_number}.htm"
+    )
+
+    provisions: list[StandaloneProvisionSchema] = []
+
+    for elem in root.iter(section_tag):
+        role = elem.get("role", "")
+        if role in _INSTRUCTION_ROLES:
+            continue
+
+        # Skip sections that contain any amending instruction
+        if any(True for _ in elem.iter(action_tag)):
+            continue
+
+        # Skip sidenote-only sections (already shown as Add_Note diffs)
+        has_sidenote = any(True for _ in elem.iter(sidenote_tag))
+        if has_sidenote:
+            continue
+
+        # Extract section number, heading, and full text
+        num_text = ""
+        num_elem = elem.find(num_tag)
+        if num_elem is not None:
+            num_text = _iter_text(num_elem)
+
+        heading_text: str | None = None
+        heading_elem = elem.find(heading_tag)
+        if heading_elem is not None:
+            heading_text = _iter_text(heading_elem)
+
+        full_text = _iter_text(elem)
+        if not full_text:
+            continue
+
+        # Skip sections whose full text is only the num/heading (empty body)
+        body = full_text
+        if num_text:
+            body = body.replace(num_text, "", 1).strip()
+        if heading_text:
+            body = body.replace(heading_text, "", 1).strip()
+        if not body:
+            continue
+
+        excerpt = full_text[:_EXCERPT_LIMIT]
+        if len(full_text) > _EXCERPT_LIMIT:
+            excerpt = excerpt.rstrip() + "…"
+
+        provisions.append(
+            StandaloneProvisionSchema(
+                section_num=num_text or "§",
+                heading=heading_text or None,
+                text_excerpt=excerpt,
+                full_text=full_text,
+                govinfo_url=govinfo_url,
+            )
+        )
+
+    return provisions
+
+
+async def get_law_standalone_provisions(
+    session: AsyncSession, congress: int, law_number: int
+) -> list[StandaloneProvisionSchema]:
+    """Return freestanding provisions from a law that don't amend the US Code.
+
+    Parses the law's USLM XML and returns all top-level sections that are
+    neither amending instructions nor note-section stubs. Falls back to an
+    empty list when XML is unavailable.
+    """
+    law_text = await get_law_text(session, congress, law_number, include_htm=False)
+    if not law_text or not law_text.xml_content:
+        return []
+
+    return _extract_standalone_provisions_from_xml(
+        law_text.xml_content, congress, law_number
+    )
 
 
 # ---------------------------------------------------------------------------
