@@ -209,6 +209,33 @@ function AmendmentStatusBadge({
   );
 }
 
+function SigningStatementBlock({ event }: { event: TimelineEventType }) {
+  if (!event.signing_statement) return null;
+
+  return (
+    <details className="mt-2 rounded border border-purple-100 bg-purple-50">
+      <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-purple-700 hover:bg-purple-100">
+        Presidential signing statement
+      </summary>
+      <div className="border-t border-purple-100 px-3 py-2">
+        <p className="whitespace-pre-wrap text-xs leading-relaxed text-gray-700">
+          {event.signing_statement}
+        </p>
+        {event.signing_statement_url && (
+          <a
+            href={event.signing_statement_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block text-[10px] text-purple-600 underline hover:text-purple-800"
+          >
+            Source: UCSB American Presidency Project
+          </a>
+        )}
+      </div>
+    </details>
+  );
+}
+
 /** A single row in the legislative history timeline. */
 export default function TimelineEvent({ event }: TimelineEventProps) {
   const iconColor =
@@ -278,6 +305,10 @@ export default function TimelineEvent({ event }: TimelineEventProps) {
               </span>
             ))}
           </div>
+        )}
+
+        {event.event_type === 'presidential_action' && (
+          <SigningStatementBlock event={event} />
         )}
       </div>
     </div>

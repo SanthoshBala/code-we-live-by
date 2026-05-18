@@ -30,6 +30,8 @@ class TimelineEventSchema(BaseModel):
     vote_not_voting: int | None = None
     congressional_record_refs: list[str] = []
     amendment_status: str | None = None
+    signing_statement: str | None = None
+    signing_statement_url: str | None = None
 
 
 class SponsorSchema(BaseModel):
