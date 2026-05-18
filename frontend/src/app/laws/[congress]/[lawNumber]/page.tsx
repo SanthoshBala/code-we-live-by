@@ -151,7 +151,7 @@ export default function LawViewerPage() {
           (historyLoading ? (
             <p className="text-gray-500">Loading legislative history...</p>
           ) : history ? (
-            <LegislativeHistoryTab history={history} />
+            <LegislativeHistoryTab history={history} lawMeta={lawMeta} />
           ) : (
             <p className="py-8 text-center text-sm text-gray-500">
               No legislative history available for this law.
