@@ -1,7 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import GroupNode from './GroupNode';
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 vi.mock('next/link', () => ({
   default: ({
@@ -43,7 +49,8 @@ const group = {
 describe('GroupNode', () => {
   it('renders the group name as a link', () => {
     render(
-      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />,
+      { wrapper }
     );
     const link = screen.getByRole('link', {
       name: /Subject Matter and Scope of Copyright/,
@@ -53,7 +60,8 @@ describe('GroupNode', () => {
 
   it('does not show children until expanded', () => {
     render(
-      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />,
+      { wrapper }
     );
     expect(screen.queryByText('Subject matter')).not.toBeInTheDocument();
   });
@@ -61,7 +69,8 @@ describe('GroupNode', () => {
   it('icon click expands to show children', async () => {
     const user = userEvent.setup();
     render(
-      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />,
+      { wrapper }
     );
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(screen.getByText(/The Works/)).toBeInTheDocument();
@@ -71,7 +80,8 @@ describe('GroupNode', () => {
   it('icon click collapses children', async () => {
     const user = userEvent.setup();
     render(
-      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />,
+      { wrapper }
     );
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(screen.getByText('Subject matter')).toBeInTheDocument();
@@ -82,7 +92,8 @@ describe('GroupNode', () => {
   it('sections render as links to section viewer', async () => {
     const user = userEvent.setup();
     render(
-      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />
+      <GroupNode group={group} titleNumber={17} parentPath="/titles/17" />,
+      { wrapper }
     );
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     const sectionLink = screen.getByRole('link', { name: /Subject matter/ });
