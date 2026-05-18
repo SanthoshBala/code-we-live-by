@@ -430,6 +430,13 @@ class SectionNotesSchema(BaseModel):
 # =========================================================================
 
 
+class GroupAncestorSchema(BaseModel):
+    """One node in the group hierarchy above a section (used for breadcrumbs)."""
+
+    type: str
+    number: str
+
+
 class SectionViewerSchema(BaseModel):
     """Full section content for the viewer page."""
 
@@ -445,6 +452,7 @@ class SectionViewerSchema(BaseModel):
     is_repealed: bool = False
     notes: SectionNotesSchema | None = None
     last_revision: HeadRevisionSchema | None = None
+    group_ancestors: list[GroupAncestorSchema] = []
 
 
 class TitleSummarySchema(BaseModel):

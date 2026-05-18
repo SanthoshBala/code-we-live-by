@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.schemas.us_code import (
     CodeLineSchema,
+    GroupAncestorSchema,
     SectionNotesSchema,
     SectionViewerSchema,
 )
@@ -171,6 +172,57 @@ def test_get_section_with_provisions(mock_get: AsyncMock, client: TestClient) ->
     assert second["indent_level"] == 1
     assert second["marker"] is None
     assert second["is_header"] is False
+
+
+@patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
+def test_get_section_includes_group_ancestors(
+    mock_get: AsyncMock, client: TestClient
+) -> None:
+    """Section endpoint returns group_ancestors for breadcrumb building."""
+    mock_get.return_value = SectionViewerSchema(
+        title_number=17,
+        section_number="106",
+        heading="Exclusive rights in copyrighted works",
+        full_citation="17 U.S.C. § 106",
+        text_content=None,
+        is_positive_law=True,
+        is_repealed=False,
+        notes=None,
+        group_ancestors=[
+            GroupAncestorSchema(type="chapter", number="1"),
+            GroupAncestorSchema(type="subchapter", number="II"),
+        ],
+    )
+
+    response = client.get("/api/v1/sections/17/106")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["group_ancestors"] == [
+        {"type": "chapter", "number": "1"},
+        {"type": "subchapter", "number": "II"},
+    ]
+
+
+@patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
+def test_get_section_group_ancestors_defaults_to_empty(
+    mock_get: AsyncMock, client: TestClient
+) -> None:
+    """Section endpoint returns empty group_ancestors when not set."""
+    mock_get.return_value = SectionViewerSchema(
+        title_number=17,
+        section_number="106",
+        heading="Exclusive rights in copyrighted works",
+        full_citation="17 U.S.C. § 106",
+        text_content=None,
+        is_positive_law=True,
+        is_repealed=False,
+        notes=None,
+    )
+
+    response = client.get("/api/v1/sections/17/106")
+    assert response.status_code == 200
+    assert response.json()["group_ancestors"] == []
 
 
 @patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
