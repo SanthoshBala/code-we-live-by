@@ -1323,23 +1323,33 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
+            # <note topic="..."> without a <heading> child: synthesize [NH] from topic.
+            # Some USLM releases omit the heading element and rely solely on the
+            # topic attribute (e.g. <note topic="amendments"><p>...</p>).
+            if tag == "note":
+                topic = el.get("topic", "")
+                if topic:
+                    child_tags = {
+                        (c.tag.split("}")[-1] if "}" in c.tag else c.tag) for c in el
+                    }
+                    if "heading" not in child_tags:
+                        parts.append(f"[NH]{topic.title()}[/NH]")
+
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n
             if tag == "p" and parts:
                 # Add paragraph break marker before this <p> element
                 parts.append("[PARA]")
 
-            # Check if this is a heading with smallCaps class
+            # Check if this is a heading element — always emit [NH] markers regardless
+            # of whether it has class="smallCaps".  Some USLM releases use
+            # <note topic="amendments"><heading>Amendments</heading> without the
+            # smallCaps class, but the element is still a structural note header.
             if tag == "heading":
-                css_class = el.get("class", "")
-                if "smallCaps" in css_class:
-                    # Apply title case to smallCaps headings
-                    # Mark with [NH] (Note Header) so downstream parsing can distinguish
-                    # from regular content
-                    text = "".join(el.itertext()).strip()
-                    if text:
-                        parts.append(f"[NH]{text.title()}[/NH]")
-                    return  # Don't process children
+                text = "".join(el.itertext()).strip()
+                if text:
+                    parts.append(f"[NH]{text.title()}[/NH]")
+                return  # Don't process children
 
             # Track bold/italic state
             new_in_bold = in_bold or tag == "b"
