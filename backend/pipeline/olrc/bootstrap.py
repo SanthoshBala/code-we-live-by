@@ -8,6 +8,7 @@ SectionSnapshot records for each section, creating the root CodeRevision
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -175,8 +176,9 @@ async def _copy_snapshots_to_db(
     bulk INSERT adds (to retrieve generated PKs we don't use). Expected
     speedup: 5-10× over the executemany path for large titles.
 
-    asyncpg's JSONB codec (registered by SQLAlchemy's asyncpg dialect) handles
-    Python list/dict → JSONB encoding automatically in binary COPY format.
+    SQLAlchemy's asyncpg JSONB codec expects a pre-serialized JSON string
+    (it prefixes with the JSONB version byte then calls .encode()). Raw
+    Python list/dict values must be serialized with json.dumps() first.
     """
     records = [
         (
@@ -185,9 +187,13 @@ async def _copy_snapshots_to_db(
             d["section_number"],
             d["heading"],
             d["text_content"],
-            d["normalized_provisions"],  # list | None — asyncpg JSONB codec
+            json.dumps(d["normalized_provisions"])
+            if d["normalized_provisions"] is not None
+            else None,
             d["notes"],
-            d["normalized_notes"],  # dict | None — asyncpg JSONB codec
+            json.dumps(d["normalized_notes"])
+            if d["normalized_notes"] is not None
+            else None,
             d["text_hash"],
             d["notes_hash"],
             d["full_citation"],
