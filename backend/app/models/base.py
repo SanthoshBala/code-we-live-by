@@ -1,5 +1,6 @@
 """Base model class and database session configuration."""
 
+import os
 from collections.abc import AsyncGenerator
 from datetime import datetime
 
@@ -47,12 +48,18 @@ class TimestampMixin:
     )
 
 
-# Async engine and session
+# Async engine and session.
+# PIPELINE_POOL_SIZE=1 is set by fan-out bootstrap tasks so each of the N
+# parallel Cloud Run tasks holds at most one connection, keeping total
+# connections within Cloud SQL limits even at high parallelism.
+_pool_size = int(os.environ.get("PIPELINE_POOL_SIZE", "5"))
+_max_overflow = 0 if _pool_size <= 1 else 10
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=_pool_size,
+    max_overflow=_max_overflow,
     pool_pre_ping=True,
     pool_recycle=1800,  # Recycle connections after 30 min
 )

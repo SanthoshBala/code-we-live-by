@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -141,12 +142,82 @@ def _build_snapshot_rows(
     return rows
 
 
+# Ordered column list for asyncpg binary COPY — must stay in sync with the
+# snapshot_dicts keys built in ingest_title. snapshot_id is omitted; the
+# sequence generates it automatically.
+_COPY_COLUMNS = [
+    "revision_id",
+    "title_number",
+    "section_number",
+    "heading",
+    "text_content",
+    "normalized_provisions",
+    "notes",
+    "normalized_notes",
+    "text_hash",
+    "notes_hash",
+    "full_citation",
+    "is_deleted",
+    "group_id",
+    "sort_order",
+    "created_at",
+    "updated_at",
+]
+
+
+async def _copy_snapshots_to_db(
+    session: AsyncSession,
+    snapshot_dicts: list[dict],
+) -> None:
+    """Bulk-insert snapshot rows via asyncpg binary COPY.
+
+    COPY bypasses the SQL parser and the RETURNING clause that SQLAlchemy's
+    bulk INSERT adds (to retrieve generated PKs we don't use). Expected
+    speedup: 5-10× over the executemany path for large titles.
+
+    asyncpg's JSONB codec (registered by SQLAlchemy's asyncpg dialect) handles
+    Python list/dict → JSONB encoding automatically in binary COPY format.
+    """
+    records = [
+        (
+            d["revision_id"],
+            d["title_number"],
+            d["section_number"],
+            d["heading"],
+            d["text_content"],
+            d["normalized_provisions"],  # list | None — asyncpg JSONB codec
+            d["notes"],
+            d["normalized_notes"],  # dict | None — asyncpg JSONB codec
+            d["text_hash"],
+            d["notes_hash"],
+            d["full_citation"],
+            d["is_deleted"],
+            d["group_id"],  # uuid.UUID | None
+            d["sort_order"],
+            d["created_at"],
+            d["updated_at"],
+        )
+        for d in snapshot_dicts
+    ]
+
+    conn = await session.connection()
+    raw = await conn.get_raw_connection()
+    asyncpg_conn = raw.driver_connection
+    await asyncpg_conn.copy_records_to_table(
+        "section_snapshot",
+        records=records,
+        columns=_COPY_COLUMNS,
+        schema_name="public",
+    )
+
+
 async def ingest_title(
     session: AsyncSession,
     downloader: OLRCDownloader,
     title_num: int,
     rp_identifier: str,
     revision_id: int,
+    use_copy: bool = False,
 ) -> int | None:
     """Download, parse, and store snapshots for one title.
 
@@ -163,6 +234,9 @@ async def ingest_title(
         title_num: US Code title number to ingest.
         rp_identifier: Release point identifier (e.g., "113-21").
         revision_id: The revision ID to attach snapshots to.
+        use_copy: If True, use asyncpg binary COPY instead of INSERT for the
+            snapshot bulk-write. Faster for large titles but requires a real
+            asyncpg connection (not available in tests with mock sessions).
 
     Returns:
         Number of sections ingested, or None if the title was skipped.
@@ -262,7 +336,10 @@ async def ingest_title(
             }
         )
 
-    await session.execute(insert(SectionSnapshot), snapshot_dicts)
+    if use_copy:
+        await _copy_snapshots_to_db(session, snapshot_dicts)
+    else:
+        await session.execute(insert(SectionSnapshot), snapshot_dicts)
     t_insert = time.monotonic()
 
     count = len(rows)
@@ -562,6 +639,7 @@ class BootstrapService:
         titles_processed = 0
         titles_skipped = 0
         total_sections = 0
+        use_copy = os.environ.get("PIPELINE_USE_COPY", "0") == "1"
 
         for title_num in title_list:
             async with self._session_factory() as s:
@@ -572,6 +650,7 @@ class BootstrapService:
                         title_num,
                         rp_identifier,
                         revision.revision_id,
+                        use_copy=use_copy,
                     )
                     await s.commit()
                 except Exception:
