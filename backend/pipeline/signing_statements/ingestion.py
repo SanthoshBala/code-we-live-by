@@ -59,7 +59,8 @@ class SigningStatementIngestionService:
             )
             return True
 
-        fetched = await fetch_signing_statement(congress, str(law_number))
+        title = law.short_title or law.popular_name or law.official_title or ""
+        fetched = await fetch_signing_statement(congress, str(law_number), title=title)
         if fetched is None:
             return False
 

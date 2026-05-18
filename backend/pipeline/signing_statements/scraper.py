@@ -1,11 +1,15 @@
-"""Scraper for presidential signing statements from UCSB American Presidency Project.
+"""Fetcher for presidential signing statements from GovInfo.
 
-The UCSB American Presidency Project (presidency.ucsb.edu) maintains the most
-comprehensive archive of presidential signing statements. This module searches that
-archive by law number and extracts the statement text and source URL.
+Signing statements live in the CPD (Compilation of Presidential Documents)
+collection on api.govinfo.gov. The collection uses two package-ID prefixes:
 
-No API key required; the site is publicly accessible. Rate-limit scraping to avoid
-overloading the server (add delays in batch jobs).
+  WCPD-YYYY-MM-DD   — Weekly Compilation (1993–2009, Clinton / Bush)
+  DCPD-YYYYMMDDXXX  — Daily Compilation  (2009–present, Obama onwards)
+
+Not every law gets a signing statement; most routine / minor bills do not.
+The function returns None gracefully when no statement is found.
+
+The GOVINFO_API_KEY environment variable (or app settings) must be set.
 """
 
 from __future__ import annotations
@@ -13,146 +17,173 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from urllib.parse import urlencode
 
 import httpx
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-UCSB_BASE = "https://www.presidency.ucsb.edu"
-# Category 50 is "Signing Statements" on UCSB advanced search
-UCSB_SEARCH_URL = f"{UCSB_BASE}/advanced-search"
-UCSB_SIGNING_STATEMENT_CATEGORY = "50"
+GOVINFO_SEARCH_URL = "https://api.govinfo.gov/search"
+GOVINFO_DETAILS_URL = "https://www.govinfo.gov/app/details"
 
-# Timeout for individual HTTP requests (seconds)
 _REQUEST_TIMEOUT = 15.0
 
 
 @dataclass
 class SigningStatementResult:
-    """A presidential signing statement fetched from UCSB."""
+    """A presidential signing statement fetched from GovInfo CPD."""
 
     text: str
-    source_url: str
+    source_url: str  # public govinfo.gov details link
     title: str
+    date_issued: str  # YYYY-MM-DD
 
 
-def _build_search_url(query: str) -> str:
-    """Return a UCSB advanced-search URL filtered to signing statement documents."""
-    params = {
-        "field-keywords": query,
-        "items_per_page": "10",
-        "category2[]": UCSB_SIGNING_STATEMENT_CATEGORY,
-    }
-    return f"{UCSB_SEARCH_URL}?{urlencode(params)}"
+def _get_api_key() -> str:
+    """Return the GovInfo API key from app settings."""
+    from app.config import settings
+
+    key: str | None = getattr(settings, "govinfo_api_key", None)
+    if not key:
+        raise ValueError(
+            "GovInfo API key required. Set GOVINFO_API_KEY environment variable."
+        )
+    return key
 
 
-def _parse_search_results(html: str) -> list[tuple[str, str]]:
-    """Return (title, relative_url) pairs from a UCSB search results page."""
-    soup = BeautifulSoup(html, "lxml")
-    results: list[tuple[str, str]] = []
+async def _search_govinfo(
+    title: str,
+    congress: int,
+    law_number: str,
+    api_key: str,
+    client: httpx.AsyncClient,
+) -> dict[str, object] | None:
+    """Search GovInfo for a signing statement granule.  Returns first CPD hit or None."""
+    queries = [
+        f'"Statement on Signing" "{title}"',
+        # Fallback: search by public law number as it appears in the statement text
+        f'"Statement on Signing" "Public Law No. {congress}-{law_number}"',
+        f'"Statement on Signing" "Public Law {congress}-{law_number}"',
+    ]
 
-    # UCSB search results list document titles inside <h3 class="field-content">
-    for h3 in soup.select("h3.field-content a"):
-        href = h3.get("href", "")
-        title = h3.get_text(strip=True)
-        if href and title:
-            results.append((title, str(href)))
+    for query in queries:
+        payload = {"query": query, "pageSize": 10, "offsetMark": "*"}
+        try:
+            resp = await client.post(
+                GOVINFO_SEARCH_URL,
+                json=payload,
+                params={"api_key": api_key},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.warning("GovInfo search error for %r: %s", query, exc)
+            continue
 
-    return results
+        results: list[dict[str, object]] = data.get("results", [])
+        for result in results:
+            if result.get("collectionCode") == "CPD" and result.get("granuleId"):
+                logger.debug("Found CPD signing statement: %s", result.get("title"))
+                return result
+
+    return None
 
 
-def _parse_statement_page(html: str) -> str | None:
-    """Extract the body text of a signing statement from its detail page."""
-    soup = BeautifulSoup(html, "lxml")
-
-    # The statement body lives in <div class="field-docs-content">
-    body_div = soup.select_one("div.field-docs-content")
-    if body_div is None:
-        # Fallback: try the generic document body selector
-        body_div = soup.select_one("div.field-items .field-item")
-    if body_div is None:
+async def _fetch_statement_text(
+    granule_id: str,
+    package_id: str,
+    api_key: str,
+    client: httpx.AsyncClient,
+) -> str | None:
+    """Fetch and clean the plain-text body of a CPD granule."""
+    htm_url = (
+        f"https://api.govinfo.gov/packages/{package_id}"
+        f"/granules/{granule_id}/htm?api_key={api_key}"
+    )
+    try:
+        resp = await client.get(htm_url)
+        resp.raise_for_status()
+    except Exception as exc:
+        logger.warning(
+            "Failed to fetch signing statement text from %s: %s", htm_url, exc
+        )
         return None
 
-    # Collapse whitespace but preserve paragraph breaks
-    paragraphs = [p.get_text(" ", strip=True) for p in body_div.find_all("p")]
-    if paragraphs:
-        return "\n\n".join(p for p in paragraphs if p)
+    soup = BeautifulSoup(resp.text, "lxml")
+    pre = soup.find("pre")
+    if not pre:
+        return None
 
-    return body_div.get_text(" ", strip=True) or None
-
-
-def _query_for_law(congress: int, law_number: str) -> str:
-    """Build the search query string for a public law."""
-    # Try the most recognisable format first: "Public Law 118-5"
-    return f"Public Law {congress}-{law_number}"
+    raw = pre.get_text("\n")
+    # Strip the GPO header lines (everything before the first blank line after the date)
+    lines = raw.splitlines()
+    # Drop lines that are bracketed metadata headers
+    body_lines = [line for line in lines if not re.match(r"^\s*\[.*\]\s*$", line)]
+    # Collapse runs of blank lines
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(body_lines)).strip()
+    return text or None
 
 
 async def fetch_signing_statement(
     congress: int,
     law_number: str,
+    title: str,
+    api_key: str | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> SigningStatementResult | None:
-    """Search UCSB for a signing statement matching the given public law.
+    """Fetch the signing statement for a public law from GovInfo CPD.
 
-    Returns a SigningStatementResult if found, or None if no statement exists
-    or the scrape fails. Errors are logged as warnings rather than raised so
-    callers can treat missing statements as graceful nulls.
+    Returns a SigningStatementResult if a statement is found, or None if
+    no statement exists for this law or the fetch fails.
 
     Args:
         congress: Congress number (e.g. 118).
-        law_number: Law number as a string (e.g. "5" or "234").
-        client: Optional pre-configured httpx.AsyncClient (useful for testing).
+        law_number: Law number string (e.g. "5").
+        title: Short title or popular name of the law (used for search).
+        api_key: GovInfo API key; reads from settings if omitted.
+        client: Optional pre-configured httpx.AsyncClient (for testing).
     """
+    if api_key is None:
+        try:
+            api_key = _get_api_key()
+        except ValueError as exc:
+            logger.warning("Signing statement fetch skipped: %s", exc)
+            return None
+
     own_client = client is None
     if client is None:
         client = httpx.AsyncClient(
             follow_redirects=True,
             timeout=_REQUEST_TIMEOUT,
-            headers={
-                "User-Agent": "CWLB-research-bot/1.0 (civic-tech; non-commercial)"
-            },
         )
 
     try:
-        query = _query_for_law(congress, law_number)
-        search_url = _build_search_url(query)
-        logger.debug("Searching UCSB for signing statement: %s", search_url)
-
-        search_resp = await client.get(search_url)
-        search_resp.raise_for_status()
-
-        hits = _parse_search_results(search_resp.text)
-        if not hits:
+        hit = await _search_govinfo(title, congress, law_number, api_key, client)
+        if hit is None:
             logger.debug(
-                "No UCSB signing statement found for PL %d-%s", congress, law_number
+                "No signing statement in GovInfo CPD for PL %d-%s (%s)",
+                congress,
+                law_number,
+                title,
             )
             return None
 
-        # The first result is typically the best match
-        doc_title, doc_path = hits[0]
-        doc_url = doc_path if doc_path.startswith("http") else f"{UCSB_BASE}{doc_path}"
+        package_id = str(hit["packageId"])
+        granule_id = str(hit["granuleId"])
+        public_url = f"{GOVINFO_DETAILS_URL}/{package_id}/{granule_id}"
 
-        logger.debug("Fetching signing statement from %s", doc_url)
-        doc_resp = await client.get(doc_url)
-        doc_resp.raise_for_status()
-
-        text = _parse_statement_page(doc_resp.text)
+        text = await _fetch_statement_text(granule_id, package_id, api_key, client)
         if not text:
-            logger.warning("Could not parse statement body from %s", doc_url)
+            logger.warning("Could not extract text for %s / %s", package_id, granule_id)
             return None
 
-        return SigningStatementResult(text=text, source_url=doc_url, title=doc_title)
-
-    except httpx.HTTPError as exc:
-        logger.warning(
-            "HTTP error fetching signing statement for PL %d-%s: %s",
-            congress,
-            law_number,
-            exc,
+        return SigningStatementResult(
+            text=text,
+            source_url=public_url,
+            title=str(hit.get("title", "")),
+            date_issued=str(hit.get("dateIssued", "")),
         )
-        return None
+
     except Exception as exc:
         logger.warning(
             "Unexpected error fetching signing statement for PL %d-%s: %s",
@@ -164,9 +195,3 @@ async def fetch_signing_statement(
     finally:
         if own_client:
             await client.aclose()
-
-
-def _normalize_law_number(raw: str) -> str:
-    """Strip leading zeros from a law number string."""
-    # Some sources store "005"; we want "5"
-    return str(int(re.sub(r"[^0-9]", "", raw))) if re.search(r"\d", raw) else raw
