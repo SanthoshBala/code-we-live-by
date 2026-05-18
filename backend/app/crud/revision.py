@@ -61,7 +61,7 @@ async def _get_chain(session: AsyncSession) -> list[int] | None:
     head_id = await svc.get_head_revision_id()
     if head_id is None:
         return None
-    chain = await svc._get_revision_chain(head_id)
+    chain = await svc.get_revision_chain(head_id)
     if chain:
         revision_cache.set(head_id, chain)
     return chain if chain else None

@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,11 +25,15 @@ from app.models.public_law import PublicLaw
 from app.models.revision import CodeRevision
 from pipeline.chrono.checkpoint import CheckpointResult, validate_checkpoint
 from pipeline.chrono.revision_builder import RevisionBuilder
+from pipeline.govinfo.client import GovInfoClient
 from pipeline.legal_parser.law_change_service import LawChangeService
 from pipeline.olrc.downloader import OLRCDownloader
 from pipeline.olrc.rp_ingestor import RPIngestor
 from pipeline.olrc.snapshot_service import SnapshotService
 from pipeline.timeline import TimelineBuilder, TimelineEvent, TimelineEventType
+
+if TYPE_CHECKING:
+    from pipeline.cache import PipelineCache
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +64,17 @@ class PlayForwardEngine:
         self,
         session: AsyncSession,
         downloader: OLRCDownloader,
+        cache: PipelineCache | None = None,
     ):
         self.session = session
         self.timeline_builder = TimelineBuilder(session)
         self.rp_ingestor = RPIngestor(session, downloader)
         self.revision_builder = RevisionBuilder(session)
         self.snapshot_service = SnapshotService(session)
-        self.law_change_service = LawChangeService(session)
+        govinfo_client = GovInfoClient(cache=cache) if cache is not None else None
+        self.law_change_service = LawChangeService(
+            session, govinfo_client=govinfo_client
+        )
 
     async def advance(self, count: int = 1) -> AdvanceResult:
         """Advance the timeline by processing the next `count` events.
