@@ -363,6 +363,12 @@ export interface LegislativeHistory {
   related_bills: RelatedBill[];
 }
 
+/** One node in the group hierarchy above a section (used for breadcrumbs). */
+export interface GroupAncestor {
+  type: string;
+  number: string;
+}
+
 /** Full section view returned by the section detail endpoint. */
 export interface SectionView {
   title_number: number;
@@ -378,4 +384,5 @@ export interface SectionView {
   omitted: boolean;
   notes: SectionNotes | null;
   last_revision?: HeadRevision | null;
+  group_ancestors?: GroupAncestor[];
 }

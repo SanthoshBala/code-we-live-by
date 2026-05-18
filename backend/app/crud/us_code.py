@@ -18,6 +18,7 @@ from app.models.public_law import PublicLaw
 from app.models.us_code import SectionGroup, USCodeSection
 from app.schemas.us_code import (
     CodeLineSchema,
+    GroupAncestorSchema,
     SectionGroupTreeSchema,
     SectionNotesSchema,
     SectionSummarySchema,
@@ -394,6 +395,40 @@ async def _enrich_notes_with_titles(
         _apply(a.law, a.law.public_law_id)
 
 
+async def _get_group_ancestors(
+    session: AsyncSession,
+    group_id: uuid.UUID,
+) -> list[GroupAncestorSchema]:
+    """Return the ancestor group path for a section in top-down order.
+
+    Walks up the section_group parent chain from group_id to (but not
+    including) the title node, using a recursive CTE.
+    """
+    result = await session.execute(
+        text("""
+            WITH RECURSIVE ancestors AS (
+                SELECT group_id, parent_id, group_type, number, 0 AS depth
+                FROM section_group
+                WHERE group_id = :group_id
+
+                UNION ALL
+
+                SELECT sg.group_id, sg.parent_id, sg.group_type, sg.number, a.depth + 1
+                FROM section_group sg
+                JOIN ancestors a ON sg.group_id = a.parent_id
+                WHERE sg.group_type != 'title'
+            )
+            SELECT group_type, number FROM ancestors
+            WHERE group_type != 'title'
+            ORDER BY depth DESC
+        """),
+        {"group_id": group_id},
+    )
+    return [
+        GroupAncestorSchema(type=row.group_type, number=row.number) for row in result
+    ]
+
+
 async def get_section(
     session: AsyncSession,
     title_number: int,
@@ -480,6 +515,10 @@ async def get_section(
         session, title_number, section_number, chain=chain
     )
 
+    group_ancestors: list[GroupAncestorSchema] = []
+    if state.group_id is not None:
+        group_ancestors = await _get_group_ancestors(session, state.group_id)
+
     return SectionViewerSchema(
         title_number=title_number,
         section_number=state.section_number,
@@ -493,4 +532,5 @@ async def get_section(
         is_repealed=state.is_deleted,
         notes=notes,
         last_revision=last_revision,
+        group_ancestors=group_ancestors,
     )
