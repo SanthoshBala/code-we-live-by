@@ -365,6 +365,12 @@ export interface LegislativeHistory {
   related_bills: RelatedBill[];
 }
 
+/** One node in the group hierarchy above a section (used for breadcrumbs). */
+export interface GroupAncestor {
+  type: string;
+  number: string;
+}
+
 /** A freestanding provision from a Public Law that does not amend the US Code. */
 export interface StandaloneProvision {
   section_num: string;
@@ -389,4 +395,5 @@ export interface SectionView {
   omitted: boolean;
   notes: SectionNotes | null;
   last_revision?: HeadRevision | null;
+  group_ancestors?: GroupAncestor[];
 }

@@ -7,16 +7,11 @@ import Sidebar from '@/components/ui/Sidebar';
 import TitleList from '@/components/tree/TitleList';
 import NotesViewer from '@/components/viewer/NotesViewer';
 import RevisionBanner from '@/components/ui/RevisionBanner';
-import { useTitleStructure } from '@/hooks/useTitleStructure';
+import { useSection } from '@/hooks/useSection';
 import { useRevision } from '@/hooks/useRevision';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
-import type {
-  BreadcrumbSegment,
-  SectionGroupTree,
-  SectionSummary,
-  TitleStructure,
-} from '@/lib/types';
+import type { BreadcrumbSegment, GroupAncestor } from '@/lib/types';
 import Link from 'next/link';
 
 const VALID_FILES: Record<string, string> = {
@@ -24,31 +19,6 @@ const VALID_FILES: Record<string, string> = {
   STATUTORY_NOTES: 'Statutory Notes',
   HISTORICAL_NOTES: 'Historical Notes',
 };
-
-interface GroupAncestor {
-  type: string;
-  number: string;
-}
-
-interface SectionPath {
-  groupAncestors: GroupAncestor[];
-}
-
-function findSectionInGroups(
-  groups: SectionGroupTree[],
-  sectionNumber: string,
-  ancestors: GroupAncestor[] = []
-): SectionPath | null {
-  for (const g of groups) {
-    const path = [...ancestors, { type: g.group_type, number: g.number }];
-    if (g.sections.some((s) => s.section_number === sectionNumber)) {
-      return { groupAncestors: path };
-    }
-    const nested = findSectionInGroups(g.children, sectionNumber, path);
-    if (nested) return nested;
-  }
-  return null;
-}
 
 function capitalizeGroupType(type: string): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
@@ -74,34 +44,28 @@ function Breadcrumbs({ segments }: { segments: BreadcrumbSegment[] }) {
 }
 
 function buildBreadcrumbs(
-  structure: TitleStructure | undefined,
   titleNumber: number,
+  groupAncestors: GroupAncestor[],
   sectionNumber: string,
   file: string,
   withRev: (href: string) => string
 ): BreadcrumbSegment[] {
-  if (!structure) return [];
-
   const basePath = `/sections/${titleNumber}/${sectionNumber}`;
   const crumbs: BreadcrumbSegment[] = [
     { label: `Title ${titleNumber}`, href: withRev(`/titles/${titleNumber}`) },
   ];
 
-  const path = findSectionInGroups(structure.children ?? [], sectionNumber);
-
-  if (path) {
-    let pathSoFar = `/titles/${titleNumber}`;
-    for (const ancestor of path.groupAncestors) {
-      pathSoFar += `/${ancestor.type}/${ancestor.number}`;
-      crumbs.push({
-        label: `${capitalizeGroupType(ancestor.type)} ${ancestor.number}`,
-        href: withRev(pathSoFar),
-      });
-    }
+  let pathSoFar = `/titles/${titleNumber}`;
+  for (const ancestor of groupAncestors) {
+    pathSoFar += `/${ancestor.type}/${ancestor.number}`;
+    crumbs.push({
+      label: `${capitalizeGroupType(ancestor.type)} ${ancestor.number}`,
+      href: withRev(pathSoFar),
+    });
   }
 
   crumbs.push({
-    label: `\u00A7\u2009${sectionNumber}`,
+    label: `§ ${sectionNumber}`,
     href: withRev(basePath),
   });
   crumbs.push({ label: file });
@@ -122,14 +86,21 @@ export default function NoteFilePage() {
   const titleNumber = Number(params.titleNumber);
   const sectionNumber = decodeURIComponent(params.sectionNumber);
   const { revision, withRev } = useRevision();
-  const { data: structure } = useTitleStructure(titleNumber, true, revision);
-  const breadcrumbs = buildBreadcrumbs(
-    structure,
+  const { data: sectionData } = useSection(
     titleNumber,
     sectionNumber,
-    params.file,
-    withRev
+    revision
   );
+
+  const breadcrumbs = sectionData
+    ? buildBreadcrumbs(
+        titleNumber,
+        sectionData.group_ancestors ?? [],
+        sectionNumber,
+        params.file,
+        withRev
+      )
+    : [];
 
   return (
     <MainLayout
