@@ -249,7 +249,7 @@ function SigningStatementQuote({ event }: { event: TimelineEventType }) {
 
   return (
     <blockquote className="border-primary-300 mt-2 border-l-2 bg-primary-50/40 px-3 py-2 text-sm italic text-gray-700">
-      <p className="whitespace-pre-wrap">&ldquo;{displayed}&rdquo;</p>
+      <p className="whitespace-pre-wrap">{displayed}</p>
       <footer className="mt-1 flex items-baseline justify-between gap-2 not-italic">
         <span className="text-[11px] text-gray-500">
           Presidential signing statement
@@ -341,8 +341,8 @@ export default function TimelineEvent({ event, view }: TimelineEventProps) {
           )}
         </div>
 
-        {/* Description */}
-        {event.description && (
+        {/* Description — suppressed for presidential_action since the signing statement replaces it */}
+        {event.description && event.event_type !== 'presidential_action' && (
           <p className="mt-1.5 text-sm text-gray-600">{event.description}</p>
         )}
 
