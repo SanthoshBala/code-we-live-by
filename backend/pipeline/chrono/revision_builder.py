@@ -25,7 +25,7 @@ from pipeline.chrono.amendment_applicator import (
 )
 from pipeline.chrono.notes_updater import update_notes_for_applied_law
 from pipeline.olrc.parser import compute_text_hash
-from pipeline.olrc.snapshot_service import SnapshotService
+from pipeline.olrc.snapshot_service import SectionState, SnapshotService
 
 logger = logging.getLogger(__name__)
 
@@ -466,14 +466,21 @@ class RevisionBuilder:
             key = (change.title_number, change.section_number)
             section_groups.setdefault(key, []).append(change)
 
-        # 5. Process each section group
+        # 5. Batch-fetch all parent states in a single query instead of
+        # per-section lookups (each of which would rebuild the revision chain).
+        keys = list(section_groups.keys())
+        parent_states = await self.snapshot_service.get_sections_at_revision(
+            keys, parent_revision_id
+        )
+
+        # 6. Process each section group
         for (title_num, section_num), section_changes in section_groups.items():
             await self._apply_section_changes(
                 revision=revision,
                 title_number=title_num,
                 section_number=section_num,
                 section_changes=section_changes,
-                parent_revision_id=parent_revision_id,
+                parent_state=parent_states.get((title_num, section_num)),
                 law=law,
                 result=result,
             )
@@ -503,16 +510,11 @@ class RevisionBuilder:
         title_number: int,
         section_number: str,
         section_changes: list[LawChange],
-        parent_revision_id: int,
+        parent_state: SectionState | None,
         law: PublicLaw,
         result: RevisionBuildResult,
     ) -> None:
         """Apply all changes for a single section and create a snapshot."""
-        # Fetch parent state
-        parent_state = await self.snapshot_service.get_section_at_revision(
-            title_number, section_number, parent_revision_id
-        )
-
         current_text = parent_state.text_content if parent_state else None
         is_deleted = False
         is_new_section = parent_state is None

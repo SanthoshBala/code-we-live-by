@@ -108,7 +108,7 @@ async def _resolve_head_and_chain(
     """
     if revision_id is not None:
         svc = SnapshotService(session)
-        chain = await svc._get_revision_chain(revision_id)
+        chain = await svc.get_revision_chain(revision_id)
         return revision_id, chain
 
     # Try the cache first
@@ -121,7 +121,7 @@ async def _resolve_head_and_chain(
     head_id = await svc.get_head_revision_id()
     if head_id is None:
         return None, []
-    chain = await svc._get_revision_chain(head_id)
+    chain = await svc.get_revision_chain(head_id)
     revision_cache.set(head_id, chain)
     return head_id, chain
 

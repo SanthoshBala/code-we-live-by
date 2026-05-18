@@ -87,13 +87,13 @@ class SnapshotService:
             section_number: Section number (e.g., "106", "80a-3a").
             revision_id: The revision to query at.
             chain: Pre-built revision chain (newest-first). If not provided,
-                built internally via ``_get_revision_chain()``.
+                built internally via ``get_revision_chain()``.
 
         Returns:
             SectionState or None if the section doesn't exist at this revision.
         """
         if chain is None:
-            chain = await self._get_revision_chain(revision_id)
+            chain = await self.get_revision_chain(revision_id)
         if not chain:
             return None
 
@@ -149,7 +149,7 @@ class SnapshotService:
         Returns:
             List of SectionState for all live sections at this revision.
         """
-        chain = await self._get_revision_chain(revision_id)
+        chain = await self.get_revision_chain(revision_id)
         if not chain:
             return []
 
@@ -242,7 +242,7 @@ class SnapshotService:
             keys: List of (title_number, section_number) pairs to fetch.
             revision_id: The revision to query at.
             chain: Pre-built revision chain (newest-first). If not provided,
-                built internally via ``_get_revision_chain()``.
+                built internally via ``get_revision_chain()``.
 
         Returns:
             Dict mapping (title_number, section_number) to SectionState.
@@ -251,7 +251,7 @@ class SnapshotService:
         if not keys:
             return {}
         if chain is None:
-            chain = await self._get_revision_chain(revision_id)
+            chain = await self.get_revision_chain(revision_id)
         if not chain:
             return {}
 
@@ -322,7 +322,7 @@ class SnapshotService:
 
         return [self._snapshot_to_state(snap) for snap in snapshots]
 
-    async def _get_revision_chain(self, revision_id: int) -> list[int]:
+    async def get_revision_chain(self, revision_id: int) -> list[int]:
         """Build the chain of revision IDs from target back to initial.
 
         Uses a recursive CTE to fetch the entire chain in a single query

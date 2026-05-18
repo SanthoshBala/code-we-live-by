@@ -72,7 +72,7 @@ class PublicLawIngestionService:
             skipped = 0
 
             # Fetch all law details in parallel, respecting API rate limits
-            sem = asyncio.Semaphore(10)
+            sem = asyncio.Semaphore(20)
 
             async def _fetch_detail(package_id: str) -> PLAWPackageDetail:
                 async with sem:
@@ -209,7 +209,7 @@ class PublicLawIngestionService:
             skipped = 0
 
             # Fetch all law details in parallel, respecting API rate limits
-            sem = asyncio.Semaphore(10)
+            sem = asyncio.Semaphore(20)
 
             async def _fetch_detail(package_id: str) -> PLAWPackageDetail:
                 async with sem:

@@ -147,9 +147,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=parent_state,
+            return_value={(26, "401"): parent_state},
         ):
             result = await builder.build_revision(
                 law, parent_revision_id=1, sequence_number=2
@@ -188,9 +188,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=parent_state,
+            return_value={(26, "401"): parent_state},
         ):
             result = await builder.build_revision(
                 law, parent_revision_id=1, sequence_number=2
@@ -220,9 +220,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=None,  # No parent state — new section
+            return_value={},  # No parent state — new section
         ):
             result = await builder.build_revision(
                 law, parent_revision_id=1, sequence_number=2
@@ -251,9 +251,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=parent_state,
+            return_value={(26, "401"): parent_state},
         ):
             result = await builder.build_revision(
                 law, parent_revision_id=1, sequence_number=2
@@ -284,9 +284,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=parent_state,
+            return_value={(26, "401"): parent_state},
         ):
             result = await builder.build_revision(
                 law, parent_revision_id=1, sequence_number=2
@@ -340,9 +340,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=parent_state,
+            return_value={(26, "401"): parent_state},
         ):
             result = await builder.build_revision(
                 law, parent_revision_id=1, sequence_number=2
@@ -369,9 +369,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=parent_state,
+            return_value={(26, "401"): parent_state},
         ):
             await builder.build_revision(law, parent_revision_id=1, sequence_number=2)
 
@@ -402,9 +402,9 @@ class TestRevisionBuilder:
 
         with patch.object(
             builder.snapshot_service,
-            "get_section_at_revision",
+            "get_sections_at_revision",
             new_callable=AsyncMock,
-            return_value=parent_state,
+            return_value={(26, "401"): parent_state},
         ):
             result = await builder.build_revision(
                 law, parent_revision_id=1, sequence_number=2

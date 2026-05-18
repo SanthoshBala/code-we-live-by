@@ -3861,7 +3861,7 @@ async def chrono_advance_command(
     downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
 
     async with async_session_maker() as session:
-        engine = PlayForwardEngine(session, downloader)
+        engine = PlayForwardEngine(session, downloader, cache=_cli_cache)
         try:
             result = await engine.advance(count=count)
         except RuntimeError as exc:
@@ -3893,7 +3893,7 @@ async def chrono_advance_to_command(
     downloader = OLRCDownloader(download_dir=download_dir, cache=_cli_cache)
 
     async with async_session_maker() as session:
-        engine = PlayForwardEngine(session, downloader)
+        engine = PlayForwardEngine(session, downloader, cache=_cli_cache)
         try:
             result = await engine.advance_to(release_point)
         except (RuntimeError, ValueError) as exc:
