@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DirectoryView from './DirectoryView';
 import type { DirectoryItem } from '@/lib/types';
 
@@ -18,6 +19,19 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+
+function makeWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+  };
+}
+
 const items: DirectoryItem[] = [
   {
     id: 'Ch. 1',
@@ -35,7 +49,8 @@ describe('DirectoryView', () => {
         title="Copyrights"
         breadcrumbs={[{ label: 'Title 17' }]}
         items={items}
-      />
+      />,
+      { wrapper: makeWrapper() }
     );
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
       'Copyrights'
@@ -51,7 +66,8 @@ describe('DirectoryView', () => {
           { label: 'Chapter 4' },
         ]}
         items={items}
-      />
+      />,
+      { wrapper: makeWrapper() }
     );
     const titleLink = screen.getByRole('link', { name: 'Title 17' });
     expect(titleLink).toHaveAttribute('href', '/titles/17');
@@ -59,7 +75,9 @@ describe('DirectoryView', () => {
   });
 
   it('renders the Code tab as active', () => {
-    render(<DirectoryView title="Test" items={items} />);
+    render(<DirectoryView title="Test" items={items} />, {
+      wrapper: makeWrapper(),
+    });
     expect(screen.getByRole('tab', { name: 'Code' })).toHaveAttribute(
       'aria-selected',
       'true'
@@ -67,7 +85,9 @@ describe('DirectoryView', () => {
   });
 
   it('renders directory table items', () => {
-    render(<DirectoryView title="Test" items={items} />);
+    render(<DirectoryView title="Test" items={items} />, {
+      wrapper: makeWrapper(),
+    });
     expect(
       screen.getByRole('link', { name: /Subject Matter/ })
     ).toBeInTheDocument();

@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import type {
   DirectoryItem,
   BreadcrumbSegment,
   HeadRevision,
 } from '@/lib/types';
+import { fetchTitleStructure } from '@/lib/api';
 import PageHeader from '@/components/ui/PageHeader';
 import TabBar from '@/components/ui/TabBar';
 import DirectoryTable from './DirectoryTable';
@@ -145,6 +147,19 @@ export default function DirectoryView({
   revision,
 }: DirectoryViewProps) {
   const [activeTab, setActiveTab] = useState('code');
+  const queryClient = useQueryClient();
+
+  function handleItemMouseEnter(item: DirectoryItem) {
+    const titleMatch = item.href.match(/^\/titles\/(\d+)$/);
+    if (titleMatch) {
+      const titleNumber = Number(titleMatch[1]);
+      queryClient.prefetchQuery({
+        queryKey: ['titleStructure', titleNumber, revision ?? 'head'],
+        queryFn: () => fetchTitleStructure(titleNumber, revision),
+        staleTime: 5 * 60 * 1000,
+      });
+    }
+  }
 
   return (
     <div>
@@ -162,7 +177,9 @@ export default function DirectoryView({
         }
       />
       <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
-      {activeTab === 'code' && <DirectoryTable items={items} />}
+      {activeTab === 'code' && (
+        <DirectoryTable items={items} onItemMouseEnter={handleItemMouseEnter} />
+      )}
     </div>
   );
 }
