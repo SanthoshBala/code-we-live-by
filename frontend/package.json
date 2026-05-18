@@ -12,7 +12,8 @@
     "format:check": "prettier --check .",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "analyze": "ANALYZE=true next build"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.0",
@@ -23,6 +24,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.6",
     "@testing-library/jest-dom": "^6.2.0",
     "@testing-library/react": "^14.1.0",
     "@testing-library/user-event": "^14.6.1",
