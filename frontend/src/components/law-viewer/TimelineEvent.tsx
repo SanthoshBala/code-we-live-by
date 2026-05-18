@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import type {
   AmendmentStatus,
   TimelineEvent as TimelineEventType,
@@ -232,20 +235,33 @@ function VoteTally({ event }: { event: TimelineEventType }) {
 // ── Signing statement blockquote ──────────────────────────────────────────
 
 function SigningStatementQuote({ event }: { event: TimelineEventType }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!event.signing_statement) return null;
 
-  // Show only the first ~280 characters as an excerpt
-  const MAX = 280;
+  const EXCERPT_LEN = 280;
   const full = event.signing_statement;
-  const excerpt = full.length > MAX ? full.slice(0, MAX).trimEnd() + '…' : full;
+  const needsTruncation = full.length > EXCERPT_LEN;
+  const displayed =
+    expanded || !needsTruncation
+      ? full
+      : full.slice(0, EXCERPT_LEN).trimEnd() + '…';
 
   return (
     <blockquote className="border-primary-300 mt-2 border-l-2 bg-primary-50/40 px-3 py-2 text-sm italic text-gray-700">
-      &ldquo;{excerpt}&rdquo;
-      <footer className="mt-1 not-italic">
+      <p className="whitespace-pre-wrap">&ldquo;{displayed}&rdquo;</p>
+      <footer className="mt-1 flex items-baseline justify-between gap-2 not-italic">
         <span className="text-[11px] text-gray-500">
           Presidential signing statement
         </span>
+        {needsTruncation && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="mono shrink-0 text-[11px] font-medium text-primary-600 hover:underline"
+          >
+            {expanded ? 'Show less ↑' : 'Read full statement ↓'}
+          </button>
+        )}
       </footer>
     </blockquote>
   );
