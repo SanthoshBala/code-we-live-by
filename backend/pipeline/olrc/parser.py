@@ -121,6 +121,10 @@ NAMESPACES = {
     "xhtml": "http://www.w3.org/1999/xhtml",
 }
 
+# Compiled once at module level — _get_text_content is called O(sections × subsections)
+_WS_RE = re.compile(r"\s+")
+_PUNCT_RE = re.compile(r" ([;,.])")
+
 
 @dataclass
 class ParsedGroup:
@@ -991,10 +995,10 @@ class USLMParser:
         # collapse runs of whitespace to a single space.  Using "".join
         # (instead of " ".join) avoids inserting extra spaces at inline
         # element boundaries like <date> or <ref>.
-        text = re.sub(r"\s+", " ", "".join(parts)).strip()
+        text = _WS_RE.sub(" ", "".join(parts)).strip()
         # Remove stray spaces before punctuation that arise from inline
         # element boundaries (e.g. "<ref>Pub. L. 94–455</ref> ;")
-        text = re.sub(r" ([;,.])", r"\1", text)
+        text = _PUNCT_RE.sub(r"\1", text)
         return text
 
     @staticmethod
