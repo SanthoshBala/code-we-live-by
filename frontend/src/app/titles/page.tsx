@@ -1,20 +1,14 @@
-'use client';
-
-import { useTitles } from '@/hooks/useTitles';
 import type { DirectoryItem } from '@/lib/types';
 import DirectoryView from '@/components/directory/DirectoryView';
+import { fetchTitlesServer } from '@/lib/api.server';
 
-/** All titles directory page. */
-export default function TitlesPage() {
-  const { data: titles, isLoading, error } = useTitles();
+// No backend available at build time, so skip static prerendering.
+// Data is still fetched server-side on every request (no client waterfall).
+export const dynamic = 'force-dynamic';
 
-  if (isLoading) {
-    return <p className="text-gray-500">Loading titles...</p>;
-  }
-
-  if (error || !titles) {
-    return <p className="text-red-600">Failed to load titles.</p>;
-  }
+/** All titles directory page (SSR). */
+export default async function TitlesPage() {
+  const titles = await fetchTitlesServer();
 
   const items: DirectoryItem[] = titles.map((t) => ({
     id: `Title ${t.title_number}`,

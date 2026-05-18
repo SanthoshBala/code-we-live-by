@@ -75,5 +75,16 @@ class Settings(BaseSettings):
         description="GCS bucket name for pipeline cache (e.g., 'cwlb-pipeline-cache')",
     )
 
+    # =========================================================================
+    # Deploy metadata
+    # =========================================================================
+    # Git SHA of the current deploy. Injected by cd.yml via --set-env-vars.
+    # Used as ETag on API responses so browsers invalidate their cache after
+    # a new deploy rather than waiting for max-age to expire.
+    deploy_sha: str | None = Field(
+        default=None,
+        description="Git commit SHA of the current deploy for ETag-based cache invalidation",
+    )
+
 
 settings = Settings()
