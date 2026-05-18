@@ -43,9 +43,38 @@ jobs:
             echo "seed_needed=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # Detect which services changed so we can skip unchanged image builds.
+  check-changes:
+    name: Detect changed services
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      backend_changed: ${{ steps.check.outputs.backend_changed }}
+      frontend_changed: ${{ steps.check.outputs.frontend_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Check which services changed
+        id: check
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          if echo "$CHANGED" | grep -qE '^backend/'; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -qE '^frontend/'; then
+            echo "frontend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-backend:
     name: Build Backend Image
-    needs: ci
+    needs: [ci, check-changes]
+    if: needs.check-changes.outputs.backend_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,7 +119,8 @@ jobs:
   # backend URL, not the newly-built image.
   build-frontend:
     name: Build Frontend Image
-    needs: ci
+    needs: [ci, check-changes]
+    if: needs.check-changes.outputs.frontend_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -144,7 +174,10 @@ jobs:
 
   deploy-backend:
     name: Deploy Backend
-    needs: build-backend
+    needs: [check-changes, build-backend]
+    # Run even when build-backend was skipped (backend unchanged); gate on
+    # check-changes succeeding so CI failures still block deployment.
+    if: always() && needs.check-changes.result == 'success' && (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -160,10 +193,20 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v3
 
+      - name: Resolve backend image tag
+        id: image
+        run: |
+          BASE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend"
+          if [ "${{ needs.check-changes.outputs.backend_changed }}" = "true" ]; then
+            echo "tag=$BASE:$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$BASE:latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy backend to Cloud Run
         run: |
           gcloud run deploy cwlb-backend \
-            --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
+            --image "${{ steps.image.outputs.tag }}" \
             --region "$GCP_REGION" \
             --platform managed \
             --port 8080 \
@@ -179,7 +222,7 @@ jobs:
       - name: Run migrations
         run: |
           gcloud run jobs deploy cwlb-migrate \
-            --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA" \
+            --image "${{ steps.image.outputs.tag }}" \
             --region "$GCP_REGION" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
@@ -196,7 +239,10 @@ jobs:
   # Runs in parallel with seed — frontend deploy and seeding are independent.
   deploy-frontend:
     name: Deploy Frontend
-    needs: [build-frontend, deploy-backend]
+    needs: [check-changes, build-frontend, deploy-backend]
+    # Run even when build-frontend was skipped (frontend unchanged); require
+    # deploy-backend to have succeeded so the backend URL is stable.
+    if: always() && needs.check-changes.result == 'success' && needs.deploy-backend.result == 'success' && (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -212,13 +258,23 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v3
 
+      - name: Resolve frontend image tag
+        id: image
+        run: |
+          BASE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend"
+          if [ "${{ needs.check-changes.outputs.frontend_changed }}" = "true" ]; then
+            echo "tag=$BASE:$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$BASE:latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy frontend to Cloud Run
         run: |
           BACKEND_URL=$(gcloud run services describe cwlb-backend \
             --region "$GCP_REGION" \
             --format "value(status.url)")
           gcloud run deploy cwlb-frontend \
-            --image "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-frontend:$GITHUB_SHA" \
+            --image "${{ steps.image.outputs.tag }}" \
             --region "$GCP_REGION" \
             --platform managed \
             --port 3000 \
@@ -233,7 +289,7 @@ jobs:
   # Three-phase fan-out pipeline: init → bootstrap (54 tasks) → finalize.
   seed:
     name: Seed Database
-    needs: [deploy-backend, check-seed]
+    needs: [check-changes, deploy-backend, check-seed]
     if: needs.check-seed.outputs.seed_needed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -250,11 +306,20 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v3
 
+      - name: Resolve backend image tag
+        id: image
+        run: |
+          BASE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend"
+          if [ "${{ needs.check-changes.outputs.backend_changed }}" = "true" ]; then
+            echo "tag=$BASE:$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$BASE:latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Phase 1 — Init (wipe DB + migrate)
         run: |
-          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
           gcloud run jobs deploy cwlb-seed-init \
-            --image "$IMAGE" \
+            --image "${{ steps.image.outputs.tag }}" \
             --region "$GCP_REGION" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
@@ -272,9 +337,8 @@ jobs:
 
       - name: Phase 2 — Bootstrap fan-out (54 tasks, 20 parallel)
         run: |
-          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
           gcloud run jobs deploy cwlb-seed-bootstrap \
-            --image "$IMAGE" \
+            --image "${{ steps.image.outputs.tag }}" \
             --region "$GCP_REGION" \
             --tasks 54 \
             --parallelism 16 \
@@ -294,9 +358,8 @@ jobs:
 
       - name: Phase 3 — Finalize (mark INGESTED + govinfo + law history + advance)
         run: |
-          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$AR_REPO/cwlb-backend:$GITHUB_SHA"
           gcloud run jobs deploy cwlb-seed-finalize \
-            --image "$IMAGE" \
+            --image "${{ steps.image.outputs.tag }}" \
             --region "$GCP_REGION" \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest,GOVINFO_API_KEY=GOVINFO_API_KEY:latest,CONGRESS_API_KEY=CONGRESS_API_KEY:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
