@@ -115,10 +115,13 @@ async def _fetch_statement_text(
         return None
 
     raw = pre.get_text("\n")
-    # Strip the GPO header lines (everything before the first blank line after the date)
     lines = raw.splitlines()
-    # Drop lines that are bracketed metadata headers
-    body_lines = [line for line in lines if not re.match(r"^\s*\[.*\]\s*$", line)]
+    # Drop bracketed GPO metadata headers and strip leading whitespace per line.
+    # GovInfo right-aligns the president's signature with spaces; stripping gives
+    # consistent left-aligned text for display.
+    body_lines = [
+        line.lstrip() for line in lines if not re.match(r"^\s*\[.*\]\s*$", line)
+    ]
     # Collapse runs of blank lines
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(body_lines)).strip()
     return text or None
