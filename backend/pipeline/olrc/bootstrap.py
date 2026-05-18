@@ -644,7 +644,10 @@ class BootstrapService:
         return revision.revision_id
 
     async def finalize_latest_ingesting(self) -> tuple[str, int]:
-        """Find and finalize the most recent INGESTING bootstrap revision.
+        """Find and finalize the most recent bootstrap revision in INGESTING status.
+
+        Idempotent: if the most recent ground-truth revision is already INGESTED
+        (e.g. a retry after a mid-script failure), returns it without error.
 
         Used when the release point identifier is not known at finalize time
         (e.g. when called from seed_finalize.sh without an explicit RP arg).
@@ -653,8 +656,10 @@ class BootstrapService:
             (rp_identifier, revision_id) of the finalized revision.
 
         Raises:
-            ValueError: If no INGESTING bootstrap revision is found.
+            ValueError: If no INGESTING or INGESTED bootstrap revision is found.
         """
+        from sqlalchemy import or_
+
         stmt = (
             select(CodeRevision, OLRCReleasePoint)
             .join(
@@ -662,7 +667,10 @@ class BootstrapService:
                 CodeRevision.release_point_id == OLRCReleasePoint.release_point_id,
             )
             .where(
-                CodeRevision.status == RevisionStatus.INGESTING.value,
+                or_(
+                    CodeRevision.status == RevisionStatus.INGESTING.value,
+                    CodeRevision.status == RevisionStatus.INGESTED.value,
+                ),
                 CodeRevision.is_ground_truth.is_(True),
             )
             .order_by(CodeRevision.revision_id.desc())
@@ -673,11 +681,19 @@ class BootstrapService:
 
         if row is None:
             raise ValueError(
-                "No INGESTING bootstrap revision found. "
+                "No bootstrap revision found in INGESTING or INGESTED status. "
                 "Ensure bootstrap fan-out tasks completed before finalizing."
             )
 
         revision, rp = row
+
+        if revision.status == RevisionStatus.INGESTED.value:
+            logger.info(
+                f"Revision {revision.revision_id} for {rp.full_identifier} "
+                "already INGESTED (idempotent retry)"
+            )
+            return rp.full_identifier, revision.revision_id
+
         revision.status = RevisionStatus.INGESTED.value
         await self.session.commit()
         logger.info(

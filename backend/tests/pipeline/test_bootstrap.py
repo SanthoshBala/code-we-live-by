@@ -937,6 +937,39 @@ class TestFinalizeLatestIngesting:
         session.commit.assert_called()
 
     @pytest.mark.asyncio
+    async def test_idempotent_when_already_ingested(self) -> None:
+        """Returns without error when revision is already INGESTED (retry case)."""
+        from app.models.release_point import OLRCReleasePoint
+        from app.models.revision import CodeRevision
+
+        session = _make_mock_session()
+        downloader = _make_mock_downloader()
+
+        mock_rp = MagicMock(spec=OLRCReleasePoint)
+        mock_rp.full_identifier = "113-21"
+        mock_rp.release_point_id = 1
+
+        mock_rev = MagicMock(spec=CodeRevision)
+        mock_rev.revision_id = 7
+        mock_rev.status = RevisionStatus.INGESTED.value
+        mock_rev.is_ground_truth = True
+
+        mock_row = MagicMock()
+        mock_row.__iter__ = MagicMock(return_value=iter([mock_rev, mock_rp]))
+
+        mock_result = MagicMock()
+        mock_result.one_or_none.return_value = mock_row
+        session.execute = AsyncMock(return_value=mock_result)
+
+        service = BootstrapService(session, downloader)
+        rp_id, rev_id = await service.finalize_latest_ingesting()
+
+        assert rp_id == "113-21"
+        assert rev_id == 7
+        # Status unchanged, no commit needed
+        session.commit.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_raises_when_none_found(self) -> None:
         """ValueError raised if no INGESTING revision exists."""
         session = _make_mock_session()
@@ -947,5 +980,5 @@ class TestFinalizeLatestIngesting:
         session.execute = AsyncMock(return_value=mock_result)
 
         service = BootstrapService(session, downloader)
-        with pytest.raises(ValueError, match="No INGESTING bootstrap revision"):
+        with pytest.raises(ValueError, match="No bootstrap revision found"):
             await service.finalize_latest_ingesting()
