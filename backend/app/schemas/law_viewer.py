@@ -4,6 +4,8 @@ These schemas support the /api/v1/laws endpoints used to browse
 and inspect parsed law text and amendments.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -114,6 +116,13 @@ class SectionDiffSchema(BaseModel):
         default_factory=list,
         description="Full section lines for frontend expansion",
     )
+
+
+class LawDiffsResponse(BaseModel):
+    """Response envelope for the diffs endpoint, including parse status."""
+
+    parse_status: Literal["success", "no_amendments_found", "no_text"]
+    diffs: list[SectionDiffSchema]
 
 
 class StandaloneProvisionSchema(BaseModel):

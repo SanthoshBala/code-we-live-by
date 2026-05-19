@@ -17,10 +17,10 @@ from app.crud.public_law import (
 from app.models.base import get_async_session
 from app.schemas.law_history import LegislativeHistorySchema
 from app.schemas.law_viewer import (
+    LawDiffsResponse,
     LawSummarySchema,
     LawTextSchema,
     ParsedAmendmentSchema,
-    SectionDiffSchema,
     StandaloneProvisionSchema,
 )
 
@@ -87,7 +87,7 @@ async def read_law_diffs(
     congress: int,
     law_number: int,
     session: AsyncSession = Depends(get_async_session),
-) -> list[SectionDiffSchema]:
+) -> LawDiffsResponse:
     """Compute per-section unified diffs for a law's amendments."""
     return await compute_law_diffs(session, congress, law_number)
 

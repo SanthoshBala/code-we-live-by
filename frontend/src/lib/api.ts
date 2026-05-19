@@ -6,7 +6,7 @@ import type {
   LawText,
   LegislativeHistory,
   ParsedAmendment,
-  SectionDiff,
+  LawDiffsResponse,
   StandaloneProvision,
   HeadRevision,
 } from './types';
@@ -158,7 +158,7 @@ export async function fetchLawAmendments(
 export async function fetchLawDiffs(
   congress: number,
   lawNumber: string
-): Promise<SectionDiff[]> {
+): Promise<LawDiffsResponse> {
   const res = await fetch(
     `${API_BASE}/laws/${congress}/${encodeURIComponent(lawNumber)}/diffs`
   );

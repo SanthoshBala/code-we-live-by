@@ -272,6 +272,13 @@ export interface SectionDiff {
   all_provisions: DiffLine[];
 }
 
+export type ParseStatus = 'success' | 'no_amendments_found' | 'no_text';
+
+export interface LawDiffsResponse {
+  parse_status: ParseStatus;
+  diffs: SectionDiff[];
+}
+
 // --- Legislative history types ---
 
 export type HistoryEventType =
