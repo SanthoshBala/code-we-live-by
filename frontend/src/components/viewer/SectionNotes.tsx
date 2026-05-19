@@ -1,4 +1,4 @@
-import type { SectionNote } from '@/lib/types';
+import type { SectionNote, NoteReference } from '@/lib/types';
 import {
   buildCrossRefLookup,
   slugify,
@@ -13,6 +13,7 @@ interface SectionNotesProps {
   categoryLabel: string;
   allNotes?: SectionNote[];
   basePath?: string;
+  references?: NoteReference[];
 }
 
 /** Count lines a note will render. */
@@ -29,6 +30,7 @@ export default function SectionNotes({
   categoryLabel,
   allNotes,
   basePath,
+  references = [],
 }: SectionNotesProps) {
   if (notes.length === 0) return null;
 
@@ -79,6 +81,7 @@ export default function SectionNotes({
               lineNumberOffset={contentOffset}
               crossRefs={crossRefs}
               basePath={basePath}
+              externalRefs={references}
             />
           </div>
         );

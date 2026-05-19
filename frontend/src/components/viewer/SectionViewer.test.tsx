@@ -71,6 +71,7 @@ const baseSectionData: SectionView = {
       },
     ],
     notes: [],
+    references: [],
     has_notes: false,
     has_citations: true,
     has_amendments: true,

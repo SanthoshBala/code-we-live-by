@@ -62,6 +62,8 @@ export default function NotesViewer({
 
   const basePath = `/sections/${titleNumber}/${encodeURIComponent(sectionNumber)}`;
 
+  const references = data.notes?.references ?? [];
+
   return (
     <SectionNotes
       notes={filtered}
@@ -70,6 +72,7 @@ export default function NotesViewer({
       categoryLabel={categoryLabel}
       allNotes={allNotes}
       basePath={basePath}
+      references={references}
     />
   );
 }

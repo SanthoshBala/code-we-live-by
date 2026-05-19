@@ -20,6 +20,7 @@ const sectionData: SectionView = {
     citations: [],
     amendments: [],
     short_titles: [],
+    references: [],
     notes: [
       {
         header: 'References in Text',
@@ -225,6 +226,61 @@ describe('NotesViewer', () => {
       'href',
       '/sections/50/541/STATUTORY_NOTES#effective-and-termination-date'
     );
+  });
+
+  it('linkifies external law references from notes.references', async () => {
+    const extRefData: SectionView = {
+      ...sectionData,
+      notes: {
+        ...sectionData.notes!,
+        references: [
+          {
+            ref_type: 'public_law',
+            href: '/us/pl/107/273',
+            display_text: 'Pub. L. 107–273',
+            congress: 107,
+            law_number: 273,
+            target_id: 'PL 107-273',
+            resolvable: true,
+          },
+        ],
+        notes: [
+          {
+            header: 'Amendments',
+            content: '',
+            lines: [
+              {
+                line_number: 1,
+                content: '2002—Subsec. (a). Pub. L. 107–273 amended heading.',
+                indent_level: 0,
+                marker: null,
+                is_header: false,
+              },
+            ],
+            category: 'historical',
+          },
+        ],
+      },
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(extRefData), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    render(
+      <NotesViewer
+        titleNumber={17}
+        sectionNumber="106"
+        file="HISTORICAL_NOTES"
+      />,
+      { wrapper }
+    );
+    await waitFor(() => {
+      expect(screen.getByText('Amendments')).toBeInTheDocument();
+    });
+    const link = screen.getByRole('link', { name: 'Pub. L. 107–273' });
+    expect(link).toHaveAttribute('href', '/laws/107/273');
   });
 
   it('shows error state on fetch failure', async () => {

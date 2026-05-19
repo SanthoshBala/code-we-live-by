@@ -1,46 +1,68 @@
 import Link from 'next/link';
-import type { SectionNote, CodeLine } from '@/lib/types';
+import type { ReactNode } from 'react';
+import type { SectionNote, CodeLine, NoteReference } from '@/lib/types';
 import { findNoteLinks, type CrossRefLookup } from '@/lib/noteUtils';
+import { linkifyContent } from '@/lib/linkifyContent';
 
 interface NoteBlockProps {
   note: SectionNote;
   lineNumberOffset?: number;
   crossRefs?: CrossRefLookup;
   basePath?: string;
+  externalRefs?: NoteReference[];
 }
 
+const identity = (href: string) => href;
+
 /**
- * Render line content, hyperlinking any cross-references to other note files.
- * Returns a plain string when there are no cross-refs to avoid unnecessary JSX.
+ * Render line content, linking both cross-note refs and external law/section refs.
+ *
+ * Cross-note links (e.g. "Effective Date note below") take priority. External
+ * refs (Public Laws, USC sections) are applied to the text gaps between them.
  */
 function renderContent(
   content: string,
   note: SectionNote,
   crossRefs: CrossRefLookup | undefined,
-  basePath: string | undefined
-) {
-  if (!crossRefs || !basePath || crossRefs.size === 0) return content;
+  basePath: string | undefined,
+  externalRefs: NoteReference[]
+): ReactNode {
+  const noteSegs =
+    crossRefs && basePath && crossRefs.size > 0
+      ? findNoteLinks(content, crossRefs, note.category, basePath)
+      : [];
 
-  const segments = findNoteLinks(content, crossRefs, note.category, basePath);
-  if (segments.length === 0) return content;
+  const applyExternal = (text: string): ReactNode =>
+    externalRefs.length > 0
+      ? linkifyContent(text, externalRefs, identity)
+      : text;
 
-  const nodes: any[] = [];
-  let pos = 0;
-  for (const seg of segments) {
-    if (seg.start > pos) nodes.push(content.slice(pos, seg.start));
-    nodes.push(
-      <Link
-        key={seg.start}
-        href={seg.url}
-        className="text-blue-600 hover:underline"
-      >
+  if (noteSegs.length === 0) return applyExternal(content);
+
+  const linkClass = 'text-blue-600 hover:underline';
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const seg of noteSegs) {
+    if (seg.start > cursor) {
+      parts.push(
+        <span key={`t-${cursor}`}>
+          {applyExternal(content.slice(cursor, seg.start))}
+        </span>
+      );
+    }
+    parts.push(
+      <Link key={`n-${seg.start}`} href={seg.url} className={linkClass}>
         {seg.text}
       </Link>
     );
-    pos = seg.end;
+    cursor = seg.end;
   }
-  if (pos < content.length) nodes.push(content.slice(pos));
-  return <>{nodes}</>;
+  if (cursor < content.length) {
+    parts.push(
+      <span key={`t-${cursor}`}>{applyExternal(content.slice(cursor))}</span>
+    );
+  }
+  return <>{parts}</>;
 }
 
 /** Renders a single line with line number and optional indent. */
@@ -50,12 +72,14 @@ function NoteLine({
   note,
   crossRefs,
   basePath,
+  externalRefs = [],
 }: {
   lineNumber: number;
   line: CodeLine;
   note: SectionNote;
   crossRefs?: CrossRefLookup;
   basePath?: string;
+  externalRefs?: NoteReference[];
 }) {
   const indent = line.indent_level > 0 ? '\t'.repeat(line.indent_level) : '';
   const isListItem = line.marker !== null;
@@ -73,10 +97,16 @@ function NoteLine({
       >
         {line.is_header ? (
           <span className="font-semibold">
-            {renderContent(line.content, note, crossRefs, basePath)}
+            {renderContent(
+              line.content,
+              note,
+              crossRefs,
+              basePath,
+              externalRefs
+            )}
           </span>
         ) : (
-          renderContent(line.content, note, crossRefs, basePath)
+          renderContent(line.content, note, crossRefs, basePath, externalRefs)
         )}
       </span>
     </div>
@@ -89,6 +119,7 @@ export default function NoteBlock({
   lineNumberOffset = 1,
   crossRefs,
   basePath,
+  externalRefs = [],
 }: NoteBlockProps) {
   if (note.lines.length > 0) {
     return (
@@ -101,6 +132,7 @@ export default function NoteBlock({
             note={note}
             crossRefs={crossRefs}
             basePath={basePath}
+            externalRefs={externalRefs}
           />
         ))}
       </div>
@@ -125,6 +157,7 @@ export default function NoteBlock({
           note={note}
           crossRefs={crossRefs}
           basePath={basePath}
+          externalRefs={externalRefs}
         />
       ))}
     </div>

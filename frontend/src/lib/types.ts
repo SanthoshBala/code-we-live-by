@@ -162,6 +162,7 @@ export interface SectionNotes {
     public_law: string | null;
   }[];
   notes: SectionNote[];
+  references: NoteReference[];
   has_notes: boolean;
   has_citations: boolean;
   has_amendments: boolean;
