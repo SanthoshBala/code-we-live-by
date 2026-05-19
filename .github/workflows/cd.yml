@@ -344,7 +344,7 @@ jobs:
             --parallelism 16 \
             --set-secrets "DATABASE_URL=DATABASE_URL:latest,GCS_CACHE_BUCKET=GCS_CACHE_BUCKET:latest" \
             --set-cloudsql-instances "$CLOUD_SQL_INSTANCE" \
-            --memory 2Gi \
+            --memory 4Gi \
             --cpu 1 \
             --task-timeout 30m \
             --max-retries 3 \
