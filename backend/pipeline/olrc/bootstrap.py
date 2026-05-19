@@ -123,12 +123,15 @@ def _build_snapshot_rows(
 
         notes_json = None
         if normalized.section_notes is not None:
-            # Exclude raw_notes: it duplicates the `notes` TEXT column already
-            # stored separately, and including it roughly doubles JSONB size for
-            # heavily-amended sections (Title 42, Title 22) causing OOM and slow
-            # COPY during the fan-out bootstrap.
+            # Exclude redundant raw-form fields to keep normalized_notes JSONB small.
+            # - raw_notes: duplicates the `notes` TEXT column (already stored separately)
+            # - notes[*].content: duplicates notes[*].lines — same text, less structure;
+            #   NoteBlock renders from lines and falls back to content only when lines
+            #   is empty (which doesn't happen after full normalization)
+            # See issue #292 for the planned model-level cleanup.
             notes_json = normalized.section_notes.model_dump(
-                mode="json", exclude={"raw_notes"}
+                mode="json",
+                exclude={"raw_notes": True, "notes": {"__all__": {"content"}}},
             )
 
         rows.append(
