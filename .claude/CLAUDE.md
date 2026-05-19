@@ -17,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **GitHub issue labels**: When creating GitHub issues, apply the `bug` label for bugfix issues and the `enhancement` label for feature issues (e.g., `gh issue create --label bug ...` or `gh issue create --label enhancement ...`).
 - **PR-to-issue linking**: Every PR body must include `Closes #N` or `Fixes #N` so the motivating issue auto-closes on merge.
 - **PR screenshots**: After creating a PR that includes frontend/UI changes, post screenshots of the affected pages. Run `bash scripts/post_pr_screenshots.sh <PR_NUMBER> /path1 /path2 ...` with the dev server running on port 3000. Pass every page path that shows the new or changed UI.
+- **PR parsing proof**: After creating a PR that includes parsing or rendering changes, include a before/after block in the PR body or a follow-up comment showing the parsed output for the representative example that triggered the fix. Use plain text or a code block — no special tooling required, just run the parser on the example in both states.
 
 ## Project Overview
 
