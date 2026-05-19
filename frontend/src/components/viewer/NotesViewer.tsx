@@ -1,6 +1,7 @@
 'use client';
 
 import { useSection } from '@/hooks/useSection';
+import { useRevision } from '@/hooks/useRevision';
 import type { SectionNote } from '@/lib/types';
 import SectionNotes from './SectionNotes';
 
@@ -30,6 +31,7 @@ export default function NotesViewer({
   file,
   revision,
 }: NotesViewerProps) {
+  const { withRev } = useRevision();
   const { data, isLoading, error } = useSection(
     titleNumber,
     sectionNumber,
@@ -70,6 +72,7 @@ export default function NotesViewer({
       categoryLabel={categoryLabel}
       allNotes={allNotes}
       basePath={basePath}
+      withRev={withRev}
     />
   );
 }

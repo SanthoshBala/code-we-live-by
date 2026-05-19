@@ -1,7 +1,17 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import SectionNotes from './SectionNotes';
-import type { SectionNote } from '@/lib/types';
+import type { SectionNote, NoteReference } from '@/lib/types';
+
+vi.mock('next/link', () => ({
+  default: ({
+    children,
+    href,
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => <a href={href}>{children}</a>,
+}));
 
 const notes: SectionNote[] = [
   {
@@ -103,6 +113,47 @@ describe('SectionNotes', () => {
   it('renders in a code-style block', () => {
     const { container } = render(<SectionNotes {...defaultProps} />);
     expect(container.querySelector('.bg-gray-100')).toBeInTheDocument();
+  });
+
+  it('renders note.references as clickable links', () => {
+    const ref: NoteReference = {
+      ref_type: 'usc_section',
+      href: '',
+      display_text: 'section 106 of title 17',
+      congress: null,
+      law_number: null,
+      usc_title: 17,
+      usc_section: '106',
+      target_id: '17 USC 106',
+      resolvable: true,
+    };
+    const noteWithRefs: SectionNote[] = [
+      {
+        header: 'References in Text',
+        content: '',
+        lines: [
+          {
+            line_number: 1,
+            content: 'See section 106 of title 17 for details.',
+            indent_level: 0,
+            marker: null,
+            is_header: false,
+          },
+        ],
+        category: 'editorial',
+        references: [ref],
+      },
+    ];
+    render(
+      <SectionNotes
+        notes={noteWithRefs}
+        fullCitation="17 U.S.C. § 602"
+        heading="Infringing importation or exportation"
+        categoryLabel="Editorial Notes"
+      />
+    );
+    const link = screen.getByRole('link', { name: 'section 106 of title 17' });
+    expect(link).toHaveAttribute('href', '/sections/17/106');
   });
 
   it('does not use dropdown details/summary elements', () => {

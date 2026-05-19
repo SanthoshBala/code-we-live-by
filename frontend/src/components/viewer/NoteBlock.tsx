@@ -1,33 +1,52 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import type { SectionNote, CodeLine } from '@/lib/types';
 import { findNoteLinks, type CrossRefLookup } from '@/lib/noteUtils';
+import { linkifyContent } from '@/lib/linkifyContent';
 
 interface NoteBlockProps {
   note: SectionNote;
   lineNumberOffset?: number;
   crossRefs?: CrossRefLookup;
   basePath?: string;
+  withRev?: (href: string) => string;
 }
 
 /**
- * Render line content, hyperlinking any cross-references to other note files.
- * Returns a plain string when there are no cross-refs to avoid unnecessary JSX.
+ * Render line content with two layers of hyperlinking:
+ * 1. USC/law references from note.references (via linkifyContent)
+ * 2. Cross-references to other note categories (via findNoteLinks)
  */
 function renderContent(
   content: string,
   note: SectionNote,
   crossRefs: CrossRefLookup | undefined,
-  basePath: string | undefined
-) {
-  if (!crossRefs || !basePath || crossRefs.size === 0) return content;
+  basePath: string | undefined,
+  withRev: (href: string) => string = (h) => h
+): ReactNode {
+  const refs = note.references ?? [];
+  const hasCrossRefs = crossRefs && basePath && crossRefs.size > 0;
+
+  if (!hasCrossRefs && refs.length === 0) return content;
+
+  if (!hasCrossRefs) {
+    return linkifyContent(content, refs, withRev);
+  }
 
   const segments = findNoteLinks(content, crossRefs, note.category, basePath);
-  if (segments.length === 0) return content;
+  if (segments.length === 0) {
+    return refs.length > 0 ? linkifyContent(content, refs, withRev) : content;
+  }
 
-  const nodes: any[] = [];
+  const nodes: ReactNode[] = [];
   let pos = 0;
   for (const seg of segments) {
-    if (seg.start > pos) nodes.push(content.slice(pos, seg.start));
+    if (seg.start > pos) {
+      const plain = content.slice(pos, seg.start);
+      nodes.push(
+        refs.length > 0 ? linkifyContent(plain, refs, withRev) : plain
+      );
+    }
     nodes.push(
       <Link
         key={seg.start}
@@ -39,7 +58,10 @@ function renderContent(
     );
     pos = seg.end;
   }
-  if (pos < content.length) nodes.push(content.slice(pos));
+  if (pos < content.length) {
+    const plain = content.slice(pos);
+    nodes.push(refs.length > 0 ? linkifyContent(plain, refs, withRev) : plain);
+  }
   return <>{nodes}</>;
 }
 
@@ -50,12 +72,14 @@ function NoteLine({
   note,
   crossRefs,
   basePath,
+  withRev,
 }: {
   lineNumber: number;
   line: CodeLine;
   note: SectionNote;
   crossRefs?: CrossRefLookup;
   basePath?: string;
+  withRev?: (href: string) => string;
 }) {
   const indent = line.indent_level > 0 ? '\t'.repeat(line.indent_level) : '';
   const isListItem = line.marker !== null;
@@ -73,10 +97,10 @@ function NoteLine({
       >
         {line.is_header ? (
           <span className="font-semibold">
-            {renderContent(line.content, note, crossRefs, basePath)}
+            {renderContent(line.content, note, crossRefs, basePath, withRev)}
           </span>
         ) : (
-          renderContent(line.content, note, crossRefs, basePath)
+          renderContent(line.content, note, crossRefs, basePath, withRev)
         )}
       </span>
     </div>
@@ -89,6 +113,7 @@ export default function NoteBlock({
   lineNumberOffset = 1,
   crossRefs,
   basePath,
+  withRev,
 }: NoteBlockProps) {
   if (note.lines.length > 0) {
     return (
@@ -101,6 +126,7 @@ export default function NoteBlock({
             note={note}
             crossRefs={crossRefs}
             basePath={basePath}
+            withRev={withRev}
           />
         ))}
       </div>
@@ -125,6 +151,7 @@ export default function NoteBlock({
           note={note}
           crossRefs={crossRefs}
           basePath={basePath}
+          withRev={withRev}
         />
       ))}
     </div>
