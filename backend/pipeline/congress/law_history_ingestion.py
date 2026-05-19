@@ -268,11 +268,9 @@ class LawHistoryIngestionService:
         if data is None:
             return None
 
-        congress_data = data.get("congress", {})
-        bills = congress_data.get("bills", [])
-        if not bills:
-            return None
-        bill_ref = bills[0]
+        # Congress.gov /law/{congress}/{type}/{number} returns:
+        # {"law": {"bill": {"type": "HR", "number": "667", ...}}}
+        bill_ref = data.get("law", {}).get("bill", {})
         b_type = (bill_ref.get("type") or "").lower()
         b_number = bill_ref.get("number")
         if not b_type or not b_number:

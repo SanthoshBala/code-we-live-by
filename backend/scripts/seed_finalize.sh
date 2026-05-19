@@ -11,10 +11,9 @@ echo "=== Ingesting Congress 113 laws ==="
 uv run python -m pipeline.cli govinfo-ingest-congress 113
 
 echo "=== Seeding legislative history for Congress 113 ==="
-# Non-fatal: Congress.gov API issues (#256) should not block the rest of the
-# seed pipeline. chrono-advance and the app itself work without law history.
+# Non-fatal: individual law failures should not block chrono-advance.
 uv run python -m pipeline.cli seed-congress-law-history 113 || \
-    echo "WARNING: seed-congress-law-history failed (see issue #256), continuing"
+    echo "WARNING: seed-congress-law-history failed, continuing"
 
 echo "=== Advancing chronological pipeline (2 revisions) ==="
 uv run python -m pipeline.cli chrono-advance --count 2
