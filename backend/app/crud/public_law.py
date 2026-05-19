@@ -896,18 +896,27 @@ def _build_hunks(
     return hunks
 
 
-def _notes_to_provisions(normalized_notes: Any) -> list[dict[str, Any]]:
+def _notes_to_provisions(
+    normalized_notes: Any,
+    raw_notes_text: str | None = None,
+) -> list[dict[str, Any]]:
     """Flatten normalized_notes into provision-like dicts for text diffing.
 
     Used when an amendment targets a section note (``section_ref.is_note``).
     Strips intermediate XML serialization markers then splits raw_notes by
     line, yielding one provision dict per non-empty line.
+
+    ``raw_notes_text`` is the fallback when ``raw_notes`` has been excluded
+    from the JSONB (bootstrap excludes it to cut JSONB size; the `notes`
+    TEXT column on SectionSnapshot always has the value).
     """
     from pipeline.olrc.normalized_section import _strip_note_markers
 
-    if not isinstance(normalized_notes, dict):
-        return []
-    raw = normalized_notes.get("raw_notes", "") or ""
+    raw = ""
+    if isinstance(normalized_notes, dict):
+        raw = normalized_notes.get("raw_notes", "") or ""
+    if not raw:
+        raw = raw_notes_text or ""
     if not raw:
         return []
     clean = _strip_note_markers(raw)
@@ -1028,7 +1037,10 @@ async def compute_law_diffs(
         # Handle note-targeting text amendments (e.g. "38 U.S.C. 5101 note")
         if note_text_amendments:
             raw_notes_dict = state.normalized_notes if state else None
-            note_before = _notes_to_provisions(raw_notes_dict)
+            note_before = _notes_to_provisions(
+                raw_notes_dict,
+                raw_notes_text=state.notes if state else None,
+            )
             if note_before:
                 note_after = _apply_amendments_to_provisions(
                     note_before, note_text_amendments

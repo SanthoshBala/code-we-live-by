@@ -123,7 +123,13 @@ def _build_snapshot_rows(
 
         notes_json = None
         if normalized.section_notes is not None:
-            notes_json = normalized.section_notes.model_dump(mode="json")
+            # Exclude raw_notes: it duplicates the `notes` TEXT column already
+            # stored separately, and including it roughly doubles JSONB size for
+            # heavily-amended sections (Title 42, Title 22) causing OOM and slow
+            # COPY during the fan-out bootstrap.
+            notes_json = normalized.section_notes.model_dump(
+                mode="json", exclude={"raw_notes"}
+            )
 
         rows.append(
             _SectionRow(
