@@ -79,7 +79,7 @@ export default function LawViewerPage() {
   );
 
   // Diffs fetched when the amendments tab is active (default)
-  const { data: diffs, isLoading: diffsLoading } = useLawDiffs(
+  const { data: diffsResponse, isLoading: diffsLoading } = useLawDiffs(
     congress,
     lawNumber,
     activeTab === 'diff'
@@ -158,7 +158,8 @@ export default function LawViewerPage() {
           <LawDiffViewer
             congress={congress}
             lawNumber={lawNumber}
-            diffs={diffs ?? []}
+            diffs={diffsResponse?.diffs ?? []}
+            parseStatus={diffsResponse?.parse_status}
             isLoading={diffsLoading}
           />
         )}

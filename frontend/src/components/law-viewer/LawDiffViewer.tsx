@@ -6,6 +6,7 @@ import type {
   SectionDiff,
   SectionGroupTree,
   TitleStructure,
+  ParseStatus,
 } from '@/lib/types';
 import { useTitleStructure } from '@/hooks/useTitleStructure';
 import { useLawStandaloneProvisions } from '@/hooks/useLaw';
@@ -17,6 +18,7 @@ interface LawDiffViewerProps {
   congress: number;
   lawNumber: string;
   diffs: SectionDiff[];
+  parseStatus?: ParseStatus;
   isLoading: boolean;
 }
 
@@ -125,6 +127,7 @@ export default function LawDiffViewer({
   congress,
   lawNumber,
   diffs,
+  parseStatus,
   isLoading,
 }: LawDiffViewerProps) {
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -176,6 +179,31 @@ export default function LawDiffViewer({
   }
 
   if (diffs.length === 0) {
+    if (parseStatus === 'no_text') {
+      return (
+        <div className="py-10 text-center">
+          <p className="text-sm font-medium text-amber-600">
+            Law text not yet available in the pipeline.
+          </p>
+          <p className="mt-1 text-xs text-gray-400">
+            The source text for this law has not been ingested. Check back
+            later.
+          </p>
+        </div>
+      );
+    }
+    if (parseStatus === 'no_amendments_found' || parseStatus === 'success') {
+      return (
+        <div className="py-10 text-center">
+          <p className="text-sm font-medium text-gray-600">
+            This law does not appear to make direct amendments to the US Code.
+          </p>
+          <p className="mt-1 text-xs text-gray-400">
+            It may be a standalone provision, appropriation, or temporary rule.
+          </p>
+        </div>
+      );
+    }
     return (
       <p className="py-8 text-center text-sm text-gray-500">
         No amendments parsed from this law.

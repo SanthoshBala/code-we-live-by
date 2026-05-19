@@ -30,6 +30,7 @@ from app.schemas.law_history import (
 from app.schemas.law_viewer import (
     DiffHunkSchema,
     DiffLineSchema,
+    LawDiffsResponse,
     LawSummarySchema,
     LawTextSchema,
     ParsedAmendmentSchema,
@@ -945,7 +946,7 @@ def _notes_to_provisions(
 
 async def compute_law_diffs(
     session: AsyncSession, congress: int, law_number: int
-) -> list[SectionDiffSchema]:
+) -> LawDiffsResponse:
     """Compute per-section unified diffs for a law's amendments.
 
     Groups amendments by (title, section), fetches before provisions,
@@ -953,15 +954,23 @@ async def compute_law_diffs(
     """
     from pipeline.olrc.snapshot_service import SnapshotService
 
+    # Check law text existence first so we can distinguish "no text" from
+    # "text present but no codified amendments found".
+    law_text = await get_law_text(
+        session, congress, law_number, include_htm=False, include_xml=False
+    )
+    if not law_text:
+        return LawDiffsResponse(parse_status="no_text", diffs=[])
+
     # Parse amendments (reuses existing logic)
     schemas = await parse_law_amendments(session, congress, law_number)
     if not schemas:
-        return []
+        return LawDiffsResponse(parse_status="no_amendments_found", diffs=[])
 
     # Get parent revision for "before" state
     revision_id = await _get_parent_revision_id(session, congress, law_number)
     if revision_id is None:
-        return []
+        return LawDiffsResponse(parse_status="no_amendments_found", diffs=[])
 
     # Group amendments by (title, section)
     groups: dict[tuple[int, str], list[ParsedAmendmentSchema]] = {}
@@ -1081,7 +1090,7 @@ async def compute_law_diffs(
                 )
             )
 
-    return diffs
+    return LawDiffsResponse(parse_status="success", diffs=diffs)
 
 
 def _build_note_hunks(
