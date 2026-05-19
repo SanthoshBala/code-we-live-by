@@ -1393,6 +1393,93 @@ class TestParserNotesContent:
         assert "[QC:1]" in content
         assert "[QC:2]" in content
 
+    def test_section_with_chapeau_and_continuation(self) -> None:
+        """quotedContent with anonymous section: chapeau + paragraphs + continuation."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes>
+            <quotedContent>
+                <section class="inline">
+                    <num value=""/>
+                    <chapeau>"Notwithstanding any provision&#8212;</chapeau>
+                    <paragraph>
+                        <num value="1">"(1)"</num>
+                        <content>imposes any tax, or</content>
+                    </paragraph>
+                    <paragraph>
+                        <num value="2">"(2)"</num>
+                        <content>establishes any trust fund,</content>
+                    </paragraph>
+                    <continuation>shall have no force or effect."</continuation>
+                </section>
+            </quotedContent>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Chapeau should be at level 1, paragraphs at level 2
+        assert "[QC:1]" in content
+        assert "[QC:2]" in content
+        assert "Notwithstanding" in content
+        assert '"(1)"' in content
+        assert "imposes any tax" in content
+        assert "shall have no force or effect" in content
+
+    def test_named_sections_in_quoted_content(self) -> None:
+        """quotedContent with named sections (section + subsection nesting)."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes>
+            <quotedContent>
+                <section>
+                    <num value="1">"SEC. 1."</num>
+                    <heading>SHORT TITLE.</heading>
+                    <content>This Act may be cited as the 'Test Act'.</content>
+                </section>
+                <section>
+                    <num value="2">"SEC. 2."</num>
+                    <heading>DEFINITIONS.</heading>
+                    <subsection>
+                        <num value="a">"(a)"</num>
+                        <content>For purposes of this Act&#8212;</content>
+                    </subsection>
+                </section>
+            </quotedContent>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Section headers at level 1, subsection at level 2
+        assert '"SEC. 1."' in content
+        assert "SHORT TITLE" in content
+        assert '"SEC. 2."' in content
+        assert "[QC:1]" in content
+        assert "[QC:2]" in content
+
+    def test_is_quoted_flag_set_on_qc_lines(self) -> None:
+        """Lines derived from quotedContent blocks have is_quoted=True."""
+        from pipeline.olrc.normalized_section import normalize_note_content
+
+        raw = 'Provided that:\n[QC:1]"(a)" First item.[/QC]\n[QC:1]"(b)" Second item.[/QC]'
+        lines = normalize_note_content(raw)
+
+        prose_lines = [ln for ln in lines if not ln.is_quoted]
+        quoted_lines = [ln for ln in lines if ln.is_quoted]
+
+        assert any("Provided" in ln.content for ln in prose_lines)
+        assert len(quoted_lines) == 2
+        assert all(ln.is_quoted for ln in quoted_lines)
+
     def test_smallcaps_heading_marked_with_nh(self) -> None:
         """Test that smallCaps headings are marked with [NH]...[/NH].
 

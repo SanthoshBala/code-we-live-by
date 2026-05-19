@@ -1208,76 +1208,105 @@ class USLMParser:
     def _format_quoted_content(self, elem: etree._Element) -> str:
         """Format quotedContent element with proper structure markers.
 
-        Parses the structured subsections, paragraphs, etc. within quoted content
-        and formats them with markers that the normalizer can use to create
-        properly indented lines.
+        Parses the structured sections, subsections, paragraphs, etc. within
+        quoted content and formats them with [QC:level] markers the normalizer
+        uses to create properly indented lines.
 
-        Markers: [QC:level:marker]content where level is indent depth (1-5).
+        Two patterns handled:
+        - Anonymous inline: <section class="inline"> with chapeau + paragraphs
+          + continuation (no section header emitted for empty <num>)
+        - Full named sections: <section> with real <num> and <heading>
+        - Subsection-only: <subsection> children at top level (legacy pattern)
         """
         parts = []
 
         def format_item(item_elem: etree._Element, level: int) -> None:
-            """Format a subsection/paragraph/clause/etc. element."""
-            # Get marker (num)
+            """Recursively format a structural element."""
             num_elem = item_elem.find("{*}num")
             if num_elem is None:
                 num_elem = item_elem.find("num")
             marker = self._get_text_content(num_elem) if num_elem is not None else ""
 
-            # Get heading
             heading_elem = item_elem.find("{*}heading")
             if heading_elem is None:
                 heading_elem = item_elem.find("heading")
-            heading = ""
-            if heading_elem is not None:
-                heading = self._get_text_content(heading_elem).strip()
+            heading = (
+                self._get_text_content(heading_elem).strip()
+                if heading_elem is not None
+                else ""
+            )
 
-            # Get content
-            content_elem = item_elem.find("{*}content")
-            if content_elem is None:
-                content_elem = item_elem.find("content")
             chapeau_elem = item_elem.find("{*}chapeau")
             if chapeau_elem is None:
                 chapeau_elem = item_elem.find("chapeau")
 
-            content = ""
-            if chapeau_elem is not None:
-                content = self._get_text_content(chapeau_elem).strip()
-            elif content_elem is not None:
-                content = self._get_text_content(content_elem).strip()
+            content_elem = item_elem.find("{*}content")
+            if content_elem is None:
+                content_elem = item_elem.find("content")
 
-            # Build the formatted line
-            line_parts = []
+            # Emit the header line: marker + heading + direct content (if no chapeau)
+            line_parts: list[str] = []
             if marker:
                 line_parts.append(marker)
             if heading:
                 line_parts.append(heading)
-            if content:
-                line_parts.append(content)
+            if chapeau_elem is None and content_elem is not None:
+                content_text = self._get_text_content(content_elem).strip()
+                if content_text:
+                    line_parts.append(content_text)
 
             if line_parts:
-                text = " ".join(line_parts)
-                parts.append(f"[QC:{level}]{text}[/QC]")
+                parts.append(f"[QC:{level}]{' '.join(line_parts)}[/QC]")
 
-            # Process nested children
-            child_tags = ["paragraph", "subparagraph", "clause", "subclause", "item"]
+            # Chapeau is the intro sentence before enumerated children
+            if chapeau_elem is not None:
+                chapeau_text = self._get_text_content(chapeau_elem).strip()
+                if chapeau_text:
+                    child_level = level + 1 if line_parts else level
+                    parts.append(f"[QC:{child_level}]{chapeau_text}[/QC]")
+
+            # Recurse into structural children (subsection added for section→subsection)
+            child_tags = [
+                "subsection",
+                "paragraph",
+                "subparagraph",
+                "clause",
+                "subclause",
+                "item",
+            ]
             for child_tag in child_tags:
                 for child in item_elem.findall(f"{{*}}{child_tag}"):
                     format_item(child, level + 1)
                 for child in item_elem.findall(child_tag):
                     format_item(child, level + 1)
 
-        # Process top-level subsections in quoted content
-        for subsection in elem.findall("{*}subsection"):
-            format_item(subsection, 1)
-        for subsection in elem.findall("subsection"):
-            format_item(subsection, 1)
+            # Continuation is the closing sentence after enumerated children
+            cont_elem = item_elem.find("{*}continuation")
+            if cont_elem is None:
+                cont_elem = item_elem.find("continuation")
+            if cont_elem is not None:
+                cont_text = self._get_text_content(cont_elem).strip()
+                if cont_text:
+                    child_level = level + 1 if line_parts else level
+                    parts.append(f"[QC:{child_level}]{cont_text}[/QC]")
 
-        # If no structured content, extract plain text (for inline quotedContent)
+        # Process top-level sections (both anonymous inline and named)
+        for section in elem.findall("{*}section"):
+            format_item(section, 1)
+        for section in elem.findall("section"):
+            format_item(section, 1)
+
+        # Process top-level subsections when no sections are present
+        if not parts:
+            for subsection in elem.findall("{*}subsection"):
+                format_item(subsection, 1)
+            for subsection in elem.findall("subsection"):
+                format_item(subsection, 1)
+
+        # Fallback: extract plain text for simple inline quotedContent
         if not parts:
             text = self._get_text_content(elem).strip()
             if text:
-                # Inline quoted content at level 1
                 parts.append(f"[QC:1]{text}[/QC]")
 
         return "\n".join(parts)
