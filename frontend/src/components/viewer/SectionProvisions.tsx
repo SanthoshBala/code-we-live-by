@@ -117,6 +117,11 @@ export default function SectionProvisions({
   const containerRef = useRef<HTMLDivElement>(null);
   const headerRefs = useRef(new Map<number, HTMLDivElement>());
   const [headerHeights, setHeaderHeights] = useState(new Map<number, number>());
+  const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+
+  // Derived from props; declared before any early returns so effects below can use them.
+  const docstring = [fullCitation, heading, 'Provisions'];
+  const blankLineNumber = docstring.length + 1;
 
   // Measure actual header heights so sub-headers stack below parents
   // regardless of text wrapping.
@@ -154,6 +159,40 @@ export default function SectionProvisions({
     return () => ro.disconnect();
   }, [measureHeaders]);
 
+  // Scroll to and highlight the line indicated by the URL hash on page load
+  // and on subsequent hash changes. Supports two formats:
+  //   #line-N   — jump to display line N
+  //   #(a)      — jump to the provision whose marker is "(a)"
+  useEffect(() => {
+    const scroll = () => {
+      const hash = window.location.hash;
+      if (!hash || !textContent) return;
+
+      const anchor = decodeURIComponent(hash.slice(1));
+      let targetDisplayNumber: number | null = null;
+
+      if (anchor.startsWith('line-')) {
+        const n = parseInt(anchor.slice(5), 10);
+        if (!isNaN(n)) targetDisplayNumber = n;
+      } else if (provisions) {
+        const match = provisions.find((line) => line.marker === anchor);
+        if (match) {
+          targetDisplayNumber = match.line_number + blankLineNumber;
+        }
+      }
+
+      if (targetDisplayNumber !== null) {
+        setHighlightedLine(targetDisplayNumber);
+        const el = document.getElementById(`line-${targetDisplayNumber}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
+    scroll();
+    window.addEventListener('hashchange', scroll);
+    return () => window.removeEventListener('hashchange', scroll);
+  }, [provisions, textContent, blankLineNumber]);
+
   if (!textContent) {
     return (
       <div className="rounded border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
@@ -162,8 +201,6 @@ export default function SectionProvisions({
     );
   }
 
-  const docstring = [fullCitation, heading, 'Provisions'];
-  const blankLineNumber = docstring.length + 1;
   const lines = textContent.split('\n');
 
   const parsedLines: ParsedLine[] = provisions
@@ -184,11 +221,19 @@ export default function SectionProvisions({
   const tree = buildSections(parsedLines);
 
   function renderLineContent(pl: ParsedLine) {
+    const displayNum = pl.lineIndex + 1 + blankLineNumber;
     return (
       <>
-        <span className="w-10 shrink-0 select-none text-right text-gray-400">
-          {pl.lineIndex + 1 + blankLineNumber}
-        </span>
+        <a
+          href={`#line-${displayNum}`}
+          onClick={(e) => {
+            e.preventDefault();
+            window.location.hash = `line-${displayNum}`;
+          }}
+          className="w-10 shrink-0 select-none text-right text-gray-400 hover:text-primary-500"
+        >
+          {displayNum}
+        </a>
         <span className="mx-2 select-none text-gray-400">│</span>
         {pl.indent && (
           <span className="shrink-0 whitespace-pre text-gray-800">
@@ -243,6 +288,10 @@ export default function SectionProvisions({
         : `${node.depth * 1.625}em`;
       const childTopPx = parentTopPx + measuredH;
 
+      const displayNum = pl.lineIndex + 1 + blankLineNumber;
+      const bgClass =
+        highlightedLine === displayNum ? 'bg-yellow-100' : 'bg-gray-100';
+
       return (
         <div key={`section-${pl.lineIndex}`}>
           <div
@@ -250,8 +299,9 @@ export default function SectionProvisions({
               if (el) headerRefs.current.set(pl.lineIndex, el);
               else headerRefs.current.delete(pl.lineIndex);
             }}
+            id={`line-${displayNum}`}
             data-sticky-header={pl.lineIndex}
-            className="relative sticky flex items-start bg-gray-100"
+            className={`relative sticky flex items-start ${bgClass}`}
             style={{
               top: topStyle,
               zIndex,
@@ -263,7 +313,7 @@ export default function SectionProvisions({
                 scrolling behind, without negative marginTop that clips
                 the preceding line's line numbers. */}
             <div
-              className="pointer-events-none absolute inset-x-0 bg-gray-100"
+              className={`pointer-events-none absolute inset-x-0 ${bgClass}`}
               style={{
                 top: node.depth === 0 ? -4 : -1,
                 height: node.depth === 0 ? 4 : 1,
@@ -275,8 +325,13 @@ export default function SectionProvisions({
         </div>
       );
     }
+    const displayNum = node.lineIndex + 1 + blankLineNumber;
     return (
-      <div key={node.lineIndex} className="flex items-start">
+      <div
+        key={node.lineIndex}
+        id={`line-${displayNum}`}
+        className={`flex items-start${highlightedLine === displayNum ? ' bg-yellow-100' : ''}`}
+      >
         {renderLineContent(node)}
       </div>
     );
@@ -289,10 +344,21 @@ export default function SectionProvisions({
         className="rounded bg-gray-100 py-2 pr-8 font-mono text-sm leading-relaxed"
       >
         {docstring.map((text, i) => (
-          <div key={`doc-${i}`} className="flex items-start text-green-700">
-            <span className="w-10 shrink-0 select-none text-right text-gray-400">
+          <div
+            key={`doc-${i}`}
+            id={`line-${i + 1}`}
+            className={`flex items-start text-green-700${highlightedLine === i + 1 ? ' bg-yellow-100' : ''}`}
+          >
+            <a
+              href={`#line-${i + 1}`}
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.hash = `line-${i + 1}`;
+              }}
+              className="w-10 shrink-0 select-none text-right text-gray-400 hover:text-primary-500"
+            >
               {i + 1}
-            </span>
+            </a>
             <span className="mx-2 select-none text-gray-400">│</span>
             <span className="min-w-0 pl-[2ch] -indent-[2ch]">
               <span className="select-none"># </span>
@@ -300,10 +366,20 @@ export default function SectionProvisions({
             </span>
           </div>
         ))}
-        <div className="flex">
-          <span className="w-10 shrink-0 select-none text-right text-gray-400">
+        <div
+          id={`line-${blankLineNumber}`}
+          className={`flex${highlightedLine === blankLineNumber ? ' bg-yellow-100' : ''}`}
+        >
+          <a
+            href={`#line-${blankLineNumber}`}
+            onClick={(e) => {
+              e.preventDefault();
+              window.location.hash = `line-${blankLineNumber}`;
+            }}
+            className="w-10 shrink-0 select-none text-right text-gray-400 hover:text-primary-500"
+          >
             {blankLineNumber}
-          </span>
+          </a>
           <span className="mx-2 select-none text-gray-400">│</span>
         </div>
         {tree.map(renderNode)}

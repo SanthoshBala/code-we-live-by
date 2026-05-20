@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, act, fireEvent } from '@testing-library/react';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import SectionProvisions from './SectionProvisions';
 
 const defaultProps = {
@@ -498,5 +498,153 @@ describe('SectionProvisions with structured provisions', () => {
     const stickyHeader = container.querySelector('[data-sticky-header]');
     expect(stickyHeader).toBeInTheDocument();
     expect(stickyHeader).toHaveClass('sticky');
+  });
+});
+
+describe('deep link anchors', () => {
+  afterEach(() => {
+    window.location.hash = '';
+  });
+
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('assigns id="line-N" to docstring lines, blank line, and provision lines', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) Test provision text"
+        status={null}
+      />
+    );
+    // Docstring lines 1–3
+    expect(container.querySelector('#line-1')).toBeInTheDocument();
+    expect(container.querySelector('#line-2')).toBeInTheDocument();
+    expect(container.querySelector('#line-3')).toBeInTheDocument();
+    // Blank line 4
+    expect(container.querySelector('#line-4')).toBeInTheDocument();
+    // First provision at display line 5
+    expect(container.querySelector('#line-5')).toBeInTheDocument();
+  });
+
+  it('assigns line IDs based on line_number from structured provisions', () => {
+    const { container } = render(
+      <SectionProvisions
+        fullCitation="18 U.S.C. § 112"
+        heading="Protection of foreign officials"
+        textContent="(a) In General\n\tWhoever assaults..."
+        status={null}
+        provisions={[
+          {
+            line_number: 1,
+            content: '(a) In General',
+            indent_level: 0,
+            marker: '(a)',
+            is_header: true,
+          },
+          {
+            line_number: 2,
+            content: 'Whoever assaults...',
+            indent_level: 1,
+            marker: null,
+            is_header: false,
+          },
+        ]}
+      />
+    );
+    // line_number 1 → display line 5 (blankLineNumber = 4)
+    expect(container.querySelector('#line-5')).toBeInTheDocument();
+    // line_number 2 → display line 6
+    expect(container.querySelector('#line-6')).toBeInTheDocument();
+  });
+
+  it('highlights the target line when URL hash is #line-N', async () => {
+    window.location.hash = '#line-5';
+
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) Test provision text"
+        status={null}
+      />
+    );
+    await act(async () => {});
+
+    expect(container.querySelector('#line-5')).toHaveClass('bg-yellow-100');
+  });
+
+  it('highlights provision line when URL hash matches a section marker', async () => {
+    window.location.hash = '#(a)';
+
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const { container } = render(
+      <SectionProvisions
+        fullCitation="18 U.S.C. § 112"
+        heading="Protection of foreign officials"
+        textContent="(a) In General\n\tWhoever assaults..."
+        status={null}
+        provisions={[
+          {
+            line_number: 1,
+            content: '(a) In General',
+            indent_level: 0,
+            marker: '(a)',
+            is_header: true,
+          },
+          {
+            line_number: 2,
+            content: 'Whoever assaults...',
+            indent_level: 1,
+            marker: null,
+            is_header: false,
+          },
+        ]}
+      />
+    );
+    await act(async () => {});
+
+    // marker "(a)" is line_number 1 → display line 5
+    expect(container.querySelector('#line-5')).toHaveClass('bg-yellow-100');
+    expect(container.querySelector('#line-6')).not.toHaveClass('bg-yellow-100');
+  });
+
+  it('renders line numbers as anchors with correct href', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) Test provision text"
+        status={null}
+      />
+    );
+    // Docstring line 1
+    const lineOneAnchor = container.querySelector('a[href="#line-1"]');
+    expect(lineOneAnchor).toBeInTheDocument();
+    expect(lineOneAnchor!.textContent).toBe('1');
+    // First provision (display line 5)
+    const lineFiveAnchor = container.querySelector('a[href="#line-5"]');
+    expect(lineFiveAnchor).toBeInTheDocument();
+    expect(lineFiveAnchor!.textContent).toBe('5');
+  });
+
+  it('clicking a line number sets the URL hash and highlights that line', async () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) Test provision text"
+        status={null}
+      />
+    );
+
+    const lineFiveAnchor = container.querySelector(
+      'a[href="#line-5"]'
+    ) as HTMLAnchorElement;
+    fireEvent.click(lineFiveAnchor);
+    await act(async () => {});
+
+    expect(window.location.hash).toBe('#line-5');
+    expect(container.querySelector('#line-5')).toHaveClass('bg-yellow-100');
   });
 });
