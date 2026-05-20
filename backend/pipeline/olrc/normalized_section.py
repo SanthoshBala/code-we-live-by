@@ -992,6 +992,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
                             indent_level=indent,
                             marker=marker,
                             is_header=False,
+                            is_quoted=True,
                             start_char=match.start(),
                             end_char=match.end(),
                         )

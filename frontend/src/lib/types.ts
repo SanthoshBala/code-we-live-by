@@ -88,6 +88,7 @@ export interface CodeLine {
   marker: string | null;
   is_header: boolean;
   is_signature?: boolean;
+  is_quoted?: boolean;
 }
 
 export type NoteRefType = 'public_law' | 'act' | 'usc_section' | 'statute';

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, Fragment } from 'react';
 import Link from 'next/link';
 import type { SectionNote, CodeLine } from '@/lib/types';
 import { findNoteLinks, type CrossRefLookup } from '@/lib/noteUtils';
@@ -107,6 +107,22 @@ function NoteLine({
   );
 }
 
+/** Groups consecutive lines into prose vs quoted-content segments. */
+function groupLineSegments(lines: CodeLine[]) {
+  type Segment = { isQuoted: boolean; lines: CodeLine[]; startIdx: number };
+  const segs: Segment[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const isQuoted = lines[i].is_quoted === true;
+    const last = segs[segs.length - 1];
+    if (!last || last.isQuoted !== isQuoted) {
+      segs.push({ isQuoted, lines: [lines[i]], startIdx: i });
+    } else {
+      last.lines.push(lines[i]);
+    }
+  }
+  return segs;
+}
+
 /** Renders a single structured note as a block with line numbers. */
 export default function NoteBlock({
   note,
@@ -116,19 +132,33 @@ export default function NoteBlock({
   withRev,
 }: NoteBlockProps) {
   if (note.lines.length > 0) {
+    const lineSegs = groupLineSegments(note.lines);
     return (
       <div className="mb-2">
-        {note.lines.map((line, i) => (
-          <NoteLine
-            key={line.line_number}
-            lineNumber={lineNumberOffset + i}
-            line={line}
-            note={note}
-            crossRefs={crossRefs}
-            basePath={basePath}
-            withRev={withRev}
-          />
-        ))}
+        {lineSegs.map((seg, si) => {
+          const lineElems = seg.lines.map((line, j) => (
+            <NoteLine
+              key={line.line_number}
+              lineNumber={lineNumberOffset + seg.startIdx + j}
+              line={line}
+              note={note}
+              crossRefs={crossRefs}
+              basePath={basePath}
+              withRev={withRev}
+            />
+          ));
+          if (seg.isQuoted) {
+            return (
+              <div
+                key={si}
+                className="my-1 ml-8 border-l-2 border-slate-300 bg-slate-50 pl-2"
+              >
+                {lineElems}
+              </div>
+            );
+          }
+          return <Fragment key={si}>{lineElems}</Fragment>;
+        })}
       </div>
     );
   }
