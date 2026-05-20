@@ -18,8 +18,8 @@ from app.models.base import get_async_session
 from app.schemas.law_history import LegislativeHistorySchema
 from app.schemas.law_viewer import (
     LawDiffsResponse,
-    LawSummarySchema,
     LawTextSchema,
+    PaginatedLawsResponse,
     ParsedAmendmentSchema,
     StandaloneProvisionSchema,
 )
@@ -32,7 +32,7 @@ async def list_laws(
     limit: int = Query(50, ge=1, le=500, description="Max results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     session: AsyncSession = Depends(get_async_session),
-) -> list[LawSummarySchema]:
+) -> PaginatedLawsResponse:
     """List public laws in the database (paginated)."""
     return await get_laws_list(session, limit=limit, offset=offset)
 
