@@ -1,0 +1,1258 @@
+# Curated CODEOWNERS mapping: congressional committee → US Code title/chapter path.
+#
+# This is the authoritative human-authored layer that bridges Rule X jurisdiction
+# prose (which never references the US Code directly) to actual US Code paths.
+# See research/TASK-0.15-Committee-Jurisdiction-Mapping.md for the full analysis.
+#
+# Fields:
+#   committee_code  — matches Committee.committee_code slug
+#   congress_start  — first Congress this mapping applies (106 = first with parseable HMAN HTM)
+#   congress_end    — last Congress (null = still current)
+#   title_number    — US Code title number (integer)
+#   chapter_number  — US Code chapter (string, null = title-level mapping)
+#   jurisdiction_type — "primary" | "secondary" | "oversight"
+#   display_order   — sort order within same title/chapter (primary first)
+#   notes           — optional curator note
+#
+# Chapter-level splits documented below for Titles 21, 31, 42, and 50.
+# All other titles use title-level (chapter_number: null) mappings.
+
+mappings:
+  # ── Title 1: General Provisions ─────────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 1
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 1
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 2: The Congress ────────────────────────────────────────────────
+  - committee_code: house-administration
+    congress_start: 106
+    congress_end: null
+    title_number: 2
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-rules-and-administration
+    congress_start: 106
+    congress_end: null
+    title_number: 2
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 3: The President ───────────────────────────────────────────────
+  - committee_code: house-oversight-and-accountability
+    congress_start: 106
+    congress_end: null
+    title_number: 3
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-homeland-security-governmental-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 3
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 4: Flag and Seal ───────────────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 4
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 4
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 5: Government Organization and Employees ───────────────────────
+  - committee_code: house-oversight-and-accountability
+    congress_start: 106
+    congress_end: null
+    title_number: 5
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-homeland-security-governmental-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 5
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 6: Domestic Security ───────────────────────────────────────────
+  - committee_code: house-homeland-security
+    congress_start: 109
+    congress_end: null
+    title_number: 6
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Homeland Security Committee established 109th Congress (H.Res.5, Jan 4, 2005)"
+
+  - committee_code: senate-homeland-security-governmental-affairs
+    congress_start: 109
+    congress_end: null
+    title_number: 6
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 7: Agriculture ─────────────────────────────────────────────────
+  - committee_code: house-agriculture
+    congress_start: 106
+    congress_end: null
+    title_number: 7
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-agriculture-nutrition-forestry
+    congress_start: 106
+    congress_end: null
+    title_number: 7
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 8: Aliens and Nationality ─────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 8
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 8
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 9: Arbitration ─────────────────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 9
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 9
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 10: Armed Forces ───────────────────────────────────────────────
+  - committee_code: house-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 10
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 10
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 11: Bankruptcy ─────────────────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 11
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 11
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 12: Banks and Banking ──────────────────────────────────────────
+  - committee_code: house-financial-services
+    congress_start: 106
+    congress_end: null
+    title_number: 12
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-banking-housing-urban-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 12
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 13: Census ─────────────────────────────────────────────────────
+  - committee_code: house-oversight-and-accountability
+    congress_start: 106
+    congress_end: null
+    title_number: 13
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-homeland-security-governmental-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 13
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 14: Coast Guard ────────────────────────────────────────────────
+  - committee_code: house-transportation-and-infrastructure
+    congress_start: 106
+    congress_end: null
+    title_number: 14
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 14
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 15: Commerce and Trade ─────────────────────────────────────────
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 15
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 15
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 16: Conservation ───────────────────────────────────────────────
+  - committee_code: house-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 16
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-energy-and-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 16
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 17: Copyrights ─────────────────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 17
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 17
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 18: Crimes and Criminal Procedure ──────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 18
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 18
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 19: Customs Duties ─────────────────────────────────────────────
+  - committee_code: house-ways-and-means
+    congress_start: 106
+    congress_end: null
+    title_number: 19
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-finance
+    congress_start: 106
+    congress_end: null
+    title_number: 19
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 20: Education ──────────────────────────────────────────────────
+  - committee_code: house-education-and-workforce
+    congress_start: 106
+    congress_end: null
+    title_number: 20
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 20
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 21: Food and Drugs — Chapter-level split ───────────────────────
+  # Default (title-level): FDA and drug regulation → Energy and Commerce / HELP
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Default title-level: FDA drug/device authority (FDCA, Ch. 9)"
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 1 (original Food and Drugs Act, USDA commodity standards)
+  - committee_code: house-agriculture
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "1"
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "USDA food safety authorities (meat, poultry inspection)"
+
+  - committee_code: senate-agriculture-nutrition-forestry
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "1"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 9 (Federal Food, Drug, and Cosmetic Act — FDA primary)
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "9"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "9"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 13 (Controlled Substances Act) — Judiciary + Energy and Commerce
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "13"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "13"
+    jurisdiction_type: secondary
+    display_order: 1
+    notes: "Judiciary has shared jurisdiction over criminal enforcement of CSA"
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "13"
+    jurisdiction_type: primary
+    display_order: 2
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 21
+    chapter_number: "13"
+    jurisdiction_type: secondary
+    display_order: 3
+
+  # ── Title 22: Foreign Relations and Intercourse ──────────────────────────
+  - committee_code: house-foreign-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 22
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-foreign-relations
+    congress_start: 106
+    congress_end: null
+    title_number: 22
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 23: Highways ───────────────────────────────────────────────────
+  - committee_code: house-transportation-and-infrastructure
+    congress_start: 106
+    congress_end: null
+    title_number: 23
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-environment-and-public-works
+    congress_start: 106
+    congress_end: null
+    title_number: 23
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 24: Hospitals and Asylums ─────────────────────────────────────
+  - committee_code: house-veterans-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 24
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Primarily VA hospital facilities; Energy and Commerce has secondary jurisdiction for non-VA public hospitals"
+
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 24
+    chapter_number: null
+    jurisdiction_type: secondary
+    display_order: 1
+
+  - committee_code: senate-veterans-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 24
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 2
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 24
+    chapter_number: null
+    jurisdiction_type: secondary
+    display_order: 3
+
+  # ── Title 25: Indians ────────────────────────────────────────────────────
+  - committee_code: house-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 25
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-indian-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 25
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+    notes: "Senate has a dedicated standing Committee on Indian Affairs"
+
+  # ── Title 26: Internal Revenue Code ─────────────────────────────────────
+  - committee_code: house-ways-and-means
+    congress_start: 106
+    congress_end: null
+    title_number: 26
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Art. I §7 constitutional origination authority — all revenue bills must originate in the House"
+
+  - committee_code: senate-finance
+    congress_start: 106
+    congress_end: null
+    title_number: 26
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 27: Intoxicating Liquors ───────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 27
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 27
+    chapter_number: null
+    jurisdiction_type: secondary
+    display_order: 1
+    notes: "Energy and Commerce has secondary jurisdiction over TTB (Alcohol and Tobacco Tax and Trade Bureau) regulation"
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 27
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 2
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 27
+    chapter_number: null
+    jurisdiction_type: secondary
+    display_order: 3
+
+  # ── Title 28: Judiciary and Judicial Procedure ───────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 28
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 28
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 29: Labor ──────────────────────────────────────────────────────
+  - committee_code: house-education-and-workforce
+    congress_start: 106
+    congress_end: null
+    title_number: 29
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 29
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 30: Mineral Lands and Mining ───────────────────────────────────
+  - committee_code: house-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 30
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-energy-and-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 30
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 31: Money and Finance — Chapter-level split ────────────────────
+  # Default (title-level): fiscal policy → Ways and Means / Finance
+  - committee_code: house-ways-and-means
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Default title-level: fiscal and appropriations authority"
+
+  - committee_code: senate-finance
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 3 (Department of the Treasury organization)
+  - committee_code: house-ways-and-means
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "3"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-finance
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "3"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 5 (Office of Management and Budget)
+  - committee_code: house-oversight-and-accountability
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "5"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-homeland-security-governmental-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "5"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 31 (Public Debt — debt ceiling)
+  - committee_code: house-ways-and-means
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "31"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-finance
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "31"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapters 51, 53 (Coins/currency, Bank Secrecy Act/AML)
+  - committee_code: house-financial-services
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "51"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-banking-housing-urban-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "51"
+    jurisdiction_type: primary
+    display_order: 1
+
+  - committee_code: house-financial-services
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "53"
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Bank Secrecy Act and Anti-Money Laundering authorities"
+
+  - committee_code: senate-banking-housing-urban-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 31
+    chapter_number: "53"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 32: National Guard ─────────────────────────────────────────────
+  - committee_code: house-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 32
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 32
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 33: Navigation and Navigable Waters ────────────────────────────
+  - committee_code: house-transportation-and-infrastructure
+    congress_start: 106
+    congress_end: null
+    title_number: 33
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-environment-and-public-works
+    congress_start: 106
+    congress_end: null
+    title_number: 33
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 34: Crime Control and Law Enforcement ──────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 34
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 34
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 35: Patents ────────────────────────────────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 35
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 35
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 36: Patriotic and National Observances ─────────────────────────
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 36
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 36
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 37: Pay and Allowances of the Uniformed Services ───────────────
+  - committee_code: house-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 37
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 37
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 38: Veterans' Benefits ─────────────────────────────────────────
+  - committee_code: house-veterans-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 38
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-veterans-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 38
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 39: Postal Service ─────────────────────────────────────────────
+  - committee_code: house-oversight-and-accountability
+    congress_start: 106
+    congress_end: null
+    title_number: 39
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-homeland-security-governmental-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 39
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 40: Public Buildings, Property, and Works ─────────────────────
+  - committee_code: house-transportation-and-infrastructure
+    congress_start: 106
+    congress_end: null
+    title_number: 40
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-environment-and-public-works
+    congress_start: 106
+    congress_end: null
+    title_number: 40
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 41: Public Contracts ───────────────────────────────────────────
+  - committee_code: house-oversight-and-accountability
+    congress_start: 106
+    congress_end: null
+    title_number: 41
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-homeland-security-governmental-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 41
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 42: Public Health and Welfare — Chapter-level split ────────────
+  # Default (title-level): public health agencies → Energy and Commerce / HELP
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Default title-level: public health agencies (CDC, NIH, FDA authorities under PHS Act)"
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 6A (Public Health Service Act — CDC, NIH, HRSA, SAMHSA)
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "6a"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-help
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "6a"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 7 (Social Security Act — Medicare, Medicaid, CHIP, TANF)
+  - committee_code: house-ways-and-means
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "7"
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "Ways and Means has jurisdiction over Social Security Act programs financed by trust funds"
+
+  - committee_code: senate-finance
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "7"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 8 (Low-Income Housing programs)
+  - committee_code: house-financial-services
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "8"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-banking-housing-urban-affairs
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "8"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 21 (Civil Rights Act provisions — §§1981–2000h-6)
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "21"
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 42
+    chapter_number: "21"
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 43: Public Lands ───────────────────────────────────────────────
+  - committee_code: house-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 43
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-energy-and-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 43
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 44: Public Printing and Documents ──────────────────────────────
+  - committee_code: house-administration
+    congress_start: 106
+    congress_end: null
+    title_number: 44
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-rules-and-administration
+    congress_start: 106
+    congress_end: null
+    title_number: 44
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 45: Railroads ──────────────────────────────────────────────────
+  - committee_code: house-transportation-and-infrastructure
+    congress_start: 106
+    congress_end: null
+    title_number: 45
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 45
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 46: Shipping ───────────────────────────────────────────────────
+  - committee_code: house-transportation-and-infrastructure
+    congress_start: 106
+    congress_end: null
+    title_number: 46
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 46
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 47: Telecommunications ─────────────────────────────────────────
+  - committee_code: house-energy-and-commerce
+    congress_start: 106
+    congress_end: null
+    title_number: 47
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 47
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 48: Territories and Insular Possessions ────────────────────────
+  - committee_code: house-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 48
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-energy-and-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 48
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 49: Transportation ─────────────────────────────────────────────
+  - committee_code: house-transportation-and-infrastructure
+    congress_start: 106
+    congress_end: null
+    title_number: 49
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 49
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 50: War and National Defense — chapter overrides ───────────────
+  # Default (title-level): Armed Services primary
+  - committee_code: house-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-armed-services
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # Chapter 36 (FISA — Foreign Intelligence Surveillance Act)
+  - committee_code: house-intelligence
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: "36"
+    jurisdiction_type: oversight
+    display_order: 0
+    notes: "Permanent Select Committee on Intelligence oversight of FISA surveillance authorities"
+
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: "36"
+    jurisdiction_type: oversight
+    display_order: 1
+    notes: "Judiciary has shared oversight of FISA due to civil liberties and Fourth Amendment implications"
+
+  - committee_code: senate-intelligence
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: "36"
+    jurisdiction_type: oversight
+    display_order: 2
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: "36"
+    jurisdiction_type: oversight
+    display_order: 3
+
+  # Chapter 44 (National Security Act — intelligence community organization)
+  - committee_code: house-intelligence
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: "44"
+    jurisdiction_type: oversight
+    display_order: 0
+    notes: "Intelligence community organization and budgets — exclusive Intelligence Committee oversight"
+
+  - committee_code: senate-intelligence
+    congress_start: 106
+    congress_end: null
+    title_number: 50
+    chapter_number: "44"
+    jurisdiction_type: oversight
+    display_order: 1
+
+  # ── Title 51: National and Commercial Space Program ──────────────────────
+  - committee_code: house-science-space-technology
+    congress_start: 106
+    congress_end: null
+    title_number: 51
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-commerce-science-transportation
+    congress_start: 106
+    congress_end: null
+    title_number: 51
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
+
+  # ── Title 52: Voting and Elections ───────────────────────────────────────
+  - committee_code: house-administration
+    congress_start: 106
+    congress_end: null
+    title_number: 52
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+    notes: "House Administration has primary jurisdiction over election administration"
+
+  - committee_code: house-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 52
+    chapter_number: null
+    jurisdiction_type: secondary
+    display_order: 1
+    notes: "Judiciary has secondary jurisdiction for voting rights enforcement"
+
+  - committee_code: senate-rules-and-administration
+    congress_start: 106
+    congress_end: null
+    title_number: 52
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 2
+
+  - committee_code: senate-judiciary
+    congress_start: 106
+    congress_end: null
+    title_number: 52
+    chapter_number: null
+    jurisdiction_type: secondary
+    display_order: 3
+
+  # ── Title 54: National Park Service and Related Programs ─────────────────
+  - committee_code: house-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 54
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 0
+
+  - committee_code: senate-energy-and-natural-resources
+    congress_start: 106
+    congress_end: null
+    title_number: 54
+    chapter_number: null
+    jurisdiction_type: primary
+    display_order: 1
