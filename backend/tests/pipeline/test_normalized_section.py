@@ -1721,6 +1721,70 @@ class TestFlatNotesParser:
 
         assert len(notes.notes) == 0
 
+    def test_flat_notes_after_historical_note_issue_283(self) -> None:
+        """Regression: flat notes after 'Historical and Revision Notes' must not be swallowed.
+
+        13 U.S.C. § 141 has 11 flat notes. The first is 'Historical and Revision
+        Notes'; prior to the fix _parse_historical_notes greedily consumed all
+        content (since there was no 'Editorial Notes' terminator), leaving notes
+        2–11 unprocessed.  Closes #283.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Historical And Revision Notes[/NH] "
+            "Based on title 13, U.S.C., 1952 ed., § 201 (part). "
+            "[NH]Amendments[/NH] "
+            "1957—Pub. L. 85–207, § 9, substituted heading; added housing census. "
+            "1975—Pub. L. 94–171, §§ 1, 2(a), inserted apportionment tabulation. "
+            "1976—Pub. L. 94–521, § 7(a), updated heading and subsections. "
+            "[NH]Effective Date Of 1976 Amendment[/NH] "
+            "Amendment by Pub. L. 94–521 effective Oct. 1, 1976. "
+            "[NH]Statistical Sampling Or Adjustment In Decennial Enumeration[/NH] "
+            "Pub. L. 105–119, title II, § 209(a), Nov. 26, 1997, 111 Stat. 2482, provided."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        # _parse_historical_notes hardcodes "Historical and Revision Notes" (lowercase "and")
+        assert "Historical and Revision Notes" in headers
+        assert "Amendments" in headers
+        assert "Effective Date Of 1976 Amendment" in headers
+        assert "Statistical Sampling Or Adjustment In Decennial Enumeration" in headers
+        assert len(notes.notes) >= 4
+
+    def test_amendments_populated_from_flat_notes_issue_284(self) -> None:
+        """Regression: notes.amendments must be populated when 'Amendments' is a flat note.
+
+        For 13 U.S.C. § 141 the 'Amendments' note is flat (no 'Editorial Notes'
+        wrapper). Prior to the fix _parse_flat_notes was not called because
+        _parse_historical_notes had already added a note.  Closes #284.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Historical And Revision Notes[/NH] "
+            "Based on title 13, U.S.C., 1952 ed., § 201 (part). "
+            "[NH]Amendments[/NH] "
+            "1957—Pub. L. 85–207, § 9, substituted the heading for prior heading. "
+            "1975—Pub. L. 94–171, §§ 1, 2(a), inserted apportionment language. "
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        # amendments array must be populated from the flat Amendments note
+        assert len(notes.amendments) > 0
+        years = [a.year for a in notes.amendments]
+        assert 1957 in years
+        assert 1975 in years
+
 
 class TestNoteTopicAmendmentParsing:
     """Regression tests for issue #216: <note topic="amendments"> not parsed.

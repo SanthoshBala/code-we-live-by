@@ -1345,7 +1345,16 @@ def _parse_notes_structure(
     # Fallback: some older sections use flat <note> elements without category
     # wrapper headings ("Editorial Notes" / "Statutory Notes"), so none of the
     # three parsers above match.  Parse all [NH]...[/NH] blocks directly.
-    if not notes.notes:
+    #
+    # Also triggered when _parse_historical_notes greedily consumed the full
+    # text (because there was no "Editorial Notes" terminator), leaving sibling
+    # flat notes—like "Amendments"—unprocessed.  See issue #283 (13 USC § 141).
+    already_processed = {n.header.lower() for n in notes.notes}
+    has_unprocessed_nh = any(
+        m.group(1).strip().lower() not in already_processed
+        for m in re.finditer(r"\[NH\](.*?)\[/NH\]", raw_notes, re.DOTALL)
+    )
+    if has_unprocessed_nh:
         _parse_flat_notes(raw_notes, notes)
 
 
@@ -1382,8 +1391,10 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         header_positions.append((match.start(), match.end(), header))
 
     seen_headers: set[str] = set()
+    # Skip headers already emitted by _parse_historical/editorial/statutory_notes
+    existing_lower = {n.header.lower() for n in notes.notes}
     for i, (_start, end, header) in enumerate(header_positions):
-        if header in seen_headers:
+        if header in seen_headers or header.lower() in existing_lower:
             continue
         seen_headers.add(header)
 
