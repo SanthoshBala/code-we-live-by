@@ -5,7 +5,7 @@ interface LawTextViewerProps {
 }
 
 /** Strip HTML wrapper tags and decode HTML entities to plain text. */
-function stripHtml(raw: string): string {
+export function stripHtml(raw: string): string {
   // Remove <html>, <body>, <pre> wrappers (and closing tags)
   let text = raw.replace(/<\/?(html|body|pre)[^>]*>/gi, '');
   // Decode HTML entities (&lt; &gt; &amp; &quot; &#NNN; &#xHH;)
@@ -17,6 +17,8 @@ function stripHtml(raw: string): string {
   }
   // Remove GPO end-of-document marker <all>
   text = text.replace(/<all>\s*/gi, '');
+  // Normalize leading tabs to 4 spaces so indentation matches the statute viewer
+  text = text.replace(/^(\t+)/gm, (tabs) => '    '.repeat(tabs.length));
   // Trim leading/trailing blank lines
   return text.replace(/^\n+/, '').replace(/\n+$/, '');
 }
