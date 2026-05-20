@@ -405,3 +405,35 @@ export interface SectionView {
   last_revision?: HeadRevision | null;
   group_ancestors?: GroupAncestor[];
 }
+
+export interface SectionSearchResult {
+  title_number: number;
+  section_number: string;
+  heading: string;
+  full_citation: string;
+  snippet: string | null;
+  is_repealed: boolean;
+  last_modified_date: string | null;
+}
+
+export interface LawSearchResult {
+  congress: number;
+  law_number: string;
+  short_title: string | null;
+  popular_name: string | null;
+  enacted_date: string | null;
+}
+
+export interface SectionSearchResponse {
+  results: SectionSearchResult[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface LawSearchResponse {
+  results: LawSearchResult[];
+  total: number;
+  limit: number;
+  offset: number;
+}

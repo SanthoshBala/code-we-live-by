@@ -9,6 +9,8 @@ import type {
   LawDiffsResponse,
   StandaloneProvision,
   HeadRevision,
+  SectionSearchResponse,
+  LawSearchResponse,
 } from './types';
 
 const API_BASE = '/api/v1';
@@ -199,5 +201,37 @@ export async function fetchLawStandaloneProvisions(
       `Failed to fetch standalone provisions for PL ${congress}-${lawNumber}: ${res.status}`
     );
   }
+  return res.json();
+}
+
+/** Search US Code sections by heading or text content. */
+export async function searchSections(
+  q: string,
+  opts: { title?: number; limit?: number; offset?: number } = {}
+): Promise<SectionSearchResponse> {
+  const params: Record<string, string> = { q };
+  if (opts.title !== undefined) params.title = String(opts.title);
+  if (opts.limit !== undefined) params.limit = String(opts.limit);
+  if (opts.offset !== undefined) params.offset = String(opts.offset);
+  const res = await fetch(
+    `${API_BASE}/search/sections?${new URLSearchParams(params)}`
+  );
+  if (!res.ok) throw new Error(`Search sections failed: ${res.status}`);
+  return res.json();
+}
+
+/** Search public laws by name, title, or number. */
+export async function searchLaws(
+  q: string,
+  opts: { congress?: number; limit?: number; offset?: number } = {}
+): Promise<LawSearchResponse> {
+  const params: Record<string, string> = { q };
+  if (opts.congress !== undefined) params.congress = String(opts.congress);
+  if (opts.limit !== undefined) params.limit = String(opts.limit);
+  if (opts.offset !== undefined) params.offset = String(opts.offset);
+  const res = await fetch(
+    `${API_BASE}/search/laws?${new URLSearchParams(params)}`
+  );
+  if (!res.ok) throw new Error(`Search laws failed: ${res.status}`);
   return res.json();
 }

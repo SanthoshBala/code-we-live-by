@@ -21,15 +21,15 @@ export default function Home() {
             </p>
           </Link>
 
-          <div className="block rounded-lg border border-gray-200 bg-white p-6 opacity-50">
+          <Link
+            href="/search"
+            className="block rounded-lg border border-gray-200 bg-white p-6 transition-colors hover:border-primary-500"
+          >
             <h2 className="mb-2 text-xl font-semibold">Search</h2>
             <p className="text-gray-600">
               Find specific sections, laws, or text across the entire US Code.
             </p>
-            <span className="mt-2 inline-block text-xs text-gray-400">
-              Coming soon
-            </span>
-          </div>
+          </Link>
 
           <Link
             href="/laws"
