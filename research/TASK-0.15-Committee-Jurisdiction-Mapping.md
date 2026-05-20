@@ -18,6 +18,10 @@ Congressional committees have jurisdiction over specific areas of federal law, m
 - **Title 52** and **Title 2** involve House/Senate Administration committees in addition to Judiciary/Rules
 - Overlapping jurisdiction is handled by convention (primary/secondary designations) and formal referral procedures
 
+**Important data model implications (discovered during research):**
+1. **Committee assignments are per-Congress.** Rule X is re-adopted at the start of each Congress and committees are renamed, merged, or restructured (e.g., Homeland Security added in 109th Congress; Intelligence moved from rule XLVIII to rule X clause 11 in 106th). Any data model must key committee records to a congress number.
+2. **Rule X does not reference the US Code.** Jurisdictions are expressed as legislative topics ("adulteration of seeds, insect pests", "commodity exchanges") — never as US Code title or section numbers. The mapping from Rule X language → US Code paths is a **human-authored curation layer** that must be maintained separately. See the [Data Model](#data-model-implications) section below.
+
 ---
 
 ## Design Questions Answered
@@ -433,18 +437,105 @@ For the CWLB CODEOWNERS implementation:
 
 ---
 
+## Data Model Implications
+
+### Problem: two separate concerns
+
+The CODEOWNERS metaphor requires resolving two distinct questions:
+
+1. **What does each committee claim jurisdiction over?** (Rule X text — per-Congress, prose format)
+2. **Which US Code paths correspond to those claims?** (Curated mapping — stable, structured)
+
+These must be stored separately. Conflating them creates a mess when Rule X changes or when committees are renamed.
+
+### Proposed schema
+
+```sql
+-- One row per committee per Congress.
+-- Committee names and jurisdiction claims change with each Congress adoption of rules.
+CREATE TABLE congressional_committee (
+    id              SERIAL PRIMARY KEY,
+    congress        INTEGER NOT NULL,           -- 106, 107, …, 119
+    chamber         TEXT NOT NULL,              -- 'house' | 'senate'
+    committee_id    TEXT NOT NULL,              -- stable slug, e.g. 'judiciary'
+    full_name       TEXT NOT NULL,              -- official name for that Congress
+    rule_citation   TEXT,                       -- 'House Rule X, Clause 1(l)'
+    jurisdiction_text TEXT,                     -- raw prose from Rule X / Rule XXV
+    source_url      TEXT,                       -- GovInfo HTM URL for this Congress
+    UNIQUE (congress, chamber, committee_id)
+);
+
+-- Human-curated mapping from a committee → US Code path.
+-- This is the bridge between Rule X prose and the code tree.
+CREATE TABLE committee_usc_mapping (
+    id                  SERIAL PRIMARY KEY,
+    committee_id        TEXT NOT NULL,          -- FK slug into congressional_committee
+    congress_start      INTEGER NOT NULL,       -- first Congress this mapping applies
+    congress_end        INTEGER,                -- NULL = still current
+    usc_title           INTEGER NOT NULL,
+    usc_chapter         TEXT,                   -- NULL = Title-level; e.g. '6a', '7'
+    jurisdiction_type   TEXT NOT NULL,          -- 'primary' | 'secondary' | 'oversight'
+    notes               TEXT                    -- reason for this mapping / split
+);
+```
+
+### Data pipeline
+
+Rule X is available as parsed HTM for every Congress from 106 onward:
+
+```
+https://www.govinfo.gov/content/pkg/HMAN-{congress}/html/HMAN-{congress}-houserules.htm
+```
+
+The HTM is parseable but the jurisdiction text is **prose** — not structured data. A pipeline approach:
+
+1. **Fetch** the HMAN HTM for each Congress from GovInfo (available 106–119)
+2. **Extract** each committee's numbered jurisdiction items by parsing the `(a) Committee on X` sections under Rule X
+3. **Store** raw jurisdiction text in `congressional_committee.jurisdiction_text` — no interpretation yet
+4. **Curate** `committee_usc_mapping` manually (or with LLM assistance) for each new Congress, diffing against the prior Congress to identify changed/added jurisdictions
+5. **Audit** by cross-referencing against `LawChange` bill-referral data from the Congress.gov API
+
+Step 4 is inherently a human judgment call. The mapping from "adulteration of seeds, insect pests, and protection of birds and animals in forest reserves" → `Title 7` requires interpreting legislative intent that no automated system can resolve cleanly. The curated table is the authoritative artifact.
+
+### Change cadence
+
+Rule X changes are infrequent between Congresses for most committees. Based on historical patterns:
+- **Stable** (rarely changed): Agriculture, Judiciary, Ways and Means, Foreign Affairs, Armed Services, Veterans' Affairs, Natural Resources
+- **Occasionally restructured**: Energy and Commerce, Transportation and Infrastructure
+- **Frequently renamed/reorganized**: Oversight (renamed multiple times), Science/Space/Technology, Homeland Security (added 109th Congress)
+
+A diff of `committee_usc_mapping` between consecutive Congresses is the right tool for tracking what changed.
+
+---
+
 ## Data Sources
 
 | Source | Type | Notes |
 |--------|------|-------|
-| House Rule X | Authoritative — committee jurisdiction rules | govinfo.gov/content/pkg/HMAN-119 |
-| Senate Rule XXV | Authoritative — committee jurisdiction rules | senate.gov/pagelayout/reference/two_column_table/Senate_Rules.htm |
+| GovInfo HMAN HTM | **Authoritative, machine-readable** | `govinfo.gov/content/pkg/HMAN-{congress}/html/HMAN-{congress}-houserules.htm` — available for all Congresses 106–119 |
+| rules.house.gov prior Congresses | Index page | `rules.house.gov/resources/rules-and-manuals-house-prior-congresses` — links to PDFs and GovInfo |
+| Senate Rule XXV | Authoritative — Senate jurisdiction rules | `senate.gov/pagelayout/reference/two_column_table/Senate_Rules.htm` |
 | Congress.gov Committees | Reference — current membership and subcommittees | congress.gov/committees |
-| House.gov Committees | Reference — committee websites and jurisdiction summaries | house.gov/committees |
-| CRS Report R46251 | Background — committee referral procedures in the House | congress.gov/crs-product/R46251 |
-| CRS Report R46815 | Background — committee referral procedures in the Senate | congress.gov/crs-product/R46815 |
+| Congress.gov API — bill committees | Empirical validation source | `/bill/{congress}/{type}/{number}/committees` — which committees received each bill |
+| CRS Report R46251 | Background — referral procedures in the House | congress.gov/crs-product/R46251 |
+| CRS Report R46815 | Background — referral procedures in the Senate | congress.gov/crs-product/R46815 |
 
-**Note on chair/membership data:** Committee chairs and membership change each Congress. Store only committee names and Rule citations in the mapping; link to `congress.gov/committees/<committee-id>` for live membership data.
+**Rule X text sample (119th Congress, Committee on Agriculture):**
+
+```
+(a) Committee on Agriculture.
+  (1) Adulteration of seeds, insect pests, and protection of birds and animals in forest reserves.
+  (2) Agriculture generally.
+  (3) Agricultural and industrial chemistry.
+  ...
+  (14) Inspection of livestock, poultry, meat products, and seafood and seafood products.
+  (15) Forestry in general and forest reserves other than those created from the public domain.
+  ...
+```
+
+This is the raw form of the data — topic descriptions only, no US Code citations. The `committee_usc_mapping` table is the authored layer that translates these into paths like `/title-7/`.
+
+**Note on chair/membership:** Committee chairs change each Congress and sometimes mid-Congress. Never hardcode them. Link to `congress.gov/committees/<committee-id>` for live data.
 
 ---
 
