@@ -15,7 +15,7 @@ from sqlalchemy.orm import attributes
 from app.core.revision_cache import revision_cache
 from app.crud.revision import get_last_changed_revision_for_section
 from app.models.public_law import PublicLaw
-from app.models.us_code import SectionGroup, USCodeSection
+from app.models.us_code import SectionGroup
 from app.schemas.us_code import (
     CodeLineSchema,
     GroupAncestorSchema,
@@ -463,10 +463,11 @@ async def get_section(
             CodeLineSchema.model_validate(line) for line in state.normalized_provisions
         ]
 
-    # Read is_positive_law from the persisted USCodeSection record
-    is_positive_law_stmt = select(USCodeSection.is_positive_law).where(
-        USCodeSection.title_number == title_number,
-        USCodeSection.section_number == section_number,
+    # Read is_positive_law from the title-level SectionGroup (USCodeSection.is_positive_law
+    # is never populated by the pipeline; the flag lives on the title SectionGroup).
+    is_positive_law_stmt = select(SectionGroup.is_positive_law).where(
+        SectionGroup.group_type == "title",
+        SectionGroup.number == str(title_number),
     )
     is_positive_law = await session.scalar(is_positive_law_stmt) or False
 
