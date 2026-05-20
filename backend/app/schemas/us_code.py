@@ -239,7 +239,6 @@ class SectionNoteSchema(BaseModel):
     """
 
     header: str = Field(..., description="Note header (e.g., 'Codification')")
-    content: str = Field("", description="Raw note body text (fallback)")
     lines: list[CodeLineSchema] = Field(
         default_factory=list,
         description="Normalized lines for structured display",
@@ -257,19 +256,11 @@ class SectionNoteSchema(BaseModel):
 
         Uses the law-flavored plain text format defined in DISPLAY_CONVENTIONS.md.
         """
-        if self.lines:
-            output = [f"# {self.header}"]
-            for line in self.lines:
-                indent = " " * (line.indent_level * indent_width)
-                output.append(f"{indent}{line.content}")
-            return "\n".join(output)
-        else:
-            # Fallback to raw content
-            indent = " " * indent_width
-            indented_content = "\n".join(
-                f"{indent}{line}" for line in self.content.split("\n") if line.strip()
-            )
-            return f"# {self.header}\n{indented_content}"
+        output = [f"# {self.header}"]
+        for line in self.lines:
+            indent = " " * (line.indent_level * indent_width)
+            output.append(f"{indent}{line.content}")
+        return "\n".join(output)
 
 
 class SectionNotesSchema(BaseModel):

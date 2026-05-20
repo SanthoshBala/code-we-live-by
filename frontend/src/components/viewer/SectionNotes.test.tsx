@@ -16,13 +16,19 @@ vi.mock('next/link', () => ({
 const notes: SectionNote[] = [
   {
     header: 'References in Text',
-    content: 'The Act referred to in subsection (a)...',
-    lines: [],
+    lines: [
+      {
+        line_number: 1,
+        content: 'The Act referred to in subsection (a)...',
+        indent_level: 0,
+        marker: null,
+        is_header: false,
+      },
+    ],
     category: 'editorial',
   },
   {
     header: 'Amendments',
-    content: '',
     lines: [
       {
         line_number: 1,
@@ -130,7 +136,6 @@ describe('SectionNotes', () => {
     const noteWithRefs: SectionNote[] = [
       {
         header: 'References in Text',
-        content: '',
         lines: [
           {
             line_number: 1,
@@ -166,7 +171,6 @@ describe('SectionNotes', () => {
     const notesWithMarkers: SectionNote[] = [
       {
         header: 'Amendments',
-        content: '',
         lines: [
           {
             line_number: 1,
@@ -199,7 +203,6 @@ describe('SectionNotes', () => {
     const notesWithoutMarkers: SectionNote[] = [
       {
         header: 'Amendments',
-        content: '',
         lines: [
           {
             line_number: 1,
@@ -230,7 +233,6 @@ describe('SectionNotes', () => {
     const notesWithIndent: SectionNote[] = [
       {
         header: 'Amendments',
-        content: '',
         lines: [
           {
             line_number: 1,

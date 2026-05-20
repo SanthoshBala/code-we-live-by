@@ -27,13 +27,11 @@ const sectionData: SectionView = {
     notes: [
       {
         header: 'References in Text',
-        content: 'The Act referred to in subsection (a)...',
         lines: [],
         category: 'editorial',
       },
       {
         header: 'Short Title',
-        content: '',
         lines: [
           {
             line_number: 1,
@@ -47,7 +45,6 @@ const sectionData: SectionView = {
       },
       {
         header: 'Amendments',
-        content: '',
         lines: [
           {
             line_number: 1,
@@ -184,7 +181,6 @@ describe('NotesViewer', () => {
         notes: [
           {
             header: 'References in Text',
-            content: '',
             lines: [
               {
                 line_number: 1,
@@ -198,7 +194,6 @@ describe('NotesViewer', () => {
           },
           {
             header: 'Effective and Termination Date',
-            content: 'Act expires on Jan. 1, 2030.',
             lines: [],
             category: 'statutory',
           },

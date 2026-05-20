@@ -18,8 +18,7 @@ interface SectionNotesProps {
 
 /** Count lines a note will render. */
 function noteLineCount(note: SectionNote): number {
-  if (note.lines.length > 0) return note.lines.length;
-  return note.content.split('\n').length;
+  return note.lines.length;
 }
 
 /** Renders section notes as numbered lines in a code-style block. */
