@@ -959,12 +959,10 @@ async def compute_law_diffs(
     """
     from pipeline.olrc.snapshot_service import SnapshotService
 
-    # Check law text existence first so we can distinguish "no text" from
-    # "text present but no codified amendments found".
-    law_text = await get_law_text(
-        session, congress, law_number, include_htm=False, include_xml=False
-    )
-    if not law_text:
+    # Check law existence first so we can distinguish "not ingested" from
+    # "ingested but no codified amendments found".
+    law_meta = await get_law_metadata(session, congress, law_number)
+    if not law_meta:
         return LawDiffsResponse(parse_status="no_text", diffs=[])
 
     # Parse amendments (reuses existing logic)
