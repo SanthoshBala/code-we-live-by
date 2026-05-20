@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.codeowners import CommitteeUSCodeMapping
@@ -17,7 +17,7 @@ from app.schemas.committees import (
 CURRENT_CONGRESS = 119
 
 
-def _congress_filter(congress: int):  # type: ignore[return]
+def _congress_filter(congress: int) -> ColumnElement[bool]:
     """SQLAlchemy WHERE clause for mappings valid at the given Congress."""
     return and_(
         CommitteeUSCodeMapping.congress_start <= congress,

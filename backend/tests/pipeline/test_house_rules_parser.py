@@ -69,7 +69,7 @@ class TestLookupCommitteeCode:
         assert _lookup_committee_code("Agriculture") == "house-agriculture"
 
     def test_judiciary(self) -> None:
-        assert _lookup_committee_code("the Judiciary") == "house-judiciary"
+        assert _lookup_committee_code("Committee on the Judiciary") == "house-judiciary"
 
     def test_ways_and_means(self) -> None:
         assert _lookup_committee_code("Ways and Means") == "house-ways-and-means"
