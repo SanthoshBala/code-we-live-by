@@ -49,6 +49,12 @@ describe('Home', () => {
   it('marks placeholder cards as coming soon', () => {
     render(<Home />);
     const badges = screen.getAllByText('Coming soon');
-    expect(badges).toHaveLength(2);
+    expect(badges).toHaveLength(1);
+  });
+
+  it('links Search card to /search', () => {
+    render(<Home />);
+    const link = screen.getByText('Search').closest('a');
+    expect(link).toHaveAttribute('href', '/search');
   });
 });
