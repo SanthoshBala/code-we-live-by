@@ -2775,6 +2775,81 @@ Examples:
         help="Delete existing rows and re-fetch from Congress.gov",
     )
 
+    # seed-committees command
+    seed_committees_parser = subparsers.add_parser(
+        "seed-committees",
+        help="Upsert Committee rows from committee_seed.yaml",
+    )
+    seed_committees_parser.add_argument(
+        "--yaml",
+        type=Path,
+        default=None,
+        help="Path to committee YAML fixture (default: bundled committee_seed.yaml)",
+    )
+    seed_committees_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Update existing rows even if unchanged",
+    )
+
+    # seed-codeowners command
+    seed_codeowners_parser = subparsers.add_parser(
+        "seed-codeowners",
+        help="Upsert CommitteeUSCodeMapping rows from committee_usc_mappings.yaml",
+    )
+    seed_codeowners_parser.add_argument(
+        "--yaml",
+        type=Path,
+        default=None,
+        help="Path to mapping YAML fixture (default: bundled committee_usc_mappings.yaml)",
+    )
+    seed_codeowners_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Update existing rows even if unchanged",
+    )
+
+    # house-rules-ingest command
+    house_rules_ingest_parser = subparsers.add_parser(
+        "house-rules-ingest",
+        help="Fetch House Rule X from GovInfo HMAN and store CommitteeCongressInstance rows",
+    )
+    house_rules_ingest_parser.add_argument(
+        "congress",
+        type=int,
+        help="Congress number to ingest (e.g. 119)",
+    )
+    house_rules_ingest_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Re-fetch even if cached",
+    )
+
+    # house-rules-ingest-range command
+    house_rules_ingest_range_parser = subparsers.add_parser(
+        "house-rules-ingest-range",
+        help="Ingest House Rule X for a range of Congresses (useful for backfilling 106–119)",
+    )
+    house_rules_ingest_range_parser.add_argument(
+        "start",
+        type=int,
+        help="First Congress number (inclusive)",
+    )
+    house_rules_ingest_range_parser.add_argument(
+        "end",
+        type=int,
+        help="Last Congress number (inclusive)",
+    )
+    house_rules_ingest_range_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Re-fetch even if cached",
+    )
+
     args = parser.parse_args()
 
     # Initialize shared pipeline cache (local-only unless GCS_CACHE_BUCKET is set)
@@ -3176,6 +3251,39 @@ Examples:
         return asyncio.run(
             seed_congress_law_history_command(
                 congress=args.congress,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "seed-committees":
+        return asyncio.run(
+            seed_committees_command(
+                yaml_path=args.yaml,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "seed-codeowners":
+        return asyncio.run(
+            seed_codeowners_command(
+                yaml_path=args.yaml,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "house-rules-ingest":
+        return asyncio.run(
+            house_rules_ingest_command(
+                congress=args.congress,
+                force=args.force,
+            )
+        )
+
+    elif args.command == "house-rules-ingest-range":
+        return asyncio.run(
+            house_rules_ingest_range_command(
+                start=args.start,
+                end=args.end,
                 force=args.force,
             )
         )
@@ -3965,6 +4073,157 @@ def _print_checkpoint_result(checkpoint) -> None:  # type: ignore[type-arg]
             )
         if len(checkpoint.mismatches) > 30:
             print(f"      ... and {len(checkpoint.mismatches) - 30} more")
+
+
+async def seed_committees_command(
+    yaml_path: Path | None = None,
+    force: bool = False,
+) -> int:
+    """Upsert Committee rows from the YAML fixture.
+
+    Args:
+        yaml_path: Path to YAML fixture; defaults to bundled committee_seed.yaml.
+        force: If True, update existing rows even if unchanged.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from pathlib import Path as _Path
+
+    from app.models.base import async_session_maker
+    from pipeline.house_rules.seed import (
+        _DEFAULT_COMMITTEE_YAML,
+        seed_committees,
+    )
+
+    resolved = yaml_path if yaml_path is not None else _DEFAULT_COMMITTEE_YAML
+    logger.info("Seeding committees from %s", resolved)
+
+    try:
+        async with async_session_maker() as session:
+            count = await seed_committees(
+                session, yaml_path=_Path(resolved), force=force
+            )
+        print(f"Seeded {count} committee rows.")
+        return 0
+    except Exception as exc:
+        logger.error("seed-committees failed: %s", exc)
+        return 1
+
+
+async def seed_codeowners_command(
+    yaml_path: Path | None = None,
+    force: bool = False,
+) -> int:
+    """Upsert CommitteeUSCodeMapping rows from the YAML fixture.
+
+    Requires Committee rows to already exist (run seed-committees first).
+
+    Args:
+        yaml_path: Path to YAML fixture; defaults to bundled committee_usc_mappings.yaml.
+        force: If True, update existing rows even if unchanged.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from pathlib import Path as _Path
+
+    from app.models.base import async_session_maker
+    from pipeline.house_rules.seed import (
+        _DEFAULT_MAPPING_YAML,
+        seed_codeowners_mappings,
+    )
+
+    resolved = yaml_path if yaml_path is not None else _DEFAULT_MAPPING_YAML
+    logger.info("Seeding CODEOWNERS mappings from %s", resolved)
+
+    try:
+        async with async_session_maker() as session:
+            count = await seed_codeowners_mappings(
+                session, yaml_path=_Path(resolved), force=force
+            )
+        print(f"Seeded {count} CommitteeUSCodeMapping rows.")
+        return 0
+    except Exception as exc:
+        logger.error("seed-codeowners failed: %s", exc)
+        return 1
+
+
+async def house_rules_ingest_command(
+    congress: int,
+    force: bool = False,
+) -> int:
+    """Fetch House Rule X from GovInfo HMAN and upsert CommitteeCongressInstance rows.
+
+    Args:
+        congress: Congress number to ingest (e.g. 119).
+        force: If True, re-fetch even if the HTML is already cached.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.house_rules.ingestion import HouseRulesIngestionService
+
+    logger.info("Ingesting House Rule X for %dth Congress", congress)
+
+    try:
+        async with async_session_maker() as session:
+            service = HouseRulesIngestionService(session, cache=_cli_cache)
+            log = await service.ingest_congress(congress, force=force)
+        print(
+            f"house-rules-ingest {congress}: status={log.status} "
+            f"created={log.records_created} updated={log.records_updated} "
+            f"failed={log.records_failed}"
+        )
+        return 0 if log.status == "completed" else 1
+    except Exception as exc:
+        logger.error("house-rules-ingest failed: %s", exc)
+        return 1
+
+
+async def house_rules_ingest_range_command(
+    start: int,
+    end: int,
+    force: bool = False,
+) -> int:
+    """Ingest House Rule X for a range of Congresses.
+
+    Args:
+        start: First Congress number (inclusive).
+        end: Last Congress number (inclusive).
+        force: If True, re-fetch even if cached.
+
+    Returns:
+        0 on success, 1 if any Congress failed.
+    """
+    from app.models.base import async_session_maker
+    from pipeline.house_rules.ingestion import HouseRulesIngestionService
+
+    logger.info("Ingesting House Rule X for Congresses %d–%d", start, end)
+
+    failed = 0
+    for congress in range(start, end + 1):
+        try:
+            async with async_session_maker() as session:
+                service = HouseRulesIngestionService(session, cache=_cli_cache)
+                log = await service.ingest_congress(congress, force=force)
+            status = log.status
+            print(
+                f"  Congress {congress}: {status} "
+                f"(created={log.records_created} updated={log.records_updated})"
+            )
+            if status != "completed":
+                failed += 1
+        except Exception as exc:
+            logger.error("  Congress %d failed: %s", congress, exc)
+            failed += 1
+
+    if failed:
+        print(f"\n{failed} Congress(es) failed.")
+    else:
+        print(f"\nAll {end - start + 1} Congress(es) ingested successfully.")
+    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":

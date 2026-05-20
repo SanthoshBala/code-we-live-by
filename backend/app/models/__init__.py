@@ -1,6 +1,7 @@
 """SQLAlchemy models for The Code We Live By."""
 
 from app.models.base import Base, TimestampMixin, async_session_maker, get_async_session
+from app.models.codeowners import CommitteeCongressInstance, CommitteeUSCodeMapping
 from app.models.enums import (
     AmendmentReviewStatus,
     BillStatus,
@@ -110,6 +111,9 @@ __all__ = [
     "SectionSnapshot",
     "RevisionType",
     "RevisionStatus",
+    # CODEOWNERS
+    "CommitteeCongressInstance",
+    "CommitteeUSCodeMapping",
     # Supporting
     "SectionReference",
     "Committee",

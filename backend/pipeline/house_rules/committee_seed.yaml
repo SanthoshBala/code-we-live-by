@@ -1,0 +1,204 @@
+# Committee seed data — stable identity records for all House and Senate committees.
+# These are loaded by `seed-committees` CLI command and must exist before
+# CommitteeCongressInstance or CommitteeUSCodeMapping rows can be inserted.
+#
+# committee_code slug convention: {chamber}-{short-name}
+# chamber values: "House" or "Senate"
+
+committees:
+  # ── House Committees ─────────────────────────────────────────────────────
+  - code: house-agriculture
+    chamber: House
+    name: "Committee on Agriculture"
+    url: "https://agriculture.house.gov/"
+
+  - code: house-appropriations
+    chamber: House
+    name: "Committee on Appropriations"
+    url: "https://appropriations.house.gov/"
+
+  - code: house-armed-services
+    chamber: House
+    name: "Committee on Armed Services"
+    url: "https://armedservices.house.gov/"
+
+  - code: house-budget
+    chamber: House
+    name: "Committee on the Budget"
+    url: "https://budget.house.gov/"
+
+  - code: house-education-and-workforce
+    chamber: House
+    name: "Committee on Education and the Workforce"
+    url: "https://edworkforce.house.gov/"
+
+  - code: house-energy-and-commerce
+    chamber: House
+    name: "Committee on Energy and Commerce"
+    url: "https://energycommerce.house.gov/"
+
+  - code: house-ethics
+    chamber: House
+    name: "Committee on Ethics"
+    url: "https://ethics.house.gov/"
+
+  - code: house-financial-services
+    chamber: House
+    name: "Committee on Financial Services"
+    url: "https://financialservices.house.gov/"
+
+  - code: house-foreign-affairs
+    chamber: House
+    name: "Committee on Foreign Affairs"
+    url: "https://foreignaffairs.house.gov/"
+
+  - code: house-homeland-security
+    chamber: House
+    name: "Committee on Homeland Security"
+    url: "https://homeland.house.gov/"
+
+  - code: house-administration
+    chamber: House
+    name: "Committee on House Administration"
+    url: "https://cha.house.gov/"
+
+  - code: house-intelligence
+    chamber: House
+    name: "Permanent Select Committee on Intelligence"
+    url: "https://intelligence.house.gov/"
+
+  - code: house-judiciary
+    chamber: House
+    name: "Committee on the Judiciary"
+    url: "https://judiciary.house.gov/"
+
+  - code: house-natural-resources
+    chamber: House
+    name: "Committee on Natural Resources"
+    url: "https://naturalresources.house.gov/"
+
+  - code: house-oversight-and-accountability
+    chamber: House
+    name: "Committee on Oversight and Accountability"
+    url: "https://oversight.house.gov/"
+
+  - code: house-rules
+    chamber: House
+    name: "Committee on Rules"
+    url: "https://rules.house.gov/"
+
+  - code: house-science-space-technology
+    chamber: House
+    name: "Committee on Science, Space, and Technology"
+    url: "https://science.house.gov/"
+
+  - code: house-small-business
+    chamber: House
+    name: "Committee on Small Business"
+    url: "https://smallbusiness.house.gov/"
+
+  - code: house-transportation-and-infrastructure
+    chamber: House
+    name: "Committee on Transportation and Infrastructure"
+    url: "https://transportation.house.gov/"
+
+  - code: house-veterans-affairs
+    chamber: House
+    name: "Committee on Veterans' Affairs"
+    url: "https://veterans.house.gov/"
+
+  - code: house-ways-and-means
+    chamber: House
+    name: "Committee on Ways and Means"
+    url: "https://waysandmeans.house.gov/"
+
+  # ── Senate Committees ────────────────────────────────────────────────────
+  - code: senate-agriculture-nutrition-forestry
+    chamber: Senate
+    name: "Committee on Agriculture, Nutrition, and Forestry"
+    url: "https://www.agriculture.senate.gov/"
+
+  - code: senate-appropriations
+    chamber: Senate
+    name: "Committee on Appropriations"
+    url: "https://www.appropriations.senate.gov/"
+
+  - code: senate-armed-services
+    chamber: Senate
+    name: "Committee on Armed Services"
+    url: "https://www.armed-services.senate.gov/"
+
+  - code: senate-banking-housing-urban-affairs
+    chamber: Senate
+    name: "Committee on Banking, Housing, and Urban Affairs"
+    url: "https://www.banking.senate.gov/"
+
+  - code: senate-budget
+    chamber: Senate
+    name: "Committee on the Budget"
+    url: "https://www.budget.senate.gov/"
+
+  - code: senate-commerce-science-transportation
+    chamber: Senate
+    name: "Committee on Commerce, Science, and Transportation"
+    url: "https://www.commerce.senate.gov/"
+
+  - code: senate-energy-and-natural-resources
+    chamber: Senate
+    name: "Committee on Energy and Natural Resources"
+    url: "https://www.energy.senate.gov/"
+
+  - code: senate-environment-and-public-works
+    chamber: Senate
+    name: "Committee on Environment and Public Works"
+    url: "https://www.epw.senate.gov/"
+
+  - code: senate-finance
+    chamber: Senate
+    name: "Committee on Finance"
+    url: "https://www.finance.senate.gov/"
+
+  - code: senate-foreign-relations
+    chamber: Senate
+    name: "Committee on Foreign Relations"
+    url: "https://www.foreign.senate.gov/"
+
+  - code: senate-help
+    chamber: Senate
+    name: "Committee on Health, Education, Labor, and Pensions"
+    url: "https://www.help.senate.gov/"
+
+  - code: senate-homeland-security-governmental-affairs
+    chamber: Senate
+    name: "Committee on Homeland Security and Governmental Affairs"
+    url: "https://www.hsgac.senate.gov/"
+
+  - code: senate-indian-affairs
+    chamber: Senate
+    name: "Committee on Indian Affairs"
+    url: "https://www.indian.senate.gov/"
+
+  - code: senate-intelligence
+    chamber: Senate
+    name: "Select Committee on Intelligence"
+    url: "https://www.intelligence.senate.gov/"
+
+  - code: senate-judiciary
+    chamber: Senate
+    name: "Committee on the Judiciary"
+    url: "https://www.judiciary.senate.gov/"
+
+  - code: senate-rules-and-administration
+    chamber: Senate
+    name: "Committee on Rules and Administration"
+    url: "https://www.rules.senate.gov/"
+
+  - code: senate-small-business
+    chamber: Senate
+    name: "Committee on Small Business and Entrepreneurship"
+    url: "https://www.sbc.senate.gov/"
+
+  - code: senate-veterans-affairs
+    chamber: Senate
+    name: "Committee on Veterans' Affairs"
+    url: "https://www.veterans.senate.gov/"
