@@ -1959,6 +1959,59 @@ class TestNoteTopicAmendmentParsing:
         assert len(amendment_notes) == 1
         assert len(notes.amendments) >= 1
 
+    def test_multiple_flat_notes_mixed_categories_issue_222(self) -> None:
+        """33 USC §2215 pattern: multiple flat <note topic="..."><heading>...</heading> elements.
+
+        The section has 4 flat notes with no 'Editorial Notes'/'Statutory Notes' wrapper.
+        All notes must be parsed with correct categories. Closes #222.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="referencesInText">'
+            "<heading>References in Text</heading>"
+            "<p>The Water Resources Development Act of 2000, referred to in subsec. (d)(2),"
+            " is Pub. L. 106–541, Dec. 11, 2000, 114 Stat. 2572."
+            " Title VI of the Act is not classified to the Code.</p>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2007—Subsec. (a)(3). Pub. L. 110–114, added par. (3).</p>"
+            "<p>1990—Subsec. (b). Pub. L. 101–640 inserted text at end.</p>"
+            "</note>"
+            '<note topic="effectiveDateOfAmendment">'
+            "<heading>Effective Date of 1996 Amendment</heading>"
+            "<p>Pub. L. 104–303, title II, § 203(b), Oct. 12, 1996,"
+            " 110 Stat. 3678, provided that the amendments shall apply"
+            " notwithstanding any prior feasibility cost-sharing agreement.</p>"
+            "</note>"
+            '<note topic="miscellaneous">'
+            "<heading>No Requirement of Reimbursement</heading>"
+            "<p>Pub. L. 104–303, title II, § 203(c), Oct. 12, 1996,"
+            " 110 Stat. 3678, provided that nothing in this section requires"
+            " reimbursement for funds previously contributed for a study.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        assert len(notes.notes) == 4
+
+        headers = [n.header for n in notes.notes]
+        assert "References In Text" in headers
+        assert "Amendments" in headers
+        assert "Effective Date Of 1996 Amendment" in headers
+        assert "No Requirement Of Reimbursement" in headers
+
+        editorial = [n for n in notes.notes if n.category.value == "editorial"]
+        statutory = [n for n in notes.notes if n.category.value == "statutory"]
+        assert len(editorial) == 2  # References in Text + Amendments
+        assert len(statutory) == 2  # Effective Date + No Requirement
+
+        assert len(notes.amendments) >= 2
+        years = [a.year for a in notes.amendments]
+        assert 1990 in years
+        assert 2007 in years
+
 
 class TestCleanHeading:
     """Tests for _clean_heading function."""
