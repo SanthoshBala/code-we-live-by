@@ -17,6 +17,12 @@ function stripHtml(raw: string): string {
   }
   // Remove GPO end-of-document marker <all>
   text = text.replace(/<all>\s*/gi, '');
+  // Normalize leading tabs to 4-space indentation so HTM/XML tabs match
+  // the visual rhythm of the statute viewer (which uses space-based indentation).
+  text = text
+    .split('\n')
+    .map((line) => line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length)))
+    .join('\n');
   // Trim leading/trailing blank lines
   return text.replace(/^\n+/, '').replace(/\n+$/, '');
 }
