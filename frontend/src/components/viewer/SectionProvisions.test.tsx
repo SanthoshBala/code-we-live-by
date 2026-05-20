@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import SectionProvisions from './SectionProvisions';
 
@@ -609,5 +609,42 @@ describe('deep link anchors', () => {
     // marker "(a)" is line_number 1 → display line 5
     expect(container.querySelector('#line-5')).toHaveClass('bg-yellow-100');
     expect(container.querySelector('#line-6')).not.toHaveClass('bg-yellow-100');
+  });
+
+  it('renders line numbers as anchors with correct href', () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) Test provision text"
+        status={null}
+      />
+    );
+    // Docstring line 1
+    const lineOneAnchor = container.querySelector('a[href="#line-1"]');
+    expect(lineOneAnchor).toBeInTheDocument();
+    expect(lineOneAnchor!.textContent).toBe('1');
+    // First provision (display line 5)
+    const lineFiveAnchor = container.querySelector('a[href="#line-5"]');
+    expect(lineFiveAnchor).toBeInTheDocument();
+    expect(lineFiveAnchor!.textContent).toBe('5');
+  });
+
+  it('clicking a line number sets the URL hash and highlights that line', async () => {
+    const { container } = render(
+      <SectionProvisions
+        {...defaultProps}
+        textContent="(a) Test provision text"
+        status={null}
+      />
+    );
+
+    const lineFiveAnchor = container.querySelector(
+      'a[href="#line-5"]'
+    ) as HTMLAnchorElement;
+    fireEvent.click(lineFiveAnchor);
+    await act(async () => {});
+
+    expect(window.location.hash).toBe('#line-5');
+    expect(container.querySelector('#line-5')).toHaveClass('bg-yellow-100');
   });
 });

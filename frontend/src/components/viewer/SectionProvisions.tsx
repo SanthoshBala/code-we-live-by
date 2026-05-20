@@ -221,11 +221,19 @@ export default function SectionProvisions({
   const tree = buildSections(parsedLines);
 
   function renderLineContent(pl: ParsedLine) {
+    const displayNum = pl.lineIndex + 1 + blankLineNumber;
     return (
       <>
-        <span className="w-10 shrink-0 select-none text-right text-gray-400">
-          {pl.lineIndex + 1 + blankLineNumber}
-        </span>
+        <a
+          href={`#line-${displayNum}`}
+          onClick={(e) => {
+            e.preventDefault();
+            window.location.hash = `line-${displayNum}`;
+          }}
+          className="w-10 shrink-0 select-none text-right text-gray-400 hover:text-primary-500"
+        >
+          {displayNum}
+        </a>
         <span className="mx-2 select-none text-gray-400">│</span>
         {pl.indent && (
           <span className="shrink-0 whitespace-pre text-gray-800">
@@ -341,9 +349,16 @@ export default function SectionProvisions({
             id={`line-${i + 1}`}
             className={`flex items-start text-green-700${highlightedLine === i + 1 ? ' bg-yellow-100' : ''}`}
           >
-            <span className="w-10 shrink-0 select-none text-right text-gray-400">
+            <a
+              href={`#line-${i + 1}`}
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.hash = `line-${i + 1}`;
+              }}
+              className="w-10 shrink-0 select-none text-right text-gray-400 hover:text-primary-500"
+            >
               {i + 1}
-            </span>
+            </a>
             <span className="mx-2 select-none text-gray-400">│</span>
             <span className="min-w-0 pl-[2ch] -indent-[2ch]">
               <span className="select-none"># </span>
@@ -355,9 +370,16 @@ export default function SectionProvisions({
           id={`line-${blankLineNumber}`}
           className={`flex${highlightedLine === blankLineNumber ? ' bg-yellow-100' : ''}`}
         >
-          <span className="w-10 shrink-0 select-none text-right text-gray-400">
+          <a
+            href={`#line-${blankLineNumber}`}
+            onClick={(e) => {
+              e.preventDefault();
+              window.location.hash = `line-${blankLineNumber}`;
+            }}
+            className="w-10 shrink-0 select-none text-right text-gray-400 hover:text-primary-500"
+          >
             {blankLineNumber}
-          </span>
+          </a>
           <span className="mx-2 select-none text-gray-400">│</span>
         </div>
         {tree.map(renderNode)}
