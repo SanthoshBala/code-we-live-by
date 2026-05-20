@@ -194,6 +194,14 @@ export interface LawSummary {
   sections_affected: number;
 }
 
+/** Paginated response from GET /api/v1/laws. */
+export interface PaginatedLaws {
+  total: number;
+  items: LawSummary[];
+  limit: number;
+  offset: number;
+}
+
 /** Raw text content of a Public Law. */
 export interface LawText {
   congress: number;

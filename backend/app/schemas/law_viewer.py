@@ -20,6 +20,15 @@ class LawSummarySchema(BaseModel):
     sections_affected: int = Field(0, description="Number of USC sections affected")
 
 
+class PaginatedLawsResponse(BaseModel):
+    """Paginated response for the public laws list."""
+
+    total: int = Field(..., description="Total number of laws in the database")
+    items: list[LawSummarySchema]
+    limit: int
+    offset: int
+
+
 class LawTextSchema(BaseModel):
     """Raw text content of a Public Law (HTM and/or XML)."""
 

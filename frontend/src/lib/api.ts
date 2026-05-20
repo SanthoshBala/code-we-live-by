@@ -7,6 +7,7 @@ import type {
   LegislativeHistory,
   ParsedAmendment,
   LawDiffsResponse,
+  PaginatedLaws,
   StandaloneProvision,
   HeadRevision,
 } from './types';
@@ -65,9 +66,12 @@ export async function fetchSection(
   return res.json();
 }
 
-/** Fetch all public law summaries. */
-export async function fetchLaws(): Promise<LawSummary[]> {
-  const res = await fetch(`${API_BASE}/laws/?limit=500`);
+/** Fetch a page of public law summaries. */
+export async function fetchLaws(
+  limit = 50,
+  offset = 0
+): Promise<PaginatedLaws> {
+  const res = await fetch(`${API_BASE}/laws/?limit=${limit}&offset=${offset}`);
   if (!res.ok) {
     throw new Error(`Failed to fetch laws: ${res.status}`);
   }
