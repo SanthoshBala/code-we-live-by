@@ -37,6 +37,9 @@ class CodeLineSchema(BaseModel):
     marker: str | None = Field(None, description="List item marker (e.g., '(a)')")
     is_header: bool = Field(False, description="Whether this is a header line")
     is_signature: bool = Field(False, description="Whether this is a signature line")
+    is_quoted: bool = Field(
+        False, description="True for lines derived from <quotedContent> blocks"
+    )
     start_char: int = Field(..., ge=0, description="Start position in original text")
     end_char: int = Field(..., ge=0, description="End position in original text")
 

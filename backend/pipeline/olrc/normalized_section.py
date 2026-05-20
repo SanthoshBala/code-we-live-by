@@ -355,6 +355,26 @@ CITATION_PARSE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Notes-parsing patterns — compiled once at module level to avoid per-call overhead.
+# (Previously compiled inside function bodies, causing ~1026 re._compile calls per
+# _parse_notes_structure invocation due to Python's 512-entry LRU cache churn.)
+_NH_HEADER_PATTERN = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
+_REPORT_PATTERN = re.compile(
+    r"((?:House|Senate)\s+Report\s+No\.\s*[\d–-]+)",
+    re.IGNORECASE,
+)
+_YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
+_PUB_L_PATTERN = re.compile(
+    r"((?:Subsec\.?\s*"  # "Subsec." or "Subsec"
+    r"(?:\([^)]+\))+"  # One or more parenthesized markers like (c)(1)
+    r"(?:\s*,\s*(?:\([^)]+\))+)*"  # Optional comma-separated markers like , (2)(A)
+    r"\.?\s*)?)"  # Optional trailing period and whitespace
+    r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
+    r"(.*?)"  # Description (including any text after)
+    r"(?=Subsec\.?\s*(?:\([^)]+\))+|Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Subsec. or Pub. L. or end
+    re.DOTALL,
+)
+
 
 def _build_law_path(
     division: str | None = None,
@@ -972,6 +992,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
                             indent_level=indent,
                             marker=marker,
                             is_header=False,
+                            is_quoted=True,
                             start_char=match.start(),
                             end_char=match.end(),
                         )
@@ -1105,6 +1126,38 @@ def _indent_block_quotes(
     return result
 
 
+def _amendment_lines(raw_content: str) -> list[ParsedLine]:
+    """Fast path for Amendments notes: split on newlines, skip sentence detection.
+
+    Amendment text consists of year-prefixed entries ("1988—Pub. L. 100–568 …"),
+    one per line, so sentence-boundary detection in normalize_note_content adds
+    no value while costing ~98× more than a plain newline split.
+    """
+    cleaned = re.sub(r"\[NH\].*?\[/NH\]", "", raw_content, flags=re.DOTALL)
+    cleaned = re.sub(r"\[/NH\]", "", cleaned)
+    cleaned = re.sub(r"\[PARA\]", "\n\n", cleaned)
+
+    lines: list[ParsedLine] = []
+    pos = 0
+    for raw_line in cleaned.split("\n"):
+        content = raw_line.strip()
+        if content:
+            lines.append(
+                ParsedLine(
+                    line_number=len(lines) + 1,
+                    content=content,
+                    indent_level=0,
+                    marker=None,
+                    is_header=False,
+                    is_signature=False,
+                    start_char=pos,
+                    end_char=pos + len(raw_line.rstrip()),
+                )
+            )
+        pos += len(raw_line) + 1  # +1 for the \n separator
+    return lines
+
+
 def _parse_amendments(text: str) -> list[Amendment]:
     """Parse amendment entries from the Amendments subsection.
 
@@ -1124,12 +1177,8 @@ def _parse_amendments(text: str) -> list[Amendment]:
     """
     amendments = []
 
-    # First, split by year markers to get year blocks
-    # Pattern: "YYYY—" at start of line or after whitespace
-    year_pattern = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
-
     # Find all year markers and their positions
-    year_matches = list(year_pattern.finditer(text))
+    year_matches = list(_YEAR_PATTERN.finditer(text))
 
     for i, year_match in enumerate(year_matches):
         year = int(year_match.group(1))
@@ -1140,22 +1189,11 @@ def _parse_amendments(text: str) -> list[Amendment]:
 
         year_block = text[start:end].strip()
 
-        # Now find all Pub. L. references within this year block
-        # Each Pub. L. reference is a separate amendment
-        # Capture optional subsection prefix (e.g., "Subsec. (c)(1), (2)(A). ")
-        # Subsection markers can be compound like (c)(1) and comma-separated
-        pub_l_pattern = re.compile(
-            r"((?:Subsec\.?\s*"  # "Subsec." or "Subsec"
-            r"(?:\([^)]+\))+"  # One or more parenthesized markers like (c)(1)
-            r"(?:\s*,\s*(?:\([^)]+\))+)*"  # Optional comma-separated markers like , (2)(A)
-            r"\.?\s*)?)"  # Optional trailing period and whitespace
-            r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
-            r"(.*?)"  # Description (including any text after)
-            r"(?=Subsec\.?\s*(?:\([^)]+\))+|Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Subsec. or Pub. L. or end
-            re.DOTALL,
-        )
+        # Find all Pub. L. references within this year block; save the list so we
+        # can reuse it below without running finditer a second time (Finding 2).
+        matches = list(_PUB_L_PATTERN.finditer(year_block))
 
-        for pub_match in pub_l_pattern.finditer(year_block):
+        for pub_match in matches:
             subsec_prefix = (pub_match.group(1) or "").strip()
             public_law_text = pub_match.group(2)
             congress = int(pub_match.group(3))
@@ -1191,7 +1229,7 @@ def _parse_amendments(text: str) -> list[Amendment]:
             )
 
         # If no Pub. L. found in the block, still record the year with the description
-        if not list(pub_l_pattern.finditer(year_block)) and year_block:
+        if not matches and year_block:
             # Try to extract any Pub. L. reference
             simple_pub_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—–-](\d+)", year_block)
             if simple_pub_match:
@@ -1382,9 +1420,8 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         "Effective Date Of Repeal",
     }
 
-    header_pattern = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
     header_positions: list[tuple[int, int, str]] = []
-    for match in header_pattern.finditer(raw_notes):
+    for match in _NH_HEADER_PATTERN.finditer(raw_notes):
         header = match.group(1).strip()
         if not header:
             continue
@@ -1422,7 +1459,9 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
             SectionNote(
                 header=header,
                 content=content,
-                lines=normalize_note_content(raw_content),
+                lines=_amendment_lines(raw_content)
+                if header == "Amendments"
+                else normalize_note_content(raw_content),
                 category=category,
             )
         )
@@ -1467,12 +1506,7 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
 
     # Look for report headers (e.g., "House Report No. 94-1476")
     # These are the primary sub-divisions in historical notes
-    report_pattern = re.compile(
-        r"((?:House|Senate)\s+Report\s+No\.\s*[\d–-]+)",
-        re.IGNORECASE,
-    )
-
-    matches = list(report_pattern.finditer(hist_text))
+    matches = list(_REPORT_PATTERN.finditer(hist_text))
     if not matches:
         # No sub-headers, treat the whole section as one note
         cleaned_hist = _strip_note_markers(hist_text)
@@ -1527,11 +1561,9 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
         return
 
     # Find note headers using [NH]...[/NH] markers from XML parser
-    header_pattern = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
-
     # Find all headers and their positions
     header_positions: list[tuple[int, int, str]] = []
-    for match in header_pattern.finditer(editorial_text):
+    for match in _NH_HEADER_PATTERN.finditer(editorial_text):
         header = match.group(1).strip()
         # Skip if too short
         if len(header.split()) < 1:
@@ -1563,7 +1595,9 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
                 SectionNote(
                     header=header,
                     content=content,
-                    lines=normalize_note_content(raw_content),
+                    lines=_amendment_lines(raw_content)
+                    if header == "Amendments"
+                    else normalize_note_content(raw_content),
                     category=NoteCategory.EDITORIAL,
                 )
             )
@@ -1591,11 +1625,10 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
 
     # Find note headers using [NH]...[/NH] markers from XML parser
     # These markers are added for <heading class="smallCaps"> elements
-    header_pattern = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
 
     # Find all headers and their positions
     header_positions: list[tuple[int, int, str]] = []
-    for match in header_pattern.finditer(statutory_text):
+    for match in _NH_HEADER_PATTERN.finditer(statutory_text):
         header = match.group(1).strip()
         # Skip if too short or a fragment
         if len(header.split()) < 2:

@@ -47,11 +47,116 @@ const columns: { key: SortKey; label: string; align: string }[] = [
   { key: 'sections_affected', label: 'Sections Affected', align: 'text-right' },
 ];
 
-/** Sortable laws table. Receives initial data from the parent Server Component. */
-export default function LawsTable({ laws }: { laws: LawSummary[] }) {
+interface PaginationProps {
+  page: number;
+  totalPages: number;
+  total: number;
+  limit: number;
+}
+
+function Pagination({ page, totalPages, total, limit }: PaginationProps) {
+  if (totalPages <= 1) return null;
+
+  const start = (page - 1) * limit + 1;
+  const end = Math.min(page * limit, total);
+
+  // Show at most 5 page numbers centered around the current page
+  const pageNumbers: number[] = [];
+  const half = 2;
+  let lo = Math.max(1, page - half);
+  const hi = Math.min(totalPages, lo + 4);
+  lo = Math.max(1, hi - 4);
+  for (let i = lo; i <= hi; i++) pageNumbers.push(i);
+
+  return (
+    <div className="mt-4 flex items-center justify-between">
+      <p className="text-sm text-gray-500">
+        Showing {start}–{end} of {total} laws
+      </p>
+      <nav className="flex items-center gap-1" aria-label="Pagination">
+        <Link
+          href={`/laws?page=${page - 1}`}
+          aria-disabled={page === 1}
+          className={`rounded px-2 py-1 text-sm ${
+            page === 1
+              ? 'pointer-events-none text-gray-300'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          ← Prev
+        </Link>
+        {lo > 1 && (
+          <>
+            <Link
+              href="/laws?page=1"
+              className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+            >
+              1
+            </Link>
+            {lo > 2 && <span className="px-1 text-sm text-gray-400">…</span>}
+          </>
+        )}
+        {pageNumbers.map((n) => (
+          <Link
+            key={n}
+            href={`/laws?page=${n}`}
+            className={`rounded px-2 py-1 text-sm ${
+              n === page
+                ? 'bg-primary-600 font-medium text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {n}
+          </Link>
+        ))}
+        {hi < totalPages && (
+          <>
+            {hi < totalPages - 1 && (
+              <span className="px-1 text-sm text-gray-400">…</span>
+            )}
+            <Link
+              href={`/laws?page=${totalPages}`}
+              className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+            >
+              {totalPages}
+            </Link>
+          </>
+        )}
+        <Link
+          href={`/laws?page=${page + 1}`}
+          aria-disabled={page === totalPages}
+          className={`rounded px-2 py-1 text-sm ${
+            page === totalPages
+              ? 'pointer-events-none text-gray-300'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          Next →
+        </Link>
+      </nav>
+    </div>
+  );
+}
+
+interface LawsTableProps {
+  laws: LawSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** Sortable laws table. Receives a single page of data from the parent Server Component. */
+export default function LawsTable({
+  laws,
+  total,
+  page,
+  limit,
+}: LawsTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('enacted_date');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const queryClient = useQueryClient();
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   const sorted = useMemo(() => {
     const copy = [...laws];
@@ -143,6 +248,13 @@ export default function LawsTable({ laws }: { laws: LawSummary[] }) {
           </p>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        limit={limit}
+      />
     </div>
   );
 }

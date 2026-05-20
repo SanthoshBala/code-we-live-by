@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Integer, cast, select
+from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -33,6 +33,7 @@ from app.schemas.law_viewer import (
     LawDiffsResponse,
     LawSummarySchema,
     LawTextSchema,
+    PaginatedLawsResponse,
     ParsedAmendmentSchema,
     PositionQualifierSchema,
     SectionDiffSchema,
@@ -47,11 +48,14 @@ async def get_laws_list(
     session: AsyncSession,
     limit: int = 50,
     offset: int = 0,
-) -> list[LawSummarySchema]:
+) -> PaginatedLawsResponse:
     """Return public laws ordered by congress desc, law_number desc.
 
-    Paginated with limit/offset to avoid transferring the entire table.
+    Paginated with limit/offset. Includes a total count for building page controls.
     """
+    count_result = await session.execute(select(func.count()).select_from(PublicLaw))
+    total = count_result.scalar_one()
+
     stmt = (
         select(PublicLaw)
         .order_by(
@@ -64,7 +68,7 @@ async def get_laws_list(
     result = await session.execute(stmt)
     laws = result.scalars().all()
 
-    return [
+    items = [
         LawSummarySchema(
             congress=law.congress,
             law_number=law.law_number,
@@ -75,6 +79,7 @@ async def get_laws_list(
         )
         for law in laws
     ]
+    return PaginatedLawsResponse(total=total, items=items, limit=limit, offset=offset)
 
 
 def _date_str(d: Any) -> str | None:

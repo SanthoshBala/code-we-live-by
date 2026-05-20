@@ -88,6 +88,7 @@ export interface CodeLine {
   marker: string | null;
   is_header: boolean;
   is_signature?: boolean;
+  is_quoted?: boolean;
 }
 
 export type NoteRefType = 'public_law' | 'act' | 'usc_section' | 'statute';
@@ -191,6 +192,14 @@ export interface LawSummary {
   short_title: string | null;
   enacted_date: string;
   sections_affected: number;
+}
+
+/** Paginated response from GET /api/v1/laws. */
+export interface PaginatedLaws {
+  total: number;
+  items: LawSummary[];
+  limit: number;
+  offset: number;
 }
 
 /** Raw text content of a Public Law. */
