@@ -273,7 +273,7 @@ export default function LawDiffViewer({
                 if (el) sectionRefs.current.set(diff.section_key, el);
               }}
             >
-              <h3 className="mb-3">
+              <h3 className="sticky top-0 z-10 -mx-2 mb-3 bg-white px-2 pb-2 pt-1 shadow-sm">
                 <SectionBreadcrumb
                   titleNumber={diff.title_number}
                   sectionNumber={diff.section_number}
