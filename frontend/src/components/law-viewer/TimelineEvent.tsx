@@ -17,6 +17,27 @@ function formatDate(dateStr: string | null): string {
   return `${year}.${month}.${day}`;
 }
 
+// Matches "CR H481", "CR 2/12/2013 H439-440", "CR S1234"
+const CR_REF_RE =
+  /^CR\s+(?:(\d{1,2})\/(\d{1,2})\/(\d{4})\s+)?([A-Z]\d+(?:-\d+)?)$/;
+
+function crRefToUrl(ref: string, eventDate: string | null): string | null {
+  const m = CR_REF_RE.exec(ref);
+  if (!m) return null;
+  const [, month, day, year, page] = m;
+
+  let isoDate: string | null = null;
+  if (year) {
+    isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  } else if (eventDate) {
+    isoDate = eventDate;
+  }
+  if (!isoDate) return null;
+
+  const chamber = page.startsWith('S') ? 'senate' : 'house';
+  return `https://www.congress.gov/congressional-record/${isoDate}/${chamber}-section`;
+}
+
 // ── Icons ──────────────────────────────────────────────────────────────────
 
 function EventIcon({
@@ -349,14 +370,27 @@ export default function TimelineEvent({ event, view }: TimelineEventProps) {
         {/* Congressional record refs */}
         {event.congressional_record_refs.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
-            {event.congressional_record_refs.map((ref) => (
-              <span
-                key={ref}
-                className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500"
-              >
-                {ref}
-              </span>
-            ))}
+            {event.congressional_record_refs.map((ref) => {
+              const url = crRefToUrl(ref, event.date);
+              return url ? (
+                <a
+                  key={ref}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-blue-600 hover:bg-gray-200 hover:underline"
+                >
+                  {ref} →
+                </a>
+              ) : (
+                <span
+                  key={ref}
+                  className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500"
+                >
+                  {ref}
+                </span>
+              );
+            })}
           </div>
         )}
 
