@@ -116,7 +116,6 @@ export interface NoteReference {
 /** A structured note attached to a section. */
 export interface SectionNote {
   header: string;
-  content: string;
   lines: CodeLine[];
   category: 'historical' | 'editorial' | 'statutory';
   references?: NoteReference[];

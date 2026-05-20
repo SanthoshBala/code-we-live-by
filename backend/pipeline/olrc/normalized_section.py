@@ -1458,7 +1458,6 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         notes.notes.append(
             SectionNote(
                 header=header,
-                content=content,
                 lines=_amendment_lines(raw_content)
                 if header == "Amendments"
                 else normalize_note_content(raw_content),
@@ -1509,11 +1508,9 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     matches = list(_REPORT_PATTERN.finditer(hist_text))
     if not matches:
         # No sub-headers, treat the whole section as one note
-        cleaned_hist = _strip_note_markers(hist_text)
         notes.notes.append(
             SectionNote(
                 header="Historical and Revision Notes",
-                content=cleaned_hist,
                 lines=normalize_note_content(hist_text),
                 category=NoteCategory.HISTORICAL,
             )
@@ -1538,7 +1535,6 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
             notes.notes.append(
                 SectionNote(
                     header=header,
-                    content=content,
                     lines=normalize_note_content(raw_content),
                     category=NoteCategory.HISTORICAL,
                 )
@@ -1594,7 +1590,6 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
             notes.notes.append(
                 SectionNote(
                     header=header,
-                    content=content,
                     lines=_amendment_lines(raw_content)
                     if header == "Amendments"
                     else normalize_note_content(raw_content),
@@ -1663,7 +1658,6 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
             notes.notes.append(
                 SectionNote(
                     header=header,
-                    content=content,
                     lines=normalize_note_content(raw_content),
                     category=NoteCategory.STATUTORY,
                 )

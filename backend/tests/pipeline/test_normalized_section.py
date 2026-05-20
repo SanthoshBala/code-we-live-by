@@ -1649,9 +1649,10 @@ class TestStatutoryNotesHeaderParsing:
         assert len(statutory_notes) == 1
         assert statutory_notes[0].header == "Delegation Of Reporting Functions"
 
-        # Content should include the Memorandum paragraphs
-        assert "Memorandum of President" in statutory_notes[0].content
-        assert "Secretary of State" in statutory_notes[0].content
+        # Lines should include the Memorandum paragraphs
+        all_text = " ".join(line.content for line in statutory_notes[0].lines)
+        assert "Memorandum of President" in all_text
+        assert "Secretary of State" in all_text
 
     def test_multiple_statutory_notes_with_nh_markers(self) -> None:
         """Test parsing multiple statutory notes using [NH] markers."""
@@ -1697,10 +1698,11 @@ class TestStatutoryNotesHeaderParsing:
         # Should have two notes
         assert len(notes.notes) == 2
 
-        # First note should not include "Executive Documents" in its content
+        # First note should be "Congressional Committees Defined" and contain the key text
         first_note = notes.notes[0]
-        assert "Executive Documents" not in first_note.content
-        assert "congressional defense committees" in first_note.content
+        assert first_note.header == "Congressional Committees Defined"
+        first_text = " ".join(line.content for line in first_note.lines)
+        assert "congressional defense committees" in first_text
 
 
 class TestFlatNotesParser:

@@ -131,59 +131,33 @@ export default function NoteBlock({
   basePath,
   withRev,
 }: NoteBlockProps) {
-  if (note.lines.length > 0) {
-    const lineSegs = groupLineSegments(note.lines);
-    return (
-      <div className="mb-2">
-        {lineSegs.map((seg, si) => {
-          const lineElems = seg.lines.map((line, j) => (
-            <NoteLine
-              key={line.line_number}
-              lineNumber={lineNumberOffset + seg.startIdx + j}
-              line={line}
-              note={note}
-              crossRefs={crossRefs}
-              basePath={basePath}
-              withRev={withRev}
-            />
-          ));
-          if (seg.isQuoted) {
-            return (
-              <div
-                key={si}
-                className="my-1 ml-8 border-l-2 border-slate-300 bg-slate-50 pl-2"
-              >
-                {lineElems}
-              </div>
-            );
-          }
-          return <Fragment key={si}>{lineElems}</Fragment>;
-        })}
-      </div>
-    );
-  }
-
-  // Fallback: split content into lines and render each
-  const contentLines = note.content.split('\n');
+  const lineSegs = groupLineSegments(note.lines);
   return (
     <div className="mb-2">
-      {contentLines.map((text, i) => (
-        <NoteLine
-          key={i}
-          lineNumber={lineNumberOffset + i}
-          line={{
-            line_number: i + 1,
-            content: text,
-            indent_level: 0,
-            marker: null,
-            is_header: false,
-          }}
-          note={note}
-          crossRefs={crossRefs}
-          basePath={basePath}
-          withRev={withRev}
-        />
-      ))}
+      {lineSegs.map((seg, si) => {
+        const lineElems = seg.lines.map((line, j) => (
+          <NoteLine
+            key={line.line_number}
+            lineNumber={lineNumberOffset + seg.startIdx + j}
+            line={line}
+            note={note}
+            crossRefs={crossRefs}
+            basePath={basePath}
+            withRev={withRev}
+          />
+        ));
+        if (seg.isQuoted) {
+          return (
+            <div
+              key={si}
+              className="my-1 ml-8 border-l-2 border-slate-300 bg-slate-50 pl-2"
+            >
+              {lineElems}
+            </div>
+          );
+        }
+        return <Fragment key={si}>{lineElems}</Fragment>;
+      })}
     </div>
   );
 }
