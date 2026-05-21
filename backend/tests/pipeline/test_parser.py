@@ -690,6 +690,66 @@ class TestChapterGroups:
         # Chapter's parent should be the title
         assert "title:17" in non_title_groups[0].parent_key
 
+    def test_t17_ch10_no_subchapters_alongside_subchapter_chapters(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Regression test for issue #215: T17 Chapter 10 missing from structure.
+
+        Chapters with subchapters (1-9) coexist with Chapter 10 which has no
+        subchapters and goes directly chapter → section.  All chapters must
+        appear in result.groups and Chapter 10's sections must carry the
+        correct parent_group_key.
+        """
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>SUBJECT MATTER AND SCOPE OF COPYRIGHT</heading>
+        <subchapter identifier="/us/usc/t17/ch1/schI" number="I">
+          <heading>General Provisions</heading>
+          <section identifier="/us/usc/t17/s101" number="101">
+            <heading>Definitions</heading>
+            <content><p>As used in this title.</p></content>
+          </section>
+        </subchapter>
+      </chapter>
+      <chapter identifier="/us/usc/t17/ch10" number="10">
+        <heading>DIGITAL AUDIO RECORDING DEVICES AND MEDIA</heading>
+        <section identifier="/us/usc/t17/s1001" number="1001">
+          <heading>Definitions</heading>
+          <content><p>As used in this chapter.</p></content>
+        </section>
+        <section identifier="/us/usc/t17/s1002" number="1002">
+          <heading>Incorporation of copying controls</heading>
+          <content><p>No person shall import.</p></content>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>"""
+        xml_path = tmp_path / "t17_ch10.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        chapters = [g for g in result.groups if g.group_type == "chapter"]
+        assert len(chapters) == 2, "Both chapters must be in result.groups"
+
+        ch1 = next(g for g in chapters if g.number == "1")
+        ch10 = next(g for g in chapters if g.number == "10")
+
+        assert "title:17" in ch1.parent_key
+        assert "title:17" in ch10.parent_key
+
+        # Chapter 10 sections must reference the chapter group, not a subchapter
+        ch10_sections = [
+            s for s in result.sections if s.section_number in ("1001", "1002")
+        ]
+        assert len(ch10_sections) == 2
+        for s in ch10_sections:
+            assert s.parent_group_key == ch10.key
+
 
 class TestExtractNotesRefs:
     """Tests for _extract_notes_refs method (Task 1.17b)."""
