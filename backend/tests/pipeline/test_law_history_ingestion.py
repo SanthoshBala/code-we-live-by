@@ -1,7 +1,7 @@
 """Tests for LawHistoryIngestionService._resolve_bill_ref.
 
 Covers the Congress.gov /law/{congress}/{type}/{number} response structure,
-which returns {"law": {"bill": {"type": ..., "number": ...}}} at the top level.
+which returns {"bill": {"type": ..., "number": ...}} at the top level.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -43,18 +43,15 @@ class TestResolveBillRef:
 
     @pytest.mark.asyncio
     async def test_resolves_from_congress_api_response(self) -> None:
-        """Falls back to Congress.gov API and parses {"law": {"bill": {...}}} correctly."""
+        """Falls back to Congress.gov API and parses {"bill": {...}} correctly."""
         law = _make_law(origin_bill=None)
         client = AsyncMock()
         client.get_law_bill_info.return_value = {
-            "law": {
-                "bill": {
-                    "type": "HR",
-                    "number": "667",
-                    "originChamber": "House",
-                },
-                "number": "23",
-                "type": "PUBLIC_LAW",
+            "bill": {
+                "type": "HR",
+                "number": "667",
+                "originChamber": "House",
+                "laws": [{"number": "113-23", "type": "Public Law"}],
             },
             "request": {},
         }
@@ -77,10 +74,10 @@ class TestResolveBillRef:
 
     @pytest.mark.asyncio
     async def test_returns_none_when_bill_missing_from_response(self) -> None:
-        """API response has a law key but no nested bill."""
+        """API response has no bill key."""
         law = _make_law(origin_bill=None)
         client = AsyncMock()
-        client.get_law_bill_info.return_value = {"law": {}, "request": {}}
+        client.get_law_bill_info.return_value = {"request": {}}
 
         service = _make_service()
         result = await service._resolve_bill_ref(law, client)
@@ -103,7 +100,7 @@ class TestResolveBillRef:
         law = _make_law(origin_bill=None)
         client = AsyncMock()
         client.get_law_bill_info.return_value = {
-            "law": {"bill": {"type": "S", "number": "42"}},
+            "bill": {"type": "S", "number": "42"},
         }
 
         service = _make_service()
