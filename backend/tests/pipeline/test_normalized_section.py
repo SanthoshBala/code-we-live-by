@@ -1874,6 +1874,115 @@ class TestFlatNotesParser:
         assert 1957 in years
         assert 1975 in years
 
+    def test_flat_heading_only_note_preserved_issue_446(self) -> None:
+        """Regression: flat heading-only note (no content paragraphs) must not be dropped.
+
+        17 U.S.C. § 107 has a 'miscellaneous' note whose only child is a
+        <heading> element ('Agreement on Guidelines for Classroom Copying...').
+        Prior to the fix _parse_flat_notes dropped it because content was empty.
+        Closes #446.
+        """
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        # Note 3 is heading-only; note 4 follows with content.
+        raw_notes = (
+            "[NH]House Report No. 94-1476[/NH] "
+            "The bill is not intended to change, narrow, or enlarge the doctrine. "
+            "[NH]Agreement On Guidelines For Classroom Copying In Not-For-Profit "
+            "Educational Institutions[/NH]"
+            "[NH]With Respect To Books And Periodicals[/NH] "
+            "The purpose of these guidelines is to state the minimum and not the "
+            "maximum standards of educational fair use under section 107."
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        assert (
+            "Agreement On Guidelines For Classroom Copying In Not-For-Profit "
+            "Educational Institutions" in headers
+        ), f"Expected heading-only note to be preserved; got headers: {headers}"
+        # The heading-only note must have no content lines
+        agreement_note = next(
+            n
+            for n in notes.notes
+            if "Agreement On Guidelines" in n.header
+        )
+        assert agreement_note.lines == []
+
+    def test_historical_heading_only_note_preserved_issue_446(self) -> None:
+        """Regression: historicalAndRevision heading-only note must not be dropped.
+
+        17 U.S.C. § 107's first note has topic 'historicalAndRevision' and only
+        a <heading> child ('Historical and Revision Notes') with no content
+        paragraphs.  Prior to the fix _parse_historical_notes silently returned
+        without appending any note when hist_text was empty (i.e., when the
+        heading was immediately followed by an Editorial or Statutory Notes
+        section).  Closes #446.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # Simulate raw_notes where "Historical and Revision Notes" heading appears
+        # with no content before the "Editorial Notes" section marker.
+        # This is what produces empty hist_text in _parse_historical_notes.
+        raw_notes = (
+            "Historical and Revision Notes "
+            "Editorial Notes "
+            "[NH]House Report No. 94-1476[/NH] "
+            "The bill is not intended to change, narrow, or enlarge the doctrine "
+            "of fair use as it has developed in the law."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        assert "Historical and Revision Notes" in headers, (
+            f"Expected 'Historical and Revision Notes' to be preserved; "
+            f"got headers: {headers}"
+        )
+        hist_note = next(
+            n for n in notes.notes if n.header == "Historical and Revision Notes"
+        )
+        assert hist_note.lines == []
+
+    def test_statutory_heading_only_note_preserved_issue_446(self) -> None:
+        """Regression: statutory heading-only note must not be dropped.
+
+        The 'Agreement on Guidelines...' note in 17 U.S.C. § 107 appears inside
+        a 'Statutory Notes' section.  Prior to the fix _parse_statutory_notes
+        dropped it because content was empty (the ``if content and len > 30``
+        guard).  Closes #446.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        # Statutory section where note 1 is heading-only, note 2 has content.
+        raw_notes = (
+            "Statutory Notes and Related Subsidiaries "
+            "[NH]Agreement On Guidelines For Classroom Copying In Not-For-Profit "
+            "Educational Institutions[/NH]"
+            "[NH]With Respect To Books And Periodicals[/NH] "
+            "The purpose of these guidelines is to state the minimum and not the "
+            "maximum standards of educational fair use under section 107."
+        )
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        assert (
+            "Agreement On Guidelines For Classroom Copying In Not-For-Profit "
+            "Educational Institutions" in headers
+        ), f"Expected heading-only statutory note to be preserved; got: {headers}"
+        agreement_note = next(
+            n for n in notes.notes if "Agreement On Guidelines" in n.header
+        )
+        assert agreement_note.lines == []
+
 
 class TestNoteTopicAmendmentParsing:
     """Regression tests for issue #216: <note topic="amendments"> not parsed.
