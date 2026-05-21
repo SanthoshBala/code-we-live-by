@@ -336,6 +336,86 @@ class TestUSLMParser:
         assert "shall be fined" in sub_a.continuation[0]
 
 
+    def test_extract_subsections_continuation_inside_content_bubbled_to_section_level(
+        self, parser: USLMParser
+    ) -> None:
+        """A <continuation> nested inside a paragraph's <content> is promoted to
+        the section-level synthetic wrapper, not left on the paragraph.
+
+        Regression test for Issue #447: 17 U.S.C. § 107 has a flush-left closing
+        sentence ("The fact that a work is unpublished...") encoded as a
+        <continuation> inside the <content> of the last <paragraph>.  OLRC
+        semantics treat this as a section-level statement (indent_level=0), but
+        the parser was previously including it as part of the paragraph's text,
+        causing it to render at indent_level=2 instead of 0.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s107">
+          <num value="107">§ 107.</num>
+          <heading>Limitations on exclusive rights: Fair use</heading>
+          <chapeau>Notwithstanding the provisions of sections 106 and 106A, the fair
+          use of a copyrighted work, including such use by reproduction in copies or
+          phonorecords or by any other means specified by that section, for purposes
+          such as criticism, comment, news reporting, teaching (including multiple
+          copies for classroom use), scholarship, or research, is not an infringement
+          of copyright. In determining whether the use made of a work in any
+          particular case is a fair use the factors to be considered shall include—
+          </chapeau>
+          <paragraph identifier="/us/usc/t17/s107/1">
+            <num value="1">(1)</num>
+            <content>the purpose and character of the use, including whether such
+            use is of a commercial nature or is for nonprofit educational
+            purposes;</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t17/s107/2">
+            <num value="2">(2)</num>
+            <content>the nature of the copyrighted work;</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t17/s107/3">
+            <num value="3">(3)</num>
+            <content>the amount and substantiality of the portion used in relation
+            to the copyrighted work as a whole; and</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t17/s107/4">
+            <num value="4">(4)</num>
+            <content>the effect of the use upon the potential market for or value
+            of the copyrighted work.
+            <continuation>The fact that a work is unpublished shall not itself bar
+            a finding of fair use if such finding is made upon consideration of all
+            the above factors.</continuation>
+            </content>
+          </paragraph>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        # Should produce one synthetic wrapper subsection
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+        assert wrapper.marker == ""
+
+        # The wrapper should have 4 paragraph children
+        assert len(wrapper.children) == 4
+
+        # Paragraph (4) should NOT include the continuation text in its content
+        para4 = wrapper.children[3]
+        assert para4.marker == "(4)"
+        assert "effect of the use" in para4.content
+        assert "unpublished" not in para4.content, (
+            "Continuation text must not appear in paragraph (4) content"
+        )
+        # Paragraph (4) should have no continuation of its own
+        assert para4.continuation == [], (
+            "Continuation from <content> must be promoted to section level"
+        )
+
+        # The wrapper (section-level) should carry the continuation
+        assert len(wrapper.continuation) == 1
+        assert "unpublished" in wrapper.continuation[0], (
+            "Continuation text must be promoted to the section-level wrapper"
+        )
+
+
 class TestToTitleCase:
     """Tests for to_title_case function."""
 

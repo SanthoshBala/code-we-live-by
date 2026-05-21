@@ -966,6 +966,120 @@ class TestNormalizeParsedSectionDirectParagraphs:
         assert result.provisions[4].indent_level == 2
 
 
+class TestNormalizeParsedSectionContinuationInsideContent:
+    """End-to-end tests for <continuation> inside <content> in enumerated lists.
+
+    Regression tests for Issue #447: 17 U.S.C. § 107's closing sentence
+    ("The fact that a work is unpublished...") appears as a <continuation>
+    element inside the <content> of the last <paragraph>.  The parser
+    must promote it to section level so it renders at indent_level=0.
+    """
+
+    def test_continuation_inside_content_renders_at_indent_level_0(self) -> None:
+        """A <continuation> inside a paragraph's <content> is promoted to
+        section level and renders at indent_level=0.
+
+        Models 17 U.S.C. § 107: four numbered factors followed by a flush-left
+        closing sentence that applies to the entire section, not just factor (4).
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        # Simulate what the parser produces AFTER the fix: the continuation
+        # has been promoted out of para4 and into the synthetic wrapper.
+        section = ParsedSection(
+            section_number="107",
+            heading="Limitations on exclusive rights: Fair use",
+            full_citation="17 U.S.C. § 107",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content=(
+                        "Notwithstanding the provisions of sections 106 and 106A, "
+                        "in determining whether the use made of a work in any "
+                        "particular case is a fair use the factors to be considered "
+                        "shall include—"
+                    ),
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="the purpose and character of the use;",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(2)",
+                            heading=None,
+                            content="the nature of the copyrighted work;",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(3)",
+                            heading=None,
+                            content=(
+                                "the amount and substantiality of the portion used;"
+                            ),
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(4)",
+                            heading=None,
+                            content=(
+                                "the effect of the use upon the potential market for "
+                                "or value of the copyrighted work."
+                            ),
+                            level="paragraph",
+                            continuation=[],  # NOT here — promoted to wrapper
+                        ),
+                    ],
+                    continuation=[
+                        "The fact that a work is unpublished shall not itself bar "
+                        "a finding of fair use if such finding is made upon "
+                        "consideration of all the above factors."
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Find the continuation line
+        continuation_lines = [
+            p for p in result.provisions if "unpublished" in p.content
+        ]
+        assert len(continuation_lines) == 1, (
+            "Expected exactly one line containing the continuation text"
+        )
+        cont_line = continuation_lines[0]
+
+        # The continuation must be at indent_level=0 (flush-left, section level)
+        assert cont_line.indent_level == 0, (
+            f"Expected indent_level=0 for continuation, got {cont_line.indent_level}"
+        )
+        assert cont_line.marker is None
+
+        # The numbered factors should be at indent_level=1
+        factor_lines = [
+            p for p in result.provisions if p.marker in {"(1)", "(2)", "(3)", "(4)"}
+        ]
+        assert len(factor_lines) == 4
+        for fl in factor_lines:
+            assert fl.indent_level == 1, (
+                f"Factor {fl.marker} expected indent_level=1, got {fl.indent_level}"
+            )
+
+        # The continuation must appear after all four factors
+        cont_line_num = cont_line.line_number
+        for fl in factor_lines:
+            assert fl.line_number < cont_line_num, (
+                f"Factor {fl.marker} (line {fl.line_number}) must come before "
+                f"continuation (line {cont_line_num})"
+            )
+
+
 class TestNormalizeParsedSectionContinuation:
     """Tests for <continuation> elements in parsed sections.
 

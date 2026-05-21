@@ -1001,6 +1001,53 @@ class USLMParser:
         text = _PUNCT_RE.sub(r"\1", text)
         return text
 
+    def _get_text_content_excluding(
+        self,
+        elem: etree._Element,
+        excluded: list[etree._Element],
+        strip_footnotes: bool = False,
+    ) -> str:
+        """Get text content from an element, skipping specified child elements.
+
+        Used to extract content text from a <content> element while excluding
+        embedded <continuation> children so their text can be captured at the
+        correct semantic level (e.g. section level for 17 U.S.C. § 107).
+
+        Args:
+            elem: The XML element to extract text from.
+            excluded: Child elements whose text (and their children's text) should
+                be omitted from the result.
+            strip_footnotes: If True, also skip footnote refs and notes.
+        """
+        excluded_set = set(id(e) for e in excluded)
+
+        def itertext_excluding(
+            el: etree._Element,
+        ) -> Generator[str, None, None]:
+            tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+            if strip_footnotes:
+                if tag == "ref" and el.get("class", "") == "footnoteRef":
+                    return
+                if tag == "note" and el.get("type", "") == "footnote":
+                    return
+            if el.text:
+                yield el.text
+            for child in el:
+                if id(child) in excluded_set:
+                    # Skip this child entirely; still yield its tail (text after
+                    # the closing tag) so surrounding punctuation is preserved.
+                    if child.tail:
+                        yield child.tail
+                    continue
+                yield from itertext_excluding(child)
+                if child.tail:
+                    yield child.tail
+
+        parts = list(itertext_excluding(elem))
+        text = _WS_RE.sub(" ", "".join(parts)).strip()
+        text = _PUNCT_RE.sub(r"\1", text)
+        return text
+
     @staticmethod
     def _itertext_skip_footnotes(elem: etree._Element) -> Generator[str, None, None]:
         """Like elem.itertext() but skips footnote refs and notes."""
@@ -1062,14 +1109,38 @@ class USLMParser:
             chapeau_elem = elem.find("chapeau")
 
         content_parts = []
+        # Collect continuation elements that appear inside <content> (not direct
+        # children of the paragraph/subsection element).  These are semantically
+        # "flush-left" continuations that apply at the parent (section) level —
+        # e.g. 17 U.S.C. § 107 where "The fact that a work is unpublished…"
+        # appears as <continuation> inside <content> inside the last <paragraph>.
+        # We strip them from the content text and collect them separately so
+        # callers can promote them to the correct indent level.
+        content_continuations: list[str] = []
         if chapeau_elem is not None:
             content_parts.append(
                 self._get_text_content(chapeau_elem, strip_footnotes=True)
             )
         if content_elem is not None:
-            content_parts.append(
-                self._get_text_content(content_elem, strip_footnotes=True)
-            )
+            # Check for <continuation> children inside <content>.
+            cont_in_content = content_elem.findall(
+                "{*}continuation"
+            ) or content_elem.findall("continuation")
+            if cont_in_content:
+                # Get content text excluding the <continuation> children.
+                content_text = self._get_text_content_excluding(
+                    content_elem, cont_in_content, strip_footnotes=True
+                )
+                if content_text:
+                    content_parts.append(content_text)
+                for cont_elem in cont_in_content:
+                    cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
+                    if cont_text:
+                        content_continuations.append(cont_text)
+            else:
+                content_parts.append(
+                    self._get_text_content(content_elem, strip_footnotes=True)
+                )
 
         content = " ".join(content_parts).strip()
 
@@ -1091,8 +1162,10 @@ class USLMParser:
                 children.append(self._parse_subsection(child_elem, child_level))
 
         # Collect continuation elements (closing text that follows a numbered list,
-        # e.g. the penalty clause in 18 U.S.C. § 1001(a))
-        continuation: list[str] = []
+        # e.g. the penalty clause in 18 U.S.C. § 1001(a)).
+        # Continuations extracted from within <content> above are prepended so
+        # they appear in document order before any direct-child continuations.
+        continuation: list[str] = list(content_continuations)
         continuation_elems = elem.findall("{*}continuation") or elem.findall(
             "continuation"
         )
@@ -1157,10 +1230,43 @@ class USLMParser:
                     if cont_text:
                         section_continuation.append(cont_text)
 
-                # Parse each paragraph
+                # Parse each paragraph, then bubble up any <continuation> elements
+                # that were nested inside a paragraph's <content>.  In OLRC XML
+                # (e.g. 17 U.S.C. § 107) these represent flush-left closing text
+                # that applies to the entire section — semantically equivalent to
+                # indent_level=0 — not a sub-clause of the individual paragraph.
+                # We promote them to the synthetic section-wrapper's continuation
+                # so they render at indent_level=0.  The paragraph's own
+                # continuation list is cleared after promotion to avoid duplication.
                 children = []
                 for para_elem in para_elems:
-                    children.append(self._parse_subsection(para_elem, "paragraph"))
+                    parsed_para = self._parse_subsection(para_elem, "paragraph")
+                    # Detect which continuation items originated inside <content>
+                    # (captured by _parse_subsection via content_continuations).
+                    para_content_elem = para_elem.find("{*}content")
+                    if para_content_elem is None:
+                        para_content_elem = para_elem.find("content")
+                    if para_content_elem is not None:
+                        in_content_cont_texts = {
+                            self._get_text_content(ce, strip_footnotes=True)
+                            for ce in (
+                                para_content_elem.findall("{*}continuation")
+                                or para_content_elem.findall("continuation")
+                            )
+                        }
+                        if in_content_cont_texts:
+                            # Bubble these up to section level and remove from
+                            # the paragraph so they don't render at indent_level=1.
+                            promoted: list[str] = []
+                            kept: list[str] = []
+                            for ct in parsed_para.continuation:
+                                if ct in in_content_cont_texts:
+                                    promoted.append(ct)
+                                else:
+                                    kept.append(ct)
+                            section_continuation.extend(promoted)
+                            parsed_para.continuation = kept
+                    children.append(parsed_para)
 
                 # Wrap in a synthetic subsection so normalization handles it
                 subsections.append(
