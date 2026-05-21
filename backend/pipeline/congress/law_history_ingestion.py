@@ -268,9 +268,9 @@ class LawHistoryIngestionService:
         if data is None:
             return None
 
-        # Congress.gov /law/{congress}/{type}/{number} returns:
-        # {"law": {"bill": {"type": "HR", "number": "667", ...}}}
-        bill_ref = data.get("law", {}).get("bill", {})
+        # Congress.gov /law/{congress}/{type}/{number} returns the bill at the
+        # top level: {"bill": {"type": "HR", "number": "667", ...}}
+        bill_ref = data.get("bill", {})
         b_type = (bill_ref.get("type") or "").lower()
         b_number = bill_ref.get("number")
         if not b_type or not b_number:
