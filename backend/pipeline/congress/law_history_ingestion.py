@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from app.core.law_history_helpers import (
     build_event_title,
     classify_action,
+    compose_sponsor_name,
     parse_vote_tally,
 )
 from app.models.public_law import LawBillAction, LawSponsor, PublicLaw
@@ -361,10 +362,15 @@ class LawHistoryIngestionService:
             row = LawSponsor(
                 law_id=law_id,
                 sort_order=sort_order,
-                name=sponsor_info.full_name,
+                name=compose_sponsor_name(
+                    sponsor_info.first_name,
+                    sponsor_info.middle_name,
+                    sponsor_info.last_name,
+                )
+                or sponsor_info.full_name,
                 party=sponsor_info.party,
                 state=sponsor_info.state,
-                district=sponsor_info.district,
+                district=sponsor_info.district or None,
                 bioguide_id=sponsor_info.bioguide_id,
                 is_primary=True,
             )
@@ -376,10 +382,15 @@ class LawHistoryIngestionService:
             row = LawSponsor(
                 law_id=law_id,
                 sort_order=sort_order,
-                name=cs.full_name,
+                name=compose_sponsor_name(
+                    cs.first_name,
+                    cs.middle_name,
+                    cs.last_name,
+                )
+                or cs.full_name,
                 party=cs.party,
                 state=cs.state,
-                district=cs.district,
+                district=cs.district or None,
                 bioguide_id=cs.bioguide_id,
                 is_primary=False,
             )
