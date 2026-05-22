@@ -2310,8 +2310,7 @@ class TestAmendmentMultiRef:
         assert len(amendments) == 1, (
             f"Expected 1 amendment, got {len(amendments)}: "
             + ", ".join(
-                f"PL {a.law.congress}-{a.law.law_number} ({a.year})"
-                for a in amendments
+                f"PL {a.law.congress}-{a.law.law_number} ({a.year})" for a in amendments
             )
         )
         a = amendments[0]
