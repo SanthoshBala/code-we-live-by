@@ -885,6 +885,55 @@ class TestNormalizeParsedSection:
         assert result.provisions[5].content == "(2) Second term"
         assert result.provisions[6].content == "Another definition."
 
+    def test_multi_sentence_no_marker_all_at_same_indent(self) -> None:
+        """Multiple sentences in a no-marker subsection all render at base_indent.
+
+        Regression test for Issue #450: 17 U.S.C. § 107's synthetic wrapper has
+        no marker, so "In determining whether..." must not be bumped to indent_level=1.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="107",
+            heading="Fair use",
+            full_citation="17 U.S.C. § 107",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content=(
+                        "Notwithstanding the provisions of sections 106 and 106A, "
+                        "fair use is not infringement. "
+                        "In determining whether the use is a fair use the factors shall include—"
+                    ),
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="the purpose of the use;",
+                            level="paragraph",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        sentence_lines = [
+            p for p in result.provisions if p.content and not p.content.startswith("(")
+        ]
+        # Both section-level sentences must be at indent_level=0
+        for line in sentence_lines:
+            if "Notwithstanding" in line.content or "In determining" in line.content:
+                assert line.indent_level == 0, (
+                    f"Expected indent_level=0 for '{line.content[:40]}...', "
+                    f"got {line.indent_level}"
+                )
+
 
 class TestNormalizeParsedSectionDirectParagraphs:
     """Tests for sections with paragraphs directly under section (no subsection).
