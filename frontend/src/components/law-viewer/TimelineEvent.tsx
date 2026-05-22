@@ -34,8 +34,9 @@ function crRefToUrl(ref: string, eventDate: string | null): string | null {
   }
   if (!isoDate) return null;
 
-  const chamber = page.startsWith('S') ? 'senate' : 'house';
-  return `https://www.congress.gov/congressional-record/${isoDate}/${chamber}-section`;
+  // For ranges like "H3426-7" or "H3426-3435", link to the first page.
+  const startPage = page.split('-')[0];
+  return `https://www.govinfo.gov/content/pkg/CREC-${isoDate}/html/CREC-${isoDate}-pt1-Pg${startPage}.htm`;
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
