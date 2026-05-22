@@ -1595,7 +1595,7 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
         # Emit the note when there is content, OR when content is completely
         # empty (heading-only note).  Skip only short non-empty fragments that
         # are noise (the 1–30 char case).
-        if content or not content:
+        if not content or len(content) > 30:
             # Special handling for Amendments - also populate structured field
             if header == "Amendments" and content:
                 notes.amendments = _parse_amendments(content)
