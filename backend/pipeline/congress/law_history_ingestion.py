@@ -364,6 +364,7 @@ class LawHistoryIngestionService:
                 name=sponsor_info.full_name,
                 party=sponsor_info.party,
                 state=sponsor_info.state,
+                district=sponsor_info.district,
                 bioguide_id=sponsor_info.bioguide_id,
                 is_primary=True,
             )
@@ -378,6 +379,7 @@ class LawHistoryIngestionService:
                 name=cs.full_name,
                 party=cs.party,
                 state=cs.state,
+                district=cs.district,
                 bioguide_id=cs.bioguide_id,
                 is_primary=False,
             )

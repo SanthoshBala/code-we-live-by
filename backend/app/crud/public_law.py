@@ -1384,6 +1384,7 @@ async def _load_history_from_db(
             name=s.name,
             party=s.party,
             state=s.state,
+            district=s.district,
             bioguide_id=s.bioguide_id,
             is_primary=s.is_primary,
         )
@@ -1541,6 +1542,7 @@ async def get_law_history(
                             name=sponsor_info.full_name,
                             party=sponsor_info.party,
                             state=sponsor_info.state,
+                            district=sponsor_info.district,
                             bioguide_id=sponsor_info.bioguide_id,
                             is_primary=True,
                         )
@@ -1551,6 +1553,7 @@ async def get_law_history(
                             name=cs.full_name,
                             party=cs.party,
                             state=cs.state,
+                            district=cs.district,
                             bioguide_id=cs.bioguide_id,
                             is_primary=False,
                         )
