@@ -2126,7 +2126,10 @@ def _normalize_subsection_recursive(
                     marker = None
                     # Indent one level deeper so continuation lines align with
                     # the text portion of the first line, not the marker.
-                    line_indent = base_indent + 1
+                    # Only applies when there is a marker; without one, all
+                    # sentences are flush at base_indent (e.g. 17 U.S.C. § 107
+                    # chapeau where both sentences are section-level text).
+                    line_indent = base_indent + 1 if subsection.marker else base_indent
 
                 line_counter[0] += 1
                 start_pos = char_pos[0]
