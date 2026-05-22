@@ -9,45 +9,22 @@ interface SponsorsSidebarProps {
 
 const MAX_VISIBLE = 5;
 
-/**
- * Normalize a sponsor name for display.
- *
- * Congress.gov sometimes returns names in "Last, First" format or with a
- * trailing party/district annotation like "[R-CA-42]". This converts both
- * to a plain "First Last" string.
- */
-export function formatSponsorName(raw: string): string {
-  // Strip trailing "[R-CA-42]", "(D-CA)", "[R-KY-5]", etc.
-  let name = raw
-    .replace(/\s*[\[(][A-Z]-[A-Z]{1,3}(?:-\d+)?[\])]\s*$/, '')
-    .trim();
-
-  // Convert "Last, First [Middle]" → "First [Middle] Last"
-  const comma = name.indexOf(',');
-  if (comma > 0 && comma < name.length - 1) {
-    const last = name.slice(0, comma).trim();
-    const first = name.slice(comma + 1).trim();
-    return `${first} ${last}`;
-  }
-  return name;
-}
-
-function getInitials(displayName: string): string {
-  const initials = displayName
-    .split(' ')
-    .filter((w) => /^[A-Z]/.test(w))
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2);
-  return initials || '?';
-}
-
 function partyColor(party: string | null): string {
   if (!party) return 'text-gray-500';
   const p = party.toUpperCase();
   if (p === 'R') return 'text-red-600';
   if (p === 'D') return 'text-blue-600';
   return 'text-gray-500';
+}
+
+function getInitials(name: string): string {
+  const initials = name
+    .split(' ')
+    .filter((w) => /^[A-Z]/.test(w))
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2);
+  return initials || '?';
 }
 
 /** Format "R-CA" or "R-CA (42)" for representatives, "D-CA" for senators. */
@@ -61,19 +38,17 @@ function formatMeta(sponsor: Sponsor): string {
 }
 
 function SponsorRow({ sponsor }: { sponsor: Sponsor }) {
-  const displayName = formatSponsorName(sponsor.name);
-  const initials = getInitials(displayName);
   const meta = formatMeta(sponsor);
 
   return (
     <div className="flex items-start gap-2 py-1.5">
       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">
-        {initials}
+        {getInitials(sponsor.name)}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="truncate text-xs font-medium text-gray-900">
-            {displayName}
+            {sponsor.name}
           </span>
           {sponsor.is_primary && (
             <span className="ring-primary-200 shrink-0 rounded bg-primary-50 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-700 ring-1 ring-inset">
@@ -101,7 +76,7 @@ export default function SponsorsSidebar({ sponsors }: SponsorsSidebarProps) {
 
   const primary = sponsors.filter((s) => s.is_primary);
   const cosponsors = [...sponsors.filter((s) => !s.is_primary)].sort((a, b) =>
-    formatSponsorName(a.name).localeCompare(formatSponsorName(b.name))
+    a.name.localeCompare(b.name)
   );
 
   const visibleCosponsors = expanded

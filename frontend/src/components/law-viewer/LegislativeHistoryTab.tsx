@@ -4,7 +4,7 @@ import type { ChamberVote, LegislativeHistory, LawText } from '@/lib/types';
 import CBOEstimatesPanel from './CBOEstimatesPanel';
 import LegislativeHistoryTimeline from './LegislativeHistoryTimeline';
 import RelatedBillsPanel from './RelatedBillsPanel';
-import SponsorsSidebar, { formatSponsorName } from './SponsorsSidebar';
+import SponsorsSidebar from './SponsorsSidebar';
 
 interface LegislativeHistoryTabProps {
   history: LegislativeHistory;
@@ -71,7 +71,7 @@ function HeaderBanner({
             {primarySponsor && (
               <>
                 <span className="mono font-medium text-gray-700">
-                  {formatSponsorName(primarySponsor.name)}
+                  {primarySponsor.name}
                 </span>{' '}
                 introduced this legislation
                 {days !== null && (
