@@ -1904,9 +1904,7 @@ class TestFlatNotesParser:
         ), f"Expected heading-only note to be preserved; got headers: {headers}"
         # The heading-only note must have no content lines
         agreement_note = next(
-            n
-            for n in notes.notes
-            if "Agreement On Guidelines" in n.header
+            n for n in notes.notes if "Agreement On Guidelines" in n.header
         )
         assert agreement_note.lines == []
 
