@@ -335,7 +335,6 @@ class TestUSLMParser:
         assert len(sub_a.continuation) == 1
         assert "shall be fined" in sub_a.continuation[0]
 
-
     def test_extract_subsections_continuation_inside_content_bubbled_to_section_level(
         self, parser: USLMParser
     ) -> None:

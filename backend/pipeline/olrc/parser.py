@@ -1019,7 +1019,7 @@ class USLMParser:
                 be omitted from the result.
             strip_footnotes: If True, also skip footnote refs and notes.
         """
-        excluded_set = set(id(e) for e in excluded)
+        excluded_set = {id(e) for e in excluded}
 
         def itertext_excluding(
             el: etree._Element,
