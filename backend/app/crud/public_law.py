@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.core.law_history_helpers import (
     build_event_title,
     classify_action,
+    compose_sponsor_name,
     parse_vote_tally,
 )
 from app.models.public_law import Bill, LawBillAction, LawSponsor, PublicLaw
@@ -1384,6 +1385,7 @@ async def _load_history_from_db(
             name=s.name,
             party=s.party,
             state=s.state,
+            district=s.district,
             bioguide_id=s.bioguide_id,
             is_primary=s.is_primary,
         )
@@ -1538,9 +1540,15 @@ async def get_law_history(
                 if sponsor_info:
                     sponsors.append(
                         SponsorSchema(
-                            name=sponsor_info.full_name,
+                            name=compose_sponsor_name(
+                                sponsor_info.first_name,
+                                sponsor_info.middle_name,
+                                sponsor_info.last_name,
+                            )
+                            or sponsor_info.full_name,
                             party=sponsor_info.party,
                             state=sponsor_info.state,
+                            district=sponsor_info.district or None,
                             bioguide_id=sponsor_info.bioguide_id,
                             is_primary=True,
                         )
@@ -1548,9 +1556,15 @@ async def get_law_history(
                 for cs in cosponsors:
                     sponsors.append(
                         SponsorSchema(
-                            name=cs.full_name,
+                            name=compose_sponsor_name(
+                                cs.first_name,
+                                cs.middle_name,
+                                cs.last_name,
+                            )
+                            or cs.full_name,
                             party=cs.party,
                             state=cs.state,
+                            district=cs.district or None,
                             bioguide_id=cs.bioguide_id,
                             is_primary=False,
                         )

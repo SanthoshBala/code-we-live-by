@@ -17,13 +17,33 @@ function partyColor(party: string | null): string {
   return 'text-gray-500';
 }
 
+function getInitials(name: string): string {
+  const initials = name
+    .split(' ')
+    .filter((w) => /^[A-Z]/.test(w))
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2);
+  return initials || '?';
+}
+
+/** Format "R-CA" or "R-CA (42)" for representatives, "D-CA" for senators. */
+function formatMeta(sponsor: Sponsor): string {
+  const parts = [sponsor.party, sponsor.state].filter(Boolean).join('-');
+  if (!parts) return '';
+  if (sponsor.district != null) {
+    return `${parts} (${sponsor.district})`;
+  }
+  return parts;
+}
+
 function SponsorRow({ sponsor }: { sponsor: Sponsor }) {
-  const meta = [sponsor.party, sponsor.state].filter(Boolean).join('-');
+  const meta = formatMeta(sponsor);
+
   return (
     <div className="flex items-start gap-2 py-1.5">
-      {/* Avatar placeholder */}
       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-600">
-        {sponsor.name.charAt(0)}
+        {getInitials(sponsor.name)}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -55,7 +75,9 @@ export default function SponsorsSidebar({ sponsors }: SponsorsSidebarProps) {
   if (sponsors.length === 0) return null;
 
   const primary = sponsors.filter((s) => s.is_primary);
-  const cosponsors = sponsors.filter((s) => !s.is_primary);
+  const cosponsors = [...sponsors.filter((s) => !s.is_primary)].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
 
   const visibleCosponsors = expanded
     ? cosponsors

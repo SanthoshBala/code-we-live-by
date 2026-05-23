@@ -311,6 +311,7 @@ class LawSponsor(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     party: Mapped[str | None] = mapped_column(String(20), nullable=True)
     state: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    district: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bioguide_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 

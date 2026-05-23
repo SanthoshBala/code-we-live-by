@@ -324,6 +324,7 @@ export interface Sponsor {
   name: string;
   party: string | null;
   state: string | null;
+  district: number | null;
   bioguide_id: string | null;
   is_primary: boolean;
 }

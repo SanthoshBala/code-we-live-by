@@ -8,6 +8,27 @@ from __future__ import annotations
 
 import re
 
+
+def compose_sponsor_name(
+    first_name: str | None,
+    middle_name: str | None,
+    last_name: str | None,
+) -> str | None:
+    """Build a clean 'First [Middle] Last' display name from structured parts.
+
+    Returns None when all parts are absent. Normalises ALL-CAPS names that
+    the Congress.gov API occasionally returns (e.g. "DON", "YOUNG").
+    """
+    parts = [p for p in (first_name, middle_name, last_name) if p]
+    if not parts:
+        return None
+    name = " ".join(parts)
+    # Normalise if every alphabetic character is uppercase.
+    if name.replace(".", "").replace(" ", "").isupper():
+        name = name.title()
+    return name
+
+
 # Matches vote tallies like "392 - 17 - 26" or "95 - 0" in action text.
 VOTE_TALLY_RE = re.compile(r"(\d+)\s*[-–]\s*(\d+)(?:\s*[-–]\s*(\d+))?")
 

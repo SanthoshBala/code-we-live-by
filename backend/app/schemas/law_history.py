@@ -40,6 +40,7 @@ class SponsorSchema(BaseModel):
     name: str
     party: str | None
     state: str | None
+    district: int | None = None
     bioguide_id: str | None
     is_primary: bool
 
