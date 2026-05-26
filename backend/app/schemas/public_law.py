@@ -4,7 +4,9 @@ These schemas are used for API responses and data transfer between
 the pipeline and application layers.
 """
 
-from pydantic import BaseModel, Field, computed_field
+import re
+
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.models.enums import LawLevel, SourceRelationship
 
@@ -220,6 +222,25 @@ class SourceLawSchema(BaseModel):
     order: int = Field(
         0, description="Position in source list (0 = first/oldest reference)"
     )
+
+    @field_validator("raw_text", mode="before")
+    @classmethod
+    def strip_internal_markup(cls, v: object) -> object:
+        """Strip internal XML serialization markers from raw_text.
+
+        Tags like [NH]...[/NH], [H1]...[/H1], [H2]...[/H2] are intermediate
+        representations used during XML parsing and must not appear in API output.
+        """
+        if not isinstance(v, str):
+            return v
+        v = re.sub(r"\[NH\].*?\[/NH\]", "", v, flags=re.DOTALL)
+        v = re.sub(r"\[H1\].*?\[/H1\]", "", v, flags=re.DOTALL)
+        v = re.sub(r"\[H2\](.*?)\[/H2\]", r"\1", v, flags=re.DOTALL)
+        v = re.sub(r"\[QC:\d+\](.*?)\[/QC\]", r"\1", v, flags=re.DOTALL)
+        v = re.sub(r"\[SIG\](.*?)\[/SIG\]", r"\1", v, flags=re.DOTALL)
+        v = re.sub(r"\[PARA\]", "\n\n", v)
+        v = re.sub(r"\[/NH\]|\[/H1\]", "", v)
+        return v.strip()
 
     @computed_field  # type: ignore[prop-decorator]
     @property

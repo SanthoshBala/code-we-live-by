@@ -8,6 +8,7 @@ from lxml import etree
 from pipeline.olrc.parser import (
     NoteRef,
     USLMParser,
+    _camel_to_title,
     _clean_bracket_heading,
     compute_text_hash,
     title_case_heading,
@@ -114,6 +115,88 @@ class TestUSLMParser:
         assert sec101.heading == "Definitions"
         assert sec101.full_citation == "17 U.S.C. § 101"
         assert "architectural work" in sec101.text_content
+
+    def test_is_repealed_set_from_status_attribute(self, parser: USLMParser) -> None:
+        """Sections with status="repealed" should have is_repealed=True.
+
+        Regression test for Issue #456: 37 U.S.C. § 426 (and similar sections)
+        have status="repealed" on the <section> element in OLRC XML, but the
+        parser was not reading that attribute and always returned is_repealed=False.
+        """
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <main>
+    <title identifier="/us/usc/t37" number="37">
+      <heading>PAY AND ALLOWANCES OF THE UNIFORMED SERVICES</heading>
+      <chapter identifier="/us/usc/t37/ch13" number="13">
+        <heading>REPEALED</heading>
+        <section status="repealed" identifier="/us/usc/t37/s426">
+          <num value="426">[§ 426.</num>
+          <heading> Repealed. Pub. L. 90-377, § 10, July 5, 1968, 82 Stat. 288]</heading>
+        </section>
+        <section identifier="/us/usc/t37/s427">
+          <num value="427">§ 427.</num>
+          <heading>Family separation allowance</heading>
+          <content><p>A member of a uniformed service is entitled to a separation allowance.</p></content>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>"""
+        import tempfile
+        from pathlib import Path as _Path
+
+        with tempfile.NamedTemporaryFile(suffix=".xml", mode="w", delete=False) as f:
+            f.write(xml)
+            tmp_path = _Path(f.name)
+
+        try:
+            result = parser.parse_file(tmp_path)
+        finally:
+            tmp_path.unlink()
+
+        assert len(result.sections) == 2
+
+        sec426 = next(s for s in result.sections if s.section_number == "426")
+        assert sec426.is_repealed is True, "Section with status='repealed' must have is_repealed=True"
+
+        sec427 = next(s for s in result.sections if s.section_number == "427")
+        assert sec427.is_repealed is False, "Section without status='repealed' must have is_repealed=False"
+
+    def test_is_repealed_false_when_no_status_attribute(
+        self, parser: USLMParser
+    ) -> None:
+        """Sections without a status attribute default to is_repealed=False."""
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t37/s427">
+          <num value="427">§ 427.</num>
+          <heading>Family separation allowance</heading>
+          <content><p>A member is entitled to an allowance.</p></content>
+        </section>"""
+        elem = etree.fromstring(xml)
+        parser._section_order = 0
+        parser._current_group_key = "title:37/chapter:13"
+        section = parser._parse_section(elem, 37)
+        assert section is not None
+        assert section.is_repealed is False
+
+    def test_is_repealed_false_when_status_is_other_value(
+        self, parser: USLMParser
+    ) -> None:
+        """Sections with a status attribute other than 'repealed' have is_repealed=False."""
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            status="enacted"
+            identifier="/us/usc/t37/s427">
+          <num value="427">§ 427.</num>
+          <heading>Family separation allowance</heading>
+          <content><p>A member is entitled to an allowance.</p></content>
+        </section>"""
+        elem = etree.fromstring(xml)
+        parser._section_order = 0
+        parser._current_group_key = "title:37/chapter:13"
+        section = parser._parse_section(elem, 37)
+        assert section is not None
+        assert section.is_repealed is False
 
     def test_section_parent_group_association(
         self, parser: USLMParser, sample_xml: Path
@@ -582,6 +665,50 @@ class TestCleanBracketHeading:
     def test_empty_string(self) -> None:
         """Test empty string returns empty string."""
         assert _clean_bracket_heading("") == ""
+
+
+class TestCamelToTitle:
+    """Tests for _camel_to_title function (Issue #457)."""
+
+    def test_removal_description(self) -> None:
+        """removalDescription → Removal Description (Issue #457 regression)."""
+        assert _camel_to_title("removalDescription") == "Removal Description"
+
+    def test_historical_and_revision(self) -> None:
+        """historicalAndRevision → Historical And Revision."""
+        assert _camel_to_title("historicalAndRevision") == "Historical And Revision"
+
+    def test_effective_date_of_amendment(self) -> None:
+        """effectiveDateOfAmendment → Effective Date Of Amendment."""
+        assert _camel_to_title("effectiveDateOfAmendment") == "Effective Date Of Amendment"
+
+    def test_all_lowercase_single_word(self) -> None:
+        """Single all-lowercase word is title-cased."""
+        assert _camel_to_title("amendments") == "Amendments"
+
+    def test_already_title_case_single_word(self) -> None:
+        """Single word starting with uppercase is unchanged."""
+        assert _camel_to_title("Amendments") == "Amendments"
+
+    def test_note_topic_without_heading_emits_nh_marker(self) -> None:
+        """<note topic="removalDescription"> without <heading> produces correct [NH] header."""
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">
+            <note topic="removalDescription">
+                <p>Section, Pub. L. 87-649, was repealed.</p>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        assert "[NH]Removal Description[/NH]" in content
+        assert "[NH]Removaldescription[/NH]" not in content
 
 
 class TestChapterGroups:
