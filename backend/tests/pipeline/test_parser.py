@@ -158,10 +158,14 @@ class TestUSLMParser:
         assert len(result.sections) == 2
 
         sec426 = next(s for s in result.sections if s.section_number == "426")
-        assert sec426.is_repealed is True, "Section with status='repealed' must have is_repealed=True"
+        assert sec426.is_repealed is True, (
+            "Section with status='repealed' must have is_repealed=True"
+        )
 
         sec427 = next(s for s in result.sections if s.section_number == "427")
-        assert sec427.is_repealed is False, "Section without status='repealed' must have is_repealed=False"
+        assert sec427.is_repealed is False, (
+            "Section without status='repealed' must have is_repealed=False"
+        )
 
     def test_is_repealed_false_when_no_status_attribute(
         self, parser: USLMParser
@@ -680,7 +684,9 @@ class TestCamelToTitle:
 
     def test_effective_date_of_amendment(self) -> None:
         """effectiveDateOfAmendment → Effective Date Of Amendment."""
-        assert _camel_to_title("effectiveDateOfAmendment") == "Effective Date Of Amendment"
+        assert (
+            _camel_to_title("effectiveDateOfAmendment") == "Effective Date Of Amendment"
+        )
 
     def test_all_lowercase_single_word(self) -> None:
         """Single all-lowercase word is title-cased."""
