@@ -109,6 +109,20 @@ def _clean_bracket_heading(text: str) -> str:
     return text.strip()
 
 
+def _camel_to_title(topic: str) -> str:
+    """Convert a camelCase topic name to a title-cased display header.
+
+    Splits camelCase word boundaries by inserting spaces before each
+    uppercase letter, then title-cases the result.
+
+    Examples:
+        ``removalDescription``  → ``Removal Description``
+        ``historicalAndRevision`` → ``Historical And Revision``
+        ``amendments``           → ``Amendments``
+    """
+    return re.sub(r"([A-Z])", r" \1", topic).strip().title()
+
+
 # Alias for backward compatibility
 to_title_case = title_case_heading
 
@@ -278,6 +292,7 @@ class ParsedSection:
     parent_group_key: str | None = None  # Key of immediate parent group
     notes: str | None = None  # Raw notes from XML
     sort_order: int = 0
+    is_repealed: bool = False  # True when XML has status="repealed"
     subsections: list[ParsedSubsection] = field(
         default_factory=list
     )  # Structured content
@@ -903,6 +918,8 @@ class USLMParser:
         # Extract hyperlink refs from notes sections (Task 1.17b)
         notes_refs = self._extract_notes_refs(section_elem)
 
+        is_repealed = section_elem.get("status") == "repealed"
+
         return ParsedSection(
             section_number=section_number,
             heading=heading,
@@ -911,6 +928,7 @@ class USLMParser:
             parent_group_key=self._current_group_key,
             notes=notes,
             sort_order=self._section_order,
+            is_repealed=is_repealed,
             subsections=subsections,
             source_credit_refs=source_credit_refs,
             act_refs=act_refs,
@@ -981,22 +999,27 @@ class USLMParser:
         return ""
 
     def _get_heading(self, elem: etree._Element) -> str:
-        """Extract the heading text from an element, stripping footnotes.
+        """Extract the heading text from an element, completely omitting footnotes.
 
         For repealed/renumbered sections the USLM XML wraps the num+heading
         in editorial brackets, e.g. ``[§ 4. Repealed. ... 90 Stat. 1558]``.
         The opening ``[`` lives on the ``<num>`` element, while the closing
         ``]`` lands on the ``<heading>``.  We strip the dangling ``]`` here.
+
+        Footnote markers are stripped entirely from headings (unlike body text
+        where they are rendered as ``[N]`` bracket markers).
         """
         heading_elem = elem.find("heading") or elem.find("{*}heading")
         if heading_elem is not None:
-            text = self._get_text_content(heading_elem, strip_footnotes=True)
+            parts = list(self._itertext_strip_all_footnotes(heading_elem))
+            text = _PUNCT_RE.sub(r"\1", _WS_RE.sub(" ", "".join(parts)).strip())
             return text.rstrip("]").rstrip()
 
         # Fall back to title element
         title_elem = elem.find("title") or elem.find("{*}title")
         if title_elem is not None:
-            return self._get_text_content(title_elem, strip_footnotes=True)
+            parts = list(self._itertext_strip_all_footnotes(title_elem))
+            return _PUNCT_RE.sub(r"\1", _WS_RE.sub(" ", "".join(parts)).strip())
 
         return ""
 
@@ -1017,7 +1040,7 @@ class USLMParser:
         if strip_footnotes:
             parts = list(self._itertext_skip_footnotes(elem))
         else:
-            parts = list(elem.itertext())
+            parts = list(self._itertext_small_caps(elem))
 
         # Concatenate text fragments preserving original whitespace, then
         # collapse runs of whitespace to a single space.  Using "".join
@@ -1081,14 +1104,32 @@ class USLMParser:
         return text
 
     @staticmethod
-    def _itertext_skip_footnotes(elem: etree._Element) -> Generator[str, None, None]:
-        """Like elem.itertext() but preserves inline footnote markers and skips note bodies.
+    def _itertext_small_caps(elem: etree._Element) -> Generator[str, None, None]:
+        """Like elem.itertext() but title-cases text in <inline class="small-caps">."""
+        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        if tag == "inline" and elem.get("class", "") == "small-caps":
+            raw = "".join(elem.itertext())
+            if raw:
+                yield raw.title()
+            return
+        if elem.text:
+            yield elem.text
+        for child in elem:
+            yield from USLMParser._itertext_small_caps(child)
+            if child.tail:
+                yield child.tail
 
-        For ``<ref class="footnoteRef">`` elements, yields a bracketed marker like
-        ``[1]`` so the footnote reference number appears in the extracted text.
-        For ``<note type="footnote">`` elements, the body text is skipped inline
-        (callers that need the full footnote text should call
-        ``_collect_footnote_texts()`` separately).
+    @staticmethod
+    def _itertext_skip_footnotes(elem: etree._Element) -> Generator[str, None, None]:
+        """Like elem.itertext() but emits [N] for footnoteRef markers and skips note bodies.
+
+        <ref class="footnoteRef"> elements are rendered as bracket markers (e.g. "[1]")
+        so readers can see that a footnote exists.  <note type="footnote"> bodies are
+        suppressed to avoid duplicating the note text in the main content flow.
+
+        Text inside <inline class="small-caps"> elements is title-cased to
+        normalise lowercase month names and other proper nouns that OLRC XML
+        stores in lowercase for CSS small-capitals rendering.
         """
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
         # Footnote reference link: include the marker number as [N].
@@ -1100,10 +1141,35 @@ class USLMParser:
         # Footnote note body: skip entirely (avoid injecting note prose inline).
         if tag == "note" and elem.get("type", "") == "footnote":
             return
+        if tag == "inline" and elem.get("class", "") == "small-caps":
+            raw = "".join(elem.itertext())
+            if raw:
+                yield raw.title()
+            return
         if elem.text:
             yield elem.text
         for child in elem:
             yield from USLMParser._itertext_skip_footnotes(child)
+            if child.tail:
+                yield child.tail
+
+    @staticmethod
+    def _itertext_strip_all_footnotes(
+        elem: etree._Element,
+    ) -> Generator[str, None, None]:
+        """Like elem.itertext() but completely omits footnoteRef markers and note bodies.
+
+        Used for headings where footnote markers should not appear in the output text.
+        """
+        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        if tag == "ref" and elem.get("class", "") == "footnoteRef":
+            return
+        if tag == "note" and elem.get("type", "") == "footnote":
+            return
+        if elem.text:
+            yield elem.text
+        for child in elem:
+            yield from USLMParser._itertext_strip_all_footnotes(child)
             if child.tail:
                 yield child.tail
 
@@ -1592,7 +1658,10 @@ class USLMParser:
         parts = []
 
         def process_element(
-            el: etree._Element, in_bold: bool = False, in_italic: bool = False
+            el: etree._Element,
+            in_bold: bool = False,
+            in_italic: bool = False,
+            in_p: bool = False,
         ) -> None:
             """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
@@ -1660,8 +1729,11 @@ class USLMParser:
                     }
                     if "heading" not in child_tags:
                         # Use the canonical display string for known camelCase topics;
-                        # fall back to topic.title() for simple single-word topics like
-                        # "amendments" → "Amendments".
+                        # fall back to _camel_to_title() for topics not in the table
+                        # (e.g. "removalDescription" → "Removal Description") so
+                        # arbitrary camelCase topics are still split on word
+                        # boundaries instead of only upcasing the first letter
+                        # (issue #457).
                         #
                         # Some OLRC releases capitalise the first character of the topic
                         # attribute (e.g. "HistoricalAndRevision" instead of the standard
@@ -1670,7 +1742,7 @@ class USLMParser:
                         # found (issue #542).
                         normalized_topic = topic[0].lower() + topic[1:]
                         display = _NOTE_TOPIC_DISPLAY.get(
-                            normalized_topic, topic.title()
+                            normalized_topic, _camel_to_title(topic)
                         )
                         nh_marker = f"[NH]{display}[/NH]"
                         # Skip the [NH] marker if an immediately-preceding cross-heading
@@ -1679,7 +1751,7 @@ class USLMParser:
                         # note; emitting both causes _parse_historical_notes to capture
                         # empty content and _parse_flat_notes to add a duplicate note
                         # (issue #542).  Compare case-insensitively to handle the
-                        # .title() capitalisation difference ("And" vs "and").
+                        # title-casing difference ("And" vs "and").
                         last_non_ws = next(
                             (p for p in reversed(parts) if p and p.strip()), ""
                         )
