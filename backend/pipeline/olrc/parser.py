@@ -1515,7 +1515,6 @@ class USLMParser:
             el: etree._Element,
             in_bold: bool = False,
             in_italic: bool = False,
-            in_p: bool = False,
         ) -> None:
             """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
