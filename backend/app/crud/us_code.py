@@ -486,17 +486,11 @@ async def get_section(
 
                 enacted_date = _parse_citation_date(law_data["date"])
 
-        # Extract last_modified_date from amendments
-        amendments = state.normalized_notes.get("amendments", [])
-        if amendments:
-            from datetime import date
-
-            max_year = max(a["year"] for a in amendments if "year" in a)
-            last_modified_date = date(max_year, 1, 1)
-
-        # Fallback: derive last_modified_date from amendment citations when
-        # the amendments list is empty (e.g. stale ingestion or unstructured notes)
-        if last_modified_date is None and citations:
+        # Extract last_modified_date from amendment citations (full ISO date).
+        # Prefer the precise date from citation law.date over the year-only
+        # value stored on amendment entries, which would otherwise default to
+        # {year}-01-01 and misrepresent the actual amendment date.
+        if citations:
             from pipeline.olrc.group_service import _parse_citation_date
 
             amendment_dates = []
@@ -509,6 +503,17 @@ async def get_section(
                             amendment_dates.append(parsed)
             if amendment_dates:
                 last_modified_date = max(amendment_dates)
+
+        # Fallback: when citation dates are unavailable, use the year from
+        # the amendments list (e.g. stale ingestion or unstructured notes).
+        if last_modified_date is None:
+            amendments = state.normalized_notes.get("amendments", [])
+            if amendments:
+                from datetime import date
+
+                years = [a["year"] for a in amendments if "year" in a]
+                if years:
+                    last_modified_date = date(max(years), 1, 1)
 
     # Find the revision that last *changed* this section's content.
     # Reuse the same chain to avoid re-fetching HEAD + CTE.
