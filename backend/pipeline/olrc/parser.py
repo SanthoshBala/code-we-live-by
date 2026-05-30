@@ -1529,6 +1529,13 @@ class USLMParser:
         # Always strip whitespace from each part and join with a single
         # space so that inconsistent leading/trailing spaces in XML
         # text/tail never produce double-spaces or missing separators.
+        #
+        # Exception: do NOT add a separator space when the previous token ends
+        # with a quote character or the current token starts with a quote
+        # character.  This prevents spurious spaces inside quoted spans that
+        # arise when a <ref> element is directly adjacent to a " character in
+        # the XML (e.g. `"<ref>section 104</ref>"` → `"section 104"` not
+        # `" section 104 "`).
         result: list[str] = []
         for part in parts:
             if part == "[PARA]":
@@ -1537,7 +1544,16 @@ class USLMParser:
             stripped = part.strip()
             if not stripped:
                 continue
-            if not result or result[-1] == "\n\n" or stripped[0] in ";,.":
+            prev = "".join(result)
+            prev_char = prev[-1] if prev else ""
+            no_space = (
+                not result
+                or result[-1] == "\n\n"
+                or stripped[0] in ";,."
+                or prev_char == '"'
+                or stripped[0] == '"'
+            )
+            if no_space:
                 result.append(stripped)
             else:
                 result.append(" " + stripped)

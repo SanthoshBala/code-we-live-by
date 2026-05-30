@@ -1689,6 +1689,58 @@ class TestParserNotesContent:
         assert "[H2]" not in content
         assert "et seq" in content
 
+    def test_ref_adjacent_to_opening_quote_no_extra_space(self) -> None:
+        """Ref element immediately after opening quote must not inject a leading space.
+
+        Issue #472: XML like substituted "<ref>section 104</ref>" was rendered
+        as substituted " section 104 " instead of substituted "section 104".
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Simulate: substituted "<ref>section 1069f(a)(1) of this title</ref>"
+        xml = (
+            '<notes><p>substituted "<ref>section 1069f(a)(1) of this title</ref>"'
+            ' for "<ref>section 1069d(a)(1) of this title</ref>".</p></notes>'
+        )
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Must NOT have a space after opening quote or before closing quote
+        assert '" section' not in content
+        assert 'title "' not in content
+        assert '"section 1069f(a)(1) of this title"' in content
+        assert '"section 1069d(a)(1) of this title"' in content
+
+    def test_ref_adjacent_to_closing_quote_no_trailing_space(self) -> None:
+        """Ref element that ends a quoted span must not inject a trailing space.
+
+        Issue #472: XML like "subsection (b) and <ref>section 1068</ref> " was
+        rendered with a trailing space before the closing quote.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Simulate: "subsection (b) and <ref>section 1068 of this title</ref>"
+        xml = (
+            '<notes><p>substituted "subsection (b) and '
+            '<ref>section 1068 of this title</ref>" for "subsection (c)".</p></notes>'
+        )
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Must NOT have a space before closing quote
+        assert 'title "' not in content
+        assert '"subsection (b) and section 1068 of this title"' in content
+
 
 class TestStripNoteMarkers:
     """Tests for _strip_note_markers function."""
