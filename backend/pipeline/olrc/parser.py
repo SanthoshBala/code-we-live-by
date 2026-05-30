@@ -1577,9 +1577,6 @@ class USLMParser:
         # Track the most recent ref (either PL or Act) for stat/date association
         last_ref_type: str | None = None
 
-        ns_tag_ref = f"{{{NAMESPACES['uslm']}}}ref"
-        ns_tag_date = f"{{{NAMESPACES['uslm']}}}date"
-
         for elem in source_credit.iter():
             local = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
 
