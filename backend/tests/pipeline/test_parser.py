@@ -1112,3 +1112,123 @@ class TestNoteRefDataclass:
         assert ref.ref_type == "act"
         assert ref.act_date == "1935-08-14"
         assert ref.act_chapter == 531
+
+
+class TestSourceCreditDateAssignment:
+    """Tests for source-credit date assignment to the correct PL citation.
+
+    Regression tests for Issue #471: dates were shifted by one position
+    because the parser collected all <ref> elements first and all <date>
+    elements second, then zipped them by index.  In OLRC XML, a <date>
+    element always follows the <ref> it belongs to, so the original act
+    (PL 89–329) has no accompanying date while every subsequent amendment
+    does.  The fix iterates elements in document order so each <date> is
+    attached to the immediately-preceding PL ref.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_source_credit_dates_assigned_to_correct_law(
+        self, parser: USLMParser
+    ) -> None:
+        """Each <date> in a sourceCredit must be assigned to the PL ref that
+        immediately precedes it in the XML, not the one before that.
+
+        Regression test for Issue #471, using the 20 U.S.C. § 1057 source
+        credit pattern:
+
+          (Pub. L. 89–329, title III, § 311, as added Pub. L. 99–498,
+          title III, § 301(a), Oct. 17, 1986, 100 Stat. 1291; amended
+          Pub. L. 100–50, § 2(a)(1), June 3, 1987, 101 Stat. 335;
+          Pub. L. 105–244, title III, §§ 301(c)(1), 303(a), Oct. 7, 1998,
+          112 Stat. 1636, 1638; Pub. L. 110–315, title III, § 301,
+          Aug. 14, 2008, 122 Stat. 3166.)
+
+        Expected date mapping:
+          PL 89-329  → None (original framework act, no date cited)
+          PL 99-498  → "Oct. 17, 1986"
+          PL 100-50  → "June 3, 1987"
+          PL 105-244 → "Oct. 7, 1998"
+          PL 110-315 → "Aug. 14, 2008"
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t20/s1057">
+          <num value="1057">§ 1057.</num>
+          <heading>Strengthening institutions</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(
+            <ref href="/us/pl/89/329/tIII/s311">Pub. L. 89–329, title III, § 311</ref>,
+            as added
+            <ref href="/us/pl/99/498/tIII/s301">Pub. L. 99–498, title III, § 301(a)</ref>,
+            <date date="1986-10-17">Oct. 17, 1986</date>,
+            <ref href="/us/stat/100/1291">100 Stat. 1291</ref>;
+            amended
+            <ref href="/us/pl/100/50/s2">Pub. L. 100–50, § 2(a)(1)</ref>,
+            <date date="1987-06-03">June 3, 1987</date>,
+            <ref href="/us/stat/101/335">101 Stat. 335</ref>;
+            <ref href="/us/pl/105/244/tIII/s301">Pub. L. 105–244, title III, §§ 301(c)(1), 303(a)</ref>,
+            <date date="1998-10-07">Oct. 7, 1998</date>,
+            <ref href="/us/stat/112/1636">112 Stat. 1636</ref>,
+            <ref href="/us/stat/112/1638">1638</ref>;
+            <ref href="/us/pl/110/315/tIII/s301">Pub. L. 110–315, title III, § 301</ref>,
+            <date date="2008-08-14">Aug. 14, 2008</date>,
+            <ref href="/us/stat/122/3166">122 Stat. 3166</ref>.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(act_refs) == 0
+        assert len(pl_refs) == 5
+
+        # PL 89-329: original framework act — no date in the source credit
+        assert pl_refs[0].congress == 89
+        assert pl_refs[0].law_number == 329
+        assert pl_refs[0].date is None
+
+        # PL 99-498: "Oct. 17, 1986"
+        assert pl_refs[1].congress == 99
+        assert pl_refs[1].law_number == 498
+        assert pl_refs[1].date == "Oct. 17, 1986"
+
+        # PL 100-50: "June 3, 1987"
+        assert pl_refs[2].congress == 100
+        assert pl_refs[2].law_number == 50
+        assert pl_refs[2].date == "June 3, 1987"
+
+        # PL 105-244: "Oct. 7, 1998"
+        assert pl_refs[3].congress == 105
+        assert pl_refs[3].law_number == 244
+        assert pl_refs[3].date == "Oct. 7, 1998"
+
+        # PL 110-315: "Aug. 14, 2008"
+        assert pl_refs[4].congress == 110
+        assert pl_refs[4].law_number == 315
+        assert pl_refs[4].date == "Aug. 14, 2008"
+
+    def test_source_credit_first_law_with_date(self, parser: USLMParser) -> None:
+        """When the first law in a source credit has a date (e.g., for sections
+        added by amendment where the original act is not listed), its date is
+        correctly assigned to index 0.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s101">
+          <num value="101">§ 101.</num>
+          <heading>Test</heading>
+          <content><p>Test.</p></content>
+          <sourceCredit>(
+            <ref href="/us/pl/94/553/s101">Pub. L. 94–553, § 101</ref>,
+            <date date="1976-10-19">Oct. 19, 1976</date>,
+            <ref href="/us/stat/90/2541">90 Stat. 2541</ref>.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 1
+        assert pl_refs[0].congress == 94
+        assert pl_refs[0].law_number == 553
+        assert pl_refs[0].date == "Oct. 19, 1976"
