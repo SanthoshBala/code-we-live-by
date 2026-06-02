@@ -1502,16 +1502,31 @@ class USLMParser:
                     header_text = text.rstrip(".")
                     parts.append(f"[H1]{header_text}[/H1]")
                 elif tag == "i":
-                    # Italic text might be a sub-header if followed by ".—"
-                    # But NOT if it's a case citation (contains " v. ")
-                    # or other inline emphasis (Latin terms, etc.)
+                    # Italic text is a sub-header only when it is followed
+                    # immediately by ".—" (an em-dash introducer), e.g.:
+                    #   <i>Reproduction</i>.—The right to reproduce.
+                    # If the tail does NOT start with ".—" the element is
+                    # inline formatting (case name, emphasis) and must be
+                    # kept as plain text so the surrounding sentence is not
+                    # fragmented.  Also exclude known case-citation patterns
+                    # (" v. ") and common Latin phrases.
                     inline_latin = {"et seq", "et al", "supra", "infra", "id"}
                     stripped_text = text.strip().rstrip(".")
-                    if " v. " in text or stripped_text.lower() in inline_latin:
-                        # Case citation or Latin phrase - keep as inline text
+                    tail = el.tail or ""
+                    is_subheader_tail = bool(
+                        re.match(r"^\s*\.?\s*—", tail)
+                    )
+                    if (
+                        " v. " in text
+                        or stripped_text.lower() in inline_latin
+                        or not is_subheader_tail
+                    ):
+                        # Inline text (case citation, Latin phrase, or
+                        # mid-sentence emphasis) — keep as plain text
                         parts.append(text)
                     else:
-                        # Mark as potential sub-header for normalizer
+                        # Standalone italic introducer followed by ".—":
+                        # mark as sub-header for the normalizer
                         parts.append(f"[H2]{text}[/H2]")
                 else:
                     parts.append(text)

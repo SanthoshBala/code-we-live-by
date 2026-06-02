@@ -1689,6 +1689,63 @@ class TestParserNotesContent:
         assert "[H2]" not in content
         assert "et seq" in content
 
+    def test_inline_italic_case_name_not_marked_as_header(self) -> None:
+        """Inline <i> case names mid-sentence must not become H2 headers.
+
+        Reproduces Issue #460: 17 USC § 110 note paragraph containing
+        'The <i>Aiken</i> decision...' was fragmenting into three lines
+        with is_header=True on the case name.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = (
+            "<notes><p>The <i>Aiken</i> decision is based squarely on the "
+            "two Supreme Court decisions dealing with cable television.</p></notes>"
+        )
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # The inline italic must NOT be wrapped in [H2] markers
+        assert "[H2]" not in content
+        assert "Aiken" in content
+
+        # When normalized, the full paragraph should be a single non-header line
+        lines = normalize_note_content(content)
+        content_lines = [ln for ln in lines if ln.content]
+        assert len(content_lines) == 1, (
+            f"Expected 1 line, got {len(content_lines)}: "
+            + str([ln.content for ln in content_lines])
+        )
+        assert content_lines[0].is_header is False
+        assert "Aiken" in content_lines[0].content
+        assert content_lines[0].content.startswith("The")
+
+    def test_standalone_italic_subheader_still_marked_as_h2(self) -> None:
+        """Italic text followed by '.—' must still be treated as an H2 sub-header.
+
+        This ensures the inline-italic fix does not break legitimate sub-header
+        detection (e.g., 'Reproduction.—The right to reproduce.').
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = "<notes><p><i>Reproduction</i>.—The right to reproduce.</p></notes>"
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Standalone italic introducer followed by ".—" must keep [H2] marker
+        assert "[H2]Reproduction" in content
+
 
 class TestStripNoteMarkers:
     """Tests for _strip_note_markers function."""
