@@ -1,5 +1,7 @@
 """Tests for SectionNotesSchema — specifically the raw_notes markup-stripping validator."""
 
+from app.models.enums import SourceRelationship
+from app.schemas.public_law import PublicLawSchema, SourceLawSchema
 from app.schemas.us_code import SectionNotesSchema
 
 
@@ -61,3 +63,57 @@ class TestRawNotesMarkupStripping:
         assert "as defined by section 101." in result.raw_notes
         assert "Definition" in result.raw_notes
         assert "Further clarification." in result.raw_notes
+
+
+class TestSourceLawSchemaRawTextStripping:
+    """SourceLawSchema.raw_text must have [NH]..[/NH] tags stripped (Issue #458).
+
+    When a note topic attribute is synthesised into an [NH]...[/NH] marker and
+    that marker ends up prepended to the citation text (because the note block
+    has no other separator), the raw_text field previously leaked the tag into
+    the API response.  Example from 37 U.S.C. § 426:
+
+        raw_text was: "[NH]Removaldescription[/NH]\\n\\nSection, Pub. L. 87-649..."
+        raw_text should be: "Section, Pub. L. 87-649..."
+    """
+
+    def _make_citation(self, raw_text: str) -> SourceLawSchema:
+        return SourceLawSchema.model_validate(
+            {
+                "law": {
+                    "congress": 87,
+                    "law_number": 649,
+                },
+                "relationship": SourceRelationship.ENACTMENT,
+                "raw_text": raw_text,
+            }
+        )
+
+    def test_nh_tag_stripped_from_raw_text(self) -> None:
+        """[NH]...[/NH] tag is removed and the citation text is preserved."""
+        raw = "[NH]Removaldescription[/NH]\n\nSection, Pub. L. 87-649, Sept. 7, 1962, 76 Stat. 451."
+        result = self._make_citation(raw)
+        assert "[NH]" not in result.raw_text
+        assert "[/NH]" not in result.raw_text
+        assert "Pub. L. 87-649" in result.raw_text
+
+    def test_nh_tag_with_multiword_topic_stripped(self) -> None:
+        """[NH] tag with multi-word note topic is fully removed."""
+        raw = "[NH]Effective Date Of 2013 Amendment[/NH] Pub. L. 113-66, § 631, Dec. 26, 2013."
+        result = self._make_citation(raw)
+        assert "[NH]" not in result.raw_text
+        assert "[/NH]" not in result.raw_text
+        assert "Pub. L. 113-66" in result.raw_text
+
+    def test_plain_citation_unchanged(self) -> None:
+        """Citations without any [NH] markup are returned as-is."""
+        raw = "Pub. L. 87-649, Sept. 7, 1962, 76 Stat. 451."
+        result = self._make_citation(raw)
+        assert result.raw_text == raw
+
+    def test_orphaned_closing_tag_stripped(self) -> None:
+        """A stray [/NH] closing tag without an opening tag is also removed."""
+        raw = "[/NH] Pub. L. 87-649, Sept. 7, 1962, 76 Stat. 451."
+        result = self._make_citation(raw)
+        assert "[/NH]" not in result.raw_text
+        assert "Pub. L. 87-649" in result.raw_text
