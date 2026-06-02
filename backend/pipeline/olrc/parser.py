@@ -1513,9 +1513,7 @@ class USLMParser:
                     inline_latin = {"et seq", "et al", "supra", "infra", "id"}
                     stripped_text = text.strip().rstrip(".")
                     tail = el.tail or ""
-                    is_subheader_tail = bool(
-                        re.match(r"^\s*\.?\s*—", tail)
-                    )
+                    is_subheader_tail = bool(re.match(r"^\s*\.?\s*—", tail))
                     if (
                         " v. " in text
                         or stripped_text.lower() in inline_latin
