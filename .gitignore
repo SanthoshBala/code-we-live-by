@@ -230,3 +230,6 @@ Thumbs.db
 
 # Downloaded data
 backend/data/
+
+# Claude Code agent worktrees (runtime only, not tracked)
+.claude/worktrees/
