@@ -1,7 +1,7 @@
 """Tests for SectionNotesSchema — specifically the raw_notes markup-stripping validator."""
 
 from app.models.enums import SourceRelationship
-from app.schemas.public_law import PublicLawSchema, SourceLawSchema
+from app.schemas.public_law import SourceLawSchema
 from app.schemas.us_code import SectionNotesSchema
 
 
