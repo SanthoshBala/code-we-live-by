@@ -1116,27 +1116,40 @@ class USLMParser:
         # appears as <continuation> inside <content> inside the last <paragraph>.
         # We strip them from the content text and collect them separately so
         # callers can promote them to the correct indent level.
+        #
+        # <p> elements inside <content> represent separate paragraphs in USLM
+        # (e.g. 9 U.S.C. § 13 where a trailing sentence follows the (c) item).
+        # They are also excluded from content text and emitted as continuations
+        # so they render as separate provisions (Issue #479).
         content_continuations: list[str] = []
         if chapeau_elem is not None:
             content_parts.append(
                 self._get_text_content(chapeau_elem, strip_footnotes=True)
             )
         if content_elem is not None:
-            # Check for <continuation> children inside <content>.
+            # Collect child elements inside <content> that should be separated out:
+            # <continuation> and <p> elements each represent distinct paragraphs.
             cont_in_content = content_elem.findall(
                 "{*}continuation"
             ) or content_elem.findall("continuation")
-            if cont_in_content:
-                # Get content text excluding the <continuation> children.
+            p_in_content = content_elem.findall("{*}p") or content_elem.findall("p")
+            excluded_in_content = cont_in_content + p_in_content
+            if excluded_in_content:
+                # Get content text excluding the separated child elements.
                 content_text = self._get_text_content_excluding(
-                    content_elem, cont_in_content, strip_footnotes=True
+                    content_elem, excluded_in_content, strip_footnotes=True
                 )
                 if content_text:
                     content_parts.append(content_text)
-                for cont_elem in cont_in_content:
-                    cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
-                    if cont_text:
-                        content_continuations.append(cont_text)
+                # Emit separated children in document order as continuation entries.
+                excluded_set = {id(e) for e in excluded_in_content}
+                for child_elem in content_elem:
+                    if id(child_elem) in excluded_set:
+                        cont_text = self._get_text_content(
+                            child_elem, strip_footnotes=True
+                        )
+                        if cont_text:
+                            content_continuations.append(cont_text)
             else:
                 content_parts.append(
                     self._get_text_content(content_elem, strip_footnotes=True)
@@ -1210,17 +1223,34 @@ class USLMParser:
                 para_elems = section_elem.findall("paragraph")
 
             if para_elems:
-                # Check for section-level chapeau (introductory text before the list)
+                # Determine the document-order position of the first and last paragraph
+                # to classify sibling <p> elements as intro text or trailing text.
+                all_children = list(section_elem)
+                first_para_idx = all_children.index(para_elems[0])
+                last_para_idx = all_children.index(para_elems[-1])
+
+                # Collect introductory text: explicit <chapeau> OR <p> siblings that
+                # appear before the first <paragraph> in document order (Issue #478).
                 chapeau_elem = section_elem.find("{*}chapeau")
                 if chapeau_elem is None:
                     chapeau_elem = section_elem.find("chapeau")
-                chapeau_text = (
-                    self._get_text_content(chapeau_elem)
-                    if chapeau_elem is not None
-                    else ""
-                )
+                chapeau_parts: list[str] = []
+                if chapeau_elem is not None:
+                    text = self._get_text_content(chapeau_elem)
+                    if text:
+                        chapeau_parts.append(text)
+                for child in all_children[:first_para_idx]:
+                    child_tag = (
+                        child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                    )
+                    if child_tag == "p":
+                        text = self._get_text_content(child)
+                        if text:
+                            chapeau_parts.append(text)
+                chapeau_text = " ".join(chapeau_parts)
 
-                # Check for section-level continuation (closing text after the list)
+                # Collect trailing text: explicit <continuation> OR <p> siblings that
+                # appear after the last <paragraph> in document order (Issue #479).
                 section_continuation: list[str] = []
                 cont_elems = section_elem.findall(
                     "{*}continuation"
@@ -1229,6 +1259,14 @@ class USLMParser:
                     cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
                     if cont_text:
                         section_continuation.append(cont_text)
+                for child in all_children[last_para_idx + 1 :]:
+                    child_tag = (
+                        child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                    )
+                    if child_tag == "p":
+                        text = self._get_text_content(child, strip_footnotes=True)
+                        if text:
+                            section_continuation.append(text)
 
                 # Parse each paragraph, then bubble up any <continuation> elements
                 # that were nested inside a paragraph's <content>.  In OLRC XML
@@ -1243,24 +1281,33 @@ class USLMParser:
                     parsed_para = self._parse_subsection(para_elem, "paragraph")
                     # Detect which continuation items originated inside <content>
                     # (captured by _parse_subsection via content_continuations).
+                    # This includes both <continuation> elements (17 U.S.C. § 107)
+                    # and <p> elements (9 U.S.C. § 13, Issue #479) — both represent
+                    # section-level paragraphs, not sub-clauses of the list item.
                     para_content_elem = para_elem.find("{*}content")
                     if para_content_elem is None:
                         para_content_elem = para_elem.find("content")
                     if para_content_elem is not None:
-                        in_content_cont_texts = {
+                        in_content_separated_texts = {
                             self._get_text_content(ce, strip_footnotes=True)
                             for ce in (
                                 para_content_elem.findall("{*}continuation")
                                 or para_content_elem.findall("continuation")
                             )
+                        } | {
+                            self._get_text_content(pe, strip_footnotes=True)
+                            for pe in (
+                                para_content_elem.findall("{*}p")
+                                or para_content_elem.findall("p")
+                            )
                         }
-                        if in_content_cont_texts:
+                        if in_content_separated_texts:
                             # Bubble these up to section level and remove from
                             # the paragraph so they don't render at indent_level=1.
                             promoted: list[str] = []
                             kept: list[str] = []
                             for ct in parsed_para.continuation:
-                                if ct in in_content_cont_texts:
+                                if ct in in_content_separated_texts:
                                     promoted.append(ct)
                                 else:
                                     kept.append(ct)

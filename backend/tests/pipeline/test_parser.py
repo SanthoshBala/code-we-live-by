@@ -414,6 +414,163 @@ class TestUSLMParser:
             "Continuation text must be promoted to the section-level wrapper"
         )
 
+    def test_intro_p_sibling_captured_as_chapeau(self, parser: USLMParser) -> None:
+        """A <p> element appearing before the first <paragraph> in a section is
+        captured as introductory (chapeau) text rather than silently dropped.
+
+        Regression test for Issue #478: 9 U.S.C. § 13 has an intro sentence
+        ("The party moving for an order confirming...") encoded as a <p> sibling
+        of the (a)/(b)/(c) <paragraph> elements.  The parser was previously
+        looking only for <chapeau>, so the intro was absent from text_content
+        and provisions.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t9/s13">
+          <num value="13">§ 13.</num>
+          <heading>Application for order confirming, modifying, or correcting award</heading>
+          <p>The party moving for an order confirming, modifying, or correcting an
+          award shall, at the time such order is filed with the clerk for the entry of
+          judgment thereon, also file the following papers with the clerk:</p>
+          <paragraph identifier="/us/usc/t9/s13/a">
+            <num value="a">(a)</num>
+            <content>The agreement; the selection or appointment, if any, of an
+            additional arbitrator or umpire.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/b">
+            <num value="b">(b)</num>
+            <content>The award.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/c">
+            <num value="c">(c)</num>
+            <content>Each notice, affidavit, or other paper used upon an application
+            to confirm, modify, or correct the award.</content>
+          </paragraph>
+          <sourceCredit>(June 12, 1939, ch. 237.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+
+        # Intro sentence must appear as the wrapper's content (chapeau equivalent)
+        assert "party moving" in wrapper.content, (
+            "Introductory <p> before paragraphs must be captured as chapeau text"
+        )
+        assert len(wrapper.children) == 3
+        assert wrapper.children[0].marker == "(a)"
+        assert wrapper.children[1].marker == "(b)"
+        assert wrapper.children[2].marker == "(c)"
+
+    def test_trailing_p_sibling_captured_as_continuation(
+        self, parser: USLMParser
+    ) -> None:
+        """A <p> element appearing after the last <paragraph> in a section is
+        captured as a section-level continuation rather than silently dropped.
+
+        Regression test for Issue #479: 9 U.S.C. § 13 has a trailing sentence
+        ("The judgment shall be docketed...") encoded as a <p> sibling after the
+        (a)/(b)/(c) <paragraph> elements.  This sentence was either dropped or
+        merged into the (c) item — it must appear as a distinct provision.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t9/s13">
+          <num value="13">§ 13.</num>
+          <heading>Application for order confirming, modifying, or correcting award</heading>
+          <p>The party moving for an order confirming, modifying, or correcting an
+          award shall, at the time such order is filed with the clerk for the entry of
+          judgment thereon, also file the following papers with the clerk:</p>
+          <paragraph identifier="/us/usc/t9/s13/a">
+            <num value="a">(a)</num>
+            <content>The agreement; the selection or appointment, if any, of an
+            additional arbitrator or umpire.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/b">
+            <num value="b">(b)</num>
+            <content>The award.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/c">
+            <num value="c">(c)</num>
+            <content>Each notice, affidavit, or other paper used upon an application
+            to confirm, modify, or correct the award.</content>
+          </paragraph>
+          <p>The judgment shall be docketed as if it was rendered in an action.</p>
+          <sourceCredit>(June 12, 1939, ch. 237.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+
+        # Trailing <p> must appear as a section-level continuation
+        assert len(wrapper.continuation) >= 1, (
+            "Trailing <p> after paragraphs must be captured as section continuation"
+        )
+        assert any("docketed" in ct for ct in wrapper.continuation), (
+            "Docketing sentence must appear in section-level continuation"
+        )
+
+        # (c) content must NOT include the docketing sentence
+        para_c = wrapper.children[2]
+        assert para_c.marker == "(c)"
+        assert "docketed" not in para_c.content, (
+            "Docketing sentence must not be merged into paragraph (c) content"
+        )
+
+    def test_p_inside_content_separated_as_continuation(
+        self, parser: USLMParser
+    ) -> None:
+        """A <p> element inside a <content> element is excluded from the content
+        text and emitted as a separate continuation entry.
+
+        Regression test for Issue #479 (merged-paragraph variant): when OLRC XML
+        encodes a trailing sentence as <p> inside <content> of the last paragraph,
+        the itertext() merge caused the two sentences to concatenate without a
+        space — e.g. '...application.The judgment shall be docketed...'
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t9/s13">
+          <num value="13">§ 13.</num>
+          <heading>Application for order confirming, modifying, or correcting award</heading>
+          <p>The party moving for an order confirming, modifying, or correcting an
+          award shall, at the time such order is filed with the clerk for the entry of
+          judgment thereon, also file the following papers with the clerk:</p>
+          <paragraph identifier="/us/usc/t9/s13/a">
+            <num value="a">(a)</num>
+            <content>The agreement.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/c">
+            <num value="c">(c)</num>
+            <content>Each notice, affidavit, or other paper used upon an application
+            to confirm, modify, or correct the award.<p>The judgment shall be docketed
+            as if it was rendered in an action.</p></content>
+          </paragraph>
+          <sourceCredit>(June 12, 1939, ch. 237.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+        para_c = wrapper.children[1]
+        assert para_c.marker == "(c)"
+
+        # The (c) content must NOT contain the docketing sentence
+        assert "docketed" not in para_c.content, (
+            "<p> inside <content> must not be merged into the list item text"
+        )
+        # The merged no-space artifact must not appear either
+        assert "application.The" not in para_c.content, (
+            "<p> inside <content> must not be concatenated without a space"
+        )
+
+        # The docketing sentence must appear separately at section level
+        all_continuation = wrapper.continuation
+        assert any("docketed" in ct for ct in all_continuation), (
+            "<p> inside <content> must be promoted to section-level continuation"
+        )
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
