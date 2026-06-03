@@ -1418,9 +1418,9 @@ class TestNormalizeNoteContent:
         text = "2005—Pub. L. 109–9, § 202(a)(4), inserted two pars. relating to par. (11) at end of concluding provisions."
         lines = normalize_note_content(text)
 
-        non_blank = [l for l in lines if l.content]
+        non_blank = [ln for ln in lines if ln.content]
         assert len(non_blank) == 1, (
-            f"Expected 1 line, got {len(non_blank)}: {[l.content for l in non_blank]}"
+            f"Expected 1 line, got {len(non_blank)}: {[ln.content for ln in non_blank]}"
         )
         assert "par. (11)" in non_blank[0].content
 
