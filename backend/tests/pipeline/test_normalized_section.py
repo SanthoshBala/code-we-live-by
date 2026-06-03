@@ -1667,7 +1667,7 @@ class TestParserNotesContent:
         content = parser._get_notes_text_content(elem)
 
         # SmallCaps heading should be wrapped in [NH]...[/NH]
-        assert "[NH]Delegation Of Functions[/NH]" in content
+        assert "[NH]Delegation of Functions[/NH]" in content
         # Paragraph content should NOT be wrapped in [NH]
         assert "[NH]Memorandum" not in content
         assert "Memorandum of President" in content
@@ -1798,7 +1798,7 @@ class TestStatutoryNotesHeaderParsing:
 
         # Simulate notes text with [NH] markers from XML parser
         raw_notes = """Statutory Notes and Related Subsidiaries
-        [NH]Delegation Of Reporting Functions[/NH]
+        [NH]Delegation of Reporting Functions[/NH]
         Memorandum of President of the United States, Mar. 16, 2012.
         Memorandum for the Secretary of State.
         By the authority vested in me as President.
@@ -1810,7 +1810,7 @@ class TestStatutoryNotesHeaderParsing:
         # Should have exactly one note
         statutory_notes = [n for n in notes.notes if n.header]
         assert len(statutory_notes) == 1
-        assert statutory_notes[0].header == "Delegation Of Reporting Functions"
+        assert statutory_notes[0].header == "Delegation of Reporting Functions"
 
         # Lines should include the Memorandum paragraphs
         all_text = " ".join(line.content for line in statutory_notes[0].lines)
@@ -1825,9 +1825,9 @@ class TestStatutoryNotesHeaderParsing:
         )
 
         raw_notes = """Statutory Notes and Related Subsidiaries
-        [NH]Effective Date Of 2013 Amendment[/NH]
+        [NH]Effective Date of 2013 Amendment[/NH]
         Amendment effective Oct. 1, 2012.
-        [NH]Termination Of Reporting Requirements[/NH]
+        [NH]Termination of Reporting Requirements[/NH]
         For termination, see section 1061.
         """
 
@@ -1835,8 +1835,8 @@ class TestStatutoryNotesHeaderParsing:
         _parse_statutory_notes(raw_notes, notes)
 
         headers = [n.header for n in notes.notes]
-        assert "Effective Date Of 2013 Amendment" in headers
-        assert "Termination Of Reporting Requirements" in headers
+        assert "Effective Date of 2013 Amendment" in headers
+        assert "Termination of Reporting Requirements" in headers
         assert len(notes.notes) == 2
 
     def test_cross_heading_stripped_from_content(self) -> None:
@@ -1851,7 +1851,7 @@ class TestStatutoryNotesHeaderParsing:
         [NH]Congressional Committees Defined[/NH]
         The term 'congressional defense committees' means the committees on appropriations and armed services.
         [H1]Executive Documents[/H1]
-        [NH]Delegation Of Functions[/NH]
+        [NH]Delegation of Functions[/NH]
         Memorandum of the President of the United States dated March 16, 2012, provided as follows.
         """
 
@@ -1897,7 +1897,7 @@ class TestFlatNotesParser:
         from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
 
         raw_notes = (
-            "[NH]Effective Date Of 1986 Amendment[/NH] "
+            "[NH]Effective Date of 1986 Amendment[/NH] "
             "Pub. L. 99–495, § 18, Oct. 16, 1986, 100 Stat. 1259, provided that "
             "the amendments shall take effect with respect to each license issued after enactment."
         )
@@ -1905,7 +1905,7 @@ class TestFlatNotesParser:
         _parse_flat_notes(raw_notes, notes)
 
         assert len(notes.notes) == 1
-        assert notes.notes[0].header == "Effective Date Of 1986 Amendment"
+        assert notes.notes[0].header == "Effective Date of 1986 Amendment"
         assert notes.notes[0].category.value == "statutory"
 
     def test_flat_notes_multiple_headers(self) -> None:
@@ -1916,7 +1916,7 @@ class TestFlatNotesParser:
             "[NH]Amendments[/NH] "
             "2005—Subsec. (e). Pub. L. 109–58, inserted text after first proviso. "
             "1986—Subsec. (e). Pub. L. 99–495 inserted additional provisions. "
-            "[NH]Change Of Name[/NH] "
+            "[NH]Change of Name[/NH] "
             "Department of War designated Department of the Army by act July 26, 1947. "
             "[NH]Savings Provision[/NH] "
             "Pub. L. 99–495, § 17(a), Oct. 16, 1986, 100 Stat. 1259, provided that "
@@ -1928,12 +1928,12 @@ class TestFlatNotesParser:
         assert len(notes.notes) == 3
         headers = [n.header for n in notes.notes]
         assert "Amendments" in headers
-        assert "Change Of Name" in headers
+        assert "Change of Name" in headers
         assert "Savings Provision" in headers
 
         editorial = [n for n in notes.notes if n.category.value == "editorial"]
         statutory = [n for n in notes.notes if n.category.value == "statutory"]
-        assert len(editorial) == 2  # Amendments + Change Of Name
+        assert len(editorial) == 2  # Amendments + Change of Name
         assert len(statutory) == 1  # Savings Provision
 
     def test_flat_notes_fallback_in_parse_notes_structure(self) -> None:
@@ -1987,15 +1987,15 @@ class TestFlatNotesParser:
         )
 
         raw_notes = (
-            "[NH]Historical And Revision Notes[/NH] "
+            "[NH]Historical and Revision Notes[/NH] "
             "Based on title 13, U.S.C., 1952 ed., § 201 (part). "
             "[NH]Amendments[/NH] "
             "1957—Pub. L. 85–207, § 9, substituted heading; added housing census. "
             "1975—Pub. L. 94–171, §§ 1, 2(a), inserted apportionment tabulation. "
             "1976—Pub. L. 94–521, § 7(a), updated heading and subsections. "
-            "[NH]Effective Date Of 1976 Amendment[/NH] "
+            "[NH]Effective Date of 1976 Amendment[/NH] "
             "Amendment by Pub. L. 94–521 effective Oct. 1, 1976. "
-            "[NH]Statistical Sampling Or Adjustment In Decennial Enumeration[/NH] "
+            "[NH]Statistical Sampling or Adjustment in Decennial Enumeration[/NH] "
             "Pub. L. 105–119, title II, § 209(a), Nov. 26, 1997, 111 Stat. 2482, provided."
         )
         notes = SectionNotes()
@@ -2005,8 +2005,8 @@ class TestFlatNotesParser:
         # _parse_historical_notes hardcodes "Historical and Revision Notes" (lowercase "and")
         assert "Historical and Revision Notes" in headers
         assert "Amendments" in headers
-        assert "Effective Date Of 1976 Amendment" in headers
-        assert "Statistical Sampling Or Adjustment In Decennial Enumeration" in headers
+        assert "Effective Date of 1976 Amendment" in headers
+        assert "Statistical Sampling or Adjustment in Decennial Enumeration" in headers
         assert len(notes.notes) >= 4
 
     def test_amendments_populated_from_flat_notes_issue_284(self) -> None:
@@ -2022,7 +2022,7 @@ class TestFlatNotesParser:
         )
 
         raw_notes = (
-            "[NH]Historical And Revision Notes[/NH] "
+            "[NH]Historical and Revision Notes[/NH] "
             "Based on title 13, U.S.C., 1952 ed., § 201 (part). "
             "[NH]Amendments[/NH] "
             "1957—Pub. L. 85–207, § 9, substituted the heading for prior heading. "
@@ -2160,10 +2160,10 @@ class TestNoteTopicAmendmentParsing:
         assert len(notes.notes) == 4
 
         headers = [n.header for n in notes.notes]
-        assert "References In Text" in headers
+        assert "References in Text" in headers
         assert "Amendments" in headers
-        assert "Effective Date Of 1996 Amendment" in headers
-        assert "No Requirement Of Reimbursement" in headers
+        assert "Effective Date of 1996 Amendment" in headers
+        assert "No Requirement of Reimbursement" in headers
 
         editorial = [n for n in notes.notes if n.category.value == "editorial"]
         statutory = [n for n in notes.notes if n.category.value == "statutory"]

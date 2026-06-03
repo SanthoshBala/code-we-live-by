@@ -53,6 +53,41 @@ def _capitalize_word(word: str) -> str:
     return word.capitalize()
 
 
+def _note_heading_title_case(text: str) -> str:
+    """Apply proper title case to a note heading from OLRC XML.
+
+    OLRC note headings come in two forms:
+    - Heading element text: already mixed-case from OLRC (e.g. "Effective Date
+      of 1981 Amendment"). We must NOT apply str.title() because that would
+      capitalize prepositions like "of" -> "Of".
+    - Topic attribute values: lowercase (e.g. "amendments"). These need
+      capitalization but still must respect minor-word rules.
+
+    This function applies standard English title-case rules to the text
+    regardless of its original casing:
+    - First and last words are always capitalized.
+    - Minor words (articles, conjunctions, short prepositions) are lowercase.
+    - Hyphenated compounds are capitalized on each part.
+    """
+    if not text:
+        return text
+
+    words = text.split()
+    if not words:
+        return text
+
+    last_idx = len(words) - 1
+    result: list[str] = []
+    for i, word in enumerate(words):
+        lower = word.lower()
+        if i == 0 or i == last_idx or lower not in _TITLE_CASE_MINOR_WORDS:
+            result.append(_capitalize_word(word))
+        else:
+            result.append(lower)
+
+    return " ".join(result)
+
+
 def title_case_heading(text: str) -> str:
     """Convert an ALL-CAPS heading to Title Case.
 
@@ -1472,7 +1507,7 @@ class USLMParser:
                         (c.tag.split("}")[-1] if "}" in c.tag else c.tag) for c in el
                     }
                     if "heading" not in child_tags:
-                        parts.append(f"[NH]{topic.title()}[/NH]")
+                        parts.append(f"[NH]{_note_heading_title_case(topic)}[/NH]")
 
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n
@@ -1487,7 +1522,7 @@ class USLMParser:
             if tag == "heading":
                 text = "".join(el.itertext()).strip()
                 if text:
-                    parts.append(f"[NH]{text.title()}[/NH]")
+                    parts.append(f"[NH]{_note_heading_title_case(text)}[/NH]")
                 return  # Don't process children
 
             # Track bold/italic state

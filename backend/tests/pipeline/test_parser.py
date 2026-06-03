@@ -9,6 +9,7 @@ from pipeline.olrc.parser import (
     NoteRef,
     USLMParser,
     _clean_bracket_heading,
+    _note_heading_title_case,
     compute_text_hash,
     title_case_heading,
     to_title_case,
@@ -582,6 +583,73 @@ class TestCleanBracketHeading:
     def test_empty_string(self) -> None:
         """Test empty string returns empty string."""
         assert _clean_bracket_heading("") == ""
+
+
+class TestNoteHeadingTitleCase:
+    """Tests for _note_heading_title_case function.
+
+    This function is used when emitting [NH] markers for note headings.
+    Unlike title_case_heading (which only converts ALL-CAPS text), this
+    function always applies proper title-case rules regardless of the
+    input casing — critical for OLRC XML headings that arrive already
+    mixed-case (e.g. "Effective Date of 1981 Amendment").
+    """
+
+    def test_of_stays_lowercase(self) -> None:
+        """'of' must remain lowercase in the middle of a heading (Issue #468)."""
+        assert (
+            _note_heading_title_case("Effective Date of 1981 Amendment")
+            == "Effective Date of 1981 Amendment"
+        )
+
+    def test_of_not_overcapitalized_by_naive_title(self) -> None:
+        """Regression: str.title() would produce 'Of', which is incorrect."""
+        result = _note_heading_title_case("Effective Date of 1981 Amendment")
+        assert result != "Effective Date Of 1981 Amendment"
+        assert result == "Effective Date of 1981 Amendment"
+
+    def test_lowercase_topic_capitalized(self) -> None:
+        """A lowercase topic attribute value like 'amendments' is capitalized."""
+        assert _note_heading_title_case("amendments") == "Amendments"
+
+    def test_first_word_always_capitalized(self) -> None:
+        """First word is capitalized even if it is a minor preposition."""
+        assert _note_heading_title_case("of mice and men") == "Of Mice and Men"
+
+    def test_and_stays_lowercase(self) -> None:
+        """'and' in the middle of a heading stays lowercase."""
+        assert (
+            _note_heading_title_case("Historical and Revision Notes")
+            == "Historical and Revision Notes"
+        )
+
+    def test_allcaps_heading_converted(self) -> None:
+        """ALL-CAPS note heading is converted to proper title case."""
+        assert (
+            _note_heading_title_case("EFFECTIVE DATE OF 1981 AMENDMENT")
+            == "Effective Date of 1981 Amendment"
+        )
+
+    def test_empty_string(self) -> None:
+        """Empty string returns empty string."""
+        assert _note_heading_title_case("") == ""
+
+    def test_references_in_text(self) -> None:
+        """'in' stays lowercase in 'References in Text'."""
+        assert (
+            _note_heading_title_case("References in Text") == "References in Text"
+        )
+
+    def test_change_of_name(self) -> None:
+        """'of' stays lowercase in 'Change of Name'."""
+        assert _note_heading_title_case("Change of Name") == "Change of Name"
+
+    def test_effective_date_of_amendment(self) -> None:
+        """'of' stays lowercase in effective date headings (the exact bug case)."""
+        assert (
+            _note_heading_title_case("Effective Date of 1986 Amendment")
+            == "Effective Date of 1986 Amendment"
+        )
 
 
 class TestChapterGroups:
