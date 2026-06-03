@@ -1411,13 +1411,13 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
     """
     EDITORIAL_HEADERS = {
         "Amendments",
-        "Change Of Name",
-        "References In Text",
+        "Change of Name",
+        "References in Text",
         "Codification",
         "Prior Provisions",
         "Construction",
         "Recodification",
-        "Effective Date Of Repeal",
+        "Effective Date of Repeal",
     }
 
     header_positions: list[tuple[int, int, str]] = []
