@@ -542,6 +542,40 @@ class TestCitationParsing:
         assert citations[1].congress == 101
         assert citations[2].congress == 106  # Newest
 
+    def test_path_display_preserves_subsection_specifier(self) -> None:
+        """path_display must include subsection specifiers like (a) and (c).
+
+        Regression test for Issue #490: citations to sections like §12(a)
+        were displayed as §12, dropping the subsection specifier. The
+        section value in the path must include the full specifier so that
+        path_display shows "§12(a)" rather than "§12".
+        """
+        from app.models.enums import LawLevel
+        from app.schemas import LawPathComponent
+
+        law = ParsedPublicLaw(congress=94, law_number=521)
+
+        # Simulate what the fixed parser produces: section="12(a)"
+        citation = SourceLaw(
+            law=law,
+            path=[LawPathComponent(level=LawLevel.SECTION, value="12(a)")],
+            raw_text="Pub. L. 94–521, §12(a), Oct. 17, 1976, 90 Stat. 2464",
+        )
+        assert citation.section == "12(a)"
+        assert citation.path_display == "§12(a)", (
+            f"Expected '§12(a)' but got {citation.path_display!r}; "
+            "subsection specifier (a) must be included in path_display"
+        )
+
+        # Also verify a multi-level subsection specifier like §2(c)
+        citation2 = SourceLaw(
+            law=ParsedPublicLaw(congress=103, law_number=430),
+            path=[LawPathComponent(level=LawLevel.SECTION, value="2(c)")],
+            raw_text="Pub. L. 103–430, §2(c), Oct. 31, 1994, 108 Stat. 4394",
+        )
+        assert citation2.section == "2(c)"
+        assert citation2.path_display == "§2(c)"
+
 
 class TestNormalizeParsedSection:
     """Tests for normalizing ParsedSection with structured subsections."""
