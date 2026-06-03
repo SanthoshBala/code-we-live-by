@@ -1407,6 +1407,77 @@ class TestNormalizeNoteContent:
         assert len(lines) == 1
         assert "Subsec. (a)(2). Pub. L. 100–159" in lines[0].content
 
+    def test_par_number_cross_reference_not_split(self) -> None:
+        """Note paragraphs with 'par. (N)' inline refs must not be fragmented.
+
+        Regression test for Issue #461: 17 USC § 110 amendment notes were split
+        at 'par. (11)' because the period triggered a false sentence boundary.
+        Each <p> element in notes must map to exactly one content line.
+        """
+        # Single paragraph with inline par. (N) reference — must stay as one line.
+        text = "2005—Pub. L. 109–9, § 202(a)(4), inserted two pars. relating to par. (11) at end of concluding provisions."
+        lines = normalize_note_content(text)
+
+        non_blank = [l for l in lines if l.content]
+        assert len(non_blank) == 1, (
+            f"Expected 1 line, got {len(non_blank)}: {[l.content for l in non_blank]}"
+        )
+        assert "par. (11)" in non_blank[0].content
+
+    def test_par_uppercase_number_cross_reference_not_split(self) -> None:
+        """'Par. (N). Pub. L.' at the start of a note line must not be split.
+
+        Regression test for Issue #461: 'Par. (11). Pub. L.' was incorrectly
+        split into ['Par.', '(11). Pub. L. ...', '(11).'] because the period
+        after 'Par' was treated as a sentence boundary before '(11)'.
+        """
+        text = "Par. (11). Pub. L. 109–9, § 202(a)(1)–(3), added par. (11)."
+        lines = normalize_note_content(text)
+
+        non_blank = [l for l in lines if l.content]
+        assert len(non_blank) == 1, (
+            f"Expected 1 line, got {len(non_blank)}: {[l.content for l in non_blank]}"
+        )
+        assert "Par. (11)" in non_blank[0].content
+
+    def test_two_para_note_each_p_yields_one_line(self) -> None:
+        """Two <p> elements in a note must each produce exactly one content line.
+
+        Regression test for Issue #461: verifies end-to-end that the XML parser
+        + note normalizer together preserve paragraph boundaries from the OLRC XML.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2005—Pub. L. 109–9, § 202(a)(4), inserted two pars. relating"
+            " to par. (11) at end of concluding provisions.</p>"
+            "<p>Par. (11). Pub. L. 109–9, § 202(a)(1)–(3), added par. (11).</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes_elem = etree.fromstring(xml)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+
+        amendment_note = next(n for n in notes.notes if n.header == "Amendments")
+        non_blank = [l for l in amendment_note.lines if l.content]
+        assert len(non_blank) == 2, (
+            f"Expected 2 lines (one per <p>), got {len(non_blank)}: "
+            f"{[l.content for l in non_blank]}"
+        )
+        assert "par. (11)" in non_blank[0].content
+        assert "Par. (11)" in non_blank[1].content
+
 
 class TestSentenceSplittingWithParagraphs:
     """Tests for sentence splitting with paragraph break detection."""
