@@ -636,9 +636,7 @@ class TestNoteHeadingTitleCase:
 
     def test_references_in_text(self) -> None:
         """'in' stays lowercase in 'References in Text'."""
-        assert (
-            _note_heading_title_case("References in Text") == "References in Text"
-        )
+        assert _note_heading_title_case("References in Text") == "References in Text"
 
     def test_change_of_name(self) -> None:
         """'of' stays lowercase in 'Change of Name'."""
