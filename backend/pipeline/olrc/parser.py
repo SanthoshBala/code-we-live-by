@@ -1584,16 +1584,25 @@ class USLMParser:
                     r"/us/pl/(\d+)/(\d+)"  # Congress and law number
                     r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
                     r"(?:/t([IVXLCDM]+))?"  # Optional title
-                    r"(?:/s([\w()]+))?",  # Optional section
+                    r"(?:/s([\w()]+))?"  # Optional section
+                    r"((?:/[a-z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1)
                     href,
                 )
                 if match:
+                    section = match.group(5)
+                    # Reconstruct subsection specifiers from additional path segments.
+                    # OLRC encodes "§12(a)" as "/s12/a" — the subsection is a separate
+                    # slash-delimited segment that must be appended as "(a)".
+                    subsection_tail = match.group(6)
+                    if section and subsection_tail:
+                        sub_parts = [p for p in subsection_tail.split("/") if p]
+                        section = section + "".join(f"({p})" for p in sub_parts)
                     ref = SourceCreditRef(
                         congress=int(match.group(1)),
                         law_number=int(match.group(2)),
                         division=match.group(3),
                         title=match.group(4),
-                        section=match.group(5),
+                        section=section,
                         raw_text=text,
                     )
                     pl_refs.append(ref)
@@ -1604,15 +1613,22 @@ class USLMParser:
                 match = re.match(
                     r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
                     r"(?:/t([IVXLCDM]+))?"  # Optional title
-                    r"(?:/s([\w()]+))?",  # Optional section
+                    r"(?:/s([\w()]+))?"  # Optional section
+                    r"((?:/[a-z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1)
                     href,
                 )
                 if match:
+                    section = match.group(4)
+                    # Reconstruct subsection specifiers from additional path segments.
+                    subsection_tail = match.group(5)
+                    if section and subsection_tail:
+                        sub_parts = [p for p in subsection_tail.split("/") if p]
+                        section = section + "".join(f"({p})" for p in sub_parts)
                     act_ref = ActRef(
                         date=match.group(1),  # e.g., "1935-08-14"
                         chapter=int(match.group(2)),
                         title=match.group(3),
-                        section=match.group(4),
+                        section=section,
                         raw_text=text,
                     )
                     act_refs.append(act_ref)

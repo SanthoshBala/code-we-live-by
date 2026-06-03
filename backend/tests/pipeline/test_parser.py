@@ -190,6 +190,54 @@ class TestUSLMParser:
         assert "Pub. L." not in text
         assert "endowment" in text
 
+    def test_extract_source_credit_refs_preserves_subsection_specifiers(
+        self, parser: USLMParser
+    ) -> None:
+        """Subsection specifiers in source credit hrefs must be preserved.
+
+        OLRC encodes section references with subsections as separate path
+        segments: /us/pl/94/521/s12/a → section "12(a)". Previously the
+        parser dropped the /a segment, producing section="12" and
+        path_display="§12" instead of "§12(a)".
+
+        Regression test for Issue #490 (13 U.S.C. § 214).
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t13/s214">
+          <num value="214">§ 214.</num>
+          <heading>Obsolete information</heading>
+          <content>Some content here.</content>
+          <sourceCredit>(Aug. 31, 1954, ch. 1158, <ref href="/us/stat/68/1023">68 Stat. 1023</ref>;
+          <ref href="/us/pl/94/521/s12/a">Pub. L. 94–521, §12(a)</ref>,
+          <date date="1976-10-17">Oct. 17, 1976</date>,
+          <ref href="/us/stat/90/2464">90 Stat. 2464</ref>;
+          <ref href="/us/pl/103/430/s2/c">Pub. L. 103–430, §2(c)</ref>,
+          <date date="1994-10-31">Oct. 31, 1994</date>,
+          <ref href="/us/stat/108/4394">108 Stat. 4394</ref>.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, _act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 2
+
+        # Pub. L. 94–521, §12(a) — subsection (a) must be preserved
+        ref1 = pl_refs[0]
+        assert ref1.congress == 94
+        assert ref1.law_number == 521
+        assert ref1.section == "12(a)", (
+            f"Expected '12(a)' but got {ref1.section!r}; "
+            "subsection specifier (a) was dropped from the path"
+        )
+
+        # Pub. L. 103–430, §2(c) — subsection (c) must be preserved
+        ref2 = pl_refs[1]
+        assert ref2.congress == 103
+        assert ref2.law_number == 430
+        assert ref2.section == "2(c)", (
+            f"Expected '2(c)' but got {ref2.section!r}; "
+            "subsection specifier (c) was dropped from the path"
+        )
+
     def test_extract_subsections_with_direct_paragraphs(
         self, parser: USLMParser
     ) -> None:
