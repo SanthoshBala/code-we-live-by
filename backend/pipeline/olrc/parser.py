@@ -1839,6 +1839,7 @@ class USLMParser:
                         r"(?:/t([IVXLCDM]+))?"  # Optional title
                         r"(?:/s([\w()]+))?",  # Optional section
                         href,
+
                     )
                     if match:
                         href_section = match.group(5)

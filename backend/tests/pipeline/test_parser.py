@@ -1340,9 +1340,7 @@ class TestCitationTailTextSubdivision:
         """Create a parser instance."""
         return USLMParser()
 
-    def test_collect_ref_subdivision_suffix_with_italic_sibling(
-        self, parser: USLMParser
-    ) -> None:
+    def test_collect_ref_subdivision_suffix_with_italic_sibling(self) -> None:
         """The subdivision suffix must be collected from ref tail and adjacent <i>
         sibling when the italic letter 'l' is encoded outside <ref>.
 
@@ -1388,9 +1386,10 @@ class TestCitationTailTextSubdivision:
           section  = "1103(l)(3)(F)"
         """
         xml = (
-            '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"' 
-            ' identifier="/us/usc/t23/s161">' 
-            "  <num value=\"161\">§ 161.</num>"
+            '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"'
+            ' identifier="/us/usc/t23/s161">'
+            '  <num value="161">§ 161.</num>'
+
             "  <heading>Some heading</heading>"
             "  <sourceCredit>"
             "    (<ref"
@@ -1420,9 +1419,7 @@ class TestCitationTailTextSubdivision:
         assert "(l)(3)(F)" in ref.raw_text
         assert ref.raw_text == "Pub. L. 105–178, title I, § 1103(l)(3)(F)"
 
-    def test_collect_ref_subdivision_suffix_no_tail(
-        self, parser: USLMParser
-    ) -> None:
+    def test_collect_ref_subdivision_suffix_no_tail(self) -> None:
         """When there is no tail text or italic siblings, the suffix must be empty."""
         xml = (
             '<sourceCredit xmlns="http://xml.house.gov/schemas/uslm/1.0">' 
@@ -1444,9 +1441,10 @@ class TestCitationTailTextSubdivision:
     ) -> None:
         """Citations without italic siblings must still parse correctly after the fix."""
         xml = (
-            '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"' 
-            ' identifier="/us/usc/t17/s101">' 
-            "  <num value=\"101\">§ 101.</num>"
+            '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"'
+            ' identifier="/us/usc/t17/s101">'
+            '  <num value="101">§ 101.</num>'
+
             "  <heading>Definitions</heading>"
             "  <sourceCredit>"
             "    (<ref"
