@@ -1675,6 +1675,102 @@ class USLMParser:
                 result.append(" " + stripped)
         return "".join(result).strip()
 
+    @staticmethod
+    def _collect_ref_subdivision_suffix(ref_elem: etree._Element) -> str:
+        """Collect subdivision text that follows a <ref> element's closing tag.
+
+        In OLRC XML, italic letters in subdivision specifiers (e.g., the 'l' in
+        '(l)(3)(F)') are encoded as <i>l</i> elements immediately after the
+        closing </ref> tag. The surrounding parentheses and alphanumeric identifiers
+        appear as tail text of the <ref> or <i> elements. This method collects
+        that trailing text and returns it as a suffix to append to the ref's
+        display text.
+
+        The collection stops at the first structural delimiter (a comma) encountered
+        at the same parenthetical depth as the end of the ref element's own text, or
+        at a structural sibling element (e.g., <date>, <ref>, <statuteRef>).
+
+        Args:
+            ref_elem: The <ref> element whose tail/siblings to inspect.
+
+        Returns:
+            Suffix string (e.g., '(l)(3)(F)') to append to the ref's text content,
+            or an empty string if no subdivision suffix is found.
+        """
+        # Structural element local names that signal a new citation component
+        _STOP_TAGS = {"date", "ref", "statuteRef", "sourceCredit"}
+
+        def _paren_depth(s: str) -> int:
+            """Return the net paren depth change for string s."""
+            depth = 0
+            for ch in s:
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+            return depth
+
+        def _take_until_comma_at_depth(s: str, start_depth: int) -> tuple[str, int]:
+            """Return (leading chars of s before a comma at depth <= 0, final depth).
+
+            Scanning begins with paren depth = start_depth, and stops when a comma
+            is encountered while depth <= 0.
+            """
+            depth = start_depth
+            for i, ch in enumerate(s):
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                elif ch == "," and depth <= 0:
+                    return s[:i], depth
+            return s, depth
+
+        parent = ref_elem.getparent()
+        if parent is None:
+            return ""
+
+        children = list(parent)
+        try:
+            ref_idx = children.index(ref_elem)
+        except ValueError:
+            return ""
+
+        # Compute the paren depth at the end of the ref element's own text content.
+        # If the ref text ends with an open paren (e.g., '§ 1103('), we start at
+        # depth 1 so that a comma inside the subdivision does not act as a delimiter.
+        ref_text = "".join(ref_elem.itertext())
+        current_depth = _paren_depth(ref_text)
+
+        parts: list[str] = []
+
+        # 1. Collect from ref_elem.tail (text immediately after </ref>)
+        tail = ref_elem.tail or ""
+        chunk, current_depth = _take_until_comma_at_depth(tail, current_depth)
+        parts.append(chunk)
+        # If the tail contained a delimiter (chunk shorter than tail), stop here.
+        if len(chunk) < len(tail):
+            return "".join(parts)
+
+        # 2. Collect from subsequent sibling elements until we hit a delimiter
+        for sibling in children[ref_idx + 1 :]:
+            tag = sibling.tag
+            local = etree.QName(tag).localname if not callable(tag) else None
+            if local in _STOP_TAGS:
+                break
+            # Collect all text inside the sibling (e.g., 'l' inside <i>l</i>)
+            sib_text = "".join(sibling.itertext())
+            current_depth += _paren_depth(sib_text)
+            parts.append(sib_text)
+            # Then collect from the sibling's tail
+            sib_tail = sibling.tail or ""
+            chunk, current_depth = _take_until_comma_at_depth(sib_tail, current_depth)
+            parts.append(chunk)
+            if len(chunk) < len(sib_tail):
+                break  # Hit a structural delimiter in sibling tail
+
+        return "".join(parts)
+
     def _extract_source_credit_refs(
         self, section_elem: etree._Element
     ) -> tuple[list[SourceCreditRef], list[ActRef]]:
@@ -1718,6 +1814,23 @@ class USLMParser:
                 href = elem.get("href", "")
                 text = "".join(elem.itertext()).strip()
 
+                # Collect any subdivision text following the </ref> closing tag.
+                # In OLRC XML, italic letters in subdivision specifiers (e.g., the 'l'
+                # in '§ 1103(l)(3)(F)') are encoded as sibling <i> elements after </ref>.
+                subdivision_suffix = self._collect_ref_subdivision_suffix(elem)
+                full_text = (text + subdivision_suffix).strip()
+
+                # Compute the "bridge": trailing '(' chars in ref text that open the
+                # subdivision but are not encoded in the href (e.g., '/s1103' href while
+                # ref text ends with '§ 1103(').
+                bridge = ""
+                if subdivision_suffix:
+                    trail = "".join(elem.itertext()).rstrip()
+                    i = len(trail)
+                    while i > 0 and trail[i - 1] == "(":
+                        i -= 1
+                    bridge = trail[i:]
+
                 # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
                 if "/us/pl/" in href:
                     match = re.match(
@@ -1728,13 +1841,19 @@ class USLMParser:
                         href,
                     )
                     if match:
+                        href_section = match.group(5)
+                        section_value: str | None = (
+                            href_section + bridge + subdivision_suffix
+                            if subdivision_suffix and href_section
+                            else href_section
+                        )
                         ref = SourceCreditRef(
                             congress=int(match.group(1)),
                             law_number=int(match.group(2)),
                             division=match.group(3),
                             title=match.group(4),
-                            section=match.group(5),
-                            raw_text=text,
+                            section=section_value,
+                            raw_text=full_text,
                         )
                         pl_refs.append(ref)
                         last_ref_type = "pl"
@@ -1748,12 +1867,18 @@ class USLMParser:
                         href,
                     )
                     if match:
+                        href_section = match.group(4)
+                        section_value = (
+                            href_section + bridge + subdivision_suffix
+                            if subdivision_suffix and href_section
+                            else href_section
+                        )
                         act_ref = ActRef(
                             date=match.group(1),  # e.g., "1935-08-14"
                             chapter=int(match.group(2)),
                             title=match.group(3),
-                            section=match.group(4),
-                            raw_text=text,
+                            section=section_value,
+                            raw_text=full_text,
                         )
                         act_refs.append(act_ref)
                         last_ref_type = "act"

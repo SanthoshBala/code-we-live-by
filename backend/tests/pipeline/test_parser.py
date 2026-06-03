@@ -1323,6 +1323,153 @@ class TestNoteRefDataclass:
         assert ref.act_chapter == 531
 
 
+class TestCitationTailTextSubdivision:
+    """Tests for citation subdivision text that appears after <ref> closing tags.
+
+    Regression tests for Issue #463: 23 USC § 161 source credit citation for
+    PL 105-178 truncated — missing subdivision (l)(3)(F).
+
+    In OLRC XML, italic letters in subdivision specifiers are encoded as sibling
+    <i> elements after the </ref> closing tag. The parser must collect this tail
+    text and adjacent sibling text to produce the full subdivision in raw_text
+    and path_display.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_collect_ref_subdivision_suffix_with_italic_sibling(
+        self, parser: USLMParser
+    ) -> None:
+        """The subdivision suffix must be collected from ref tail and adjacent <i>
+        sibling when the italic letter 'l' is encoded outside <ref>.
+
+        Simulates the OLRC XML structure for 23 USC § 161 / PL 105-178:
+          <ref href="...">...§ 1103(</ref><i>l</i>)(3)(F), June 9, 1998, ...
+
+        In this structure the opening '(' is the last char of the ref element's
+        own text, so the suffix starts with 'l' (not '(l'). When appended to the
+        ref text the full display string becomes '§ 1103(l)(3)(F)'.
+        """
+        xml = (
+            '<sourceCredit xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<ref href="/us/pl/105/178/tI/s1103">'
+            "Pub. L. 105–178, title I, § 1103("
+            "</ref>"
+            "<i>l</i>"
+            ")(3)(F), "
+            '<date date="1998-06-09">June 9, 1998</date>'
+            ", 112 Stat. 126."
+            "</sourceCredit>"
+        )
+        elem = etree.fromstring(xml)
+        ref_elem = elem.find(".//{http://xml.house.gov/schemas/uslm/1.0}ref")
+        assert ref_elem is not None
+
+        suffix = USLMParser._collect_ref_subdivision_suffix(ref_elem)
+
+        # The opening '(' is part of the ref element's own text, so the suffix
+        # starts immediately with 'l'. When appended: '§ 1103(' + 'l)(3)(F)' = full subdivision.
+        assert suffix == "l)(3)(F)"
+
+    def test_extract_source_credit_refs_includes_full_subdivision(
+        self, parser: USLMParser
+    ) -> None:
+        """raw_text and path (section) must include the full subdivision '(l)(3)(F)'
+        even when italic sibling elements and tail text encode part of it outside <ref>.
+
+        Regression test for Issue #463: before this fix, the parsed citation was:
+          raw_text = "Pub. L. 105–178, title I, § 1103("
+          section  = "1103"
+        After the fix:
+          raw_text = "Pub. L. 105–178, title I, § 1103(l)(3)(F)"
+          section  = "1103(l)(3)(F)"
+        """
+        xml = (
+            '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"' 
+            ' identifier="/us/usc/t23/s161">' 
+            "  <num value=\"161\">§ 161.</num>"
+            "  <heading>Some heading</heading>"
+            "  <sourceCredit>"
+            "    (<ref"
+            '      href="/us/pl/105/178/tI/s1103">' 
+            "Pub. L. 105–178, title I, § 1103("
+            "</ref>"
+            "<i>l</i>"
+            ")(3)(F), "
+            '    <date date="1998-06-09">June 9, 1998</date>'
+            ", 112 Stat. 126.)"
+            "  </sourceCredit>"
+            "</section>"
+        )
+        elem = etree.fromstring(xml)
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 1
+        assert len(act_refs) == 0
+
+        ref = pl_refs[0]
+        assert ref.congress == 105
+        assert ref.law_number == 178
+        assert ref.title == "I"
+        # Section must include the full subdivision, not just the base number
+        assert ref.section == "1103(l)(3)(F)"
+        # raw_text must include the full display string from the source credit
+        assert "(l)(3)(F)" in ref.raw_text
+        assert ref.raw_text == "Pub. L. 105–178, title I, § 1103(l)(3)(F)"
+
+    def test_collect_ref_subdivision_suffix_no_tail(
+        self, parser: USLMParser
+    ) -> None:
+        """When there is no tail text or italic siblings, the suffix must be empty."""
+        xml = (
+            '<sourceCredit xmlns="http://xml.house.gov/schemas/uslm/1.0">' 
+            '<ref href="/us/pl/94/553/tI/s101">' 
+            "Pub. L. 94–553, title I, § 101"
+            "</ref>"
+            ", Oct. 19, 1976, 90 Stat. 2546."
+            "</sourceCredit>"
+        )
+        elem = etree.fromstring(xml)
+        ref_elem = elem.find(".//{http://xml.house.gov/schemas/uslm/1.0}ref")
+        assert ref_elem is not None
+
+        suffix = USLMParser._collect_ref_subdivision_suffix(ref_elem)
+        assert suffix == ""
+
+    def test_extract_source_credit_refs_unaffected_without_italic_sibling(
+        self, parser: USLMParser
+    ) -> None:
+        """Citations without italic siblings must still parse correctly after the fix."""
+        xml = (
+            '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"' 
+            ' identifier="/us/usc/t17/s101">' 
+            "  <num value=\"101\">§ 101.</num>"
+            "  <heading>Definitions</heading>"
+            "  <sourceCredit>"
+            "    (<ref"
+            '      href="/us/pl/94/553/tI/s101">' 
+            "Pub. L. 94–553, title I, § 101"
+            "</ref>"
+            ", Oct. 19, 1976, "
+            '    <date date="1976-10-19">Oct. 19, 1976</date>'
+            ", 90 Stat. 2546.)"
+            "  </sourceCredit>"
+            "</section>"
+        )
+        elem = etree.fromstring(xml)
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 1
+        ref = pl_refs[0]
+        assert ref.congress == 94
+        assert ref.law_number == 553
+        assert ref.section == "101"
+        assert ref.raw_text == "Pub. L. 94–553, title I, § 101"
+
+
 class TestExtractSourceCreditRefs:
     """Tests for _extract_source_credit_refs — specifically the as-added date bug (Issue #480)."""
 
@@ -1353,7 +1500,7 @@ class TestExtractSourceCreditRefs:
         <section identifier="/us/usc/t22/s2377" number="2377">
           <heading>Prohibition on assistance to countries that aid terrorist states</heading>
           <content><p>Test content.</p></content>
-          <sourceCredit>(<ref href="/us/pl/87/195/tIII/s620G">Pub. L. 87–195</ref>, pt. III, § 620G, as added <ref href="/us/pl/104/132/tIII/s325">Pub. L. 104–132</ref>, title III, § 325, <date>Apr. 24, 1996</date>, <ref href="/us/stat/110/1256">110 Stat. 1256</ref>.)</sourceCredit>
+          <sourceCredit>(<ref href="/us/pl/87/195/tIII/s620G">Pub. L. 87–195</ref>, pt. III, § 620G, as added <ref href="/us/pl/104/132/tIII/s325">Pub. L. 104–132</ref>, title III, § 325, <date>Apr. 24, 1996</date>, <ref href="/us/stat/110/1256">110 Stat. 1256</ref>.)</sourceCredit>
         </section>
       </chapter>
     </title>
