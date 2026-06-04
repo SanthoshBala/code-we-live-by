@@ -101,6 +101,8 @@ LEGAL_ABBREVIATIONS = {
     "cl.",
     "Para.",
     "para.",
+    "Par.",  # Paragraph (e.g., "Par. (11). Pub. L. ...")
+    "par.",  # Paragraph (e.g., "inserted two pars. relating to par. (11)")
     "Subch.",
     "subch.",
     "Pt.",
