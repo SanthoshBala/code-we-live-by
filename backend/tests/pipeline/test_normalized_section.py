@@ -1434,9 +1434,9 @@ class TestNormalizeNoteContent:
         text = "Par. (11). Pub. L. 109–9, § 202(a)(1)–(3), added par. (11)."
         lines = normalize_note_content(text)
 
-        non_blank = [l for l in lines if l.content]
+        non_blank = [ln for ln in lines if ln.content]
         assert len(non_blank) == 1, (
-            f"Expected 1 line, got {len(non_blank)}: {[l.content for l in non_blank]}"
+            f"Expected 1 line, got {len(non_blank)}: {[ln.content for ln in non_blank]}"
         )
         assert "Par. (11)" in non_blank[0].content
 
@@ -1470,10 +1470,10 @@ class TestNormalizeNoteContent:
         _parse_notes_structure(raw, notes)
 
         amendment_note = next(n for n in notes.notes if n.header == "Amendments")
-        non_blank = [l for l in amendment_note.lines if l.content]
+        non_blank = [ln for ln in amendment_note.lines if ln.content]
         assert len(non_blank) == 2, (
             f"Expected 2 lines (one per <p>), got {len(non_blank)}: "
-            f"{[l.content for l in non_blank]}"
+            f"{[ln.content for ln in non_blank]}"
         )
         assert "par. (11)" in non_blank[0].content
         assert "Par. (11)" in non_blank[1].content
