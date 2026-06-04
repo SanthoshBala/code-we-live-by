@@ -1647,6 +1647,34 @@ class TestNormalizeNoteContent:
         assert sig_lines[0].content == "— By Irwin Karp,"
         assert sig_lines[1].content == "— Counsel"
 
+    def test_orphaned_nh_opening_tag_stripped(self) -> None:
+        """Orphaned [NH] opening tag (no closing [/NH]) must not appear in line content.
+
+        Regression test for issue #499: when _parse_historical_notes slices
+        content at a section boundary, the lookahead stops at the plain text of
+        the next section header (e.g. "Editorial Notes") but leaves the
+        immediately-preceding "[NH]" marker inside the last note's raw_content.
+        normalize_note_content must strip that orphaned opening tag so it does
+        not surface as "[NH]" at the end of the last line of note text.
+
+        Reproduces the spurious "[NH]" seen in 11 USC § 1163 Senate Report
+        No. 95-989 note at release point 113-21.
+        """
+        # Simulate raw_content where the content slice ends mid-marker:
+        # the "[NH]" for the next section header has no closing "[/NH]".
+        text = (
+            "This panel determines whether a trustee is qualified to become "
+            "a member of that panel. [NH]"
+        )
+        lines = normalize_note_content(text)
+
+        assert lines, "Expected at least one content line"
+        last_line = lines[-1]
+        assert "[NH]" not in last_line.content
+        assert "[/NH]" not in last_line.content
+        # The actual note text must still be present
+        assert "qualified to become a member of that panel." in last_line.content
+
 
 class TestSentenceSplittingWithParagraphs:
     """Tests for sentence splitting with paragraph break detection."""
