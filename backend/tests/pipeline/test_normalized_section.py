@@ -2245,6 +2245,54 @@ class TestNoteTopicAmendmentParsing:
         assert 1990 in years
         assert 2007 in years
 
+    def test_historical_and_revision_camelcase_topic_no_duplicate_issue_503(
+        self,
+    ) -> None:
+        """Regression: <note topic="historicalAndRevision"> must not produce a duplicate note.
+
+        Positive-law sections (e.g. 41 U.S.C. § 4706) use
+        <note topic="historicalAndRevision"> without a <heading> child.  Prior to
+        the fix, topic.title() produced the garbled header "Historicalandrevision"
+        (camelCase is treated as a single word by str.title()), which did not match
+        the already-processed "historical and revision notes" header.  The flat-notes
+        fallback then added a second, malformed SectionNote.
+
+        After the fix, the canonical display string "Historical and Revision Notes"
+        is used for this topic, so the fallback recognises it as already processed
+        and no duplicate is created.  Closes #503.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="historicalAndRevision">'
+            "<p>Based on 41:252(a)(1), (c)."
+            " Source Credit: Pub. L. 111-350, Jan. 4, 2011, 124 Stat. 3677.</p>"
+            "<p>The words 'agency' and 'executive agency' are coextensive"
+            " and synonymous in the revised title.</p>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2012—Subsec. (a). Pub. L. 112-239, § 801(b)(1),"
+            " substituted 'executive agency' for 'agency'.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # Only one Historical and Revision Notes entry — no duplicate
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 1, (
+            f"Expected exactly 1 historical note, got {len(hist_notes)}: {headers}"
+        )
+        assert hist_notes[0].header == "Historical and Revision Notes"
+        assert hist_notes[0].category.value == "historical"
+        # No garbled "Historicalandrevision" header
+        assert not any("historicalandrevision" in h.lower() for h in headers), (
+            f"Garbled camelCase header found in: {headers}"
+        )
+        # Amendments note is also present and correct
+        assert "Amendments" in headers
+
 
 class TestCleanHeading:
     """Tests for _clean_heading function."""
