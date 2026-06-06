@@ -2009,6 +2009,76 @@ class TestFlatNotesParser:
         assert "Statistical Sampling Or Adjustment In Decennial Enumeration" in headers
         assert len(notes.notes) >= 4
 
+    def test_references_in_text_not_captured_in_historical_note_issue_504(
+        self,
+    ) -> None:
+        """Regression: References in Text content must not bleed into Historical note.
+
+        For positive-law sections (e.g. 41 U.S.C. § 4706) the OLRC XML places
+        multiple <note> children inside a single <notes> wrapper:
+
+            <notes>
+              <note topic="historicalAndRevision"><heading>Historical and Revision Notes</heading>
+                ...table and paragraphs...
+              </note>
+              <note topic="referencesInText"><heading>References In Text</heading>
+                <p>The Inspector General Act of 1978...</p>
+              </note>
+            </notes>
+
+        _get_notes_text_content processes all children and produces a raw_notes
+        string where both note headers appear as [NH] markers:
+
+            [NH]Historical And Revision Notes[/NH] ... [NH]References In Text[/NH] ...
+
+        Prior to the fix _parse_historical_notes used a regex that stopped only
+        at "Editorial Notes" / "Statutory Notes" or end-of-string.  It greedily
+        consumed the References in Text paragraph as the last line of the
+        Historical note, while _parse_flat_notes also created a correct
+        "References In Text" note — resulting in the Inspector General Act
+        sentence appearing twice.  Closes #504.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # This mirrors what _get_notes_text_content produces for the XML
+        # described above (one <notes> wrapper, two <note> children).
+        # The historical note refers to IG Act generically; the References
+        # note gives the full citation — "set out in the Appendix to Title 5"
+        # is unique to the References In Text note and must not appear in the
+        # Historical note's lines.
+        raw_notes = (
+            "[NH]Historical And Revision Notes[/NH] "
+            "In subsection (a), the reference is for clarity. "
+            "In subsection (c)(1), the reference to the Inspector General Act "
+            "of 1978 is added for clarity. "
+            "[NH]References In Text[/NH] "
+            "The Inspector General Act of 1978, referred to in subsec. (c)(1), "
+            "is Pub. L. 95-452, Oct. 12, 1978, 92 Stat. 1101, which is set out "
+            "in the Appendix to Title 5, Government Organization and Employees."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        assert "Historical and Revision Notes" in headers
+        assert "References In Text" in headers
+
+        # The Historical note must NOT contain the References in Text sentence.
+        # "set out in the Appendix to Title 5" is unique to the References note.
+        hist_note = next(n for n in notes.notes if "Historical" in n.header)
+        hist_content = " ".join(line.content for line in hist_note.lines)
+        assert "set out in the Appendix to Title 5" not in hist_content, (
+            "References in Text content must not bleed into Historical note lines"
+        )
+
+        # The References In Text note must contain the correct sentence.
+        ref_note = next(n for n in notes.notes if "References" in n.header)
+        ref_content = " ".join(line.content for line in ref_note.lines)
+        assert "set out in the Appendix to Title 5" in ref_content
+
     def test_amendments_populated_from_flat_notes_issue_284(self) -> None:
         """Regression: notes.amendments must be populated when 'Amendments' is a flat note.
 
