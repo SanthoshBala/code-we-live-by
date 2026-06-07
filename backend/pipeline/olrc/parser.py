@@ -1144,22 +1144,44 @@ class USLMParser:
 
         content = " ".join(content_parts).strip()
 
-        # Parse nested children
+        # Parse nested children.
+        #
+        # The standard USLM hierarchy is:
+        #     subsection > paragraph > subparagraph > clause > subclause > item
+        #
+        # Normally each level's children use the immediate-next tag (e.g. a
+        # <paragraph> contains <subparagraph> children). However, some sources
+        # (e.g. 38 U.S.C. § 3702(a)(1)) skip a level — a <paragraph> may
+        # directly contain <clause> elements with no intervening
+        # <subparagraph>. If we only ever look for the immediate-next tag, we
+        # silently drop these deeper-nested children and lose their content.
+        #
+        # To handle this, we search for whichever of the structurally-valid
+        # descendant tags (in hierarchy order, from shallowest to deepest)
+        # actually appears as a direct child, and use that tag both to find
+        # the children AND to determine the correct `level` to assign so they
+        # render with the appropriate marker/indentation (e.g. clauses render
+        # as "(i)", "(ii)" regardless of whether they are reached via
+        # <subparagraph> or directly).
         children = []
-        child_levels = {
-            "subsection": ("paragraph", "paragraph"),
-            "paragraph": ("subparagraph", "subparagraph"),
-            "subparagraph": ("clause", "clause"),
-            "clause": ("subclause", "subclause"),
-            "subclause": ("item", "item"),
-        }
-
-        if level in child_levels:
-            child_tag, child_level = child_levels[level]
-            for child_elem in elem.findall(f"{{*}}{child_tag}") or elem.findall(
-                child_tag
-            ):
-                children.append(self._parse_subsection(child_elem, child_level))
+        hierarchy = [
+            "subsection",
+            "paragraph",
+            "subparagraph",
+            "clause",
+            "subclause",
+            "item",
+        ]
+        if level in hierarchy:
+            level_index = hierarchy.index(level)
+            for child_level in hierarchy[level_index + 1 :]:
+                child_elems = elem.findall(f"{{*}}{child_level}") or elem.findall(
+                    child_level
+                )
+                if child_elems:
+                    for child_elem in child_elems:
+                        children.append(self._parse_subsection(child_elem, child_level))
+                    break
 
         # Collect continuation elements (closing text that follows a numbered list,
         # e.g. the penalty clause in 18 U.S.C. § 1001(a)).

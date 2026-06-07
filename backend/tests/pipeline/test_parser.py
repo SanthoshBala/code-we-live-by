@@ -298,6 +298,58 @@ class TestUSLMParser:
 
         assert result.continuation == []
 
+    def test_parse_subsection_clause_skipping_subparagraph_level(
+        self, parser: USLMParser
+    ) -> None:
+        """_parse_subsection captures <clause> children nested directly in a
+        <paragraph>, skipping the <subparagraph> level.
+
+        Regression test for Issue #506: 38 U.S.C. § 3702(a)(1) encodes its
+        paragraph as a <chapeau> followed directly by two <clause> elements
+        (no intervening <subparagraph>). The parser previously only searched
+        for the immediate-next level in the standard hierarchy
+        (paragraph -> subparagraph), so it found nothing and silently dropped
+        clauses (i) and (ii) along with their text.
+        """
+        xml = """<paragraph xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t38/s3702/a/1">
+          <num value="1">(1)</num>
+          <chapeau>The veterans described in paragraph (2) of this subsection are
+          eligible for the housing loan benefits of this chapter. Entitlement
+          derived from service during the most recent such period shall be
+          reduced by the amount by which entitlement from service during any
+          earlier such period has been used to obtain a direct, guaranteed, or
+          insured housing loan&#8212;</chapeau>
+          <clause identifier="/us/usc/t38/s3702/a/1/i">
+            <num value="i">(i)</num>
+            <content>on real property which the veteran owns at the time of
+            application; or</content>
+          </clause>
+          <clause identifier="/us/usc/t38/s3702/a/1/ii">
+            <num value="ii">(ii)</num>
+            <content>as to which the Secretary has incurred actual liability or
+            loss, unless in the event of loss or the incurrence and payment of
+            such liability by the Secretary the resulting indebtedness of the
+            veteran to the United States has been paid in full.</content>
+          </clause>
+        </paragraph>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "paragraph")
+
+        assert result.marker == "(1)"
+        assert "housing loan" in result.content
+
+        assert len(result.children) == 2
+        clause_i, clause_ii = result.children
+
+        assert clause_i.marker == "(i)"
+        assert clause_i.level == "clause"
+        assert "on real property which the veteran owns" in clause_i.content
+
+        assert clause_ii.marker == "(ii)"
+        assert clause_ii.level == "clause"
+        assert "incurred actual liability or loss" in clause_ii.content
+
     def test_extract_subsections_continuation_in_subsection(
         self, parser: USLMParser
     ) -> None:
