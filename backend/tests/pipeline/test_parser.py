@@ -1112,3 +1112,109 @@ class TestNoteRefDataclass:
         assert ref.ref_type == "act"
         assert ref.act_date == "1935-08-14"
         assert ref.act_chapter == 531
+
+
+class TestExtractSourceCreditActRefs:
+    """Tests for _extract_source_credit_refs with pre-1957 Act citations.
+
+    Covers issue #467: sub-path levels (title, section) after the chapter
+    number must be captured even when they live outside the <ref> element.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def _make_xml(self, source_credit_inner: str, tmp_path: Path) -> Path:
+        """Wrap source credit text in a minimal USLM document."""
+        xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/2</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t2" number="2">
+      <heading>THE CONGRESS</heading>
+      <chapter identifier="/us/usc/t2/ch1" number="1">
+        <heading>ELECTION OF SENATORS AND REPRESENTATIVES</heading>
+        <section identifier="/us/usc/t2/s33" number="33">
+          <heading>Senators' salaries</heading>
+          <content><p>Each Senator shall receive...</p></content>
+          <sourceCredit>({source_credit_inner})</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_act_source_credit.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    def test_act_ref_chapter_only_href_captures_tail_title_and_section(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Act ref where href only has chapter; title and section are in tail text.
+
+        Reproduces 2 U.S.C. § 33 (RP 113-21):
+          June 19, 1934, ch. 648, title I, § 1, 48 Stat. 1022
+        The <ref> wraps only the date+chapter; title/section follow as tail.
+        """
+        # Simulate the OLRC XML structure: <ref> covers date+chapter only;
+        # ", title I, § 1," is tail text between the act ref and stat ref.
+        source_credit = (
+            '<ref href="/us/act/1934-06-19/ch648">June 19, 1934, ch. 648</ref>'
+            ', title I, § 1, '
+            '<ref href="/us/stat/48/1022">48 Stat. 1022</ref>'
+        )
+        xml_path = self._make_xml(source_credit, tmp_path)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+
+        assert len(section.act_refs) == 1
+        act_ref = section.act_refs[0]
+
+        assert act_ref.chapter == 648
+        assert act_ref.title == "I", "title sub-path must be captured from tail text"
+        assert act_ref.section == "1", "section sub-path must be captured from tail text"
+        assert act_ref.stat_volume == 48
+        assert act_ref.stat_page == 1022
+
+    def test_act_ref_href_with_title_and_section_unchanged(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """When href already encodes title and section, those values are used."""
+        source_credit = (
+            '<ref href="/us/act/1935-08-14/ch531/tI/s3">Aug. 14, 1935, ch. 531</ref>'
+            ', <ref href="/us/stat/49/620">49 Stat. 620</ref>'
+        )
+        xml_path = self._make_xml(source_credit, tmp_path)
+        result = parser.parse_file(xml_path)
+
+        section = result.sections[0]
+        assert len(section.act_refs) == 1
+        act_ref = section.act_refs[0]
+
+        assert act_ref.chapter == 531
+        assert act_ref.title == "I"
+        assert act_ref.section == "3"
+
+    def test_act_ref_chapter_only_no_sub_path(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Act ref with no title/section in href or tail leaves them as None."""
+        source_credit = (
+            '<ref href="/us/act/1935-08-14/ch531">Aug. 14, 1935, ch. 531</ref>'
+            ', <ref href="/us/stat/49/620">49 Stat. 620</ref>'
+        )
+        xml_path = self._make_xml(source_credit, tmp_path)
+        result = parser.parse_file(xml_path)
+
+        section = result.sections[0]
+        assert len(section.act_refs) == 1
+        act_ref = section.act_refs[0]
+
+        assert act_ref.chapter == 531
+        assert act_ref.title is None
+        assert act_ref.section is None

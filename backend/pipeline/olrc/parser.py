@@ -1608,11 +1608,35 @@ class USLMParser:
                     href,
                 )
                 if match:
+                    href_title = match.group(3)
+                    href_section = match.group(4)
+                    # If href lacks title/section, parse them from the tail text.
+                    # OLRC XML sometimes encodes only the chapter in the href and
+                    # writes the sub-path (e.g. ", title I, § 1,") as tail text
+                    # after the closing </ref> tag.
+                    tail_title: str | None = href_title
+                    tail_section: str | None = href_section
+                    if href_title is None and href_section is None:
+                        tail = (ref_elem.tail or "").strip()
+                        if tail:
+                            title_match = re.match(
+                                r",?\s*title\s+([IVXLCDM]+)",
+                                tail,
+                                re.IGNORECASE,
+                            )
+                            if title_match:
+                                tail_title = title_match.group(1).upper()
+                            sec_match = re.search(
+                                r"§\s*([\w()]+)",
+                                tail,
+                            )
+                            if sec_match:
+                                tail_section = sec_match.group(1)
                     act_ref = ActRef(
                         date=match.group(1),  # e.g., "1935-08-14"
                         chapter=int(match.group(2)),
-                        title=match.group(3),
-                        section=match.group(4),
+                        title=tail_title,
+                        section=tail_section,
                         raw_text=text,
                     )
                     act_refs.append(act_ref)
