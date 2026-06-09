@@ -1563,86 +1563,91 @@ class USLMParser:
         if source_credit is None:
             return pl_refs, act_refs
 
-        # Find all ref elements within sourceCredit
-        ref_elems = source_credit.findall(".//{*}ref")
-        if not ref_elems:
-            ref_elems = source_credit.findall(".//ref")
+        # Process all significant elements within sourceCredit in document order.
+        # We traverse the element tree once, handling <ref> and <date> elements
+        # together so that each <date> is attributed to the most recently seen
+        # PL ref rather than the positionally-matching one.
+        #
+        # This correctly handles "as added" credits, e.g.:
+        #   (Pub. L. 87–195, ..., as added Pub. L. 104–132, ..., Apr. 24, 1996, ...)
+        # where the single <date> belongs to PL 104-132 (the adding law), not
+        # to PL 87-195 (the framework law that has no date in the credit).
+        #
+        # We use iter() to visit all descendants in document order, which gives
+        # the correct interleaving of <ref> and <date> elements.
 
-        # Track current stat volume/page for associating with refs
-        current_stat_volume: int | None = None
-        current_stat_page: int | None = None
-        # Track the most recent ref (either PL or Act) for stat association
+        # Track the most recent ref (either PL or Act) for stat/date association
         last_ref_type: str | None = None
 
-        for ref_elem in ref_elems:
-            href = ref_elem.get("href", "")
-            text = "".join(ref_elem.itertext()).strip()
+        for elem in source_credit.iter():
+            local_tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
 
-            # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
-            if "/us/pl/" in href:
-                match = re.match(
-                    r"/us/pl/(\d+)/(\d+)"  # Congress and law number
-                    r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
-                    r"(?:/t([IVXLCDM]+))?"  # Optional title
-                    r"(?:/s([\w()]+))?",  # Optional section
-                    href,
-                )
-                if match:
-                    ref = SourceCreditRef(
-                        congress=int(match.group(1)),
-                        law_number=int(match.group(2)),
-                        division=match.group(3),
-                        title=match.group(4),
-                        section=match.group(5),
-                        raw_text=text,
+            if local_tag == "ref":
+                href = elem.get("href", "")
+                text = "".join(elem.itertext()).strip()
+
+                # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
+                if "/us/pl/" in href:
+                    match = re.match(
+                        r"/us/pl/(\d+)/(\d+)"  # Congress and law number
+                        r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
+                        r"(?:/t([IVXLCDM]+))?"  # Optional title
+                        r"(?:/s([\w()]+))?",  # Optional section
+                        href,
                     )
-                    pl_refs.append(ref)
-                    last_ref_type = "pl"
+                    if match:
+                        ref = SourceCreditRef(
+                            congress=int(match.group(1)),
+                            law_number=int(match.group(2)),
+                            division=match.group(3),
+                            title=match.group(4),
+                            section=match.group(5),
+                            raw_text=text,
+                        )
+                        pl_refs.append(ref)
+                        last_ref_type = "pl"
 
-            # Parse /us/act/YYYY-MM-DD/chNNN/... hrefs (Acts, pre-1957)
-            elif "/us/act/" in href:
-                match = re.match(
-                    r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
-                    r"(?:/t([IVXLCDM]+))?"  # Optional title
-                    r"(?:/s([\w()]+))?",  # Optional section
-                    href,
-                )
-                if match:
-                    act_ref = ActRef(
-                        date=match.group(1),  # e.g., "1935-08-14"
-                        chapter=int(match.group(2)),
-                        title=match.group(3),
-                        section=match.group(4),
-                        raw_text=text,
+                # Parse /us/act/YYYY-MM-DD/chNNN/... hrefs (Acts, pre-1957)
+                elif "/us/act/" in href:
+                    match = re.match(
+                        r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
+                        r"(?:/t([IVXLCDM]+))?"  # Optional title
+                        r"(?:/s([\w()]+))?",  # Optional section
+                        href,
                     )
-                    act_refs.append(act_ref)
-                    last_ref_type = "act"
+                    if match:
+                        act_ref = ActRef(
+                            date=match.group(1),  # e.g., "1935-08-14"
+                            chapter=int(match.group(2)),
+                            title=match.group(3),
+                            section=match.group(4),
+                            raw_text=text,
+                        )
+                        act_refs.append(act_ref)
+                        last_ref_type = "act"
 
-            # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
-            elif "/us/stat/" in href:
-                match = re.match(r"/us/stat/(\d+)/(\d+)", href)
-                if match:
-                    current_stat_volume = int(match.group(1))
-                    current_stat_page = int(match.group(2))
-                    # Apply to the most recent ref
-                    if last_ref_type == "pl" and pl_refs:
-                        pl_refs[-1].stat_volume = current_stat_volume
-                        pl_refs[-1].stat_page = current_stat_page
-                    elif last_ref_type == "act" and act_refs:
-                        act_refs[-1].stat_volume = current_stat_volume
-                        act_refs[-1].stat_page = current_stat_page
+                # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
+                elif "/us/stat/" in href:
+                    match = re.match(r"/us/stat/(\d+)/(\d+)", href)
+                    if match:
+                        stat_volume = int(match.group(1))
+                        stat_page = int(match.group(2))
+                        # Apply to the most recent ref
+                        if last_ref_type == "pl" and pl_refs:
+                            pl_refs[-1].stat_volume = stat_volume
+                            pl_refs[-1].stat_page = stat_page
+                        elif last_ref_type == "act" and act_refs:
+                            act_refs[-1].stat_volume = stat_volume
+                            act_refs[-1].stat_page = stat_page
 
-        # Extract dates from <date> elements and associate with PL refs
-        # Act refs already have dates in the href, so all <date> elements belong to PL refs
-        date_elems = source_credit.findall(".//{*}date")
-        if not date_elems:
-            date_elems = source_credit.findall(".//date")
-
-        # Simple heuristic: dates appear after their associated PL ref, in order
-        for i, date_elem in enumerate(date_elems):
-            date_text = "".join(date_elem.itertext()).strip()
-            if i < len(pl_refs):
-                pl_refs[i].date = date_text
+            elif local_tag == "date":
+                # Act refs already have dates in the href; <date> elements belong to
+                # PL refs only. Attribute each date to the most recently seen PL ref
+                # so that "as added" credits assign the date to the adding law, not
+                # the framework law that precedes the "as added" clause.
+                date_text = "".join(elem.itertext()).strip()
+                if last_ref_type == "pl" and pl_refs:
+                    pl_refs[-1].date = date_text
 
         return pl_refs, act_refs
 
