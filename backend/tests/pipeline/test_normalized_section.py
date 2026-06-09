@@ -2081,9 +2081,13 @@ class TestFlatNotesParser:
 
         # The House Report note must contain ONLY its own content —
         # no Amendments text and no Effective Date text.
-        house_report = next(n for n in notes.notes if n.header == "House Report No. 95-595")
+        house_report = next(
+            n for n in notes.notes if n.header == "House Report No. 95-595"
+        )
         house_text = " ".join(line.content for line in house_report.lines)
-        assert "independent trustee" in house_text, "House Report should contain its own text"
+        assert "independent trustee" in house_text, (
+            "House Report should contain its own text"
+        )
         assert "1986" not in house_text, (
             "House Report note must not contain Amendments year text"
         )
@@ -2097,7 +2101,9 @@ class TestFlatNotesParser:
         # Amendments note must have its own content
         amendments = next(n for n in notes.notes if n.header == "Amendments")
         amend_text = " ".join(line.content for line in amendments.lines)
-        assert "Pub. L. 99–554" in amend_text, "Amendments note should contain Pub. L. ref"
+        assert "Pub. L. 99–554" in amend_text, (
+            "Amendments note should contain Pub. L. ref"
+        )
 
         # Effective Date note must have its own content
         eff_date = next(
