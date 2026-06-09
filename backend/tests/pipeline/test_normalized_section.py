@@ -1407,6 +1407,26 @@ class TestNormalizeNoteContent:
         assert len(lines) == 1
         assert "Subsec. (a)(2). Pub. L. 100–159" in lines[0].content
 
+    def test_sig_single_line_no_embedded_newline(self) -> None:
+        """Each [SIG] token produces exactly one line with no embedded newline."""
+        # Simulates parser output when <signature> has separate <name> and <role>
+        # children that were emitted as two distinct [SIG] tokens (issue #511).
+        text = (
+            "[PARA][SIG]— By Irwin Karp,[/SIG]"
+            "[PARA][SIG]— Counsel[/SIG]"
+        )
+        lines = normalize_note_content(text)
+
+        sig_lines = [ln for ln in lines if ln.is_signature]
+        # Must produce two separate signature lines, not one with an embedded \n
+        assert len(sig_lines) == 2
+        for ln in sig_lines:
+            assert "\n" not in ln.content, (
+                f"Embedded newline found in signature line: {ln.content!r}"
+            )
+        assert sig_lines[0].content == "— By Irwin Karp,"
+        assert sig_lines[1].content == "— Counsel"
+
 
 class TestSentenceSplittingWithParagraphs:
     """Tests for sentence splitting with paragraph break detection."""
@@ -1688,6 +1708,60 @@ class TestParserNotesContent:
         # Should NOT contain [H2] marker for "et seq"
         assert "[H2]" not in content
         assert "et seq" in content
+
+    def test_signature_with_name_and_role_emits_separate_sig_tokens(self) -> None:
+        """<signature> with <name> and <role> children emits two separate [SIG] tokens.
+
+        Regression test for issue #511: when <signature> contains both <name>
+        and <role> child elements, the parser must not collapse them into a
+        single string with an embedded \\n. Each child element should become
+        its own [SIG] token so that normalize_note_content can turn them into
+        distinct line objects.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Mirrors the OLRC source for 17 U.S.C. § 107 Guidelines note
+        xml = """<notes>
+            <p>Agreed upon in principle March 19, 1976.</p>
+            <signature>
+                <name>By Irwin Karp,</name>
+                <role>Counsel.</role>
+            </signature>
+            <signature>
+                <name>By Alexander C. Hoffman</name>
+            </signature>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        raw = parser._get_notes_text_content(elem)
+
+        # Should have three separate [SIG]...[/SIG] blocks: Irwin Karp name,
+        # Counsel role, and Alexander C. Hoffman (no role child).
+        assert raw.count("[SIG]") == 3, (
+            f"Expected 3 [SIG] tokens, got {raw.count('[SIG]')}: {raw!r}"
+        )
+
+        # No embedded newline must appear inside any single [SIG] span
+        import re
+
+        for m in re.finditer(r"\[SIG\](.*?)\[/SIG\]", raw, re.DOTALL):
+            assert "\n" not in m.group(1), (
+                f"Embedded newline inside [SIG]: {m.group(1)!r}"
+            )
+
+        # Now verify normalize_note_content produces two separate line objects
+        lines = normalize_note_content(raw)
+        sig_lines = [ln for ln in lines if ln.is_signature]
+        assert len(sig_lines) == 3
+        for ln in sig_lines:
+            assert "\n" not in ln.content, (
+                f"Embedded newline in rendered signature line: {ln.content!r}"
+            )
 
 
 class TestStripNoteMarkers:
