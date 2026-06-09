@@ -2274,7 +2274,7 @@ class TestAmendmentSubsectionPrefix:
         from pipeline.olrc.normalized_section import _parse_amendments
 
         text = (
-            '1998—Subsec. (b)(1). Pub. L. 105–244, § 301(c)(1), '
+            "1998—Subsec. (b)(1). Pub. L. 105–244, § 301(c)(1), "
             'substituted "section 1068h(a)(1)" for "section 1069f(a)(1)".\n'
             "Subsecs. (c), (d). Pub. L. 105–244, § 303(a), added subsecs. (c) and (d).\n"
         )
