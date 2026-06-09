@@ -6,9 +6,7 @@ import pytest
 from lxml import etree
 
 from pipeline.olrc.parser import (
-    ActRef,
     NoteRef,
-    SourceCreditRef,
     USLMParser,
     _clean_bracket_heading,
     compute_text_hash,
