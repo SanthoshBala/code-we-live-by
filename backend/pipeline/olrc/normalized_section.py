@@ -1517,6 +1517,13 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
         )
         return
 
+    # Pre-compute positions of all [NH] markers in hist_text so we can use them
+    # as note-boundary sentinels when no subsequent Report header exists.
+    # When hist_text absorbed sibling notes (because there is no "Editorial Notes"
+    # or "Statutory Notes" wrapper), the first [NH] marker *after* a Report's
+    # content start is the real boundary — not the end of hist_text.
+    _nh_positions = [m.start() for m in _NH_HEADER_PATTERN.finditer(hist_text)]
+
     # Extract unique report sections
     seen_headers: set[str] = set()
     for i, match in enumerate(matches):
@@ -1525,9 +1532,20 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
             continue
         seen_headers.add(header)
 
-        # Content runs from end of this header to start of next header (or end)
+        # Content runs from end of this header to start of next header (or end).
+        # For the last report, also stop at the first [NH] marker that follows
+        # the report header — this prevents sibling flat notes (Amendments,
+        # Effective Date, etc.) from bleeding into the last report note.
         content_start = match.end()
-        content_end = matches[i + 1].start() if i + 1 < len(matches) else len(hist_text)
+        if i + 1 < len(matches):
+            content_end = matches[i + 1].start()
+        else:
+            # Find the first [NH] position strictly after content_start
+            next_nh = next(
+                (pos for pos in _nh_positions if pos > content_start),
+                len(hist_text),
+            )
+            content_end = next_nh
         raw_content = hist_text[content_start:content_end]
         content = _strip_note_markers(raw_content)
 
