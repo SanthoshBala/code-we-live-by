@@ -365,13 +365,14 @@ _REPORT_PATTERN = re.compile(
 )
 _YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
 _PUB_L_PATTERN = re.compile(
-    r"((?:Subsec\.?\s*"  # "Subsec." or "Subsec"
+    r"((?:Subsecs?\.?\s*"  # "Subsec." / "Subsec" or plural "Subsecs." / "Subsecs"
     r"(?:\([^)]+\))+"  # One or more parenthesized markers like (c)(1)
-    r"(?:\s*,\s*(?:\([^)]+\))+)*"  # Optional comma-separated markers like , (2)(A)
+    r"(?:\s+to\s+(?:\([^)]+\))+)?"  # Optional range suffix like " to (13)"
+    r"(?:\s*,\s*(?:\([^)]+\))+(?:\s+to\s+(?:\([^)]+\))+)?)*"  # Optional comma-separated markers, each optionally with a range
     r"\.?\s*)?)"  # Optional trailing period and whitespace
     r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
     r"(.*?)"  # Description (including any text after)
-    r"(?=Subsec\.?\s*(?:\([^)]+\))+|Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Subsec. or Pub. L. or end
+    r"(?=Subsecs?\.?\s*(?:\([^)]+\))+|Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Subsec(s). or Pub. L. or end
     re.DOTALL,
 )
 
