@@ -1163,7 +1163,7 @@ class TestExtractSourceCreditActRefs:
         # ", title I, § 1," is tail text between the act ref and stat ref.
         source_credit = (
             '<ref href="/us/act/1934-06-19/ch648">June 19, 1934, ch. 648</ref>'
-            ', title I, § 1, '
+            ", title I, § 1, "
             '<ref href="/us/stat/48/1022">48 Stat. 1022</ref>'
         )
         xml_path = self._make_xml(source_credit, tmp_path)
@@ -1177,7 +1177,9 @@ class TestExtractSourceCreditActRefs:
 
         assert act_ref.chapter == 648
         assert act_ref.title == "I", "title sub-path must be captured from tail text"
-        assert act_ref.section == "1", "section sub-path must be captured from tail text"
+        assert act_ref.section == "1", (
+            "section sub-path must be captured from tail text"
+        )
         assert act_ref.stat_volume == 48
         assert act_ref.stat_page == 1022
 
