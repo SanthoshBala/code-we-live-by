@@ -1459,7 +1459,8 @@ class USLMParser:
             # fall back to the simple single-line form.
             if tag == "signature":
                 child_tags_in_sig = [
-                    c for c in el
+                    c
+                    for c in el
                     if (c.tag.split("}")[-1] if "}" in c.tag else c.tag)
                     in ("name", "role")
                 ]

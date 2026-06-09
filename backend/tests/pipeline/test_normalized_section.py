@@ -1411,10 +1411,7 @@ class TestNormalizeNoteContent:
         """Each [SIG] token produces exactly one line with no embedded newline."""
         # Simulates parser output when <signature> has separate <name> and <role>
         # children that were emitted as two distinct [SIG] tokens (issue #511).
-        text = (
-            "[PARA][SIG]— By Irwin Karp,[/SIG]"
-            "[PARA][SIG]— Counsel[/SIG]"
-        )
+        text = "[PARA][SIG]— By Irwin Karp,[/SIG][PARA][SIG]— Counsel[/SIG]"
         lines = normalize_note_content(text)
 
         sig_lines = [ln for ln in lines if ln.is_signature]
