@@ -1682,8 +1682,15 @@ def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
     # Find the earliest notes section header
     earliest_notes_pos = len(text)
     for header in NOTES_SECTION_HEADERS:
-        # Look for the header, possibly with leading whitespace/newlines
-        pattern = re.compile(rf"[\s\n]+{re.escape(header)}", re.IGNORECASE)
+        # Look for the header at the start of a line (possibly with leading
+        # whitespace), since real notes headers always begin their own line.
+        # Requiring a line start avoids false positives when a header word
+        # (e.g. "Regulations") appears mid-sentence in ordinary law text,
+        # such as "...in accordance with the rules and regulations
+        # prescribed by..." in 24 U.S.C. § 17.
+        pattern = re.compile(
+            rf"(?:^|\n)[ \t]*{re.escape(header)}", re.IGNORECASE | re.MULTILINE
+        )
         match = pattern.search(text)
         if match and match.start() < earliest_notes_pos:
             earliest_notes_pos = match.start()

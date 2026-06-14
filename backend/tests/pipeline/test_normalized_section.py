@@ -285,6 +285,48 @@ class TestNormalizeSectionRealExamples:
         full_text = " ".join(line.content for line in result.provisions)
         assert "U.S.C." in full_text
 
+    def test_naval_asylum_regulations_not_treated_as_notes_header_issue_522(
+        self,
+    ) -> None:
+        """Regression test for 24 U.S.C. § 17 (issue #522).
+
+        The word "regulations" appearing mid-sentence must not be mistaken
+        for the "Regulations" notes-section header, which would truncate the
+        law text right before it.
+        """
+        text = (
+            "The asylum for disabled and decrepit Navy officers, seamen, "
+            "and marines shall be governed in accordance with the rules "
+            "and regulations prescribed by the Secretary of the Navy."
+        )
+
+        result = normalize_section(text)
+
+        full_text = " ".join(line.content for line in result.provisions)
+        assert full_text == text
+        assert "regulations prescribed by the Secretary of the Navy" in full_text
+
+    def test_army_navy_hospital_regulations_not_truncated_issue_522(self) -> None:
+        """Regression test for 24 U.S.C. § 18 (issue #522).
+
+        Same pattern as § 17: "regulations" appears mid-sentence (after
+        "such rules,") and must not be treated as a notes header.
+        """
+        text = (
+            "The Army and Navy General Hospital at Hot Springs, Arkansas, "
+            "shall be subject to such rules, regulations, and restrictions "
+            "as shall be provided by the President of the United States "
+            "and shall remain under the jurisdiction and control of the "
+            "Department of the Army."
+        )
+
+        result = normalize_section(text)
+
+        full_text = " ".join(line.content for line in result.provisions)
+        assert full_text == text
+        assert "regulations, and restrictions" in full_text
+        assert "Department of the Army" in full_text
+
 
 class TestCharacterToLineMapping:
     """Tests for character position to line number mapping."""
