@@ -230,3 +230,6 @@ Thumbs.db
 
 # Downloaded data
 backend/data/
+
+# Claude Code agent worktrees (ephemeral, managed by Claude Code)
+.claude/worktrees/
