@@ -1488,13 +1488,43 @@ def _strip_note_markers(text: str) -> str:
     return text.strip()
 
 
+def _find_wrapper_heading(pattern: str, raw_notes: str) -> re.Match[str] | None:
+    """Find a top-level wrapper heading match, rejecting inline cross-references.
+
+    Wrapper headings like "Historical and Revision Notes", "Editorial Notes",
+    and "Statutory Notes and Related Subsidiaries" mark the start of a whole
+    category of notes within raw_notes. But the same phrases can also appear
+    as inline cross-references buried inside a note's body prose — e.g. "See
+    Historical and Revision Notes and 2006 Amendment note under section 303
+    of Title 40." A naive unanchored search matches that prose too, splitting
+    one note into a real note plus a fabricated one from the trailing
+    fragment (issue #529).
+
+    A real wrapper heading only ever begins raw_notes, or follows immediately
+    after [NH]/[H1] marker spans with nothing but whitespace in between —
+    never mid-sentence prose. We scan all candidate matches and accept the
+    first one whose preceding text, once marker spans are stripped, is
+    empty/whitespace-only.
+    """
+    for match in re.finditer(pattern, raw_notes, re.DOTALL | re.IGNORECASE):
+        prefix = raw_notes[: match.start()]
+        prefix = re.sub(r"\[NH\].*?\[/NH\]", "", prefix, flags=re.DOTALL)
+        prefix = re.sub(r"\[H1\].*?\[/H1\]", "", prefix, flags=re.DOTALL)
+        prefix = re.sub(r"\[/?NH\]|\[/?H1\]", "", prefix)
+        if not prefix.strip():
+            return match
+    return None
+
+
 def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Historical and Revision Notes section."""
-    # Match until next major section (with optional [H1] prefix)
-    hist_match = re.search(
+    # Match until next major section (with optional [H1] prefix). Use
+    # _find_wrapper_heading so an inline cross-reference like "See Historical
+    # and Revision Notes ..." inside another note's body isn't mistaken for
+    # the start of this section (issue #529).
+    hist_match = _find_wrapper_heading(
         r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|$)",
         raw_notes,
-        re.DOTALL | re.IGNORECASE,
     )
     if not hist_match:
         return
@@ -1543,11 +1573,12 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
 
 def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Editorial Notes section."""
-    # Match "Editorial Notes" and capture until "Statutory Notes" (with optional [H1] prefix)
-    edit_match = re.search(
+    # Match "Editorial Notes" and capture until "Statutory Notes" (with optional
+    # [H1] prefix). Use _find_wrapper_heading to reject inline cross-references
+    # to "Editorial Notes" buried in other notes' body prose (issue #529).
+    edit_match = _find_wrapper_heading(
         r"Editorial Notes\s*(.*?)(?=\[H1\]Statutory Notes|\[NH\]Statutory Notes|Statutory Notes|$)",
         raw_notes,
-        re.DOTALL | re.IGNORECASE,
     )
     if not edit_match:
         return
@@ -1600,10 +1631,12 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
 
 def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Statutory Notes section."""
-    stat_match = re.search(
+    # Use _find_wrapper_heading to reject inline cross-references to
+    # "Statutory Notes and Related Subsidiaries" buried in other notes' body
+    # prose (issue #529).
+    stat_match = _find_wrapper_heading(
         r"Statutory Notes and Related Subsidiaries\s*(.*)",
         raw_notes,
-        re.DOTALL | re.IGNORECASE,
     )
     if not stat_match:
         return

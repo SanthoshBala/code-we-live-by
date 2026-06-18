@@ -2037,6 +2037,65 @@ class TestFlatNotesParser:
         assert 1957 in years
         assert 1975 in years
 
+    def test_inline_cross_reference_to_historical_notes_not_split_issue_529(
+        self,
+    ) -> None:
+        """Regression: an inline "See Historical and Revision Notes ..."
+        cross-reference inside a note's body must not be split into a second,
+        fabricated note.
+
+        16 U.S.C. § 16 has a single flat 'transferOfFunctions' note whose body
+        ends with "See Historical and Revision Notes and 2006 Amendment note
+        under section 303 of Title 40." Prior to the fix, _parse_historical_notes
+        did an unanchored search for "Historical and Revision Notes" and matched
+        this inline prose, fabricating a bogus second note ("Historical and
+        Revision Notes") containing only the truncated tail fragment, while also
+        mis-categorising the real note via the historical-notes code path.
+        Closes #529.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Transfer Of Functions[/NH] "
+            "Functions of procurement of supplies, services, stores, etc., "
+            "exercised by any other agency transferred to Procurement Division "
+            "in Department of the Treasury by Ex. Ord. No. 6166, "
+            "Section 1, June 10, 1933, set out as a note under section 901 of "
+            "Title 5, Government Organization and Employees. Bureau transferred "
+            "on July 1, 1949, to General Services Administration. Section 303(a) "
+            "of Title 40 was amended generally by Pub. L. 109-313, "
+            "Section 2(a)(1), Oct. 6, 2006, 120 Stat. 1734. "
+            "See Historical and Revision Notes and 2006 Amendment note under "
+            "section 303 of Title 40."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        # Exactly one note must be produced — no fabricated split.
+        assert len(notes.notes) == 1
+
+        note = notes.notes[0]
+        assert note.header.lower() == "transfer of functions"
+
+        # The note must not be mis-categorised as historical.
+        assert note.category.value != "historical"
+
+        # The full body, including the trailing cross-reference sentence,
+        # must be present in the single note (nothing truncated away).
+        full_text = " ".join(line.content for line in note.lines)
+        assert "Functions of procurement of supplies" in full_text
+        assert (
+            "See Historical and Revision Notes and 2006 Amendment note "
+            "under section 303 of Title 40." in full_text
+        )
+
+        # No fabricated "Historical and Revision Notes" note should exist.
+        headers = [n.header.lower() for n in notes.notes]
+        assert "historical and revision notes" not in headers
+
 
 class TestNoteTopicAmendmentParsing:
     """Regression tests for issue #216: <note topic="amendments"> not parsed.
