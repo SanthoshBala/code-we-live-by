@@ -9,6 +9,18 @@ CWLB and the OLRC XML at the stated release point.
 | Date       | Title | Section | Heading                                          | Release Point | Status |
 |------------|-------|---------|--------------------------------------------------|---------------|--------|
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership    | 113-21        | ✅ Clean |
+| 2026.06.20 | 28    | 2514    | Forfeiture of fraudulent claims                  | 113-21        | ✅ Clean (known issue applies — see notes) |
+
+## Notes
+
+### 2026.06.20 — 28 U.S.C. § 2514
+
+All fields matched: heading, body text (2 paragraphs), source credit/citations, Historical and
+Revision Notes, Amendments note, Effective Date notes, and all 15 in-note cross-references.
+
+`last_modified_date` is returned as `1992-01-01` instead of the actual amendment date
+`1992-10-29` (Pub. L. 102-572 effective date). This is the systemic Jan-1-placeholder bug
+already tracked in #466, #483, #491, and #510 — not re-filed here.
 
 ## Test methodology
 
