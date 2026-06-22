@@ -9,6 +9,7 @@ CWLB and the OLRC XML at the stated release point.
 | Date       | Title | Section | Heading                                          | Release Point | Status |
 |------------|-------|---------|--------------------------------------------------|---------------|--------|
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership    | 113-21        | ✅ Clean |
+| 2026.06.22 | 5     | 569     | Encouraging negotiated rulemaking                | 113-21        | ✅ Clean |
 
 ## Test methodology
 
