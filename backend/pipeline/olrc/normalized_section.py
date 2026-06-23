@@ -101,6 +101,10 @@ LEGAL_ABBREVIATIONS = {
     "cl.",
     "Para.",
     "para.",
+    "Subsec.",  # Subsection (e.g., "referred to in subsec. (c)(3)")
+    "subsec.",
+    "Subsecs.",  # Plural subsection (e.g., "referred to in subsecs. (b), (c)")
+    "subsecs.",
     "Subch.",
     "subch.",
     "Pt.",
@@ -1126,12 +1130,29 @@ def _indent_block_quotes(
     return result
 
 
-def _amendment_lines(raw_content: str) -> list[ParsedLine]:
-    """Fast path for Amendments notes: split on newlines, skip sentence detection.
+# Note headers whose paragraphs are already complete, self-contained statements
+# (citation/cross-reference prose, year-prefixed amendment entries) and so should
+# bypass sentence-boundary splitting in favor of a straight one-paragraph-per-line
+# mapping. See _paragraph_lines() docstring for why the general-purpose
+# normalize_note_content() codepath mis-renders these headers.
+PARAGRAPH_LINE_HEADERS = {
+    "Amendments",
+    "References In Text",
+}
 
-    Amendment text consists of year-prefixed entries ("1988—Pub. L. 100–568 …"),
-    one per line, so sentence-boundary detection in normalize_note_content adds
-    no value while costing ~98× more than a plain newline split.
+
+def _paragraph_lines(raw_content: str) -> list[ParsedLine]:
+    """One line per source <p>: split on paragraph breaks, skip sentence detection.
+
+    Used for note categories whose paragraphs are already complete, self-contained
+    statements — e.g. "Amendments" entries ("1988—Pub. L. 100–568 …") and
+    "References in Text" entries (citation/cross-reference prose). Running these
+    through normalize_note_content's sentence-boundary detector would (a) fragment
+    a paragraph mid-sentence whenever it contains an abbreviation outside
+    LEGAL_ABBREVIATIONS (e.g. "subsecs."), and (b) insert a spurious blank
+    ParsedLine for the paragraph break itself, since that codepath always renders
+    [PARA] markers as a separating blank line. Splitting on paragraph boundaries
+    directly avoids both problems and is ~98x cheaper than sentence splitting.
     """
     cleaned = re.sub(r"\[NH\].*?\[/NH\]", "", raw_content, flags=re.DOTALL)
     cleaned = re.sub(r"\[/NH\]", "", cleaned)
@@ -1458,8 +1479,8 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         notes.notes.append(
             SectionNote(
                 header=header,
-                lines=_amendment_lines(raw_content)
-                if header == "Amendments"
+                lines=_paragraph_lines(raw_content)
+                if header in PARAGRAPH_LINE_HEADERS
                 else normalize_note_content(raw_content),
                 category=category,
             )
@@ -1590,8 +1611,8 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
             notes.notes.append(
                 SectionNote(
                     header=header,
-                    lines=_amendment_lines(raw_content)
-                    if header == "Amendments"
+                    lines=_paragraph_lines(raw_content)
+                    if header in PARAGRAPH_LINE_HEADERS
                     else normalize_note_content(raw_content),
                     category=NoteCategory.EDITORIAL,
                 )
