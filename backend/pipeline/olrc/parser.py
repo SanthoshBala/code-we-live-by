@@ -1318,11 +1318,15 @@ class USLMParser:
         quoted content and formats them with [QC:level] markers the normalizer
         uses to create properly indented lines.
 
-        Two patterns handled:
+        Patterns handled:
         - Anonymous inline: <section class="inline"> with chapeau + paragraphs
           + continuation (no section header emitted for empty <num>)
         - Full named sections: <section> with real <num> and <heading>
         - Subsection-only: <subsection> children at top level (legacy pattern)
+        - Paragraph-only: <paragraph> children directly under quotedContent
+          with no enclosing <section>/<subsection> wrapper, optionally
+          preceded by a bare <inline> intro line (e.g. the 21 U.S.C. 822
+          "Findings" note; see issue #536)
         """
         parts = []
 
@@ -1408,6 +1412,25 @@ class USLMParser:
                 format_item(subsection, 1)
             for subsection in elem.findall("subsection"):
                 format_item(subsection, 1)
+
+        # Process top-level paragraphs when neither sections nor subsections
+        # wrap them directly under quotedContent (e.g. a flat enumeration
+        # like "(1)", "(2)" with "(A)", "(B)" sub-items but no enclosing
+        # <section>/<subsection>). A bare <inline> intro line, if present,
+        # is emitted first at the same level so it precedes the enumeration.
+        if not parts:
+            inline_elem = elem.find("{*}inline")
+            if inline_elem is None:
+                inline_elem = elem.find("inline")
+            if inline_elem is not None:
+                inline_text = self._get_text_content(inline_elem).strip()
+                if inline_text:
+                    parts.append(f"[QC:1]{inline_text}[/QC]")
+
+            for paragraph in elem.findall("{*}paragraph"):
+                format_item(paragraph, 1)
+            for paragraph in elem.findall("paragraph"):
+                format_item(paragraph, 1)
 
         # Fallback: extract plain text for simple inline quotedContent
         if not parts:
