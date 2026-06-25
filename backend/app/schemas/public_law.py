@@ -29,7 +29,11 @@ class PublicLawSchema(BaseModel):
         default_factory=list,
         description="Alternative short titles (e.g., ['CARES Act'])",
     )
-    stat_volume: int | None = Field(None, description="Statutes at Large volume")
+    stat_volume: str | None = Field(
+        None,
+        description="Statutes at Large volume (string since pre-1957 codification "
+        "volumes may have a letter suffix, e.g. '70A')",
+    )
     stat_page: int | None = Field(None, description="Statutes at Large page")
 
     @computed_field  # type: ignore[prop-decorator]
@@ -81,7 +85,11 @@ class ActSchema(BaseModel):
     short_title: str | None = Field(
         None, description="Short title (e.g., 'Social Security Act')"
     )
-    stat_volume: int | None = Field(None, description="Statutes at Large volume")
+    stat_volume: str | None = Field(
+        None,
+        description="Statutes at Large volume (string since pre-1957 codification "
+        "volumes may have a letter suffix, e.g. '70A')",
+    )
     stat_page: int | None = Field(None, description="Statutes at Large page")
 
     @computed_field  # type: ignore[prop-decorator]
@@ -278,7 +286,7 @@ class SourceLawSchema(BaseModel):
         return None
 
     @property
-    def stat_volume(self) -> int | None:
+    def stat_volume(self) -> str | None:
         """Return the Statutes at Large volume."""
         if self.law:
             return self.law.stat_volume

@@ -424,7 +424,7 @@ def parse_citation(text: str) -> SourceLaw | None:
     title = match.group(4)  # May be None
     section = match.group(5)  # May be None
     date = match.group(6)  # May be None
-    stat_volume = int(match.group(7)) if match.group(7) else None
+    stat_volume = match.group(7) if match.group(7) else None
     stat_page = int(match.group(8)) if match.group(8) else None
 
     law = ParsedPublicLaw(
