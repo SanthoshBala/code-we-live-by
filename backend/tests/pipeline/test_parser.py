@@ -7,6 +7,7 @@ from lxml import etree
 
 from pipeline.olrc.parser import (
     NoteRef,
+    SourceCreditRef,
     USLMParser,
     _clean_bracket_heading,
     compute_text_hash,
@@ -1112,3 +1113,118 @@ class TestNoteRefDataclass:
         assert ref.ref_type == "act"
         assert ref.act_date == "1935-08-14"
         assert ref.act_chapter == 531
+
+
+class TestExtractSourceCreditRefs:
+    """Tests for USLMParser._extract_source_credit_refs.
+
+    Regression coverage for GitHub issue #547: multi-part amendment
+    citations with more than one comma-separated sub-citation (and Stat.
+    page) before the date were silently dropping everything after the
+    first sub-citation/page.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_multi_subcitation_and_stat_pages_captured(
+        self, parser: USLMParser
+    ) -> None:
+        """26 U.S.C. § 1037 / Pub. L. 94-455 has two sub-citations and two
+        Stat. pages in a single amendment reference:
+
+            Pub. L. 94-455, title XIX, § 1901(a)(130), (b)(3)(I),
+            Oct. 4, 1976, 90 Stat. 1786, 1793
+
+        The "(b)(3)(I)" sub-citation and the "1793" Stat. page are plain
+        text in the source XML (not wrapped in their own <ref>), trailing
+        the <ref> elements for "§ 1901(a)(130)" and "90 Stat. 1786"
+        respectively. Both must be captured rather than dropped.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t26/s1037">
+          <sourceCredit>
+            (Added <ref href="/us/pl/86/346/s201/a">Pub. L. 86-346, title II,
+            &#167; 201(a)</ref>, <date date="1959-09-22">Sept. 22, 1959</date>,
+            <ref href="/us/stat/73/622">73 Stat. 622</ref>; amended
+            <ref href="/us/pl/94/455/s1901/a/130">Pub. L. 94-455, title XIX,
+            &#167; 1901(a)(130)</ref>, (b)(3)(I),
+            <date date="1976-10-04">Oct. 4, 1976</date>,
+            <ref href="/us/stat/90/1786">90 Stat. 1786</ref>, 1793;
+            <ref href="/us/pl/97/452/s2/c/3">Pub. L. 97-452, &#167; 2(c)(3)</ref>,
+            <date date="1983-01-12">Jan. 12, 1983</date>,
+            <ref href="/us/stat/96/2478">96 Stat. 2478</ref>.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml.encode())
+
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert act_refs == []
+        assert len(pl_refs) == 3
+
+        original_ref = pl_refs[0]
+        assert original_ref.congress == 86
+        assert original_ref.law_number == 346
+        assert original_ref.extra_sections == []
+        assert original_ref.extra_stat_pages == []
+
+        # The PL 94-455 ref must keep its first sub-citation/Stat. page in
+        # the existing singular fields, and capture the rest in the new
+        # list fields.
+        multi_ref = pl_refs[1]
+        assert multi_ref.congress == 94
+        assert multi_ref.law_number == 455
+        assert multi_ref.section == "1901"
+        assert multi_ref.date == "Oct. 4, 1976"
+        assert multi_ref.stat_volume == 90
+        assert multi_ref.stat_page == 1786
+        assert multi_ref.extra_sections == ["(b)(3)(I)"]
+        assert multi_ref.extra_stat_pages == [1793]
+
+        trailing_ref = pl_refs[2]
+        assert trailing_ref.congress == 97
+        assert trailing_ref.law_number == 452
+        assert trailing_ref.extra_sections == []
+        assert trailing_ref.extra_stat_pages == []
+
+    def test_single_subcitation_unchanged(self, parser: USLMParser) -> None:
+        """Regression test: a normal single sub-citation/Stat. page
+        reference (the common case) must still parse exactly as before,
+        with empty extra_sections/extra_stat_pages.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s106">
+          <sourceCredit>
+            (<ref href="/us/pl/94/553/tI/s106">Pub. L. 94-553, title I,
+            &#167; 106</ref>, <date date="1976-10-19">Oct. 19, 1976</date>,
+            <ref href="/us/stat/90/2546">90 Stat. 2546</ref>.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml.encode())
+
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert act_refs == []
+        assert len(pl_refs) == 1
+
+        ref = pl_refs[0]
+        assert ref.congress == 94
+        assert ref.law_number == 553
+        assert ref.section == "106"
+        assert ref.date == "Oct. 19, 1976"
+        assert ref.stat_volume == 90
+        assert ref.stat_page == 2546
+        assert ref.extra_sections == []
+        assert ref.extra_stat_pages == []
+
+    def test_source_credit_ref_defaults_to_empty_extra_lists(self) -> None:
+        """SourceCreditRef should default extra_sections/extra_stat_pages
+        to empty lists rather than None, matching existing list field
+        conventions (e.g. ParsedSubsection.children).
+        """
+        ref = SourceCreditRef(congress=94, law_number=455)
+        assert ref.extra_sections == []
+        assert ref.extra_stat_pages == []
