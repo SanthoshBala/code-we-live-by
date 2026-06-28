@@ -11,13 +11,14 @@ from pipeline.olrc.normalized_section import (
     _split_into_sentences,
     _strip_note_markers,
     char_span_to_line_span,
+    citations_from_source_credit_refs,
     normalize_note_content,
     normalize_section,
     note_refs_to_schemas,
     parse_citation,
     parse_citations,
 )
-from pipeline.olrc.parser import NoteRef
+from pipeline.olrc.parser import NoteRef, SourceCreditRef
 
 
 class TestMarkerLevelDetection:
@@ -541,6 +542,109 @@ class TestCitationParsing:
         assert citations[0].congress == 94  # Oldest
         assert citations[1].congress == 101
         assert citations[2].congress == 106  # Newest
+
+    def test_parse_multi_subcitation_and_stat_pages(self) -> None:
+        """Regression test for GitHub issue #547 (26 U.S.C. § 1037).
+
+        A single Pub. L. amendment citation can have more than one
+        comma-separated sub-citation before the date, and more than one
+        Stat. page after the Stat. volume:
+
+            Pub. L. 94-455, title XIX, § 1901(a)(130), (b)(3)(I),
+            Oct. 4, 1976, 90 Stat. 1786, 1793
+
+        Previously, parse_citation's regex stopped matching after the
+        first sub-citation, so the date and Stat. page after the extra
+        "(b)(3)(I)" text were never captured at all. The first
+        sub-citation/page must remain in section/stat_page for backward
+        compatibility, and the rest must be captured in the new
+        extra_sections/extra_stat_pages fields.
+        """
+        text = (
+            "Pub. L. 94–455, title XIX, § 1901(a)(130), (b)(3)(I), "
+            "Oct. 4, 1976, 90 Stat. 1786, 1793"
+        )
+        citation = parse_citation(text)
+
+        assert citation is not None
+        assert citation.congress == 94
+        assert citation.law_number == 455
+        assert citation.section == "1901(a)(130)"
+        assert citation.date == "Oct. 4, 1976"
+        assert citation.stat_page == 1786
+        assert citation.extra_sections == ["(b)(3)(I)"]
+        assert citation.extra_stat_pages == [1793]
+
+    def test_parse_citations_block_with_multi_subcitation(self) -> None:
+        """Full 26 U.S.C. § 1037 sourceCredit block parses all four
+        citations, with the multi-part PL 94-455 amendment capturing both
+        sub-citations and both Stat. pages.
+        """
+        text = (
+            "(Added Pub. L. 86–346, title II, § 201(a), Sept. 22, 1959, "
+            "73 Stat. 622; amended Pub. L. 94–455, title XIX, "
+            "§ 1901(a)(130), (b)(3)(I), Oct. 4, 1976, 90 Stat. 1786, 1793; "
+            "Pub. L. 97–452, § 2(c)(3), Jan. 12, 1983, 96 Stat. 2478; "
+            "Pub. L. 98–369, div. A, title I, § 42(a)(11), July 18, 1984, "
+            "98 Stat. 557.)"
+        )
+        citations = parse_citations(text)
+
+        assert len(citations) == 4
+
+        multi_citation = citations[1]
+        assert multi_citation.public_law_id == "PL 94-455"
+        assert multi_citation.date == "Oct. 4, 1976"
+        assert multi_citation.stat_page == 1786
+        assert multi_citation.extra_sections == ["(b)(3)(I)"]
+        assert multi_citation.extra_stat_pages == [1793]
+
+        # Single sub-citation entries are unaffected (empty extra lists).
+        assert citations[0].extra_sections == []
+        assert citations[0].extra_stat_pages == []
+        assert citations[2].extra_sections == []
+        assert citations[2].extra_stat_pages == []
+        assert citations[3].extra_sections == []
+        assert citations[3].extra_stat_pages == []
+
+    def test_citations_from_source_credit_refs_multi_subcitation(self) -> None:
+        """citations_from_source_credit_refs (the preferred XML-structured
+        path) must also surface extra_sections/extra_stat_pages from a
+        SourceCreditRef populated by the parser's tail-text extraction.
+        """
+        refs = [
+            SourceCreditRef(
+                congress=86,
+                law_number=346,
+                title="II",
+                section="201",
+                date="Sept. 22, 1959",
+                stat_volume=73,
+                stat_page=622,
+                raw_text="Pub. L. 86–346, title II, § 201(a)",
+            ),
+            SourceCreditRef(
+                congress=94,
+                law_number=455,
+                title="XIX",
+                section="1901",
+                date="Oct. 4, 1976",
+                stat_volume=90,
+                stat_page=1786,
+                raw_text="Pub. L. 94–455, title XIX, § 1901(a)(130)",
+                extra_sections=["(b)(3)(I)"],
+                extra_stat_pages=[1793],
+            ),
+        ]
+
+        citations = citations_from_source_credit_refs(refs)
+
+        assert len(citations) == 2
+        assert citations[0].extra_sections == []
+        assert citations[0].extra_stat_pages == []
+        assert citations[1].public_law_id == "PL 94-455"
+        assert citations[1].extra_sections == ["(b)(3)(I)"]
+        assert citations[1].extra_stat_pages == [1793]
 
 
 class TestNormalizeParsedSection:

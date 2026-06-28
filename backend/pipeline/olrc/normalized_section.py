@@ -344,14 +344,19 @@ SectionNotes = SectionNotesSchema
 # Pattern to parse individual citation components
 # Matches: "Pub. L. 94–553, title I, § 101, Oct. 19, 1976, 90 Stat. 2546"
 # Also handles: "Pub. L. 107–273, div. C, title III, § 13210(4)(A), Nov. 2, 2002"
+# Also handles multi-part amendments with extra comma-separated sub-citations
+# and Stat. pages: "Pub. L. 94–455, title XIX, § 1901(a)(130), (b)(3)(I),
+# Oct. 4, 1976, 90 Stat. 1786, 1793"
 # Note: Source text may have extra whitespace around commas (e.g., " ,  ")
 CITATION_PARSE_PATTERN = re.compile(
     r"Pub\.\s*L\.\s*(\d+)[–-](\d+)"  # Congress and law number
     r"(?:\s*,\s*div\.\s*([A-Z]))?"  # Optional division (e.g., "div. C") - capture letter
     r"(?:\s*,\s*title\s+([IVXLCDM]+))?"  # Optional title (roman numeral)
     r"(?:\s*,\s*§+\s*([\d\w]+(?:\([a-z0-9]+\))*))?"  # Optional section
+    r"(?:\s*,\s*((?:\([\w]+\))+(?:\s*,\s*(?:\([\w]+\))+)*))?"  # Optional extra sub-citations
     r"(?:\s*,\s*([A-Z][a-z]{2,3}\.?\s+\d{1,2}\s*,\s+\d{4}))?"  # Optional date
-    r"(?:\s*,\s*(\d+)\s+Stat\.\s+(\d+))?",  # Optional Stat reference
+    r"(?:\s*,\s*(\d+)\s+Stat\.\s+(\d+))?"  # Optional Stat reference
+    r"(?:\s*,\s*(\d+(?:\s*,\s*\d+)*))?",  # Optional extra Stat. pages
     re.IGNORECASE,
 )
 
@@ -423,9 +428,22 @@ def parse_citation(text: str) -> SourceLaw | None:
     division = match.group(3)  # May be None
     title = match.group(4)  # May be None
     section = match.group(5)  # May be None
-    date = match.group(6)  # May be None
-    stat_volume = int(match.group(7)) if match.group(7) else None
-    stat_page = int(match.group(8)) if match.group(8) else None
+    extra_sections_text = match.group(6)  # May be None, e.g. "(b)(3)(I)"
+    date = match.group(7)  # May be None
+    stat_volume = int(match.group(8)) if match.group(8) else None
+    stat_page = int(match.group(9)) if match.group(9) else None
+    extra_stat_pages_text = match.group(10)  # May be None, e.g. "1793"
+
+    extra_sections = (
+        [part.strip() for part in extra_sections_text.split(",") if part.strip()]
+        if extra_sections_text
+        else []
+    )
+    extra_stat_pages = (
+        [int(part.strip()) for part in extra_stat_pages_text.split(",") if part.strip()]
+        if extra_stat_pages_text
+        else []
+    )
 
     law = ParsedPublicLaw(
         congress=congress,
@@ -439,6 +457,8 @@ def parse_citation(text: str) -> SourceLaw | None:
         law=law,
         path=_build_law_path(division=division, title=title, section=section),
         raw_text=text.strip(),
+        extra_sections=extra_sections,
+        extra_stat_pages=extra_stat_pages,
     )
 
 
@@ -562,6 +582,8 @@ def citations_from_source_credit_refs(
             relationship=relationship,
             raw_text=ref.raw_text,
             order=order,
+            extra_sections=list(ref.extra_sections),
+            extra_stat_pages=list(ref.extra_stat_pages),
         )
         citations.append(citation)
         order += 1
