@@ -220,6 +220,22 @@ class SourceLawSchema(BaseModel):
     order: int = Field(
         0, description="Position in source list (0 = first/oldest reference)"
     )
+    extra_sections: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Additional comma-separated sub-citations beyond the first "
+            "(e.g., ['(b)(3)(I)'] for 'Pub. L. 94-455, title XIX, "
+            "§ 1901(a)(130), (b)(3)(I)'). The first sub-citation remains in "
+            "``path``/``section`` for backward compatibility."
+        ),
+    )
+    extra_stat_pages: list[int] = Field(
+        default_factory=list,
+        description=(
+            "Additional Statutes at Large pages beyond ``stat_page`` (e.g., "
+            "[1793] for '90 Stat. 1786, 1793')."
+        ),
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property

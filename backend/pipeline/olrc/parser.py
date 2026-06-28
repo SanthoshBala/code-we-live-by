@@ -125,6 +125,21 @@ NAMESPACES = {
 _WS_RE = re.compile(r"\s+")
 _PUNCT_RE = re.compile(r" ([;,.])")
 
+# Matches leading comma-separated parenthetical sub-citation clauses that
+# trail a sourceCredit PL <ref> as plain text, e.g. the "(b)(3)(I)" in
+# "<ref>...§ 1901(a)(130)</ref>, (b)(3)(I), <date>...". Only matches simple
+# "(x)(y)..." groups — stops before free text like "title" or "§" so more
+# complex trailing citation text (rare) is left uncaptured rather than
+# mis-parsed.
+_SOURCE_CREDIT_EXTRA_SECTIONS_RE = re.compile(
+    r"^,\s*((?:\([^()\s]*\))+(?:\s*,\s*(?:\([^()\s]*\))+)*)"
+)
+
+# Matches leading comma-separated Stat. page numbers that trail a
+# sourceCredit Stat. <ref> as plain text, e.g. the "1793" in
+# "<ref>90 Stat. 1786</ref>, 1793;".
+_SOURCE_CREDIT_EXTRA_STAT_PAGES_RE = re.compile(r"^,\s*(\d+(?:\s*,\s*\d+)*)")
+
 
 @dataclass
 class ParsedGroup:
@@ -190,6 +205,14 @@ class SourceCreditRef:
     stat_page: int | None = None  # e.g., 501
     raw_text: str = ""  # The display text from the ref element
     is_framework: bool = False  # True if this is the "as added" parent reference
+    # Additional comma-separated sub-citations that follow the ref's own
+    # section (e.g., the "(b)(3)(I)" in "§ 1901(a)(130), (b)(3)(I)"). These
+    # appear as plain text (not inside a <ref>) in the source XML.
+    extra_sections: list[str] = field(default_factory=list)
+    # Additional comma-separated Stat. pages that follow the ref's own page
+    # (e.g., the "1793" in "90 Stat. 1786, 1793"). These also appear as
+    # plain text trailing the <ref> for the first Stat. page.
+    extra_stat_pages: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -1577,6 +1600,7 @@ class USLMParser:
         for ref_elem in ref_elems:
             href = ref_elem.get("href", "")
             text = "".join(ref_elem.itertext()).strip()
+            tail = ref_elem.tail or ""
 
             # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
             if "/us/pl/" in href:
@@ -1588,6 +1612,18 @@ class USLMParser:
                     href,
                 )
                 if match:
+                    # Capture additional comma-separated sub-citation clauses
+                    # in the tail text, e.g. "(b)(3)(I)" following
+                    # "§ 1901(a)(130), (b)(3)(I), <date>...".
+                    extra_sections: list[str] = []
+                    extra_match = _SOURCE_CREDIT_EXTRA_SECTIONS_RE.match(tail)
+                    if extra_match:
+                        extra_sections = [
+                            part.strip()
+                            for part in extra_match.group(1).split(",")
+                            if part.strip()
+                        ]
+
                     ref = SourceCreditRef(
                         congress=int(match.group(1)),
                         law_number=int(match.group(2)),
@@ -1595,6 +1631,7 @@ class USLMParser:
                         title=match.group(4),
                         section=match.group(5),
                         raw_text=text,
+                        extra_sections=extra_sections,
                     )
                     pl_refs.append(ref)
                     last_ref_type = "pl"
@@ -1624,10 +1661,23 @@ class USLMParser:
                 if match:
                     current_stat_volume = int(match.group(1))
                     current_stat_page = int(match.group(2))
+
+                    # Capture additional comma-separated Stat. pages in the
+                    # tail text, e.g. "1793" following "90 Stat. 1786, 1793;".
+                    extra_stat_pages: list[int] = []
+                    extra_pages_match = _SOURCE_CREDIT_EXTRA_STAT_PAGES_RE.match(tail)
+                    if extra_pages_match:
+                        extra_stat_pages = [
+                            int(part.strip())
+                            for part in extra_pages_match.group(1).split(",")
+                            if part.strip()
+                        ]
+
                     # Apply to the most recent ref
                     if last_ref_type == "pl" and pl_refs:
                         pl_refs[-1].stat_volume = current_stat_volume
                         pl_refs[-1].stat_page = current_stat_page
+                        pl_refs[-1].extra_stat_pages = extra_stat_pages
                     elif last_ref_type == "act" and act_refs:
                         act_refs[-1].stat_volume = current_stat_volume
                         act_refs[-1].stat_page = current_stat_page
