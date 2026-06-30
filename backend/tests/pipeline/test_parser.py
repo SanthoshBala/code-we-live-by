@@ -623,6 +623,66 @@ class TestUSLMParser:
             "<p> inside <content> must be promoted to section-level continuation"
         )
 
+    def test_footnote_ref_marker_preserved_in_content(
+        self, parser: USLMParser
+    ) -> None:
+        """Inline footnoteRef markers appear as [N] in subsection content.
+
+        Regression test for Issue #533: 21 U.S.C. § 1054 has a
+        <ref class="footnoteRef"> immediately after the (a) num marker.
+        Previously the marker was silently dropped; now it appears as [1]
+        in the extracted content text.
+        """
+        xml = """<subsection xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t21/s1054/a">
+          <num value="a">(a)</num>
+          <content>
+            <ref class="footnoteRef" idref="fn001">1</ref>
+            <note type="footnote" id="fn001">1 So in original. No subsec. (b) has been enacted.</note>
+            Not later than March 1 of each year following December 29, 1970,
+            the Secretary shall submit to Congress a report.
+          </content>
+        </subsection>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "subsection")
+
+        # The footnote ref marker must appear in content as [1]
+        assert "[1]" in result.content, (
+            "Footnote ref marker [1] must be preserved in subsection content"
+        )
+        # The main provision text must also be present
+        assert "Not later than March 1" in result.content
+        # The footnote note body text must NOT appear inline in content
+        assert "So in original" not in result.content
+
+    def test_footnote_body_texts_collected_from_section(
+        self, parser: USLMParser
+    ) -> None:
+        """_collect_footnote_texts returns body text from <note type='footnote'> elements.
+
+        Regression test for Issue #533: footnote body text was silently dropped
+        from text_content; now it is accessible via _collect_footnote_texts.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t21/s1054">
+          <num value="1054">§ 1054.</num>
+          <heading>Annual reports</heading>
+          <subsection identifier="/us/usc/t21/s1054/a">
+            <num value="a">(a)</num>
+            <content>
+              <ref class="footnoteRef" idref="fn001">1</ref>
+              <note type="footnote" id="fn001">1 So in original. No subsec. (b) has been enacted.</note>
+              Not later than March 1 of each year, the Secretary shall report.
+            </content>
+          </subsection>
+        </section>"""
+        elem = etree.fromstring(xml)
+        footnotes = parser._collect_footnote_texts(elem)
+
+        assert len(footnotes) == 1
+        assert "So in original" in footnotes[0]
+        assert "No subsec. (b) has been enacted" in footnotes[0]
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
