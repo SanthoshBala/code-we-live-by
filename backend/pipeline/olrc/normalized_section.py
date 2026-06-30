@@ -359,6 +359,7 @@ CITATION_PARSE_PATTERN = re.compile(
 # (Previously compiled inside function bodies, causing ~1026 re._compile calls per
 # _parse_notes_structure invocation due to Python's 512-entry LRU cache churn.)
 _NH_HEADER_PATTERN = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
+_H1_HEADER_PATTERN = re.compile(r"\[H1\](.*?)\[/H1\]", re.DOTALL)
 _REPORT_PATTERN = re.compile(
     r"((?:House|Senate)\s+Report\s+No\.\s*[\d–-]+)",
     re.IGNORECASE,
@@ -1618,25 +1619,36 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     # cross-references that don't lend themselves to structured extraction.
     notes.short_titles = _parse_short_titles(statutory_text)
 
-    # Find note headers using [NH]...[/NH] markers from XML parser
-    # These markers are added for <heading class="smallCaps"> elements
+    # Labels that are section-level cross-headings, not individual note headers.
+    # These appear in both [NH] and [H1] marker scans and must be skipped.
+    skip_headers = {
+        "Editorial Notes",
+        "Statutory Notes And Related Subsidiaries",
+        "Executive Documents",
+    }
+
+    # Find note headers using [NH]...[/NH] markers from XML parser.
+    # These markers are added for <heading> elements (with or without class="smallCaps").
 
     # Find all headers and their positions
     header_positions: list[tuple[int, int, str]] = []
     for match in _NH_HEADER_PATTERN.finditer(statutory_text):
         header = match.group(1).strip()
-        # Skip if too short or a fragment
-        if len(header.split()) < 2:
-            continue
-        # Skip cross-heading markers (Editorial Notes, Statutory Notes, Executive Documents)
-        skip_headers = {
-            "Editorial Notes",
-            "Statutory Notes And Related Subsidiaries",
-            "Executive Documents",
-        }
-        if header in skip_headers:
+        # Skip if empty or a cross-heading label
+        if not header or header in skip_headers:
             continue
         header_positions.append((match.start(), match.end(), header))
+
+    # Fallback: if no [NH] headers found, scan for [H1]...[/H1] markers.
+    # These are emitted for <b> elements used as note sub-headings in some
+    # USLM XML structures (e.g. a lone "Effective Date" note whose heading is
+    # encoded as a <b> rather than a <heading> element).
+    if not header_positions:
+        for match in _H1_HEADER_PATTERN.finditer(statutory_text):
+            header = match.group(1).strip()
+            if not header or header in skip_headers:
+                continue
+            header_positions.append((match.start(), match.end(), header))
 
     # Deduplicate and extract content
     seen_headers: set[str] = set()
@@ -1662,6 +1674,36 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
                     category=NoteCategory.STATUTORY,
                 )
             )
+
+    # Final fallback: if no headers were found via any marker, the statutory
+    # block may consist of a single note whose heading appears as plain text
+    # immediately before the first paragraph break (e.g. "Effective Date" as
+    # tail text of a <b> cross-heading element).  Split on the first double-
+    # newline: if the leading fragment looks like a short note title (<=6 words,
+    # no sentence-ending punctuation), treat it as the header.
+    if not header_positions:
+        stripped = _strip_note_markers(statutory_text)
+        if not stripped:
+            return
+        # Split at the first paragraph break
+        parts = re.split(r"\n\n", stripped, maxsplit=1)
+        if len(parts) == 2:
+            candidate_header = parts[0].strip()
+            note_body = parts[1].strip()
+            words = candidate_header.split()
+            is_header_like = (
+                1 <= len(words) <= 6
+                and not candidate_header.endswith(".")
+                and not candidate_header.endswith(",")
+            )
+            if is_header_like and len(note_body) > 30:
+                notes.notes.append(
+                    SectionNote(
+                        header=candidate_header.title(),
+                        lines=normalize_note_content(note_body),
+                        category=NoteCategory.STATUTORY,
+                    )
+                )
 
 
 def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
