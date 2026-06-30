@@ -1929,7 +1929,10 @@ class TestStatutoryNotesHeaderParsing:
         """
         from lxml import etree
 
-        from pipeline.olrc.normalized_section import SectionNotes, _parse_notes_structure
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
         from pipeline.olrc.parser import USLMParser
 
         # Mirrors the USLM XML structure for 21 U.S.C. ss 1054 as described in Issue #534.
