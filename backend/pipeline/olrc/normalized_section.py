@@ -1150,7 +1150,7 @@ def _indent_block_quotes(
 # normalize_note_content() codepath mis-renders these headers.
 PARAGRAPH_LINE_HEADERS = {
     "Amendments",
-    "References In Text",
+    "References in Text",
 }
 
 
