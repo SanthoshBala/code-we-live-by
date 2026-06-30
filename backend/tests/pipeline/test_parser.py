@@ -623,9 +623,7 @@ class TestUSLMParser:
             "<p> inside <content> must be promoted to section-level continuation"
         )
 
-    def test_footnote_ref_marker_preserved_in_content(
-        self, parser: USLMParser
-    ) -> None:
+    def test_footnote_ref_marker_preserved_in_content(self, parser: USLMParser) -> None:
         """Inline footnoteRef markers appear as [N] in subsection content.
 
         Regression test for Issue #533: 21 U.S.C. § 1054 has a
