@@ -1524,8 +1524,13 @@ class TestParserNotesContent:
         assert "[H2]" not in content
         assert "Smith v. Jones" in content
 
-    def test_italic_subheader_marked_as_h2(self) -> None:
-        """Test that italic sub-headers ARE marked as H2."""
+    def test_italic_not_marked_as_h2(self) -> None:
+        """Test that <i> (italic) elements are never marked as H2 headers.
+
+        In USLM, <b> marks structural headings and <i> marks inline italic
+        styling. Italic text must always be emitted as inline content regardless
+        of context (issue #556).
+        """
         from lxml import etree
 
         from pipeline.olrc.parser import USLMParser
@@ -1537,8 +1542,9 @@ class TestParserNotesContent:
 
         content = parser._get_notes_text_content(elem)
 
-        # Should contain [H2] marker for sub-header
-        assert "[H2]Reproduction" in content
+        # Should NOT contain [H2] marker — <i> is never a header
+        assert "[H2]" not in content
+        assert "Reproduction" in content
 
     def test_paragraph_markers_inserted(self) -> None:
         """Test that [PARA] markers are inserted between <p> elements."""
@@ -1866,6 +1872,132 @@ class TestParserNotesContent:
             assert "\n" not in ln.content, (
                 f"Embedded newline in rendered signature line: {ln.content!r}"
             )
+
+    def test_connective_italic_phrases_not_header(self) -> None:
+        """Connective <i> phrases like 'provided that:', 'and,' are never headers.
+
+        Reproduces issue #556: 17 U.S.C. § 107 note provisions where <i> wraps
+        connective words that were incorrectly classified as is_header=True.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Simulate the exact XML pattern from 17 U.S.C. § 107
+        xml = """<notes>
+            <p>Multiple copies may be made for classroom use;
+                <i>provided that:</i>
+            </p>
+            <p>A. The copying meets the tests of brevity;
+                <i>and,</i>
+            </p>
+            <p>B. The copying meets spontaneity;
+                <i>and</i>
+            </p>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # <i> elements must never produce [H2] markers
+        assert "[H2]" not in content
+        assert "provided that:" in content
+        assert "and," in content
+
+        # Verify the normalizer also produces no headers from this content
+        lines = normalize_note_content(content)
+        assert all(not ln.is_header for ln in lines if ln.content)
+
+    def test_sub_item_designators_in_italic_not_header(self) -> None:
+        """Sub-item designators in <i> like '(i)', '(ii)' are never headers.
+
+        Reproduces issue #556: parenthesized roman numeral sub-items wrapped in
+        <i> were incorrectly classified as is_header=True.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes>
+            <p><i>(i)</i> first condition;</p>
+            <p><i>(ii)</i> second condition;</p>
+            <p><i>(iii)</i> third condition.</p>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # <i> sub-item designators must never produce [H2] markers
+        assert "[H2]" not in content
+        assert "(i)" in content
+        assert "(ii)" in content
+        assert "(iii)" in content
+
+        # Verify the normalizer produces no headers from this content
+        lines = normalize_note_content(content)
+        assert all(not ln.is_header for ln in lines if ln.content)
+
+    def test_role_title_italic_not_header(self) -> None:
+        """Role/title text in <i> like 'Chairman, Copyright Committee' is not a header.
+
+        Reproduces issue #556: signatory role text wrapped in <i> was incorrectly
+        classified as is_header=True.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes>
+            <p>Signed: John Smith</p>
+            <p><i>Chairman, Copyright Committee</i></p>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Role/title in <i> must never produce a [H2] header marker
+        assert "[H2]" not in content
+        assert "Chairman, Copyright Committee" in content
+
+        lines = normalize_note_content(content)
+        assert all(not ln.is_header for ln in lines if ln.content)
+
+    def test_bold_element_still_produces_h1_header(self) -> None:
+        """<b> (bold) elements still correctly produce [H1] headers.
+
+        Verifies that fixing <i> handling does not break <b> header detection.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = (
+            "<notes><p><b>General Scope of Copyright.</b> The five rights.</p></notes>"
+        )
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # <b> must still produce [H1] markers
+        assert "[H1]" in content
+        assert "General Scope of Copyright" in content
+
+        lines = normalize_note_content(content)
+        header_lines = [ln for ln in lines if ln.is_header]
+        assert len(header_lines) == 1
+        assert "General Scope of Copyright" in header_lines[0].content
 
 
 class TestStripNoteMarkers:

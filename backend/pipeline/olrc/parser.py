@@ -1467,13 +1467,13 @@ class USLMParser:
 
         In USLM XML:
         - Headings with class="smallCaps" are section headers (stored lowercase)
-        - <b> tags indicate inline headers (e.g., "General Scope of Copyright.")
-        - <i> tags followed by ".—" indicate sub-headers (e.g., "Reproduction.—")
+        - <b> tags indicate bold structural headers (e.g., "General Scope of Copyright.")
+        - <i> tags mark inline italic styling (connective phrases, sub-item designators,
+          role/title text, etc.) — these are NOT structural headings
         - <quotedContent> contains structured law text with subsections
 
         We insert markers to preserve this structure:
-        - [H1] prefix for bold headers
-        - [H2] prefix for italic sub-headers
+        - [H1] prefix for bold headers (from <b> elements)
         - [QC:level]...[/QC] for quoted content items
 
         These markers are processed by normalize_note_content() to create
@@ -1565,17 +1565,11 @@ class USLMParser:
                     header_text = text.rstrip(".")
                     parts.append(f"[H1]{header_text}[/H1]")
                 elif tag == "i":
-                    # Italic text might be a sub-header if followed by ".—"
-                    # But NOT if it's a case citation (contains " v. ")
-                    # or other inline emphasis (Latin terms, etc.)
-                    inline_latin = {"et seq", "et al", "supra", "infra", "id"}
-                    stripped_text = text.strip().rstrip(".")
-                    if " v. " in text or stripped_text.lower() in inline_latin:
-                        # Case citation or Latin phrase - keep as inline text
-                        parts.append(text)
-                    else:
-                        # Mark as potential sub-header for normalizer
-                        parts.append(f"[H2]{text}[/H2]")
+                    # In USLM, <i> marks inline italic styling — connective phrases,
+                    # sub-item designators, role/title text, Latin terms, etc.
+                    # Only <b> (bold) marks structural headings.
+                    # Always emit italic text as inline content, never as a header.
+                    parts.append(text)
                 else:
                     parts.append(text)
 
