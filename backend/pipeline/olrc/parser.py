@@ -1669,13 +1669,13 @@ class USLMParser:
 
         In USLM XML:
         - Headings with class="smallCaps" are section headers (stored lowercase)
-        - <b> tags indicate inline headers (e.g., "General Scope of Copyright.")
-        - <i> tags followed by ".—" indicate sub-headers (e.g., "Reproduction.—")
+        - <b> tags indicate bold structural headers (e.g., "General Scope of Copyright.")
+        - <i> tags mark inline italic styling (connective phrases, sub-item designators,
+          role/title text, etc.) — these are NOT structural headings
         - <quotedContent> contains structured law text with subsections
 
         We insert markers to preserve this structure:
-        - [H1] prefix for bold headers
-        - [H2] prefix for italic sub-headers
+        - [H1] prefix for bold headers (from <b> elements)
         - [QC:level]...[/QC] for quoted content items
 
         These markers are processed by normalize_note_content() to create
@@ -1814,30 +1814,16 @@ class USLMParser:
                     header_text = text.rstrip(".")
                     parts.append(f"[H1]{header_text}[/H1]")
                 elif tag == "i":
-                    # Italic text is a sub-header only when it is followed
-                    # immediately by ".—" (an em-dash introducer), e.g.:
-                    #   <i>Reproduction</i>.—The right to reproduce.
-                    # If the tail does NOT start with ".—" the element is
-                    # inline formatting (case name, date, emphasis) and must
-                    # be kept as plain text so the surrounding sentence is
-                    # not fragmented. Also exclude known case-citation
-                    # patterns (" v. ") and common Latin phrases.
-                    inline_latin = {"et seq", "et al", "supra", "infra", "id"}
-                    stripped_text = text.strip().rstrip(".")
-                    tail = el.tail or ""
-                    is_subheader_tail = bool(re.match(r"^\s*\.?\s*—", tail))
-                    if (
-                        " v. " in text
-                        or stripped_text.lower() in inline_latin
-                        or not is_subheader_tail
-                    ):
-                        # Inline text (case citation, date, Latin phrase, or
-                        # mid-sentence emphasis) — keep as plain text
-                        parts.append(text)
-                    else:
-                        # Standalone italic introducer followed by ".—":
-                        # mark as sub-header for the normalizer
-                        parts.append(f"[H2]{text}[/H2]")
+                    # In USLM, <i> marks inline italic styling — connective phrases,
+                    # sub-item designators, role/title text, Latin terms, case
+                    # citations, date, etc. Only <b> (bold) marks structural
+                    # headings. Always emit italic text as inline content, never
+                    # as a header (issue #556). This applies even when the
+                    # italic span is followed by ".—" (e.g. "Reproduction.—"),
+                    # which previous logic (issue #551) treated as a sub-header
+                    # introducer — that promotion is removed here since it
+                    # reintroduces the is_header misclassification bug.
+                    parts.append(text)
                 else:
                     parts.append(text)
 
