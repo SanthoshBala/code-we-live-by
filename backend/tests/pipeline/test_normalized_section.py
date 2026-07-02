@@ -3633,3 +3633,129 @@ class TestPrePLAmendmentCitations:
         assert modern.law is not None
         assert modern.law.congress == 106
         assert pre_pl.law is None
+
+
+class TestAmendmentMidSentencePubLFix:
+    """Regression tests for issue #558: amendment parser splits mid-sentence on
+    Pub. L. cross-references, producing spurious and truncated entries.
+
+    Root cause: the old _PUB_L_PATTERN lookahead fired on any 'Pub. L.' string,
+    including cross-references inside sentences.  The fix splits each year-block
+    into paragraphs at double-newlines (one <p> element → one entry) and uses a
+    per-paragraph anchored pattern (_PUB_L_PARA_PATTERN) instead.
+    """
+
+    def test_bug_a_no_split_on_mid_sentence_pub_l_crossref(self) -> None:
+        """Bug A: Pub. L. cross-reference mid-sentence must NOT create a spurious entry.
+
+        13 USC §141 first 1976 paragraph:
+          "Pub. L. 94–521 substituted catchline … without reference to
+           amendment of catchline by Pub. L. 94–171."
+
+        Must produce exactly ONE entry (for Pub. L. 94–521) with the full
+        sentence.  Previously produced two: a truncated entry ending at "by"
+        and a spurious entry for Pub. L. 94–171.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1976—Pub. L. 94–521 substituted “Population and other "
+            "census information” for “Population, unemployment, and housing” "
+            "in section catchline, without reference to amendment of catchline "
+            "by Pub. L. 94–171."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1, (
+            f"Expected 1 amendment but got {len(amendments)}: "
+            + str([a.description for a in amendments])
+        )
+        a = amendments[0]
+        assert a.year == 1976
+        assert a.law.congress == 94
+        assert a.law.law_number == 521
+        # Full sentence must be preserved, including the cross-reference law
+        assert "by Pub. L. 94–171" in a.description
+
+    def test_bug_b_subsecs_plural_prefix_captured(self) -> None:
+        """Bug B: 'Subsecs.' (plural) prefix must be captured, not lost.
+
+        13 USC §141 fifth 1976 paragraph:
+          "Subsecs. (d) to (g). Pub. L. 94–521 added subsecs. (d) to (g)."
+
+        Must produce ONE entry with the prefix included in the description.
+        Previously the 'Subsecs.' form was not recognised as a prefix, so the
+        subsection range bled into the *previous* entry and this entry lost it.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1976—Subsecs. (d) to (g). Pub. L. 94–521 "
+            "added subsecs. (d) to (g)."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1, (
+            f"Expected 1 amendment but got {len(amendments)}: "
+            + str([a.description for a in amendments])
+        )
+        a = amendments[0]
+        assert a.year == 1976
+        assert a.law.congress == 94
+        assert a.law.law_number == 521
+        assert "Subsecs. (d) to (g)." in a.description
+        assert "added subsecs. (d) to (g)." in a.description
+
+    def test_13_usc_141_full_1976_block_produces_eight_entries(self) -> None:
+        """Regression: 13 USC §141 must produce exactly 8 amendment entries.
+
+        OLRC shows 5 PL 94-521 entries + 2 PL 94-171 entries + 1 PL 85-207
+        entry = 8 total.  Previously produced 9 entries due to Bugs A and B.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # Paragraphs separated by \n\n (as produced from separate <p> elements)
+        text = (
+            "1976—"
+            "Pub. L. 94–521 substituted “Population and other census "
+            "information” for “Population, unemployment, and housing” "
+            "in section catchline, without reference to amendment of catchline "
+            "by Pub. L. 94–171.\n\n"
+            "Subsec. (a). Pub. L. 94–521 substituted provisions in subsec. (a).\n\n"
+            "Subsec. (b). Pub. L. 94–521 substituted provisions in subsec. (b).\n\n"
+            "Subsec. (c). Pub. L. 94–521 substituted “the decennial census "
+            "date” for “the census date” wherever appearing.\n\n"
+            "Subsecs. (d) to (g). Pub. L. 94–521 added subsecs. (d) to (g).\n\n"
+            "1975—"
+            "Pub. L. 94–171, §§ 1, 2(a), inserted “;tabulation "
+            "for legislative apportionment” in catchline.\n\n"
+            "Subsec. (c). Pub. L. 94–171, § 1, added subsec. (c).\n\n"
+            "1957—"
+            "Pub. L. 85–207, § 9, substituted catchline and added "
+            "housing provisions."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 8, (
+            f"Expected 8 amendments but got {len(amendments)}: "
+            + str([(a.year, a.law.congress, a.law.law_number) for a in amendments])
+        )
+
+        years = [a.year for a in amendments]
+        assert years.count(1976) == 5
+        assert years.count(1975) == 2
+        assert years.count(1957) == 1
+
+        # All 1976 entries must be attributed to PL 94-521
+        for a in amendments:
+            if a.year == 1976:
+                assert a.law.congress == 94
+                assert a.law.law_number == 521
+
+        # The first 1976 entry must contain the full cross-reference sentence
+        first_1976 = next(a for a in amendments if a.year == 1976)
+        assert "by Pub. L. 94–171" in first_1976.description
+
+        # The fifth 1976 entry must have the Subsecs. plural prefix
+        fifth_1976 = [a for a in amendments if a.year == 1976][4]
+        assert "Subsecs. (d) to (g)." in fifth_1976.description

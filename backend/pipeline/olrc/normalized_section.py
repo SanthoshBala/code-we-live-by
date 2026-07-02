@@ -365,14 +365,26 @@ _REPORT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
-_PUB_L_PATTERN = re.compile(
-    r"((?:Subsec\.?\s*"  # "Subsec." or "Subsec"
-    r"(?:\([^)]+\))+"  # One or more parenthesized markers like (c)(1)
-    r"(?:\s*,\s*(?:\([^)]+\))+)*"  # Optional comma-separated markers like , (2)(A)
-    r"\.?\s*)?)"  # Optional trailing period and whitespace
+# Per-paragraph pattern for amendment parsing.
+#
+# Amendment notes in USLM XML have each entry in a separate <p> element.  After
+# XML processing, <p> boundaries become \n\n separators, so _parse_amendments
+# first splits a year-block into paragraphs and then applies this pattern once
+# per paragraph.
+#
+# Because each paragraph is a single amendment entry, the pattern does NOT
+# need to look ahead for the next "Pub. L." to know where an entry ends — it
+# simply captures everything after the law citation to end-of-string.  This
+# avoids the previous bug where a mid-sentence cross-reference like
+# "…without reference to amendment by Pub. L. 94–171." was mistakenly
+# treated as the start of a new entry.
+#
+# The optional leading group handles both singular ("Subsec.") and plural
+# ("Subsecs.") forms and arbitrary range expressions like "(d) to (g)".
+_PUB_L_PARA_PATTERN = re.compile(
+    r"^(Subsecs?\.\s+.*?)?"              # Optional "Subsec." / "Subsecs." prefix (lazy)
     r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
-    r"(.*?)"  # Description (including any text after)
-    r"(?=Subsec\.?\s*(?:\([^)]+\))+|Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Subsec. or Pub. L. or end
+    r"(.*)",                             # Rest of paragraph
     re.DOTALL,
 )
 
@@ -1166,9 +1178,9 @@ def _parse_amendments(text: str) -> list[Amendment]:
     "2010—Pub. L. 111-203 substituted 'Bureau' for 'Board'."
     "1976—Subsec. (e). Pub. L. 94-239 substituted provisions..."
 
-    Multiple amendments can occur in the same year:
-    "1990— Pub. L. 101–650 substituted...
-     Pub. L. 101–318 substituted..."
+    Multiple amendments in the same year appear as separate paragraphs
+    (each a distinct <p> element in the USLM XML, separated by \n\n):
+    "1990—Pub. L. 101–650 substituted...\n\nPub. L. 101–318 substituted..."
 
     Args:
         text: The amendments subsection text.
@@ -1190,49 +1202,58 @@ def _parse_amendments(text: str) -> list[Amendment]:
 
         year_block = text[start:end].strip()
 
-        # Find all Pub. L. references within this year block; save the list so we
-        # can reuse it below without running finditer a second time (Finding 2).
-        matches = list(_PUB_L_PATTERN.finditer(year_block))
+        # Split the year block into paragraphs at double-newlines.
+        # In USLM XML every amendment <p> element is separated from the next by a
+        # [PARA] marker (\u2192 \n\n), so each paragraph is exactly one amendment entry.
+        # Splitting first prevents _PUB_L_PARA_PATTERN from treating mid-sentence
+        # Pub. L. cross-references (e.g. "\u2026by Pub. L. 94\u2013171.") as new entries.
+        paragraphs = [p.strip() for p in re.split(r"\n\n+", year_block) if p.strip()]
+        if not paragraphs:
+            paragraphs = [year_block] if year_block else []
 
-        for pub_match in matches:
-            subsec_prefix = (pub_match.group(1) or "").strip()
-            public_law_text = pub_match.group(2)
-            congress = int(pub_match.group(3))
-            law_number = int(pub_match.group(4))
-            after_text = pub_match.group(5)
+        found_any = False
+        for para in paragraphs:
+            pub_match = _PUB_L_PARA_PATTERN.match(para)
+            if pub_match:
+                subsec_prefix = (pub_match.group(1) or "").strip()
+                public_law_text = pub_match.group(2)
+                congress = int(pub_match.group(3))
+                law_number = int(pub_match.group(4))
+                after_text = pub_match.group(5)
 
-            # Build description: subsec prefix + Pub. L. + rest
-            if subsec_prefix:
-                description = f"{subsec_prefix} {public_law_text}{after_text}"
-            else:
-                description = f"{public_law_text}{after_text}"
+                # Build description: subsec prefix + Pub. L. + rest
+                if subsec_prefix:
+                    description = f"{subsec_prefix} {public_law_text}{after_text}"
+                else:
+                    description = f"{public_law_text}{after_text}"
 
-            # Clean up description - normalize whitespace (handles multiple spaces)
-            description = " ".join(description.split())
+                # Clean up description - normalize whitespace (handles multiple spaces)
+                description = " ".join(description.split())
 
-            # Fix whitespace inside quotes (from XML date element spacing)
-            # e.g., '" December 31, 2021 "' -> '"December 31, 2021"'
-            # Match quoted content and strip leading/trailing spaces inside quotes
-            # Handle both straight quotes (") and curly quotes (" ")
-            description = re.sub(r'"(\s*)(.*?)(\s*)"', r'"\2"', description)
-            # Curly quotes: " (U+201C left) and " (U+201D right)
-            description = re.sub(
-                r"\u201c(\s*)(.*?)(\s*)\u201d", "\u201c\\2\u201d", description
-            )
-
-            law = ParsedPublicLaw(congress=congress, law_number=law_number)
-            amendments.append(
-                Amendment(
-                    law=law,
-                    year=year,
-                    description=description,
+                # Fix whitespace inside quotes (from XML date element spacing)
+                # e.g., '" December 31, 2021 "' -> '"December 31, 2021"'
+                # Match quoted content and strip leading/trailing spaces inside quotes
+                # Handle both straight quotes (") and curly quotes (\u201c \u201d)
+                description = re.sub(r'"(\s*)(.*?)(\s*)"', r'"\2"', description)
+                # Curly quotes: \u201c (U+201C left) and \u201d (U+201D right)
+                description = re.sub(
+                    r"\u201c(\s*)(.*?)(\s*)\u201d", "\u201c\\2\u201d", description
                 )
-            )
 
-        # If no Pub. L. found in the block, still record the year with the description
-        if not matches and year_block:
+                law = ParsedPublicLaw(congress=congress, law_number=law_number)
+                amendments.append(
+                    Amendment(
+                        law=law,
+                        year=year,
+                        description=description,
+                    )
+                )
+                found_any = True
+
+        # If no Pub. L. found in any paragraph, still record the year
+        if not found_any and year_block:
             # Try to extract any Pub. L. reference
-            simple_pub_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—–-](\d+)", year_block)
+            simple_pub_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—\u2013-](\d+)", year_block)
             if simple_pub_match:
                 congress = int(simple_pub_match.group(1))
                 law_number = int(simple_pub_match.group(2))
