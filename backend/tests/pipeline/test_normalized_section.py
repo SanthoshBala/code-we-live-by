@@ -3689,10 +3689,7 @@ class TestAmendmentMidSentencePubLFix:
         """
         from pipeline.olrc.normalized_section import _parse_amendments
 
-        text = (
-            "1976—Subsecs. (d) to (g). Pub. L. 94–521 "
-            "added subsecs. (d) to (g)."
-        )
+        text = "1976—Subsecs. (d) to (g). Pub. L. 94–521 added subsecs. (d) to (g)."
         amendments = _parse_amendments(text)
 
         assert len(amendments) == 1, (

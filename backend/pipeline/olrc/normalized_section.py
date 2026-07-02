@@ -382,9 +382,9 @@ _YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
 # The optional leading group handles both singular ("Subsec.") and plural
 # ("Subsecs.") forms and arbitrary range expressions like "(d) to (g)".
 _PUB_L_PARA_PATTERN = re.compile(
-    r"^(Subsecs?\.\s+.*?)?"              # Optional "Subsec." / "Subsecs." prefix (lazy)
+    r"^(Subsecs?\.\s+.*?)?"  # Optional "Subsec." / "Subsecs." prefix (lazy)
     r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
-    r"(.*)",                             # Rest of paragraph
+    r"(.*)",  # Rest of paragraph
     re.DOTALL,
 )
 
@@ -1253,7 +1253,9 @@ def _parse_amendments(text: str) -> list[Amendment]:
         # If no Pub. L. found in any paragraph, still record the year
         if not found_any and year_block:
             # Try to extract any Pub. L. reference
-            simple_pub_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—\u2013-](\d+)", year_block)
+            simple_pub_match = re.search(
+                r"Pub\.\s*L\.\s*(\d+)[—\u2013-](\d+)", year_block
+            )
             if simple_pub_match:
                 congress = int(simple_pub_match.group(1))
                 law_number = int(simple_pub_match.group(2))
