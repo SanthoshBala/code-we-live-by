@@ -2863,9 +2863,7 @@ class TestPrePLAmendmentCitations:
         """Sections with modern Pub. L. amendments are parsed as before."""
         from pipeline.olrc.normalized_section import _parse_amendments
 
-        text = (
-            "2013—Pub. L. 112–239, § 1033(b)(2)(B), made technical amendments."
-        )
+        text = "2013—Pub. L. 112–239, § 1033(b)(2)(B), made technical amendments."
         amendments = _parse_amendments(text)
 
         assert len(amendments) == 1

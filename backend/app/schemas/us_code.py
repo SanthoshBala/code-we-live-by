@@ -99,7 +99,8 @@ class AmendmentSchema(BaseModel):
     """
 
     law: PublicLawSchema | None = Field(
-        None, description="The Public Law that made this amendment (None for pre-1957 Acts)"
+        None,
+        description="The Public Law that made this amendment (None for pre-1957 Acts)",
     )
     year: int = Field(..., description="Year of the amendment")
     description: str = Field(..., description="Description of what changed")
