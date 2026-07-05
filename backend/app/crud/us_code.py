@@ -44,7 +44,7 @@ def _extract_last_amendment(
         return None, None
     latest = amendments[0]
     year = latest.get("year")
-    law = latest.get("law", {})
+    law = latest.get("law") or {}
     congress = law.get("congress")
     law_number = law.get("law_number")
     if congress is not None and law_number is not None:
@@ -334,7 +334,7 @@ async def _enrich_notes_with_titles(
         if c.law and not c.law.short_title:
             pairs.add((c.law.congress, str(c.law.law_number)))
     for a in notes.amendments:
-        if not a.law.short_title:
+        if a.law and not a.law.short_title:
             pairs.add((a.law.congress, str(a.law.law_number)))
 
     if not pairs:
@@ -390,9 +390,10 @@ async def _enrich_notes_with_titles(
         if c.law:
             _apply(c.law, c.law.public_law_id)
 
-    # Enrich amendments
+    # Enrich amendments (skip pre-1957 Acts that have no PL reference)
     for a in notes.amendments:
-        _apply(a.law, a.law.public_law_id)
+        if a.law:
+            _apply(a.law, a.law.public_law_id)
 
 
 async def _get_group_ancestors(
