@@ -1146,7 +1146,7 @@ def _amendment_lines(raw_content: str) -> list[ParsedLine]:
                 ParsedLine(
                     line_number=len(lines) + 1,
                     content=content,
-                    indent_level=0,
+                    indent_level=1,
                     marker=None,
                     is_header=False,
                     is_signature=False,
