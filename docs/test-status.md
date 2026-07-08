@@ -9,6 +9,7 @@ CWLB and the OLRC XML at the stated release point.
 | Date       | Title | Section | Heading                                          | Release Point | Status |
 |------------|-------|---------|--------------------------------------------------|---------------|--------|
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership    | 113-21        | ✅ Clean |
+| 2026.07.08 | 9     | 8       | Proceedings begun by libel in admiralty and seizure of vessel or property | 113-21 | ✅ Clean |
 
 ## Test methodology
 
