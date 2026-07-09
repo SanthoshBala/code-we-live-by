@@ -185,7 +185,11 @@ class TestLastModifiedDateFromNotes:
                     "relationship": "Enactment",
                 },
                 {
-                    "law": {"congress": 102, "law_number": 492, "date": "Oct. 24, 1992"},
+                    "law": {
+                        "congress": 102,
+                        "law_number": 492,
+                        "date": "Oct. 24, 1992",
+                    },
                     "relationship": "Amendment",
                 },
             ],
