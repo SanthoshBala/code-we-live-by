@@ -238,11 +238,22 @@ class USCodeIngestionService:
                         f"{first_citation.act.stat_page}"
                     )
 
-        # Derive last_modified_date from the most recent amendment year
+        # Derive last_modified_date from the most recent amendment citation
+        # (full enactment date preferred over year-only approximation)
         last_modified_date = None
-        if normalized.section_notes and normalized.section_notes.amendments:
-            max_year = max(a.year for a in normalized.section_notes.amendments)
-            last_modified_date = date(max_year, 1, 1)
+        if normalized.section_notes:
+            amendment_dates = [
+                _parse_citation_date(c.date)
+                for c in normalized.section_notes.citations
+                if c.relationship == "Amendment" and c.date
+            ]
+            amendment_dates = [d for d in amendment_dates if d is not None]
+            if amendment_dates:
+                last_modified_date = max(amendment_dates)
+            elif normalized.section_notes.amendments:
+                # Fallback: year-only when citations lack dates
+                max_year = max(a.year for a in normalized.section_notes.amendments)
+                last_modified_date = date(max_year, 1, 1)
 
         result = await self.session.execute(
             select(USCodeSection).where(

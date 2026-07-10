@@ -14,6 +14,7 @@ from sqlalchemy import select, update
 
 from app.models.base import async_session_maker
 from app.models.us_code import USCodeSection
+from pipeline.olrc.group_service import _parse_citation_date
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -24,7 +25,10 @@ BATCH_SIZE = 500
 
 
 async def backfill(*, dry_run: bool = True) -> int:
-    """Backfill last_modified_date from normalized_notes amendments.
+    """Backfill last_modified_date from normalized_notes amendment citations.
+
+    Prefers the full enactment date from amendment citations over the
+    year-only approximation from the amendments list.
 
     Returns the number of rows updated.
     """
@@ -46,16 +50,34 @@ async def backfill(*, dry_run: bool = True) -> int:
 
         batch: list[dict] = []
         for section_id, notes in rows:
-            amendments = notes.get("amendments", []) if notes else []
-            if not amendments:
+            if not notes:
                 continue
 
-            years = [a.get("year") for a in amendments if a.get("year")]
-            if not years:
+            lmd: date | None = None
+
+            # Prefer full date from amendment citations
+            citations = notes.get("citations", [])
+            amendment_dates = []
+            for c in citations:
+                if c.get("relationship") == "Amendment":
+                    law_data = c.get("law") or c.get("act")
+                    if law_data and law_data.get("date"):
+                        parsed = _parse_citation_date(law_data["date"])
+                        if parsed is not None:
+                            amendment_dates.append(parsed)
+            if amendment_dates:
+                lmd = max(amendment_dates)
+            else:
+                # Fallback: year-only from amendments
+                amendments = notes.get("amendments", [])
+                years = [a.get("year") for a in amendments if a.get("year")]
+                if years:
+                    lmd = date(max(years), 1, 1)
+
+            if lmd is None:
                 continue
 
-            max_year = max(years)
-            batch.append({"sid": section_id, "lmd": date(max_year, 1, 1)})
+            batch.append({"sid": section_id, "lmd": lmd})
 
             if len(batch) >= BATCH_SIZE:
                 if not dry_run:
