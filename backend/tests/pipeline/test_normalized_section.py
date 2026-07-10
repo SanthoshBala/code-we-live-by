@@ -2215,6 +2215,83 @@ class TestFlatNotesParser:
         assert 1957 in years
         assert 1975 in years
 
+    def test_house_report_note_does_not_absorb_siblings_issue_498(self) -> None:
+        """Regression: House Report note must not bleed into Amendments/Effective Date.
+
+        11 U.S.C. § 1163 (release 113-21): the Historical and Revision Notes contain
+        a House Report No. 95-595 note, followed by flat [NH]-delimited sibling notes
+        for Amendments and Effective Date of 1986 Amendment.  Because there is no
+        'Editorial Notes' / 'Statutory Notes' wrapper, the hist_text regex captured
+        everything to end-of-string.  The House Report note's content_end was then set
+        to len(hist_text), absorbing the Amendments and Effective Date text.  Closes #498.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # Minimal reproduction of the 11 USC § 1163 flat-notes structure:
+        # Historical notes header + House Report + sibling flat notes
+        raw_notes = (
+            "Historical and Revision Notes "
+            "[NH]House Report No. 95-595[/NH] "
+            "[Section 1162] This section [enacted as section 1163] requires the appointment "
+            "of an independent trustee in a railroad reorganization case. "
+            "The court may appoint one or more disinterested persons to serve as trustee "
+            "in the case. "
+            "[NH]Amendments[/NH] "
+            "1986— Pub. L. 99–554 amended section generally, substituting provisions "
+            "relating to appointment of trustee for provisions relating to qualification "
+            "of trustee. "
+            "[NH]Effective Date Of 1986 Amendment[/NH] "
+            "Effective date and applicability of amendment by Pub. L. 99–554 are "
+            "as provided in section 302(a) of Pub. L. 99–554."
+        )
+
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        # All four notes must be present
+        headers = [n.header for n in notes.notes]
+        assert "House Report No. 95-595" in headers, f"Notes: {headers}"
+        assert "Amendments" in headers, f"Notes: {headers}"
+        assert "Effective Date Of 1986 Amendment" in headers, f"Notes: {headers}"
+
+        # The House Report note must contain ONLY its own content —
+        # no Amendments text and no Effective Date text.
+        house_report = next(
+            n for n in notes.notes if n.header == "House Report No. 95-595"
+        )
+        house_text = " ".join(line.content for line in house_report.lines)
+        assert "independent trustee" in house_text, (
+            "House Report should contain its own text"
+        )
+        assert "1986" not in house_text, (
+            "House Report note must not contain Amendments year text"
+        )
+        assert "Pub. L. 99–554" not in house_text, (
+            "House Report note must not contain Amendments Pub. L. reference"
+        )
+        assert "Effective date and applicability" not in house_text, (
+            "House Report note must not contain Effective Date text"
+        )
+
+        # Amendments note must have its own content
+        amendments = next(n for n in notes.notes if n.header == "Amendments")
+        amend_text = " ".join(line.content for line in amendments.lines)
+        assert "Pub. L. 99–554" in amend_text, (
+            "Amendments note should contain Pub. L. ref"
+        )
+
+        # Effective Date note must have its own content
+        eff_date = next(
+            n for n in notes.notes if n.header == "Effective Date Of 1986 Amendment"
+        )
+        eff_text = " ".join(line.content for line in eff_date.lines)
+        assert "Effective date and applicability" in eff_text, (
+            "Effective Date note should contain its own text"
+        )
+
 
 class TestNoteTopicAmendmentParsing:
     """Regression tests for issue #216: <note topic="amendments"> not parsed.
