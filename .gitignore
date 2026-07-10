@@ -230,3 +230,6 @@ Thumbs.db
 
 # Downloaded data
 backend/data/
+
+# Claude Code runtime worktrees
+.claude/worktrees/
