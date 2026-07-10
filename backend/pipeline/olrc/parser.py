@@ -1475,12 +1475,30 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
-            # Handle signature blocks (presidential/official signatures)
+            # Handle signature blocks (presidential/official signatures).
+            # When <signature> has structured child elements (<name>, <role>),
+            # emit each child as a separate [SIG] line to avoid embedding \n
+            # in a single content string.  When there are no child elements,
+            # fall back to the simple single-line form.
             if tag == "signature":
-                sig_text = "".join(el.itertext()).strip()
-                if sig_text:
-                    sig_text = sig_text.rstrip(".")
-                    parts.append(f"[PARA][SIG]\u2014 {sig_text}[/SIG]")
+                child_tags_in_sig = [
+                    c
+                    for c in el
+                    if (c.tag.split("}")[-1] if "}" in c.tag else c.tag)
+                    in ("name", "role")
+                ]
+                if child_tags_in_sig:
+                    # Emit each <name>/<role> child as its own [SIG] line
+                    for child in child_tags_in_sig:
+                        child_text = "".join(child.itertext()).strip().rstrip(".")
+                        if child_text:
+                            parts.append(f"[PARA][SIG]\u2014 {child_text}[/SIG]")
+                else:
+                    # No structured children — collapse the whole element as before
+                    sig_text = "".join(el.itertext()).strip()
+                    if sig_text:
+                        sig_text = sig_text.rstrip(".")
+                        parts.append(f"[PARA][SIG]\u2014 {sig_text}[/SIG]")
                 if el.tail:
                     parts.append(el.tail)
                 return
