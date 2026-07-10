@@ -2187,6 +2187,76 @@ class TestFlatNotesParser:
         assert "Statistical Sampling Or Adjustment In Decennial Enumeration" in headers
         assert len(notes.notes) >= 4
 
+    def test_references_in_text_not_captured_in_historical_note_issue_504(
+        self,
+    ) -> None:
+        """Regression: References in Text content must not bleed into Historical note.
+
+        For positive-law sections (e.g. 41 U.S.C. § 4706) the OLRC XML places
+        multiple <note> children inside a single <notes> wrapper:
+
+            <notes>
+              <note topic="historicalAndRevision"><heading>Historical and Revision Notes</heading>
+                ...table and paragraphs...
+              </note>
+              <note topic="referencesInText"><heading>References In Text</heading>
+                <p>The Inspector General Act of 1978...</p>
+              </note>
+            </notes>
+
+        _get_notes_text_content processes all children and produces a raw_notes
+        string where both note headers appear as [NH] markers:
+
+            [NH]Historical And Revision Notes[/NH] ... [NH]References In Text[/NH] ...
+
+        Prior to the fix _parse_historical_notes used a regex that stopped only
+        at "Editorial Notes" / "Statutory Notes" or end-of-string.  It greedily
+        consumed the References in Text paragraph as the last line of the
+        Historical note, while _parse_flat_notes also created a correct
+        "References In Text" note — resulting in the Inspector General Act
+        sentence appearing twice.  Closes #504.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # This mirrors what _get_notes_text_content produces for the XML
+        # described above (one <notes> wrapper, two <note> children).
+        # The historical note refers to IG Act generically; the References
+        # note gives the full citation — "set out in the Appendix to Title 5"
+        # is unique to the References In Text note and must not appear in the
+        # Historical note's lines.
+        raw_notes = (
+            "[NH]Historical And Revision Notes[/NH] "
+            "In subsection (a), the reference is for clarity. "
+            "In subsection (c)(1), the reference to the Inspector General Act "
+            "of 1978 is added for clarity. "
+            "[NH]References In Text[/NH] "
+            "The Inspector General Act of 1978, referred to in subsec. (c)(1), "
+            "is Pub. L. 95-452, Oct. 12, 1978, 92 Stat. 1101, which is set out "
+            "in the Appendix to Title 5, Government Organization and Employees."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        assert "Historical and Revision Notes" in headers
+        assert "References In Text" in headers
+
+        # The Historical note must NOT contain the References in Text sentence.
+        # "set out in the Appendix to Title 5" is unique to the References note.
+        hist_note = next(n for n in notes.notes if "Historical" in n.header)
+        hist_content = " ".join(line.content for line in hist_note.lines)
+        assert "set out in the Appendix to Title 5" not in hist_content, (
+            "References in Text content must not bleed into Historical note lines"
+        )
+
+        # The References In Text note must contain the correct sentence.
+        ref_note = next(n for n in notes.notes if "References" in n.header)
+        ref_content = " ".join(line.content for line in ref_note.lines)
+        assert "set out in the Appendix to Title 5" in ref_content
+
     def test_amendments_populated_from_flat_notes_issue_284(self) -> None:
         """Regression: notes.amendments must be populated when 'Amendments' is a flat note.
 
@@ -2429,6 +2499,54 @@ class TestNoteTopicAmendmentParsing:
         years = [a.year for a in notes.amendments]
         assert 1990 in years
         assert 2007 in years
+
+    def test_historical_and_revision_camelcase_topic_no_duplicate_issue_503(
+        self,
+    ) -> None:
+        """Regression: <note topic="historicalAndRevision"> must not produce a duplicate note.
+
+        Positive-law sections (e.g. 41 U.S.C. § 4706) use
+        <note topic="historicalAndRevision"> without a <heading> child.  Prior to
+        the fix, topic.title() produced the garbled header "Historicalandrevision"
+        (camelCase is treated as a single word by str.title()), which did not match
+        the already-processed "historical and revision notes" header.  The flat-notes
+        fallback then added a second, malformed SectionNote.
+
+        After the fix, the canonical display string "Historical and Revision Notes"
+        is used for this topic, so the fallback recognises it as already processed
+        and no duplicate is created.  Closes #503.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="historicalAndRevision">'
+            "<p>Based on 41:252(a)(1), (c)."
+            " Source Credit: Pub. L. 111-350, Jan. 4, 2011, 124 Stat. 3677.</p>"
+            "<p>The words 'agency' and 'executive agency' are coextensive"
+            " and synonymous in the revised title.</p>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2012—Subsec. (a). Pub. L. 112-239, § 801(b)(1),"
+            " substituted 'executive agency' for 'agency'.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # Only one Historical and Revision Notes entry — no duplicate
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 1, (
+            f"Expected exactly 1 historical note, got {len(hist_notes)}: {headers}"
+        )
+        assert hist_notes[0].header == "Historical and Revision Notes"
+        assert hist_notes[0].category.value == "historical"
+        # No garbled "Historicalandrevision" header
+        assert not any("historicalandrevision" in h.lower() for h in headers), (
+            f"Garbled camelCase header found in: {headers}"
+        )
+        # Amendments note is also present and correct
+        assert "Amendments" in headers
 
 
 class TestAmendmentsIndentLevel:

@@ -1498,9 +1498,14 @@ def _strip_note_markers(text: str) -> str:
 
 def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Historical and Revision Notes section."""
-    # Match until next major section (with optional [H1] prefix)
+    # Match until next major section (with optional [H1] prefix) or the
+    # next sibling note header ([NH]...[/NH]).  For positive-law sections
+    # (e.g. Title 41) multiple <note> children share a single <notes>
+    # wrapper in the OLRC XML.  Without the [NH] lookahead the regex
+    # greedily consumed sibling note content (e.g. "References in Text")
+    # into the Historical note — Issue #504.
     hist_match = re.search(
-        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|$)",
+        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|\[NH\]|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )

@@ -125,6 +125,24 @@ NAMESPACES = {
 _WS_RE = re.compile(r"\s+")
 _PUNCT_RE = re.compile(r" ([;,.])")
 
+# Mapping from camelCase USLM <note topic="..."> values to canonical display strings.
+# str.title() works fine for single-word topics like "amendments" → "Amendments",
+# but fails for camelCase multi-word topics: "historicalAndRevision".title() produces
+# "Historicalandrevision" (only the first character is capitalised because there are no
+# word-boundary characters).  Entries here override topic.title() for known topics.
+_NOTE_TOPIC_DISPLAY: dict[str, str] = {
+    "historicalAndRevision": "Historical and Revision Notes",
+    "referencesInText": "References in Text",
+    "effectiveDateOfAmendment": "Effective Date of Amendment",
+    "effectiveDate": "Effective Date",
+    "changeOfName": "Change of Name",
+    "transferOfFunctions": "Transfer of Functions",
+    "shortTitle": "Short Title",
+    "priorProvisions": "Prior Provisions",
+    "savingsProvision": "Savings Provision",
+    "constructionOfAmendment": "Construction of Amendment",
+}
+
 
 @dataclass
 class ParsedGroup:
@@ -1535,7 +1553,11 @@ class USLMParser:
                         (c.tag.split("}")[-1] if "}" in c.tag else c.tag) for c in el
                     }
                     if "heading" not in child_tags:
-                        parts.append(f"[NH]{topic.title()}[/NH]")
+                        # Use the canonical display string for known camelCase topics;
+                        # fall back to topic.title() for simple single-word topics like
+                        # "amendments" → "Amendments".
+                        display = _NOTE_TOPIC_DISPLAY.get(topic, topic.title())
+                        parts.append(f"[NH]{display}[/NH]")
 
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n
