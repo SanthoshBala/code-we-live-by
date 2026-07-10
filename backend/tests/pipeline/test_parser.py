@@ -298,6 +298,58 @@ class TestUSLMParser:
 
         assert result.continuation == []
 
+    def test_parse_subsection_clause_skipping_subparagraph_level(
+        self, parser: USLMParser
+    ) -> None:
+        """_parse_subsection captures <clause> children nested directly in a
+        <paragraph>, skipping the <subparagraph> level.
+
+        Regression test for Issue #506: 38 U.S.C. § 3702(a)(1) encodes its
+        paragraph as a <chapeau> followed directly by two <clause> elements
+        (no intervening <subparagraph>). The parser previously only searched
+        for the immediate-next level in the standard hierarchy
+        (paragraph -> subparagraph), so it found nothing and silently dropped
+        clauses (i) and (ii) along with their text.
+        """
+        xml = """<paragraph xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t38/s3702/a/1">
+          <num value="1">(1)</num>
+          <chapeau>The veterans described in paragraph (2) of this subsection are
+          eligible for the housing loan benefits of this chapter. Entitlement
+          derived from service during the most recent such period shall be
+          reduced by the amount by which entitlement from service during any
+          earlier such period has been used to obtain a direct, guaranteed, or
+          insured housing loan&#8212;</chapeau>
+          <clause identifier="/us/usc/t38/s3702/a/1/i">
+            <num value="i">(i)</num>
+            <content>on real property which the veteran owns at the time of
+            application; or</content>
+          </clause>
+          <clause identifier="/us/usc/t38/s3702/a/1/ii">
+            <num value="ii">(ii)</num>
+            <content>as to which the Secretary has incurred actual liability or
+            loss, unless in the event of loss or the incurrence and payment of
+            such liability by the Secretary the resulting indebtedness of the
+            veteran to the United States has been paid in full.</content>
+          </clause>
+        </paragraph>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "paragraph")
+
+        assert result.marker == "(1)"
+        assert "housing loan" in result.content
+
+        assert len(result.children) == 2
+        clause_i, clause_ii = result.children
+
+        assert clause_i.marker == "(i)"
+        assert clause_i.level == "clause"
+        assert "on real property which the veteran owns" in clause_i.content
+
+        assert clause_ii.marker == "(ii)"
+        assert clause_ii.level == "clause"
+        assert "incurred actual liability or loss" in clause_ii.content
+
     def test_extract_subsections_continuation_in_subsection(
         self, parser: USLMParser
     ) -> None:
@@ -412,6 +464,163 @@ class TestUSLMParser:
         assert len(wrapper.continuation) == 1
         assert "unpublished" in wrapper.continuation[0], (
             "Continuation text must be promoted to the section-level wrapper"
+        )
+
+    def test_intro_p_sibling_captured_as_chapeau(self, parser: USLMParser) -> None:
+        """A <p> element appearing before the first <paragraph> in a section is
+        captured as introductory (chapeau) text rather than silently dropped.
+
+        Regression test for Issue #478: 9 U.S.C. § 13 has an intro sentence
+        ("The party moving for an order confirming...") encoded as a <p> sibling
+        of the (a)/(b)/(c) <paragraph> elements.  The parser was previously
+        looking only for <chapeau>, so the intro was absent from text_content
+        and provisions.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t9/s13">
+          <num value="13">§ 13.</num>
+          <heading>Application for order confirming, modifying, or correcting award</heading>
+          <p>The party moving for an order confirming, modifying, or correcting an
+          award shall, at the time such order is filed with the clerk for the entry of
+          judgment thereon, also file the following papers with the clerk:</p>
+          <paragraph identifier="/us/usc/t9/s13/a">
+            <num value="a">(a)</num>
+            <content>The agreement; the selection or appointment, if any, of an
+            additional arbitrator or umpire.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/b">
+            <num value="b">(b)</num>
+            <content>The award.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/c">
+            <num value="c">(c)</num>
+            <content>Each notice, affidavit, or other paper used upon an application
+            to confirm, modify, or correct the award.</content>
+          </paragraph>
+          <sourceCredit>(June 12, 1939, ch. 237.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+
+        # Intro sentence must appear as the wrapper's content (chapeau equivalent)
+        assert "party moving" in wrapper.content, (
+            "Introductory <p> before paragraphs must be captured as chapeau text"
+        )
+        assert len(wrapper.children) == 3
+        assert wrapper.children[0].marker == "(a)"
+        assert wrapper.children[1].marker == "(b)"
+        assert wrapper.children[2].marker == "(c)"
+
+    def test_trailing_p_sibling_captured_as_continuation(
+        self, parser: USLMParser
+    ) -> None:
+        """A <p> element appearing after the last <paragraph> in a section is
+        captured as a section-level continuation rather than silently dropped.
+
+        Regression test for Issue #479: 9 U.S.C. § 13 has a trailing sentence
+        ("The judgment shall be docketed...") encoded as a <p> sibling after the
+        (a)/(b)/(c) <paragraph> elements.  This sentence was either dropped or
+        merged into the (c) item — it must appear as a distinct provision.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t9/s13">
+          <num value="13">§ 13.</num>
+          <heading>Application for order confirming, modifying, or correcting award</heading>
+          <p>The party moving for an order confirming, modifying, or correcting an
+          award shall, at the time such order is filed with the clerk for the entry of
+          judgment thereon, also file the following papers with the clerk:</p>
+          <paragraph identifier="/us/usc/t9/s13/a">
+            <num value="a">(a)</num>
+            <content>The agreement; the selection or appointment, if any, of an
+            additional arbitrator or umpire.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/b">
+            <num value="b">(b)</num>
+            <content>The award.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/c">
+            <num value="c">(c)</num>
+            <content>Each notice, affidavit, or other paper used upon an application
+            to confirm, modify, or correct the award.</content>
+          </paragraph>
+          <p>The judgment shall be docketed as if it was rendered in an action.</p>
+          <sourceCredit>(June 12, 1939, ch. 237.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+
+        # Trailing <p> must appear as a section-level continuation
+        assert len(wrapper.continuation) >= 1, (
+            "Trailing <p> after paragraphs must be captured as section continuation"
+        )
+        assert any("docketed" in ct for ct in wrapper.continuation), (
+            "Docketing sentence must appear in section-level continuation"
+        )
+
+        # (c) content must NOT include the docketing sentence
+        para_c = wrapper.children[2]
+        assert para_c.marker == "(c)"
+        assert "docketed" not in para_c.content, (
+            "Docketing sentence must not be merged into paragraph (c) content"
+        )
+
+    def test_p_inside_content_separated_as_continuation(
+        self, parser: USLMParser
+    ) -> None:
+        """A <p> element inside a <content> element is excluded from the content
+        text and emitted as a separate continuation entry.
+
+        Regression test for Issue #479 (merged-paragraph variant): when OLRC XML
+        encodes a trailing sentence as <p> inside <content> of the last paragraph,
+        the itertext() merge caused the two sentences to concatenate without a
+        space — e.g. '...application.The judgment shall be docketed...'
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t9/s13">
+          <num value="13">§ 13.</num>
+          <heading>Application for order confirming, modifying, or correcting award</heading>
+          <p>The party moving for an order confirming, modifying, or correcting an
+          award shall, at the time such order is filed with the clerk for the entry of
+          judgment thereon, also file the following papers with the clerk:</p>
+          <paragraph identifier="/us/usc/t9/s13/a">
+            <num value="a">(a)</num>
+            <content>The agreement.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t9/s13/c">
+            <num value="c">(c)</num>
+            <content>Each notice, affidavit, or other paper used upon an application
+            to confirm, modify, or correct the award.<p>The judgment shall be docketed
+            as if it was rendered in an action.</p></content>
+          </paragraph>
+          <sourceCredit>(June 12, 1939, ch. 237.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 1
+        wrapper = subsections[0]
+        para_c = wrapper.children[1]
+        assert para_c.marker == "(c)"
+
+        # The (c) content must NOT contain the docketing sentence
+        assert "docketed" not in para_c.content, (
+            "<p> inside <content> must not be merged into the list item text"
+        )
+        # The merged no-space artifact must not appear either
+        assert "application.The" not in para_c.content, (
+            "<p> inside <content> must not be concatenated without a space"
+        )
+
+        # The docketing sentence must appear separately at section level
+        all_continuation = wrapper.continuation
+        assert any("docketed" in ct for ct in all_continuation), (
+            "<p> inside <content> must be promoted to section-level continuation"
         )
 
 
@@ -1112,3 +1321,108 @@ class TestNoteRefDataclass:
         assert ref.ref_type == "act"
         assert ref.act_date == "1935-08-14"
         assert ref.act_chapter == 531
+
+
+class TestExtractSourceCreditRefs:
+    """Tests for _extract_source_credit_refs — specifically the as-added date bug (Issue #480)."""
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_as_added_date_attributed_to_adding_law_not_framework(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Date after an 'as added' clause must go to the adding law, not the framework law.
+
+        Regression test for Issue #480:
+            (Pub. L. 87–195, pt. III, § 620G, as added Pub. L. 104–132,
+             title III, § 325, Apr. 24, 1996, 110 Stat. 1256.)
+
+        PL 87-195 has no date in this credit; the date belongs to PL 104-132.
+        """
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/22</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t22" number="22">
+      <heading>FOREIGN RELATIONS AND INTERCOURSE</heading>
+      <chapter identifier="/us/usc/t22/ch32" number="32">
+        <heading>FOREIGN ASSISTANCE</heading>
+        <section identifier="/us/usc/t22/s2377" number="2377">
+          <heading>Prohibition on assistance to countries that aid terrorist states</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/pl/87/195/tIII/s620G">Pub. L. 87–195</ref>, pt. III, § 620G, as added <ref href="/us/pl/104/132/tIII/s325">Pub. L. 104–132</ref>, title III, § 325, <date>Apr. 24, 1996</date>, <ref href="/us/stat/110/1256">110 Stat. 1256</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_as_added.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+
+        pl_refs = section.source_credit_refs
+        assert len(pl_refs) == 2, f"Expected 2 PL refs, got {len(pl_refs)}"
+
+        # PL 87-195 is the framework law — no date should be attributed to it
+        framework = pl_refs[0]
+        assert framework.congress == 87
+        assert framework.law_number == 195
+        assert framework.date is None, (
+            f"Framework law PL 87-195 should have date=None, got {framework.date!r}"
+        )
+
+        # PL 104-132 is the adding law — it gets the date "Apr. 24, 1996"
+        adding = pl_refs[1]
+        assert adding.congress == 104
+        assert adding.law_number == 132
+        assert adding.date == "Apr. 24, 1996", (
+            f"Adding law PL 104-132 should have date='Apr. 24, 1996', got {adding.date!r}"
+        )
+        assert adding.stat_volume == 110
+        assert adding.stat_page == 1256
+
+    def test_simple_single_law_date_attributed_correctly(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """A single PL ref should still get its date when there is no 'as added' clause."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>SUBJECT MATTER</heading>
+        <section identifier="/us/usc/t17/s101" number="101">
+          <heading>Definitions</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/pl/94/553">Pub. L. 94–553</ref>, <date>Oct. 19, 1976</date>, <ref href="/us/stat/90/2541">90 Stat. 2541</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_simple_credit.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+
+        pl_refs = section.source_credit_refs
+        assert len(pl_refs) == 1
+
+        ref = pl_refs[0]
+        assert ref.congress == 94
+        assert ref.law_number == 553
+        assert ref.date == "Oct. 19, 1976"
+        assert ref.stat_volume == 90
+        assert ref.stat_page == 2541

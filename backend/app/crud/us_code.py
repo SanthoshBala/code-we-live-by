@@ -44,7 +44,7 @@ def _extract_last_amendment(
         return None, None
     latest = amendments[0]
     year = latest.get("year")
-    law = latest.get("law", {})
+    law = latest.get("law") or {}
     congress = law.get("congress")
     law_number = law.get("law_number")
     if congress is not None and law_number is not None:
@@ -334,7 +334,7 @@ async def _enrich_notes_with_titles(
         if c.law and not c.law.short_title:
             pairs.add((c.law.congress, str(c.law.law_number)))
     for a in notes.amendments:
-        if not a.law.short_title:
+        if a.law and not a.law.short_title:
             pairs.add((a.law.congress, str(a.law.law_number)))
 
     if not pairs:
@@ -390,9 +390,10 @@ async def _enrich_notes_with_titles(
         if c.law:
             _apply(c.law, c.law.public_law_id)
 
-    # Enrich amendments
+    # Enrich amendments (skip pre-1957 Acts that have no PL reference)
     for a in notes.amendments:
-        _apply(a.law, a.law.public_law_id)
+        if a.law:
+            _apply(a.law, a.law.public_law_id)
 
 
 async def _get_group_ancestors(
@@ -486,21 +487,12 @@ async def get_section(
 
                 enacted_date = _parse_citation_date(law_data["date"])
 
-        # Extract last_modified_date from amendments
-        amendments = state.normalized_notes.get("amendments", [])
-        if amendments:
-            from datetime import date
-
-            max_year = max(a["year"] for a in amendments if "year" in a)
-            last_modified_date = date(max_year, 1, 1)
-
-        # Fallback: derive last_modified_date from amendment citations when
-        # the amendments list is empty (e.g. stale ingestion or unstructured notes).
-        # Includes citations with relationship "Amendment" OR any non-original
-        # citation (is_original == false) — the latter covers pre-Public Law
-        # chapter-numbered acts (e.g. "Oct. 31, 1951, ch. 655") whose relationship
-        # is stored as "Framework" rather than "Amendment".
-        if last_modified_date is None and citations:
+        # Extract last_modified_date from amendment citations (full enactment date
+        # preferred — yields the actual date rather than a Jan 1 approximation).
+        # Includes "Amendment" relationship citations AND any non-original citation
+        # (is_original == false) — the latter covers pre-Public Law chapter-numbered
+        # acts (e.g. "Oct. 31, 1951, ch. 655") whose relationship is "Framework".
+        if citations:
             from pipeline.olrc.group_service import _parse_citation_date
 
             amendment_dates = []
@@ -515,6 +507,15 @@ async def get_section(
                             amendment_dates.append(parsed)
             if amendment_dates:
                 last_modified_date = max(amendment_dates)
+
+        # Fallback: use year-only from amendments when citation dates are unavailable
+        if last_modified_date is None:
+            amendments = state.normalized_notes.get("amendments", [])
+            if amendments:
+                from datetime import date
+
+                max_year = max(a["year"] for a in amendments if "year" in a)
+                last_modified_date = date(max_year, 1, 1)
 
     # Find the revision that last *changed* this section's content.
     # Reuse the same chain to avoid re-fetching HEAD + CTE.

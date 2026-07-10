@@ -125,6 +125,24 @@ NAMESPACES = {
 _WS_RE = re.compile(r"\s+")
 _PUNCT_RE = re.compile(r" ([;,.])")
 
+# Mapping from camelCase USLM <note topic="..."> values to canonical display strings.
+# str.title() works fine for single-word topics like "amendments" → "Amendments",
+# but fails for camelCase multi-word topics: "historicalAndRevision".title() produces
+# "Historicalandrevision" (only the first character is capitalised because there are no
+# word-boundary characters).  Entries here override topic.title() for known topics.
+_NOTE_TOPIC_DISPLAY: dict[str, str] = {
+    "historicalAndRevision": "Historical and Revision Notes",
+    "referencesInText": "References in Text",
+    "effectiveDateOfAmendment": "Effective Date of Amendment",
+    "effectiveDate": "Effective Date",
+    "changeOfName": "Change of Name",
+    "transferOfFunctions": "Transfer of Functions",
+    "shortTitle": "Short Title",
+    "priorProvisions": "Prior Provisions",
+    "savingsProvision": "Savings Provision",
+    "constructionOfAmendment": "Construction of Amendment",
+}
+
 
 @dataclass
 class ParsedGroup:
@@ -1116,27 +1134,40 @@ class USLMParser:
         # appears as <continuation> inside <content> inside the last <paragraph>.
         # We strip them from the content text and collect them separately so
         # callers can promote them to the correct indent level.
+        #
+        # <p> elements inside <content> represent separate paragraphs in USLM
+        # (e.g. 9 U.S.C. § 13 where a trailing sentence follows the (c) item).
+        # They are also excluded from content text and emitted as continuations
+        # so they render as separate provisions (Issue #479).
         content_continuations: list[str] = []
         if chapeau_elem is not None:
             content_parts.append(
                 self._get_text_content(chapeau_elem, strip_footnotes=True)
             )
         if content_elem is not None:
-            # Check for <continuation> children inside <content>.
+            # Collect child elements inside <content> that should be separated out:
+            # <continuation> and <p> elements each represent distinct paragraphs.
             cont_in_content = content_elem.findall(
                 "{*}continuation"
             ) or content_elem.findall("continuation")
-            if cont_in_content:
-                # Get content text excluding the <continuation> children.
+            p_in_content = content_elem.findall("{*}p") or content_elem.findall("p")
+            excluded_in_content = cont_in_content + p_in_content
+            if excluded_in_content:
+                # Get content text excluding the separated child elements.
                 content_text = self._get_text_content_excluding(
-                    content_elem, cont_in_content, strip_footnotes=True
+                    content_elem, excluded_in_content, strip_footnotes=True
                 )
                 if content_text:
                     content_parts.append(content_text)
-                for cont_elem in cont_in_content:
-                    cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
-                    if cont_text:
-                        content_continuations.append(cont_text)
+                # Emit separated children in document order as continuation entries.
+                excluded_set = {id(e) for e in excluded_in_content}
+                for child_elem in content_elem:
+                    if id(child_elem) in excluded_set:
+                        cont_text = self._get_text_content(
+                            child_elem, strip_footnotes=True
+                        )
+                        if cont_text:
+                            content_continuations.append(cont_text)
             else:
                 content_parts.append(
                     self._get_text_content(content_elem, strip_footnotes=True)
@@ -1144,22 +1175,44 @@ class USLMParser:
 
         content = " ".join(content_parts).strip()
 
-        # Parse nested children
+        # Parse nested children.
+        #
+        # The standard USLM hierarchy is:
+        #     subsection > paragraph > subparagraph > clause > subclause > item
+        #
+        # Normally each level's children use the immediate-next tag (e.g. a
+        # <paragraph> contains <subparagraph> children). However, some sources
+        # (e.g. 38 U.S.C. § 3702(a)(1)) skip a level — a <paragraph> may
+        # directly contain <clause> elements with no intervening
+        # <subparagraph>. If we only ever look for the immediate-next tag, we
+        # silently drop these deeper-nested children and lose their content.
+        #
+        # To handle this, we search for whichever of the structurally-valid
+        # descendant tags (in hierarchy order, from shallowest to deepest)
+        # actually appears as a direct child, and use that tag both to find
+        # the children AND to determine the correct `level` to assign so they
+        # render with the appropriate marker/indentation (e.g. clauses render
+        # as "(i)", "(ii)" regardless of whether they are reached via
+        # <subparagraph> or directly).
         children = []
-        child_levels = {
-            "subsection": ("paragraph", "paragraph"),
-            "paragraph": ("subparagraph", "subparagraph"),
-            "subparagraph": ("clause", "clause"),
-            "clause": ("subclause", "subclause"),
-            "subclause": ("item", "item"),
-        }
-
-        if level in child_levels:
-            child_tag, child_level = child_levels[level]
-            for child_elem in elem.findall(f"{{*}}{child_tag}") or elem.findall(
-                child_tag
-            ):
-                children.append(self._parse_subsection(child_elem, child_level))
+        hierarchy = [
+            "subsection",
+            "paragraph",
+            "subparagraph",
+            "clause",
+            "subclause",
+            "item",
+        ]
+        if level in hierarchy:
+            level_index = hierarchy.index(level)
+            for child_level in hierarchy[level_index + 1 :]:
+                child_elems = elem.findall(f"{{*}}{child_level}") or elem.findall(
+                    child_level
+                )
+                if child_elems:
+                    for child_elem in child_elems:
+                        children.append(self._parse_subsection(child_elem, child_level))
+                    break
 
         # Collect continuation elements (closing text that follows a numbered list,
         # e.g. the penalty clause in 18 U.S.C. § 1001(a)).
@@ -1210,17 +1263,34 @@ class USLMParser:
                 para_elems = section_elem.findall("paragraph")
 
             if para_elems:
-                # Check for section-level chapeau (introductory text before the list)
+                # Determine the document-order position of the first and last paragraph
+                # to classify sibling <p> elements as intro text or trailing text.
+                all_children = list(section_elem)
+                first_para_idx = all_children.index(para_elems[0])
+                last_para_idx = all_children.index(para_elems[-1])
+
+                # Collect introductory text: explicit <chapeau> OR <p> siblings that
+                # appear before the first <paragraph> in document order (Issue #478).
                 chapeau_elem = section_elem.find("{*}chapeau")
                 if chapeau_elem is None:
                     chapeau_elem = section_elem.find("chapeau")
-                chapeau_text = (
-                    self._get_text_content(chapeau_elem)
-                    if chapeau_elem is not None
-                    else ""
-                )
+                chapeau_parts: list[str] = []
+                if chapeau_elem is not None:
+                    text = self._get_text_content(chapeau_elem)
+                    if text:
+                        chapeau_parts.append(text)
+                for child in all_children[:first_para_idx]:
+                    child_tag = (
+                        child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                    )
+                    if child_tag == "p":
+                        text = self._get_text_content(child)
+                        if text:
+                            chapeau_parts.append(text)
+                chapeau_text = " ".join(chapeau_parts)
 
-                # Check for section-level continuation (closing text after the list)
+                # Collect trailing text: explicit <continuation> OR <p> siblings that
+                # appear after the last <paragraph> in document order (Issue #479).
                 section_continuation: list[str] = []
                 cont_elems = section_elem.findall(
                     "{*}continuation"
@@ -1229,6 +1299,14 @@ class USLMParser:
                     cont_text = self._get_text_content(cont_elem, strip_footnotes=True)
                     if cont_text:
                         section_continuation.append(cont_text)
+                for child in all_children[last_para_idx + 1 :]:
+                    child_tag = (
+                        child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                    )
+                    if child_tag == "p":
+                        text = self._get_text_content(child, strip_footnotes=True)
+                        if text:
+                            section_continuation.append(text)
 
                 # Parse each paragraph, then bubble up any <continuation> elements
                 # that were nested inside a paragraph's <content>.  In OLRC XML
@@ -1243,24 +1321,33 @@ class USLMParser:
                     parsed_para = self._parse_subsection(para_elem, "paragraph")
                     # Detect which continuation items originated inside <content>
                     # (captured by _parse_subsection via content_continuations).
+                    # This includes both <continuation> elements (17 U.S.C. § 107)
+                    # and <p> elements (9 U.S.C. § 13, Issue #479) — both represent
+                    # section-level paragraphs, not sub-clauses of the list item.
                     para_content_elem = para_elem.find("{*}content")
                     if para_content_elem is None:
                         para_content_elem = para_elem.find("content")
                     if para_content_elem is not None:
-                        in_content_cont_texts = {
+                        in_content_separated_texts = {
                             self._get_text_content(ce, strip_footnotes=True)
                             for ce in (
                                 para_content_elem.findall("{*}continuation")
                                 or para_content_elem.findall("continuation")
                             )
+                        } | {
+                            self._get_text_content(pe, strip_footnotes=True)
+                            for pe in (
+                                para_content_elem.findall("{*}p")
+                                or para_content_elem.findall("p")
+                            )
                         }
-                        if in_content_cont_texts:
+                        if in_content_separated_texts:
                             # Bubble these up to section level and remove from
                             # the paragraph so they don't render at indent_level=1.
                             promoted: list[str] = []
                             kept: list[str] = []
                             for ct in parsed_para.continuation:
-                                if ct in in_content_cont_texts:
+                                if ct in in_content_separated_texts:
                                     promoted.append(ct)
                                 else:
                                     kept.append(ct)
@@ -1318,11 +1405,15 @@ class USLMParser:
         quoted content and formats them with [QC:level] markers the normalizer
         uses to create properly indented lines.
 
-        Two patterns handled:
+        Patterns handled:
         - Anonymous inline: <section class="inline"> with chapeau + paragraphs
           + continuation (no section header emitted for empty <num>)
         - Full named sections: <section> with real <num> and <heading>
         - Subsection-only: <subsection> children at top level (legacy pattern)
+        - Paragraph-only: <paragraph> children directly under quotedContent
+          with no enclosing <section>/<subsection> wrapper, optionally
+          preceded by a bare <inline> intro line (e.g. the 21 U.S.C. 822
+          "Findings" note; see issue #536)
         """
         parts = []
 
@@ -1409,6 +1500,25 @@ class USLMParser:
             for subsection in elem.findall("subsection"):
                 format_item(subsection, 1)
 
+        # Process top-level paragraphs when neither sections nor subsections
+        # wrap them directly under quotedContent (e.g. a flat enumeration
+        # like "(1)", "(2)" with "(A)", "(B)" sub-items but no enclosing
+        # <section>/<subsection>). A bare <inline> intro line, if present,
+        # is emitted first at the same level so it precedes the enumeration.
+        if not parts:
+            inline_elem = elem.find("{*}inline")
+            if inline_elem is None:
+                inline_elem = elem.find("inline")
+            if inline_elem is not None:
+                inline_text = self._get_text_content(inline_elem).strip()
+                if inline_text:
+                    parts.append(f"[QC:1]{inline_text}[/QC]")
+
+            for paragraph in elem.findall("{*}paragraph"):
+                format_item(paragraph, 1)
+            for paragraph in elem.findall("paragraph"):
+                format_item(paragraph, 1)
+
         # Fallback: extract plain text for simple inline quotedContent
         if not parts:
             text = self._get_text_content(elem).strip()
@@ -1452,12 +1562,30 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
-            # Handle signature blocks (presidential/official signatures)
+            # Handle signature blocks (presidential/official signatures).
+            # When <signature> has structured child elements (<name>, <role>),
+            # emit each child as a separate [SIG] line to avoid embedding \n
+            # in a single content string.  When there are no child elements,
+            # fall back to the simple single-line form.
             if tag == "signature":
-                sig_text = "".join(el.itertext()).strip()
-                if sig_text:
-                    sig_text = sig_text.rstrip(".")
-                    parts.append(f"[PARA][SIG]\u2014 {sig_text}[/SIG]")
+                child_tags_in_sig = [
+                    c
+                    for c in el
+                    if (c.tag.split("}")[-1] if "}" in c.tag else c.tag)
+                    in ("name", "role")
+                ]
+                if child_tags_in_sig:
+                    # Emit each <name>/<role> child as its own [SIG] line
+                    for child in child_tags_in_sig:
+                        child_text = "".join(child.itertext()).strip().rstrip(".")
+                        if child_text:
+                            parts.append(f"[PARA][SIG]\u2014 {child_text}[/SIG]")
+                else:
+                    # No structured children — collapse the whole element as before
+                    sig_text = "".join(el.itertext()).strip()
+                    if sig_text:
+                        sig_text = sig_text.rstrip(".")
+                        parts.append(f"[PARA][SIG]\u2014 {sig_text}[/SIG]")
                 if el.tail:
                     parts.append(el.tail)
                 return
@@ -1472,7 +1600,11 @@ class USLMParser:
                         (c.tag.split("}")[-1] if "}" in c.tag else c.tag) for c in el
                     }
                     if "heading" not in child_tags:
-                        parts.append(f"[NH]{topic.title()}[/NH]")
+                        # Use the canonical display string for known camelCase topics;
+                        # fall back to topic.title() for simple single-word topics like
+                        # "amendments" → "Amendments".
+                        display = _NOTE_TOPIC_DISPLAY.get(topic, topic.title())
+                        parts.append(f"[NH]{display}[/NH]")
 
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n
@@ -1563,86 +1695,91 @@ class USLMParser:
         if source_credit is None:
             return pl_refs, act_refs
 
-        # Find all ref elements within sourceCredit
-        ref_elems = source_credit.findall(".//{*}ref")
-        if not ref_elems:
-            ref_elems = source_credit.findall(".//ref")
+        # Process all significant elements within sourceCredit in document order.
+        # We traverse the element tree once, handling <ref> and <date> elements
+        # together so that each <date> is attributed to the most recently seen
+        # PL ref rather than the positionally-matching one.
+        #
+        # This correctly handles "as added" credits, e.g.:
+        #   (Pub. L. 87–195, ..., as added Pub. L. 104–132, ..., Apr. 24, 1996, ...)
+        # where the single <date> belongs to PL 104-132 (the adding law), not
+        # to PL 87-195 (the framework law that has no date in the credit).
+        #
+        # We use iter() to visit all descendants in document order, which gives
+        # the correct interleaving of <ref> and <date> elements.
 
-        # Track current stat volume/page for associating with refs
-        current_stat_volume: int | None = None
-        current_stat_page: int | None = None
-        # Track the most recent ref (either PL or Act) for stat association
+        # Track the most recent ref (either PL or Act) for stat/date association
         last_ref_type: str | None = None
 
-        for ref_elem in ref_elems:
-            href = ref_elem.get("href", "")
-            text = "".join(ref_elem.itertext()).strip()
+        for elem in source_credit.iter():
+            local_tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
 
-            # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
-            if "/us/pl/" in href:
-                match = re.match(
-                    r"/us/pl/(\d+)/(\d+)"  # Congress and law number
-                    r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
-                    r"(?:/t([IVXLCDM]+))?"  # Optional title
-                    r"(?:/s([\w()]+))?",  # Optional section
-                    href,
-                )
-                if match:
-                    ref = SourceCreditRef(
-                        congress=int(match.group(1)),
-                        law_number=int(match.group(2)),
-                        division=match.group(3),
-                        title=match.group(4),
-                        section=match.group(5),
-                        raw_text=text,
+            if local_tag == "ref":
+                href = elem.get("href", "")
+                text = "".join(elem.itertext()).strip()
+
+                # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
+                if "/us/pl/" in href:
+                    match = re.match(
+                        r"/us/pl/(\d+)/(\d+)"  # Congress and law number
+                        r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
+                        r"(?:/t([IVXLCDM]+))?"  # Optional title
+                        r"(?:/s([\w()]+))?",  # Optional section
+                        href,
                     )
-                    pl_refs.append(ref)
-                    last_ref_type = "pl"
+                    if match:
+                        ref = SourceCreditRef(
+                            congress=int(match.group(1)),
+                            law_number=int(match.group(2)),
+                            division=match.group(3),
+                            title=match.group(4),
+                            section=match.group(5),
+                            raw_text=text,
+                        )
+                        pl_refs.append(ref)
+                        last_ref_type = "pl"
 
-            # Parse /us/act/YYYY-MM-DD/chNNN/... hrefs (Acts, pre-1957)
-            elif "/us/act/" in href:
-                match = re.match(
-                    r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
-                    r"(?:/t([IVXLCDM]+))?"  # Optional title
-                    r"(?:/s([\w()]+))?",  # Optional section
-                    href,
-                )
-                if match:
-                    act_ref = ActRef(
-                        date=match.group(1),  # e.g., "1935-08-14"
-                        chapter=int(match.group(2)),
-                        title=match.group(3),
-                        section=match.group(4),
-                        raw_text=text,
+                # Parse /us/act/YYYY-MM-DD/chNNN/... hrefs (Acts, pre-1957)
+                elif "/us/act/" in href:
+                    match = re.match(
+                        r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
+                        r"(?:/t([IVXLCDM]+))?"  # Optional title
+                        r"(?:/s([\w()]+))?",  # Optional section
+                        href,
                     )
-                    act_refs.append(act_ref)
-                    last_ref_type = "act"
+                    if match:
+                        act_ref = ActRef(
+                            date=match.group(1),  # e.g., "1935-08-14"
+                            chapter=int(match.group(2)),
+                            title=match.group(3),
+                            section=match.group(4),
+                            raw_text=text,
+                        )
+                        act_refs.append(act_ref)
+                        last_ref_type = "act"
 
-            # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
-            elif "/us/stat/" in href:
-                match = re.match(r"/us/stat/(\d+)/(\d+)", href)
-                if match:
-                    current_stat_volume = int(match.group(1))
-                    current_stat_page = int(match.group(2))
-                    # Apply to the most recent ref
-                    if last_ref_type == "pl" and pl_refs:
-                        pl_refs[-1].stat_volume = current_stat_volume
-                        pl_refs[-1].stat_page = current_stat_page
-                    elif last_ref_type == "act" and act_refs:
-                        act_refs[-1].stat_volume = current_stat_volume
-                        act_refs[-1].stat_page = current_stat_page
+                # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
+                elif "/us/stat/" in href:
+                    match = re.match(r"/us/stat/(\d+)/(\d+)", href)
+                    if match:
+                        stat_volume = int(match.group(1))
+                        stat_page = int(match.group(2))
+                        # Apply to the most recent ref
+                        if last_ref_type == "pl" and pl_refs:
+                            pl_refs[-1].stat_volume = stat_volume
+                            pl_refs[-1].stat_page = stat_page
+                        elif last_ref_type == "act" and act_refs:
+                            act_refs[-1].stat_volume = stat_volume
+                            act_refs[-1].stat_page = stat_page
 
-        # Extract dates from <date> elements and associate with PL refs
-        # Act refs already have dates in the href, so all <date> elements belong to PL refs
-        date_elems = source_credit.findall(".//{*}date")
-        if not date_elems:
-            date_elems = source_credit.findall(".//date")
-
-        # Simple heuristic: dates appear after their associated PL ref, in order
-        for i, date_elem in enumerate(date_elems):
-            date_text = "".join(date_elem.itertext()).strip()
-            if i < len(pl_refs):
-                pl_refs[i].date = date_text
+            elif local_tag == "date":
+                # Act refs already have dates in the href; <date> elements belong to
+                # PL refs only. Attribute each date to the most recently seen PL ref
+                # so that "as added" credits assign the date to the adding law, not
+                # the framework law that precedes the "as added" clause.
+                date_text = "".join(elem.itertext()).strip()
+                if last_ref_type == "pl" and pl_refs:
+                    pl_refs[-1].date = date_text
 
         return pl_refs, act_refs
 

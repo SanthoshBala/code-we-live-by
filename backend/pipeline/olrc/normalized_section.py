@@ -359,6 +359,7 @@ CITATION_PARSE_PATTERN = re.compile(
 # (Previously compiled inside function bodies, causing ~1026 re._compile calls per
 # _parse_notes_structure invocation due to Python's 512-entry LRU cache churn.)
 _NH_HEADER_PATTERN = re.compile(r"\[NH\](.*?)\[/NH\]", re.DOTALL)
+_H1_HEADER_PATTERN = re.compile(r"\[H1\](.*?)\[/H1\]", re.DOTALL)
 _REPORT_PATTERN = re.compile(
     r"((?:House|Senate)\s+Report\s+No\.\s*[\d–-]+)",
     re.IGNORECASE,
@@ -1146,7 +1147,7 @@ def _amendment_lines(raw_content: str) -> list[ParsedLine]:
                 ParsedLine(
                     line_number=len(lines) + 1,
                     content=content,
-                    indent_level=0,
+                    indent_level=1,
                     marker=None,
                     is_header=False,
                     is_signature=False,
@@ -1243,8 +1244,16 @@ def _parse_amendments(text: str) -> list[Amendment]:
                         description=" ".join(year_block.split()),
                     )
                 )
-            # Skip amendments where we can't extract congress/law_number
-            # since we need valid law references
+            elif re.search(r"\bAct\b", year_block):
+                # Pre-1957 chapter-style citation (e.g. "Act Oct. 31, 1951, ch. 655 …").
+                # No modern PL number exists, so law is None.
+                amendments.append(
+                    Amendment(
+                        law=None,
+                        year=year,
+                        description=" ".join(year_block.split()),
+                    )
+                )
 
     return amendments
 
@@ -1490,9 +1499,14 @@ def _strip_note_markers(text: str) -> str:
 
 def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     """Parse Historical and Revision Notes section."""
-    # Match until next major section (with optional [H1] prefix)
+    # Match until next major section (with optional [H1] prefix) or the
+    # next sibling note header ([NH]...[/NH]).  For positive-law sections
+    # (e.g. Title 41) multiple <note> children share a single <notes>
+    # wrapper in the OLRC XML.  Without the [NH] lookahead the regex
+    # greedily consumed sibling note content (e.g. "References in Text")
+    # into the Historical note — Issue #504.
     hist_match = re.search(
-        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|$)",
+        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|\[NH\]|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
@@ -1517,6 +1531,13 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
         )
         return
 
+    # Pre-compute positions of all [NH] markers in hist_text so we can use them
+    # as note-boundary sentinels when no subsequent Report header exists.
+    # When hist_text absorbed sibling notes (because there is no "Editorial Notes"
+    # or "Statutory Notes" wrapper), the first [NH] marker *after* a Report's
+    # content start is the real boundary — not the end of hist_text.
+    _nh_positions = [m.start() for m in _NH_HEADER_PATTERN.finditer(hist_text)]
+
     # Extract unique report sections
     seen_headers: set[str] = set()
     for i, match in enumerate(matches):
@@ -1525,9 +1546,20 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
             continue
         seen_headers.add(header)
 
-        # Content runs from end of this header to start of next header (or end)
+        # Content runs from end of this header to start of next header (or end).
+        # For the last report, also stop at the first [NH] marker that follows
+        # the report header — this prevents sibling flat notes (Amendments,
+        # Effective Date, etc.) from bleeding into the last report note.
         content_start = match.end()
-        content_end = matches[i + 1].start() if i + 1 < len(matches) else len(hist_text)
+        if i + 1 < len(matches):
+            content_end = matches[i + 1].start()
+        else:
+            # Find the first [NH] position strictly after content_start
+            next_nh = next(
+                (pos for pos in _nh_positions if pos > content_start),
+                len(hist_text),
+            )
+            content_end = next_nh
         raw_content = hist_text[content_start:content_end]
         content = _strip_note_markers(raw_content)
 
@@ -1618,25 +1650,36 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     # cross-references that don't lend themselves to structured extraction.
     notes.short_titles = _parse_short_titles(statutory_text)
 
-    # Find note headers using [NH]...[/NH] markers from XML parser
-    # These markers are added for <heading class="smallCaps"> elements
+    # Labels that are section-level cross-headings, not individual note headers.
+    # These appear in both [NH] and [H1] marker scans and must be skipped.
+    skip_headers = {
+        "Editorial Notes",
+        "Statutory Notes And Related Subsidiaries",
+        "Executive Documents",
+    }
+
+    # Find note headers using [NH]...[/NH] markers from XML parser.
+    # These markers are added for <heading> elements (with or without class="smallCaps").
 
     # Find all headers and their positions
     header_positions: list[tuple[int, int, str]] = []
     for match in _NH_HEADER_PATTERN.finditer(statutory_text):
         header = match.group(1).strip()
-        # Skip if too short or a fragment
-        if len(header.split()) < 2:
-            continue
-        # Skip cross-heading markers (Editorial Notes, Statutory Notes, Executive Documents)
-        skip_headers = {
-            "Editorial Notes",
-            "Statutory Notes And Related Subsidiaries",
-            "Executive Documents",
-        }
-        if header in skip_headers:
+        # Skip if empty or a cross-heading label
+        if not header or header in skip_headers:
             continue
         header_positions.append((match.start(), match.end(), header))
+
+    # Fallback: if no [NH] headers found, scan for [H1]...[/H1] markers.
+    # These are emitted for <b> elements used as note sub-headings in some
+    # USLM XML structures (e.g. a lone "Effective Date" note whose heading is
+    # encoded as a <b> rather than a <heading> element).
+    if not header_positions:
+        for match in _H1_HEADER_PATTERN.finditer(statutory_text):
+            header = match.group(1).strip()
+            if not header or header in skip_headers:
+                continue
+            header_positions.append((match.start(), match.end(), header))
 
     # Deduplicate and extract content
     seen_headers: set[str] = set()
@@ -1663,6 +1706,36 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
                 )
             )
 
+    # Final fallback: if no headers were found via any marker, the statutory
+    # block may consist of a single note whose heading appears as plain text
+    # immediately before the first paragraph break (e.g. "Effective Date" as
+    # tail text of a <b> cross-heading element).  Split on the first double-
+    # newline: if the leading fragment looks like a short note title (<=6 words,
+    # no sentence-ending punctuation), treat it as the header.
+    if not header_positions:
+        stripped = _strip_note_markers(statutory_text)
+        if not stripped:
+            return
+        # Split at the first paragraph break
+        parts = re.split(r"\n\n", stripped, maxsplit=1)
+        if len(parts) == 2:
+            candidate_header = parts[0].strip()
+            note_body = parts[1].strip()
+            words = candidate_header.split()
+            is_header_like = (
+                1 <= len(words) <= 6
+                and not candidate_header.endswith(".")
+                and not candidate_header.endswith(",")
+            )
+            if is_header_like and len(note_body) > 30:
+                notes.notes.append(
+                    SectionNote(
+                        header=candidate_header.title(),
+                        lines=normalize_note_content(note_body),
+                        category=NoteCategory.STATUTORY,
+                    )
+                )
+
 
 def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
     """Separate law text from notes/metadata sections.
@@ -1682,8 +1755,15 @@ def _separate_notes_from_text(text: str) -> tuple[str, SectionNotes]:
     # Find the earliest notes section header
     earliest_notes_pos = len(text)
     for header in NOTES_SECTION_HEADERS:
-        # Look for the header, possibly with leading whitespace/newlines
-        pattern = re.compile(rf"[\s\n]+{re.escape(header)}", re.IGNORECASE)
+        # Look for the header at the start of a line (possibly with leading
+        # whitespace), since real notes headers always begin their own line.
+        # Requiring a line start avoids false positives when a header word
+        # (e.g. "Regulations") appears mid-sentence in ordinary law text,
+        # such as "...in accordance with the rules and regulations
+        # prescribed by..." in 24 U.S.C. § 17.
+        pattern = re.compile(
+            rf"(?:^|\n)[ \t]*{re.escape(header)}", re.IGNORECASE | re.MULTILINE
+        )
         match = pattern.search(text)
         if match and match.start() < earliest_notes_pos:
             earliest_notes_pos = match.start()

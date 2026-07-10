@@ -4,7 +4,9 @@ These schemas are used for API responses and data transfer between
 the pipeline and application layers.
 """
 
-from pydantic import BaseModel, Field, computed_field
+import re
+
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.models.enums import LawLevel, SourceRelationship
 
@@ -220,6 +222,21 @@ class SourceLawSchema(BaseModel):
     order: int = Field(
         0, description="Position in source list (0 = first/oldest reference)"
     )
+
+    @field_validator("raw_text", mode="before")
+    @classmethod
+    def strip_internal_markup_tokens(cls, v: object) -> object:
+        """Strip internal XML serialization markers before surfacing in the API.
+
+        [NH]...[/NH] markers are generated during XML ingestion to encode note
+        headers for the notes normalizer. They should not appear in raw_text.
+        """
+        if not isinstance(v, str):
+            return v
+        v = re.sub(r"\[NH\].*?\[/NH\]", "", v, flags=re.DOTALL)
+        # Strip any orphaned closing tags left by multiline patterns
+        v = re.sub(r"\[/NH\]", "", v)
+        return v.strip()
 
     @computed_field  # type: ignore[prop-decorator]
     @property

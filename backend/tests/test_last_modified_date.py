@@ -1,13 +1,19 @@
 """Unit tests for last_modified_date derivation from amendment citations.
 
-These tests verify the fallback logic added to get_section() in
-app/crud/us_code.py: when the `amendments` list is empty but `citations`
-contains entries with relationship "Amendment" or non-original chapter acts
-(is_original == false), last_modified_date should be derived from the most
-recent such citation date.
+These tests verify the logic in get_section() (app/crud/us_code.py) that
+derives last_modified_date from normalized_notes.  The correct value is the
+full enactment date of the most recent amending Public Law (from the
+``citations`` list), NOT a Jan-1 approximation built from a year integer.
 
-The tests exercise the same computation as the production code by calling
-_parse_citation_date directly and running the equivalent selection logic.
+Coverage also includes pre-Public Law chapter-numbered acts (is_original==false,
+relationship=="Framework") which must be treated as amendments when deriving
+last_modified_date — fixing the 9 U.S.C. § 7 scenario from issue #563.
+
+Regression coverage for issue #510: sections such as 17 U.S.C. § 107 were
+returning 1992-01-01 instead of 1992-10-24 (Pub. L. 102-492, Oct. 24, 1992)
+because the primary derivation path read a year-only ``amendments`` entry and
+constructed date(year, 1, 1) rather than parsing the full date from the
+corresponding citation.
 """
 
 from datetime import date
@@ -16,11 +22,12 @@ from pipeline.olrc.group_service import _parse_citation_date
 
 
 def _compute_last_modified_date_from_citations(citations: list[dict]) -> date | None:
-    """Mirror of the fallback logic in get_section() for isolated testing.
+    """Mirror of the citation-based derivation in get_section() for unit testing.
 
-    Includes citations with relationship "Amendment" OR any non-original
+    Includes citations with relationship ``"Amendment"`` OR any non-original
     citation (is_original == false) — the latter covers pre-Public Law
-    chapter-numbered acts whose relationship is stored as "Framework".
+    chapter-numbered acts (relationship ``"Framework"``) that modified the section
+    after original enactment. Returns None when no eligible citations have dates.
     """
     amendment_dates = []
     for c in citations:
@@ -33,8 +40,26 @@ def _compute_last_modified_date_from_citations(citations: list[dict]) -> date | 
     return max(amendment_dates) if amendment_dates else None
 
 
+def _compute_last_modified_date_from_notes(normalized_notes: dict) -> date | None:
+    """Mirror of the full last_modified_date derivation in get_section().
+
+    Prefers the full enactment date from amendment citations; falls back to the
+    year-only value from the ``amendments`` list when no citation dates exist.
+    """
+    citations = normalized_notes.get("citations", [])
+    result = _compute_last_modified_date_from_citations(citations)
+    if result is not None:
+        return result
+    # Fallback: year-only from amendments
+    amendments = normalized_notes.get("amendments", [])
+    years = [a["year"] for a in amendments if "year" in a]
+    if years:
+        return date(max(years), 1, 1)
+    return None
+
+
 class TestLastModifiedDateFromCitations:
-    """last_modified_date fallback: derive from amendment citations."""
+    """last_modified_date primary path: derive full date from amendment citations."""
 
     def test_single_amendment_citation(self) -> None:
         """A single amendment citation yields its date as last_modified_date."""
@@ -103,7 +128,7 @@ class TestLastModifiedDateFromCitations:
         assert result is None
 
     def test_amendment_citation_using_act_key(self) -> None:
-        """Fallback also works when citation uses 'act' key instead of 'law'."""
+        """Works when citation uses 'act' key instead of 'law'."""
         citations = [
             {
                 "law_id": "PL 94-553",
@@ -225,3 +250,120 @@ class TestLastModifiedDateFromCitations:
         ]
         result = _compute_last_modified_date_from_citations(citations)
         assert result == date(1978, 11, 6)
+
+
+class TestLastModifiedDateFromNotes:
+    """Full derivation from normalized_notes: citation dates preferred, year fallback."""
+
+    def test_citation_date_wins_over_year_only_from_amendments(self) -> None:
+        """Regression test for issue #510 (17 USC §107 scenario).
+
+        When normalized_notes has both an amendments entry (year-only) AND a
+        citation with relationship "Amendment" carrying a full date, the full
+        date must be returned — NOT the Jan-1 approximation.
+        """
+        normalized_notes = {
+            "citations": [
+                {
+                    "law": {"congress": 94, "law_number": 553, "date": "Oct. 19, 1976"},
+                    "relationship": "Enactment",
+                },
+                {
+                    "law": {
+                        "congress": 102,
+                        "law_number": 492,
+                        "date": "Oct. 24, 1992",
+                    },
+                    "relationship": "Amendment",
+                },
+            ],
+            "amendments": [
+                {"law": {"congress": 102, "law_number": 492}, "year": 1992},
+            ],
+        }
+        result = _compute_last_modified_date_from_notes(normalized_notes)
+        assert result == date(1992, 10, 24), (
+            "Expected full date Oct 24, not Jan 1 approximation"
+        )
+        assert result != date(1992, 1, 1)
+
+    def test_17_usc_101_citation_date(self) -> None:
+        """Regression: 17 USC §101 last_modified_date must be 2010-12-09, not 2010-01-01."""
+        normalized_notes = {
+            "citations": [
+                {
+                    "law": {"congress": 94, "law_number": 553, "date": "Oct. 19, 1976"},
+                    "relationship": "Enactment",
+                },
+                {
+                    "law": {"congress": 111, "law_number": 295, "date": "Dec. 9, 2010"},
+                    "relationship": "Amendment",
+                },
+            ],
+            "amendments": [
+                {"law": {"congress": 111, "law_number": 295}, "year": 2010},
+            ],
+        }
+        result = _compute_last_modified_date_from_notes(normalized_notes)
+        assert result == date(2010, 12, 9)
+
+    def test_17_usc_106_citation_date(self) -> None:
+        """Regression: 17 USC §106 last_modified_date must be 2002-11-02, not 2002-01-01."""
+        normalized_notes = {
+            "citations": [
+                {
+                    "law": {"congress": 94, "law_number": 553, "date": "Oct. 19, 1976"},
+                    "relationship": "Enactment",
+                },
+                {
+                    "law": {"congress": 107, "law_number": 273, "date": "Nov. 2, 2002"},
+                    "relationship": "Amendment",
+                },
+            ],
+            "amendments": [
+                {"law": {"congress": 107, "law_number": 273}, "year": 2002},
+            ],
+        }
+        result = _compute_last_modified_date_from_notes(normalized_notes)
+        assert result == date(2002, 11, 2)
+
+    def test_fallback_to_year_only_when_no_citation_dates(self) -> None:
+        """Year-only fallback is used when no amendment citations have dates."""
+        normalized_notes = {
+            "citations": [
+                {
+                    "law": {"congress": 94, "law_number": 553},
+                    "relationship": "Enactment",
+                },
+                {
+                    # Amendment citation but no date field
+                    "law": {"congress": 102, "law_number": 492},
+                    "relationship": "Amendment",
+                },
+            ],
+            "amendments": [
+                {"law": {"congress": 102, "law_number": 492}, "year": 1992},
+            ],
+        }
+        result = _compute_last_modified_date_from_notes(normalized_notes)
+        # Falls back to year-only since citation has no date
+        assert result == date(1992, 1, 1)
+
+    def test_no_amendments_and_no_citation_dates_returns_none(self) -> None:
+        """Returns None when neither citations nor amendments provide dates."""
+        normalized_notes = {
+            "citations": [
+                {
+                    "law": {"congress": 94, "law_number": 553, "date": "Oct. 19, 1976"},
+                    "relationship": "Enactment",
+                },
+            ],
+            "amendments": [],
+        }
+        result = _compute_last_modified_date_from_notes(normalized_notes)
+        assert result is None
+
+    def test_empty_normalized_notes_returns_none(self) -> None:
+        """Returns None for empty normalized_notes dict."""
+        result = _compute_last_modified_date_from_notes({})
+        assert result is None

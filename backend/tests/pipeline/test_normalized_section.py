@@ -1,5 +1,7 @@
 """Tests for legal text line normalization."""
 
+import re
+
 from app.models.enums import NoteRefType
 from app.schemas import NoteReferenceSchema
 from pipeline.olrc.normalized_section import (
@@ -284,6 +286,48 @@ class TestNormalizeSectionRealExamples:
         # The key is that "U.S.C." doesn't split the sentence
         full_text = " ".join(line.content for line in result.provisions)
         assert "U.S.C." in full_text
+
+    def test_naval_asylum_regulations_not_treated_as_notes_header_issue_522(
+        self,
+    ) -> None:
+        """Regression test for 24 U.S.C. § 17 (issue #522).
+
+        The word "regulations" appearing mid-sentence must not be mistaken
+        for the "Regulations" notes-section header, which would truncate the
+        law text right before it.
+        """
+        text = (
+            "The asylum for disabled and decrepit Navy officers, seamen, "
+            "and marines shall be governed in accordance with the rules "
+            "and regulations prescribed by the Secretary of the Navy."
+        )
+
+        result = normalize_section(text)
+
+        full_text = " ".join(line.content for line in result.provisions)
+        assert full_text == text
+        assert "regulations prescribed by the Secretary of the Navy" in full_text
+
+    def test_army_navy_hospital_regulations_not_truncated_issue_522(self) -> None:
+        """Regression test for 24 U.S.C. § 18 (issue #522).
+
+        Same pattern as § 17: "regulations" appears mid-sentence (after
+        "such rules,") and must not be treated as a notes header.
+        """
+        text = (
+            "The Army and Navy General Hospital at Hot Springs, Arkansas, "
+            "shall be subject to such rules, regulations, and restrictions "
+            "as shall be provided by the President of the United States "
+            "and shall remain under the jurisdiction and control of the "
+            "Department of the Army."
+        )
+
+        result = normalize_section(text)
+
+        full_text = " ".join(line.content for line in result.provisions)
+        assert full_text == text
+        assert "regulations, and restrictions" in full_text
+        assert "Department of the Army" in full_text
 
 
 class TestCharacterToLineMapping:
@@ -1279,6 +1323,185 @@ class TestNormalizeParsedSectionContinuation:
         assert result.provisions[0].content == "(a) Single item."
 
 
+class TestNormalizeParsedSection9USC13:
+    """End-to-end normalization tests for 9 U.S.C. § 13.
+
+    Regression tests for Issues #478 and #479: the statutory body parser was
+    silently dropping the introductory <p> element that precedes the (a)/(b)/(c)
+    list, and merging a trailing <p> into the (c) item without a separator.
+    """
+
+    def test_intro_p_renders_as_first_provision(self) -> None:
+        """The introductory <p> before the first list item must appear as the
+        first provision at indent_level=0, not be dropped entirely.
+
+        Regression test for Issue #478.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        # Simulate what the parser produces AFTER the fix: intro <p> captured
+        # as the synthetic wrapper's content (chapeau), trailing <p> in continuation.
+        section = ParsedSection(
+            section_number="13",
+            heading="Application for order confirming, modifying, or correcting award",
+            full_citation="9 U.S.C. § 13",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content=(
+                        "The party moving for an order confirming, modifying, or"
+                        " correcting an award shall, at the time such order is filed"
+                        " with the clerk for the entry of judgment thereon, also file"
+                        " the following papers with the clerk:"
+                    ),
+                    children=[
+                        ParsedSubsection(
+                            marker="(a)",
+                            heading=None,
+                            content=(
+                                "The agreement; the selection or appointment, if any,"
+                                " of an additional arbitrator or umpire; and each"
+                                " written extension of the time, if any, within which"
+                                " to make the award."
+                            ),
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(b)",
+                            heading=None,
+                            content="The award.",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(c)",
+                            heading=None,
+                            content=(
+                                "Each notice, affidavit, or other paper used upon an"
+                                " application to confirm, modify, or correct the award,"
+                                " and a copy of each order of the court upon such an"
+                                " application."
+                            ),
+                            level="paragraph",
+                        ),
+                    ],
+                    level="subsection",
+                    continuation=[
+                        "The judgment shall be docketed as if it was rendered in an action."
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Must have 5 provisions: intro + (a) + (b) + (c) + docketing sentence
+        assert result.provision_count == 5, (
+            f"Expected 5 provisions (intro + 3 items + docketing), got"
+            f" {result.provision_count}: {[p.content for p in result.provisions]}"
+        )
+
+        # First provision: intro sentence at indent 0 (Issue #478)
+        intro = result.provisions[0]
+        assert "party moving" in intro.content, (
+            "Introductory sentence must appear as the first provision"
+        )
+        assert intro.indent_level == 0
+        assert intro.marker is None
+
+        # (a), (b), (c) at indent 1
+        assert "(a)" in result.provisions[1].content
+        assert result.provisions[1].indent_level == 1
+        assert "(b)" in result.provisions[2].content
+        assert result.provisions[2].indent_level == 1
+        assert "(c)" in result.provisions[3].content
+        assert result.provisions[3].indent_level == 1
+
+        # Docketing sentence as a separate provision at indent 0 (Issue #479)
+        docketing = result.provisions[4]
+        assert "docketed" in docketing.content, (
+            "Docketing sentence must appear as a distinct final provision"
+        )
+        assert docketing.indent_level == 0
+        assert docketing.marker is None
+
+    def test_docketing_sentence_not_merged_with_c_item(self) -> None:
+        """The docketing sentence must NOT be concatenated into the (c) content.
+
+        Regression test for Issue #479: the merged content was
+        '(c) ...application.The judgment shall be docketed...' (no space).
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="13",
+            heading="Application for order confirming, modifying, or correcting award",
+            full_citation="9 U.S.C. § 13",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content="The party moving for an order:",
+                    children=[
+                        ParsedSubsection(
+                            marker="(a)",
+                            heading=None,
+                            content="The agreement.",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(c)",
+                            heading=None,
+                            content=(
+                                "Each notice, affidavit, or other paper used upon an"
+                                " application to confirm, modify, or correct the award,"
+                                " and a copy of each order of the court upon such an"
+                                " application."
+                            ),
+                            level="paragraph",
+                        ),
+                    ],
+                    level="subsection",
+                    continuation=[
+                        "The judgment shall be docketed as if it was rendered in an action."
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Find the (c) provision
+        c_provision = next(
+            (p for p in result.provisions if p.content.startswith("(c)")), None
+        )
+        assert c_provision is not None, "Provision (c) must be present"
+
+        # (c) content must NOT include the docketing sentence
+        assert "docketed" not in c_provision.content, (
+            "Docketing sentence must NOT be merged into provision (c)"
+        )
+        # The no-space artifact must not appear
+        assert "application.The" not in c_provision.content, (
+            "Sentences must not be concatenated without a space"
+        )
+
+        # The docketing sentence must be a separate provision
+        docketing = next(
+            (p for p in result.provisions if "docketed" in p.content), None
+        )
+        assert docketing is not None, (
+            "Docketing sentence must appear as a distinct provision"
+        )
+        assert docketing.line_number > c_provision.line_number, (
+            "Docketing sentence must appear after provision (c)"
+        )
+
+
 class TestNormalizeNoteContent:
     """Tests for normalize_note_content function (notes parsing)."""
 
@@ -1406,6 +1629,23 @@ class TestNormalizeNoteContent:
 
         assert len(lines) == 1
         assert "Subsec. (a)(2). Pub. L. 100–159" in lines[0].content
+
+    def test_sig_single_line_no_embedded_newline(self) -> None:
+        """Each [SIG] token produces exactly one line with no embedded newline."""
+        # Simulates parser output when <signature> has separate <name> and <role>
+        # children that were emitted as two distinct [SIG] tokens (issue #511).
+        text = "[PARA][SIG]— By Irwin Karp,[/SIG][PARA][SIG]— Counsel[/SIG]"
+        lines = normalize_note_content(text)
+
+        sig_lines = [ln for ln in lines if ln.is_signature]
+        # Must produce two separate signature lines, not one with an embedded \n
+        assert len(sig_lines) == 2
+        for ln in sig_lines:
+            assert "\n" not in ln.content, (
+                f"Embedded newline found in signature line: {ln.content!r}"
+            )
+        assert sig_lines[0].content == "— By Irwin Karp,"
+        assert sig_lines[1].content == "— Counsel"
 
 
 class TestSentenceSplittingWithParagraphs:
@@ -1629,6 +1869,69 @@ class TestParserNotesContent:
         assert "[QC:1]" in content
         assert "[QC:2]" in content
 
+    def test_paragraphs_direct_children_of_quoted_content(self) -> None:
+        """quotedContent whose direct children are <paragraph> (no enclosing
+        <section>/<subsection>), optionally preceded by a bare <inline> intro.
+
+        This mirrors the real OLRC structure for the 21 U.S.C. 822 "Findings"
+        statutory note (Pub. L. 111-273, Sec. 2), where <quotedContent> wraps
+        an <inline> intro line followed directly by sibling <paragraph>
+        elements -- some of which have nested <subparagraph> children -- with
+        no <section> or <subsection> wrapper at the top level (issue #536).
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes>
+            <quotedContent>
+                <inline>"Congress finds the following:</inline>
+                <paragraph>
+                    <num value="1">"(1)"</num>
+                    <content>The nonmedical use of prescription drugs is a growing problem.</content>
+                </paragraph>
+                <paragraph>
+                    <num value="2">"(2)"</num>
+                    <chapeau>According to the Department of Justice&#8212;</chapeau>
+                    <subparagraph>
+                        <num value="A">"(A)"</num>
+                        <content>the number of deaths has increased significantly; and</content>
+                    </subparagraph>
+                    <subparagraph>
+                        <num value="B">"(B)"</num>
+                        <content>treatment admissions increased.</content>
+                    </subparagraph>
+                </paragraph>
+            </quotedContent>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # The bare intro line and each enumerated paragraph/subparagraph
+        # must become its own [QC:level] marker rather than being flattened
+        # into a single block of concatenated text.
+        assert "Congress finds the following" in content
+        assert '"(1)"' in content
+        assert '"(2)"' in content
+        assert '"(A)"' in content
+        assert '"(B)"' in content
+        assert "[QC:1]" in content
+        assert "[QC:2]" in content
+
+        # The intro and each paragraph/subparagraph must be distinct QC
+        # blocks -- not one giant block containing all of the text below.
+        qc_blocks = re.findall(r"\[QC:\d+\](.*?)\[/QC\]", content, flags=re.DOTALL)
+        assert len(qc_blocks) >= 5
+        assert not any('"(1)"' in block and '"(2)"' in block for block in qc_blocks), (
+            "paragraphs (1) and (2) must not be merged into a single QC block"
+        )
+        assert not any('"(A)"' in block and '"(B)"' in block for block in qc_blocks), (
+            "subparagraphs (A) and (B) must not be merged into a single QC block"
+        )
+
     def test_is_quoted_flag_set_on_qc_lines(self) -> None:
         """Lines derived from quotedContent blocks have is_quoted=True."""
         from pipeline.olrc.normalized_section import normalize_note_content
@@ -1688,6 +1991,60 @@ class TestParserNotesContent:
         # Should NOT contain [H2] marker for "et seq"
         assert "[H2]" not in content
         assert "et seq" in content
+
+    def test_signature_with_name_and_role_emits_separate_sig_tokens(self) -> None:
+        """<signature> with <name> and <role> children emits two separate [SIG] tokens.
+
+        Regression test for issue #511: when <signature> contains both <name>
+        and <role> child elements, the parser must not collapse them into a
+        single string with an embedded \\n. Each child element should become
+        its own [SIG] token so that normalize_note_content can turn them into
+        distinct line objects.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Mirrors the OLRC source for 17 U.S.C. § 107 Guidelines note
+        xml = """<notes>
+            <p>Agreed upon in principle March 19, 1976.</p>
+            <signature>
+                <name>By Irwin Karp,</name>
+                <role>Counsel.</role>
+            </signature>
+            <signature>
+                <name>By Alexander C. Hoffman</name>
+            </signature>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        raw = parser._get_notes_text_content(elem)
+
+        # Should have three separate [SIG]...[/SIG] blocks: Irwin Karp name,
+        # Counsel role, and Alexander C. Hoffman (no role child).
+        assert raw.count("[SIG]") == 3, (
+            f"Expected 3 [SIG] tokens, got {raw.count('[SIG]')}: {raw!r}"
+        )
+
+        # No embedded newline must appear inside any single [SIG] span
+        import re
+
+        for m in re.finditer(r"\[SIG\](.*?)\[/SIG\]", raw, re.DOTALL):
+            assert "\n" not in m.group(1), (
+                f"Embedded newline inside [SIG]: {m.group(1)!r}"
+            )
+
+        # Now verify normalize_note_content produces two separate line objects
+        lines = normalize_note_content(raw)
+        sig_lines = [ln for ln in lines if ln.is_signature]
+        assert len(sig_lines) == 3
+        for ln in sig_lines:
+            assert "\n" not in ln.content, (
+                f"Embedded newline in rendered signature line: {ln.content!r}"
+            )
 
 
 class TestStripNoteMarkers:
@@ -1867,6 +2224,93 @@ class TestStatutoryNotesHeaderParsing:
         first_text = " ".join(line.content for line in first_note.lines)
         assert "congressional defense committees" in first_text
 
+    def test_single_statutory_note_h1_header(self) -> None:
+        """Regression for Issue #534: lone note encoded with [H1] heading marker.
+
+        When a USLM section uses <b>Effective Date</b> as the sub-heading for
+        a statutory note (producing [H1]...[/H1] rather than [NH]...[/NH]),
+        _parse_statutory_notes must still capture the note via the [H1] fallback.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        raw_notes = (
+            "[H1]Statutory Notes and Related Subsidiaries[/H1] "
+            "[H1]Effective Date[/H1]\n\n"
+            "For effective date of this section, see section 29 of Pub. L. 91-597, "
+            "set out as a note under section 1031 of this title."
+        )
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "Effective Date"
+        assert notes.notes[0].category.value == "statutory"
+        all_text = " ".join(line.content for line in notes.notes[0].lines)
+        assert "Pub. L. 91-597" in all_text
+
+    def test_single_statutory_note_plain_text_header(self) -> None:
+        """Regression for Issue #534: lone note with header as plain tail text.
+
+        21 U.S.C. ss 1054's XML has "Effective Date" as tail text of the
+        <b>Statutory Notes and Related Subsidiaries</b> element with no marker.
+        The plain-text fallback must capture it when no [NH] or [H1] markers exist.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        raw_notes = (
+            "[H1]Statutory Notes and Related Subsidiaries[/H1] "
+            "Effective Date\n\n"
+            "For effective date of this section, see section 29 of Pub. L. 91-597, "
+            "set out as a note under section 1031 of this title."
+        )
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "Effective Date"
+        assert notes.notes[0].category.value == "statutory"
+        all_text = " ".join(line.content for line in notes.notes[0].lines)
+        assert "Pub. L. 91-597" in all_text
+
+    def test_full_xml_pipeline_issue_534(self) -> None:
+        """End-to-end regression for Issue #534: full XML to parsed notes pipeline.
+
+        Confirms that the complete pipeline (XML parsing -> raw text ->
+        _parse_notes_structure) correctly captures the lone Effective Date
+        statutory note that immediately follows the cross-heading in the USLM
+        XML for 21 U.S.C. ss 1054.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        # Mirrors the USLM XML structure for 21 U.S.C. ss 1054 as described in Issue #534.
+        xml = (
+            "<notes>"
+            "<b>Statutory Notes and Related Subsidiaries</b>"
+            "Effective Date"
+            "<p>For effective date of this section, see section 29 of "
+            "Pub. L. 91-597, set out as a note under section 1031 of this title.</p>"
+            "</notes>"
+        )
+        notes_elem = etree.fromstring(xml)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+        statutory = [n for n in notes.notes if n.category.value == "statutory"]
+        assert len(statutory) == 1, f"Expected 1 statutory note, got {len(statutory)}"
+        assert statutory[0].header == "Effective Date"
+        body = " ".join(line.content for line in statutory[0].lines)
+        assert "Pub. L. 91-597" in body
+
 
 class TestFlatNotesParser:
     """Tests for _parse_flat_notes — fallback for sections without category wrappers.
@@ -2009,6 +2453,76 @@ class TestFlatNotesParser:
         assert "Statistical Sampling Or Adjustment In Decennial Enumeration" in headers
         assert len(notes.notes) >= 4
 
+    def test_references_in_text_not_captured_in_historical_note_issue_504(
+        self,
+    ) -> None:
+        """Regression: References in Text content must not bleed into Historical note.
+
+        For positive-law sections (e.g. 41 U.S.C. § 4706) the OLRC XML places
+        multiple <note> children inside a single <notes> wrapper:
+
+            <notes>
+              <note topic="historicalAndRevision"><heading>Historical and Revision Notes</heading>
+                ...table and paragraphs...
+              </note>
+              <note topic="referencesInText"><heading>References In Text</heading>
+                <p>The Inspector General Act of 1978...</p>
+              </note>
+            </notes>
+
+        _get_notes_text_content processes all children and produces a raw_notes
+        string where both note headers appear as [NH] markers:
+
+            [NH]Historical And Revision Notes[/NH] ... [NH]References In Text[/NH] ...
+
+        Prior to the fix _parse_historical_notes used a regex that stopped only
+        at "Editorial Notes" / "Statutory Notes" or end-of-string.  It greedily
+        consumed the References in Text paragraph as the last line of the
+        Historical note, while _parse_flat_notes also created a correct
+        "References In Text" note — resulting in the Inspector General Act
+        sentence appearing twice.  Closes #504.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # This mirrors what _get_notes_text_content produces for the XML
+        # described above (one <notes> wrapper, two <note> children).
+        # The historical note refers to IG Act generically; the References
+        # note gives the full citation — "set out in the Appendix to Title 5"
+        # is unique to the References In Text note and must not appear in the
+        # Historical note's lines.
+        raw_notes = (
+            "[NH]Historical And Revision Notes[/NH] "
+            "In subsection (a), the reference is for clarity. "
+            "In subsection (c)(1), the reference to the Inspector General Act "
+            "of 1978 is added for clarity. "
+            "[NH]References In Text[/NH] "
+            "The Inspector General Act of 1978, referred to in subsec. (c)(1), "
+            "is Pub. L. 95-452, Oct. 12, 1978, 92 Stat. 1101, which is set out "
+            "in the Appendix to Title 5, Government Organization and Employees."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+        assert "Historical and Revision Notes" in headers
+        assert "References In Text" in headers
+
+        # The Historical note must NOT contain the References in Text sentence.
+        # "set out in the Appendix to Title 5" is unique to the References note.
+        hist_note = next(n for n in notes.notes if "Historical" in n.header)
+        hist_content = " ".join(line.content for line in hist_note.lines)
+        assert "set out in the Appendix to Title 5" not in hist_content, (
+            "References in Text content must not bleed into Historical note lines"
+        )
+
+        # The References In Text note must contain the correct sentence.
+        ref_note = next(n for n in notes.notes if "References" in n.header)
+        ref_content = " ".join(line.content for line in ref_note.lines)
+        assert "set out in the Appendix to Title 5" in ref_content
+
     def test_amendments_populated_from_flat_notes_issue_284(self) -> None:
         """Regression: notes.amendments must be populated when 'Amendments' is a flat note.
 
@@ -2036,6 +2550,83 @@ class TestFlatNotesParser:
         years = [a.year for a in notes.amendments]
         assert 1957 in years
         assert 1975 in years
+
+    def test_house_report_note_does_not_absorb_siblings_issue_498(self) -> None:
+        """Regression: House Report note must not bleed into Amendments/Effective Date.
+
+        11 U.S.C. § 1163 (release 113-21): the Historical and Revision Notes contain
+        a House Report No. 95-595 note, followed by flat [NH]-delimited sibling notes
+        for Amendments and Effective Date of 1986 Amendment.  Because there is no
+        'Editorial Notes' / 'Statutory Notes' wrapper, the hist_text regex captured
+        everything to end-of-string.  The House Report note's content_end was then set
+        to len(hist_text), absorbing the Amendments and Effective Date text.  Closes #498.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # Minimal reproduction of the 11 USC § 1163 flat-notes structure:
+        # Historical notes header + House Report + sibling flat notes
+        raw_notes = (
+            "Historical and Revision Notes "
+            "[NH]House Report No. 95-595[/NH] "
+            "[Section 1162] This section [enacted as section 1163] requires the appointment "
+            "of an independent trustee in a railroad reorganization case. "
+            "The court may appoint one or more disinterested persons to serve as trustee "
+            "in the case. "
+            "[NH]Amendments[/NH] "
+            "1986— Pub. L. 99–554 amended section generally, substituting provisions "
+            "relating to appointment of trustee for provisions relating to qualification "
+            "of trustee. "
+            "[NH]Effective Date Of 1986 Amendment[/NH] "
+            "Effective date and applicability of amendment by Pub. L. 99–554 are "
+            "as provided in section 302(a) of Pub. L. 99–554."
+        )
+
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        # All four notes must be present
+        headers = [n.header for n in notes.notes]
+        assert "House Report No. 95-595" in headers, f"Notes: {headers}"
+        assert "Amendments" in headers, f"Notes: {headers}"
+        assert "Effective Date Of 1986 Amendment" in headers, f"Notes: {headers}"
+
+        # The House Report note must contain ONLY its own content —
+        # no Amendments text and no Effective Date text.
+        house_report = next(
+            n for n in notes.notes if n.header == "House Report No. 95-595"
+        )
+        house_text = " ".join(line.content for line in house_report.lines)
+        assert "independent trustee" in house_text, (
+            "House Report should contain its own text"
+        )
+        assert "1986" not in house_text, (
+            "House Report note must not contain Amendments year text"
+        )
+        assert "Pub. L. 99–554" not in house_text, (
+            "House Report note must not contain Amendments Pub. L. reference"
+        )
+        assert "Effective date and applicability" not in house_text, (
+            "House Report note must not contain Effective Date text"
+        )
+
+        # Amendments note must have its own content
+        amendments = next(n for n in notes.notes if n.header == "Amendments")
+        amend_text = " ".join(line.content for line in amendments.lines)
+        assert "Pub. L. 99–554" in amend_text, (
+            "Amendments note should contain Pub. L. ref"
+        )
+
+        # Effective Date note must have its own content
+        eff_date = next(
+            n for n in notes.notes if n.header == "Effective Date Of 1986 Amendment"
+        )
+        eff_text = " ".join(line.content for line in eff_date.lines)
+        assert "Effective date and applicability" in eff_text, (
+            "Effective Date note should contain its own text"
+        )
 
 
 class TestNoteTopicAmendmentParsing:
@@ -2174,6 +2765,158 @@ class TestNoteTopicAmendmentParsing:
         years = [a.year for a in notes.amendments]
         assert 1990 in years
         assert 2007 in years
+
+    def test_historical_and_revision_camelcase_topic_no_duplicate_issue_503(
+        self,
+    ) -> None:
+        """Regression: <note topic="historicalAndRevision"> must not produce a duplicate note.
+
+        Positive-law sections (e.g. 41 U.S.C. § 4706) use
+        <note topic="historicalAndRevision"> without a <heading> child.  Prior to
+        the fix, topic.title() produced the garbled header "Historicalandrevision"
+        (camelCase is treated as a single word by str.title()), which did not match
+        the already-processed "historical and revision notes" header.  The flat-notes
+        fallback then added a second, malformed SectionNote.
+
+        After the fix, the canonical display string "Historical and Revision Notes"
+        is used for this topic, so the fallback recognises it as already processed
+        and no duplicate is created.  Closes #503.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="historicalAndRevision">'
+            "<p>Based on 41:252(a)(1), (c)."
+            " Source Credit: Pub. L. 111-350, Jan. 4, 2011, 124 Stat. 3677.</p>"
+            "<p>The words 'agency' and 'executive agency' are coextensive"
+            " and synonymous in the revised title.</p>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2012—Subsec. (a). Pub. L. 112-239, § 801(b)(1),"
+            " substituted 'executive agency' for 'agency'.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # Only one Historical and Revision Notes entry — no duplicate
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 1, (
+            f"Expected exactly 1 historical note, got {len(hist_notes)}: {headers}"
+        )
+        assert hist_notes[0].header == "Historical and Revision Notes"
+        assert hist_notes[0].category.value == "historical"
+        # No garbled "Historicalandrevision" header
+        assert not any("historicalandrevision" in h.lower() for h in headers), (
+            f"Garbled camelCase header found in: {headers}"
+        )
+        # Amendments note is also present and correct
+        assert "Amendments" in headers
+
+
+class TestAmendmentsIndentLevel:
+    """Regression tests for issue #573: Amendments note lines must use indent_level=1.
+
+    The _amendment_lines fast-path previously hardcoded indent_level=0, causing
+    Amendments content to render flush-left while peer notes (Derivation,
+    References In Text) correctly used indent_level=1 from normalize_note_content.
+    All editorial note content lines must have the same base indent level.
+    """
+
+    def test_amendment_lines_indent_level_is_one(self) -> None:
+        """_amendment_lines returns lines with indent_level=1, matching peer notes."""
+        from pipeline.olrc.normalized_section import _amendment_lines
+
+        raw = (
+            "[NH]Amendments[/NH] "
+            "1954—Act Sept. 3, 1954, brought section into conformity with arbitration "
+            "rules of the Federal Rules of Civil Procedure."
+        )
+        lines = _amendment_lines(raw)
+
+        assert len(lines) > 0
+        for line in lines:
+            assert line.indent_level == 1, (
+                f"Expected indent_level=1 for Amendments line, got {line.indent_level}: "
+                f"{line.content!r}"
+            )
+
+    def test_amendments_indent_matches_peer_notes_issue_573(self) -> None:
+        """9 U.S.C. § 4 pattern: Amendments indent_level equals Derivation/References indent.
+
+        Amendments, Derivation, and References In Text are peer notes in the OLRC
+        XML. All three must produce lines with the same indent_level so the rendered
+        notes section is visually consistent. Closes #573.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note class="editorial">'
+            '<heading class="smallCaps">Editorial Notes</heading>'
+            '<note topic="derivation">'
+            "<heading>Derivation</heading>"
+            "<p>Act Feb. 12, 1925, ch. 213, § 4, 43 Stat. 883.</p>"
+            "</note>"
+            '<note topic="referencesInText">'
+            "<heading>References In Text</heading>"
+            "<p>Federal Rules of Civil Procedure, referred to in text,"
+            " are set out in the Appendix to Title 28.</p>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>1954—Act Sept. 3, 1954, brought section into conformity"
+            " with arbitration rules of the Federal Rules of Civil Procedure.</p>"
+            "</note>"
+            "</note>"
+            "</notes>"
+        )
+        notes_elem = etree.fromstring(xml)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+
+        # Collect all content lines (non-empty, non-header) by note header
+        content_lines_by_header: dict[str, list[int]] = {}
+        for note in notes.notes:
+            content_lines = [
+                line.indent_level
+                for line in note.lines
+                if line.content and not line.is_header
+            ]
+            if content_lines:
+                content_lines_by_header[note.header] = content_lines
+
+        assert "Derivation" in content_lines_by_header, "Derivation note not found"
+        assert "References In Text" in content_lines_by_header, (
+            "References In Text note not found"
+        )
+        assert "Amendments" in content_lines_by_header, "Amendments note not found"
+
+        derivation_indent = content_lines_by_header["Derivation"][0]
+        references_indent = content_lines_by_header["References In Text"][0]
+        amendments_indent = content_lines_by_header["Amendments"][0]
+
+        assert amendments_indent == derivation_indent, (
+            f"Amendments indent_level ({amendments_indent}) != "
+            f"Derivation indent_level ({derivation_indent})"
+        )
+        assert amendments_indent == references_indent, (
+            f"Amendments indent_level ({amendments_indent}) != "
+            f"References In Text indent_level ({references_indent})"
+        )
+        # Explicit check: all note content must be at indent_level=1
+        assert amendments_indent == 1, (
+            f"Expected indent_level=1 for all editorial note content, "
+            f"got {amendments_indent} for Amendments"
+        )
 
 
 class TestCleanHeading:
@@ -2814,3 +3557,79 @@ class TestNoteReferenceSchema:
             # Missing congress and law_number
         )
         assert schema.target_id == "/us/pl/unknown"
+
+
+class TestPrePLAmendmentCitations:
+    """Regression tests for issues #566 and #567.
+
+    Pre-1957 chapter-style amendment citations (e.g. "Act Oct. 31, 1951, ch. 655")
+    must populate notes.amendments and contribute to last_amendment_year even though
+    they have no modern Pub. L. number.
+    """
+
+    def test_pre_pl_amendment_appears_in_amendments(self) -> None:
+        """A section with only a chapter-style amendment has a non-empty notes.amendments."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            '1951—Act Oct. 31, 1951, substituted "United States district court for"'
+            ' for "United States court in and for", and "by law for" for'
+            ' "on February 12, 1925, for".'
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].year == 1951
+        assert amendments[0].law is None
+        assert "Act Oct. 31, 1951" in amendments[0].description
+
+    def test_pre_pl_amendment_year_from_year_prefix(self) -> None:
+        """last_amendment_year is derived from the year prefix in a chapter-style note."""
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Amendments[/NH] "
+            '1951—Act Oct. 31, 1951, ch. 655, substituted "United States district court for"'
+            ' for "United States court in and for".'
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        assert len(notes.amendments) == 1
+        assert notes.amendments[0].year == 1951
+        assert notes.amendments[0].law is None
+
+    def test_modern_pl_amendments_unaffected(self) -> None:
+        """Sections with modern Pub. L. amendments are parsed as before."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "2013—Pub. L. 112–239, § 1033(b)(2)(B), made technical amendments."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].year == 2013
+        assert amendments[0].law is not None
+        assert amendments[0].law.congress == 112
+        assert amendments[0].law.law_number == 239
+
+    def test_pre_pl_and_modern_amendments_coexist(self) -> None:
+        """A section amended by both an Act and a Pub. L. returns both entries."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "2000—Pub. L. 106–518 made a change.\n"
+            '1951—Act Oct. 31, 1951, ch. 655, substituted "district court for" for "court in and for".'
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+        years = {a.year for a in amendments}
+        assert years == {2000, 1951}
+        modern = next(a for a in amendments if a.year == 2000)
+        pre_pl = next(a for a in amendments if a.year == 1951)
+        assert modern.law is not None
+        assert modern.law.congress == 106
+        assert pre_pl.law is None
