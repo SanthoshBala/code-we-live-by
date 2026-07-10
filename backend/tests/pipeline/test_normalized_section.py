@@ -13,13 +13,14 @@ from pipeline.olrc.normalized_section import (
     _split_into_sentences,
     _strip_note_markers,
     char_span_to_line_span,
+    citations_from_source_credit_refs,
     normalize_note_content,
     normalize_section,
     note_refs_to_schemas,
     parse_citation,
     parse_citations,
 )
-from pipeline.olrc.parser import NoteRef
+from pipeline.olrc.parser import ActRef, NoteRef, SourceCreditRef
 
 
 class TestMarkerLevelDetection:
@@ -471,7 +472,7 @@ class TestCitationParsing:
         assert citation.title == "I"
         assert citation.section == "101"
         assert citation.date == "Oct. 19, 1976"
-        assert citation.stat_volume == 90
+        assert citation.stat_volume == "90"
         assert citation.stat_page == 2546
         assert citation.stat_reference == "90 Stat. 2546"
 
@@ -541,7 +542,7 @@ class TestCitationParsing:
     def test_citation_stat_reference_property(self) -> None:
         """Test the stat_reference property."""
         law = ParsedPublicLaw(
-            congress=94, law_number=553, stat_volume=90, stat_page=2546
+            congress=94, law_number=553, stat_volume="90", stat_page=2546
         )
         citation = SourceLaw(law=law)
         assert citation.stat_reference == "90 Stat. 2546"
@@ -585,6 +586,122 @@ class TestCitationParsing:
         assert citations[0].congress == 94  # Oldest
         assert citations[1].congress == 101
         assert citations[2].congress == 106  # Newest
+
+
+class TestCitationsFromSourceCreditRefs:
+    """Tests for citations_from_source_credit_refs (Act + Pub. L. builder).
+
+    Regression tests for issue #543: the act-type SourceLaw built from an
+    ActRef must capture stat_volume/stat_page/stat_reference the same way
+    the law-type SourceLaw built from a SourceCreditRef does, including for
+    pre-1957 codification volumes with a letter suffix (e.g. "70A"), which
+    can't be parsed as a plain int.
+    """
+
+    def test_act_citation_captures_numeric_stat_reference(self) -> None:
+        """Act ref with a plain numeric Stat volume populates stat fields."""
+        act_ref = ActRef(
+            date="1935-08-14",
+            chapter=531,
+            stat_volume="49",
+            stat_page=620,
+            raw_text="Aug. 14, 1935, ch. 531, 49 Stat. 620",
+        )
+
+        citations = citations_from_source_credit_refs([], act_refs=[act_ref])
+
+        assert len(citations) == 1
+        citation = citations[0]
+        assert citation.is_act is True
+        assert citation.act is not None
+        assert citation.act.stat_volume == "49"
+        assert citation.act.stat_page == 620
+        assert citation.stat_volume == "49"
+        assert citation.stat_page == 620
+        assert citation.stat_reference == "49 Stat. 620"
+        assert citation.raw_text == "Aug. 14, 1935, ch. 531, 49 Stat. 620"
+
+    def test_act_citation_captures_alphanumeric_stat_reference(self) -> None:
+        """Act ref with a letter-suffixed Stat volume (e.g. "70A") populates
+        stat fields, mirroring 32 U.S.C. Sec. 106:
+        "(Aug. 10, 1956, ch. 1041, 70A Stat. 599.)" (issue #543).
+
+        Before the fix, stat_volume/stat_page/stat_reference were all None
+        and raw_text omitted ", 70A Stat. 599" entirely for this citation.
+        """
+        act_ref = ActRef(
+            date="1956-08-10",
+            chapter=1041,
+            stat_volume="70A",
+            stat_page=599,
+            raw_text="Aug. 10, 1956, ch. 1041, 70A Stat. 599",
+        )
+
+        citations = citations_from_source_credit_refs([], act_refs=[act_ref])
+
+        assert len(citations) == 1
+        citation = citations[0]
+        assert citation.is_act is True
+        assert citation.act is not None
+        assert citation.act.stat_volume == "70A"
+        assert citation.act.stat_page == 599
+        assert citation.stat_volume == "70A"
+        assert citation.stat_page == 599
+        assert citation.stat_reference == "70A Stat. 599"
+        assert citation.raw_text == "Aug. 10, 1956, ch. 1041, 70A Stat. 599"
+
+    def test_law_citation_still_captures_stat_reference(self) -> None:
+        """Sanity check that the existing law-type (Pub. L.) path still works,
+        modeled on 32 U.S.C. Sec. 107's Pub. L. 90-83 amendment citation.
+        """
+        pl_ref = SourceCreditRef(
+            congress=90,
+            law_number=83,
+            date="Sept. 11, 1967",
+            stat_volume="81",
+            stat_page=220,
+            raw_text="Pub. L. 90-83, § 4, 81 Stat. 220",
+        )
+
+        citations = citations_from_source_credit_refs([pl_ref], act_refs=[])
+
+        assert len(citations) == 1
+        citation = citations[0]
+        assert citation.is_act is False
+        assert citation.law is not None
+        assert citation.law.stat_volume == "81"
+        assert citation.law.stat_page == 220
+        assert citation.stat_reference == "81 Stat. 220"
+
+    def test_act_then_law_citations_both_capture_stat_reference(self) -> None:
+        """Full 32 U.S.C. Sec. 107-style sourceCredit: the Framework Act ref
+        (with alphanumeric Stat volume) followed by a Pub. L. amendment ref
+        (with numeric Stat volume) should both populate their stat fields.
+        """
+        act_ref = ActRef(
+            date="1956-08-10",
+            chapter=1041,
+            stat_volume="70A",
+            stat_page=599,
+            raw_text="Aug. 10, 1956, ch. 1041, 70A Stat. 599",
+        )
+        pl_ref = SourceCreditRef(
+            congress=90,
+            law_number=83,
+            section="4",
+            date="Sept. 11, 1967",
+            stat_volume="81",
+            stat_page=220,
+            raw_text="Pub. L. 90-83, § 4, 81 Stat. 220",
+        )
+
+        citations = citations_from_source_credit_refs([pl_ref], act_refs=[act_ref])
+
+        assert len(citations) == 2
+        assert citations[0].is_act is True
+        assert citations[0].stat_reference == "70A Stat. 599"
+        assert citations[1].is_act is False
+        assert citations[1].stat_reference == "81 Stat. 220"
 
 
 class TestNormalizeParsedSection:
@@ -3054,7 +3171,7 @@ class TestNoteRefsToSchemas:
             ref_type="statute",
             href="/us/stat/90/2546",
             display_text="90 Stat. 2546",
-            stat_volume=90,
+            stat_volume="90",
             stat_page=2546,
         )
         schemas = note_refs_to_schemas([note_ref])
@@ -3062,7 +3179,7 @@ class TestNoteRefsToSchemas:
         assert len(schemas) == 1
         schema = schemas[0]
         assert schema.ref_type == NoteRefType.STATUTE
-        assert schema.stat_volume == 90
+        assert schema.stat_volume == "90"
         assert schema.stat_page == 2546
         assert schema.target_id == "90 Stat. 2546"
 
@@ -3105,7 +3222,7 @@ class TestNoteRefsToSchemas:
                 ref_type="statute",
                 href="/us/stat/90/2546",
                 display_text="90 Stat. 2546",
-                stat_volume=90,
+                stat_volume="90",
                 stat_page=2546,
             ),
         ]
@@ -3150,7 +3267,7 @@ class TestNoteReferenceSchema:
         schema = NoteReferenceSchema(
             ref_type=NoteRefType.STATUTE,
             href="/us/stat/90/2546",
-            stat_volume=90,
+            stat_volume="90",
             stat_page=2546,
         )
         assert schema.target_id == "90 Stat. 2546"

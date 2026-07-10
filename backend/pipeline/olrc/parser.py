@@ -186,7 +186,8 @@ class SourceCreditRef:
     division: str | None = None  # e.g., "A"
     title: str | None = None  # e.g., "V"
     date: str | None = None  # e.g., "Mar. 27, 2020"
-    stat_volume: int | None = None  # e.g., 134
+    stat_volume: str | None = None  # e.g., "134"; some pre-1957 volumes have letter
+    # suffixes (e.g., "70A"), so this is kept as a string rather than int.
     stat_page: int | None = None  # e.g., 501
     raw_text: str = ""  # The display text from the ref element
     is_framework: bool = False  # True if this is the "as added" parent reference
@@ -204,7 +205,8 @@ class ActRef:
     chapter: int  # e.g., 531
     section: str | None = None  # e.g., "601"
     title: str | None = None  # e.g., "VI"
-    stat_volume: int | None = None
+    stat_volume: str | None = None  # e.g., "70A"; pre-1957 codification volumes
+    # (Titles 10, 18, 32) used letter-suffixed volume numbers, so this is a string.
     stat_page: int | None = None
     raw_text: str = ""  # The display text from the ref element
     short_title: str | None = None  # e.g., "Social Security Act"
@@ -234,7 +236,8 @@ class NoteRef:
     act_chapter: int | None = None  # For ACT
     usc_title: int | None = None  # For USC_SECTION
     usc_section: str | None = None  # For USC_SECTION (e.g., "106")
-    stat_volume: int | None = None  # For STATUTE
+    # For STATUTE. May have a letter suffix (e.g., "70A"), so kept as a string.
+    stat_volume: str | None = None
     stat_page: int | None = None  # For STATUTE
 
 
@@ -1689,19 +1692,30 @@ class USLMParser:
                         act_refs.append(act_ref)
                         last_ref_type = "act"
 
-                # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references
+                # Parse /us/stat/VOLUME/PAGE hrefs to capture Stat references.
+                # VOLUME is usually numeric, but pre-1957 codification volumes
+                # (Titles 10, 18, 32) use a letter-suffixed volume number such as
+                # "70A", so the volume is captured as a string, not cast to int.
                 elif "/us/stat/" in href:
-                    match = re.match(r"/us/stat/(\d+)/(\d+)", href)
+                    match = re.match(r"/us/stat/(\d+[A-Za-z]?)/(\d+)", href)
                     if match:
-                        stat_volume = int(match.group(1))
+                        stat_volume = match.group(1)
                         stat_page = int(match.group(2))
-                        # Apply to the most recent ref
+                        # Apply to the most recent ref, and fold the Stat ref's own
+                        # display text into raw_text so the full citation (e.g.
+                        # "Aug. 10, 1956, ch. 1041, 70A Stat. 599") is preserved.
                         if last_ref_type == "pl" and pl_refs:
                             pl_refs[-1].stat_volume = stat_volume
                             pl_refs[-1].stat_page = stat_page
+                            if text:
+                                pl_refs[-1].raw_text = f"{pl_refs[-1].raw_text}, {text}"
                         elif last_ref_type == "act" and act_refs:
                             act_refs[-1].stat_volume = stat_volume
                             act_refs[-1].stat_page = stat_page
+                            if text:
+                                act_refs[
+                                    -1
+                                ].raw_text = f"{act_refs[-1].raw_text}, {text}"
 
             elif local_tag == "date":
                 # Act refs already have dates in the href; <date> elements belong to
@@ -1802,16 +1816,17 @@ class USLMParser:
                         )
                     )
 
-            # Parse /us/stat/VOLUME/PAGE hrefs (Statutes at Large)
+            # Parse /us/stat/VOLUME/PAGE hrefs (Statutes at Large). VOLUME may
+            # have a letter suffix for pre-1957 codification volumes (e.g., "70A").
             elif "/us/stat/" in href:
-                match = re.match(r"/us/stat/(\d+)/(\d+)", href)
+                match = re.match(r"/us/stat/(\d+[A-Za-z]?)/(\d+)", href)
                 if match:
                     refs.append(
                         NoteRef(
                             ref_type="statute",
                             href=href,
                             display_text=text,
-                            stat_volume=int(match.group(1)),
+                            stat_volume=match.group(1),
                             stat_page=int(match.group(2)),
                         )
                     )

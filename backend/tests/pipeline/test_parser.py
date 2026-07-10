@@ -1049,7 +1049,7 @@ class TestExtractNotesRefs:
 
         ref = section.notes_refs[0]
         assert ref.ref_type == "statute"
-        assert ref.stat_volume == 90
+        assert ref.stat_volume == "90"
         assert ref.stat_page == 2546
 
     def test_extract_act_refs(
@@ -1108,6 +1108,138 @@ class TestExtractNotesRefs:
         assert len(section.notes_refs) == 0
 
 
+class TestExtractSourceCreditRefs:
+    """Tests for _extract_source_credit_refs (sourceCredit <ref> extraction).
+
+    Regression tests for issue #543: the original-enactment Act citation
+    silently dropped its Statutes at Large reference when the sourceCredit
+    contained two sibling <ref> elements (the Act/chapter ref, followed by
+    the Stat ref), even though the equivalent Pub. L. (law-type) citation
+    path correctly associated the Stat ref with the preceding law ref.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_act_ref_with_numeric_stat_volume(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Act ref followed by a plain numeric Stat ref should populate stat fields."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/42</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t42" number="42">
+      <heading>PUBLIC HEALTH</heading>
+      <chapter identifier="/us/usc/t42/ch7" number="7">
+        <heading>SOCIAL SECURITY</heading>
+        <section identifier="/us/usc/t42/s401" number="401">
+          <heading>Trust funds</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/act/1935-08-14/ch531">Aug. 14, 1935, ch. 531</ref>, <ref href="/us/stat/49/620">49 Stat. 620</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_act_numeric_stat.xml"
+        xml_path.write_text(xml_content)
+
+        result = parser.parse_file(xml_path)
+        section = result.sections[0]
+
+        assert len(section.act_refs) == 1
+        act_ref = section.act_refs[0]
+        assert act_ref.date == "1935-08-14"
+        assert act_ref.chapter == 531
+        assert act_ref.stat_volume == "49"
+        assert act_ref.stat_page == 620
+        assert act_ref.raw_text == "Aug. 14, 1935, ch. 531, 49 Stat. 620"
+
+    def test_act_ref_with_alphanumeric_stat_volume(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Act ref followed by a letter-suffixed Stat ref (e.g. '70A') should
+        still populate stat fields, mirroring 32 U.S.C. Sec. 106's sourceCredit:
+        "(Aug. 10, 1956, ch. 1041, 70A Stat. 599.)" (issue #543).
+
+        Volume "70A" refers to the 1956 recodification of Titles 10, 18, and 32,
+        and cannot be parsed as a plain integer.
+        """
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/32</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t32" number="32">
+      <heading>NATIONAL GUARD</heading>
+      <chapter identifier="/us/usc/t32/ch1" number="1">
+        <heading>ORGANIZATION</heading>
+        <section identifier="/us/usc/t32/s106" number="106">
+          <heading>Compilation of National Guard laws</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/act/1956-08-10/ch1041">Aug. 10, 1956, ch. 1041</ref>, <ref href="/us/stat/70A/599">70A Stat. 599</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_act_alphanumeric_stat.xml"
+        xml_path.write_text(xml_content)
+
+        result = parser.parse_file(xml_path)
+        section = result.sections[0]
+
+        assert len(section.act_refs) == 1
+        act_ref = section.act_refs[0]
+        assert act_ref.date == "1956-08-10"
+        assert act_ref.chapter == 1041
+        assert act_ref.stat_volume == "70A"
+        assert act_ref.stat_page == 599
+        assert act_ref.raw_text == "Aug. 10, 1956, ch. 1041, 70A Stat. 599"
+
+    def test_pl_ref_with_numeric_stat_volume_still_works(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Sanity check that the law-type (Pub. L.) path keeps working,
+        modeled on 32 U.S.C. Sec. 107's amendment citation for Pub. L. 90-83.
+        """
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/32</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t32" number="32">
+      <heading>NATIONAL GUARD</heading>
+      <chapter identifier="/us/usc/t32/ch1" number="1">
+        <heading>ORGANIZATION</heading>
+        <section identifier="/us/usc/t32/s107" number="107">
+          <heading>Regulations</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/pl/90/83/s4">Pub. L. 90-83, § 4</ref>, <date date="1967-09-11">Sept. 11, 1967</date>, <ref href="/us/stat/81/220">81 Stat. 220</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_pl_numeric_stat.xml"
+        xml_path.write_text(xml_content)
+
+        result = parser.parse_file(xml_path)
+        section = result.sections[0]
+
+        assert len(section.source_credit_refs) == 1
+        pl_ref = section.source_credit_refs[0]
+        assert pl_ref.congress == 90
+        assert pl_ref.law_number == 83
+        assert pl_ref.stat_volume == "81"
+        assert pl_ref.stat_page == 220
+        assert pl_ref.raw_text == "Pub. L. 90-83, § 4, 81 Stat. 220"
+
+
 class TestNoteRefDataclass:
     """Tests for NoteRef dataclass."""
 
@@ -1145,11 +1277,11 @@ class TestNoteRefDataclass:
             ref_type="statute",
             href="/us/stat/90/2546",
             display_text="90 Stat. 2546",
-            stat_volume=90,
+            stat_volume="90",
             stat_page=2546,
         )
         assert ref.ref_type == "statute"
-        assert ref.stat_volume == 90
+        assert ref.stat_volume == "90"
         assert ref.stat_page == 2546
 
     def test_act_ref(self) -> None:
@@ -1166,7 +1298,7 @@ class TestNoteRefDataclass:
         assert ref.act_chapter == 531
 
 
-class TestExtractSourceCreditRefs:
+class TestExtractSourceCreditRefsAsAddedDate:
     """Tests for _extract_source_credit_refs — specifically the as-added date bug (Issue #480)."""
 
     @pytest.fixture
@@ -1228,7 +1360,7 @@ class TestExtractSourceCreditRefs:
         assert adding.date == "Apr. 24, 1996", (
             f"Adding law PL 104-132 should have date='Apr. 24, 1996', got {adding.date!r}"
         )
-        assert adding.stat_volume == 110
+        assert adding.stat_volume == "110"
         assert adding.stat_page == 1256
 
     def test_simple_single_law_date_attributed_correctly(
@@ -1267,5 +1399,5 @@ class TestExtractSourceCreditRefs:
         assert ref.congress == 94
         assert ref.law_number == 553
         assert ref.date == "Oct. 19, 1976"
-        assert ref.stat_volume == 90
+        assert ref.stat_volume == "90"
         assert ref.stat_page == 2541
