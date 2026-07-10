@@ -2045,6 +2045,93 @@ class TestStatutoryNotesHeaderParsing:
         first_text = " ".join(line.content for line in first_note.lines)
         assert "congressional defense committees" in first_text
 
+    def test_single_statutory_note_h1_header(self) -> None:
+        """Regression for Issue #534: lone note encoded with [H1] heading marker.
+
+        When a USLM section uses <b>Effective Date</b> as the sub-heading for
+        a statutory note (producing [H1]...[/H1] rather than [NH]...[/NH]),
+        _parse_statutory_notes must still capture the note via the [H1] fallback.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        raw_notes = (
+            "[H1]Statutory Notes and Related Subsidiaries[/H1] "
+            "[H1]Effective Date[/H1]\n\n"
+            "For effective date of this section, see section 29 of Pub. L. 91-597, "
+            "set out as a note under section 1031 of this title."
+        )
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "Effective Date"
+        assert notes.notes[0].category.value == "statutory"
+        all_text = " ".join(line.content for line in notes.notes[0].lines)
+        assert "Pub. L. 91-597" in all_text
+
+    def test_single_statutory_note_plain_text_header(self) -> None:
+        """Regression for Issue #534: lone note with header as plain tail text.
+
+        21 U.S.C. ss 1054's XML has "Effective Date" as tail text of the
+        <b>Statutory Notes and Related Subsidiaries</b> element with no marker.
+        The plain-text fallback must capture it when no [NH] or [H1] markers exist.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        raw_notes = (
+            "[H1]Statutory Notes and Related Subsidiaries[/H1] "
+            "Effective Date\n\n"
+            "For effective date of this section, see section 29 of Pub. L. 91-597, "
+            "set out as a note under section 1031 of this title."
+        )
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "Effective Date"
+        assert notes.notes[0].category.value == "statutory"
+        all_text = " ".join(line.content for line in notes.notes[0].lines)
+        assert "Pub. L. 91-597" in all_text
+
+    def test_full_xml_pipeline_issue_534(self) -> None:
+        """End-to-end regression for Issue #534: full XML to parsed notes pipeline.
+
+        Confirms that the complete pipeline (XML parsing -> raw text ->
+        _parse_notes_structure) correctly captures the lone Effective Date
+        statutory note that immediately follows the cross-heading in the USLM
+        XML for 21 U.S.C. ss 1054.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        # Mirrors the USLM XML structure for 21 U.S.C. ss 1054 as described in Issue #534.
+        xml = (
+            "<notes>"
+            "<b>Statutory Notes and Related Subsidiaries</b>"
+            "Effective Date"
+            "<p>For effective date of this section, see section 29 of "
+            "Pub. L. 91-597, set out as a note under section 1031 of this title.</p>"
+            "</notes>"
+        )
+        notes_elem = etree.fromstring(xml)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+        statutory = [n for n in notes.notes if n.category.value == "statutory"]
+        assert len(statutory) == 1, f"Expected 1 statutory note, got {len(statutory)}"
+        assert statutory[0].header == "Effective Date"
+        body = " ".join(line.content for line in statutory[0].lines)
+        assert "Pub. L. 91-597" in body
+
 
 class TestFlatNotesParser:
     """Tests for _parse_flat_notes — fallback for sections without category wrappers.
