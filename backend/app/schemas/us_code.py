@@ -90,12 +90,17 @@ class CodeReferenceSchema(BaseModel):
 class AmendmentSchema(BaseModel):
     """A single amendment to a section.
 
-    Represents one change made to a section by a Public Law,
+    Represents one change made to a section by a Public Law or a pre-1957 Act,
     like a commit in version control.
+
+    For post-1957 amendments, ``law`` is populated with the Public Law reference.
+    For pre-1957 (chapter-style) amendments, ``law`` is None because no modern
+    PL number exists.
     """
 
-    law: PublicLawSchema = Field(
-        ..., description="The Public Law that made this amendment"
+    law: PublicLawSchema | None = Field(
+        None,
+        description="The Public Law that made this amendment (None for pre-1957 Acts)",
     )
     year: int = Field(..., description="Year of the amendment")
     description: str = Field(..., description="Description of what changed")
@@ -103,18 +108,20 @@ class AmendmentSchema(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def public_law_id(self) -> str:
-        """Return normalized PL identifier."""
+        """Return normalized PL identifier, or empty string for pre-1957 Acts."""
+        if self.law is None:
+            return ""
         return self.law.public_law_id
 
     @property
-    def congress(self) -> int:
-        """Return the congress number."""
-        return self.law.congress
+    def congress(self) -> int | None:
+        """Return the congress number, or None for pre-1957 Acts."""
+        return self.law.congress if self.law is not None else None
 
     @property
-    def law_number(self) -> int:
-        """Return the law number."""
-        return self.law.law_number
+    def law_number(self) -> int | None:
+        """Return the law number, or None for pre-1957 Acts."""
+        return self.law.law_number if self.law is not None else None
 
 
 class ShortTitleSchema(BaseModel):

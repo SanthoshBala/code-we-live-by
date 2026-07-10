@@ -3025,3 +3025,79 @@ class TestNoteReferenceSchema:
             # Missing congress and law_number
         )
         assert schema.target_id == "/us/pl/unknown"
+
+
+class TestPrePLAmendmentCitations:
+    """Regression tests for issues #566 and #567.
+
+    Pre-1957 chapter-style amendment citations (e.g. "Act Oct. 31, 1951, ch. 655")
+    must populate notes.amendments and contribute to last_amendment_year even though
+    they have no modern Pub. L. number.
+    """
+
+    def test_pre_pl_amendment_appears_in_amendments(self) -> None:
+        """A section with only a chapter-style amendment has a non-empty notes.amendments."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            '1951—Act Oct. 31, 1951, substituted "United States district court for"'
+            ' for "United States court in and for", and "by law for" for'
+            ' "on February 12, 1925, for".'
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].year == 1951
+        assert amendments[0].law is None
+        assert "Act Oct. 31, 1951" in amendments[0].description
+
+    def test_pre_pl_amendment_year_from_year_prefix(self) -> None:
+        """last_amendment_year is derived from the year prefix in a chapter-style note."""
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Amendments[/NH] "
+            '1951—Act Oct. 31, 1951, ch. 655, substituted "United States district court for"'
+            ' for "United States court in and for".'
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        assert len(notes.amendments) == 1
+        assert notes.amendments[0].year == 1951
+        assert notes.amendments[0].law is None
+
+    def test_modern_pl_amendments_unaffected(self) -> None:
+        """Sections with modern Pub. L. amendments are parsed as before."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "2013—Pub. L. 112–239, § 1033(b)(2)(B), made technical amendments."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].year == 2013
+        assert amendments[0].law is not None
+        assert amendments[0].law.congress == 112
+        assert amendments[0].law.law_number == 239
+
+    def test_pre_pl_and_modern_amendments_coexist(self) -> None:
+        """A section amended by both an Act and a Pub. L. returns both entries."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "2000—Pub. L. 106–518 made a change.\n"
+            '1951—Act Oct. 31, 1951, ch. 655, substituted "district court for" for "court in and for".'
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+        years = {a.year for a in amendments}
+        assert years == {2000, 1951}
+        modern = next(a for a in amendments if a.year == 2000)
+        pre_pl = next(a for a in amendments if a.year == 1951)
+        assert modern.law is not None
+        assert modern.law.congress == 106
+        assert pre_pl.law is None

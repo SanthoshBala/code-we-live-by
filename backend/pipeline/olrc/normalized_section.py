@@ -1243,8 +1243,16 @@ def _parse_amendments(text: str) -> list[Amendment]:
                         description=" ".join(year_block.split()),
                     )
                 )
-            # Skip amendments where we can't extract congress/law_number
-            # since we need valid law references
+            elif re.search(r"\bAct\b", year_block):
+                # Pre-1957 chapter-style citation (e.g. "Act Oct. 31, 1951, ch. 655 …").
+                # No modern PL number exists, so law is None.
+                amendments.append(
+                    Amendment(
+                        law=None,
+                        year=year,
+                        description=" ".join(year_block.split()),
+                    )
+                )
 
     return amendments
 
