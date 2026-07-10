@@ -1323,6 +1323,185 @@ class TestNormalizeParsedSectionContinuation:
         assert result.provisions[0].content == "(a) Single item."
 
 
+class TestNormalizeParsedSection9USC13:
+    """End-to-end normalization tests for 9 U.S.C. § 13.
+
+    Regression tests for Issues #478 and #479: the statutory body parser was
+    silently dropping the introductory <p> element that precedes the (a)/(b)/(c)
+    list, and merging a trailing <p> into the (c) item without a separator.
+    """
+
+    def test_intro_p_renders_as_first_provision(self) -> None:
+        """The introductory <p> before the first list item must appear as the
+        first provision at indent_level=0, not be dropped entirely.
+
+        Regression test for Issue #478.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        # Simulate what the parser produces AFTER the fix: intro <p> captured
+        # as the synthetic wrapper's content (chapeau), trailing <p> in continuation.
+        section = ParsedSection(
+            section_number="13",
+            heading="Application for order confirming, modifying, or correcting award",
+            full_citation="9 U.S.C. § 13",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content=(
+                        "The party moving for an order confirming, modifying, or"
+                        " correcting an award shall, at the time such order is filed"
+                        " with the clerk for the entry of judgment thereon, also file"
+                        " the following papers with the clerk:"
+                    ),
+                    children=[
+                        ParsedSubsection(
+                            marker="(a)",
+                            heading=None,
+                            content=(
+                                "The agreement; the selection or appointment, if any,"
+                                " of an additional arbitrator or umpire; and each"
+                                " written extension of the time, if any, within which"
+                                " to make the award."
+                            ),
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(b)",
+                            heading=None,
+                            content="The award.",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(c)",
+                            heading=None,
+                            content=(
+                                "Each notice, affidavit, or other paper used upon an"
+                                " application to confirm, modify, or correct the award,"
+                                " and a copy of each order of the court upon such an"
+                                " application."
+                            ),
+                            level="paragraph",
+                        ),
+                    ],
+                    level="subsection",
+                    continuation=[
+                        "The judgment shall be docketed as if it was rendered in an action."
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Must have 5 provisions: intro + (a) + (b) + (c) + docketing sentence
+        assert result.provision_count == 5, (
+            f"Expected 5 provisions (intro + 3 items + docketing), got"
+            f" {result.provision_count}: {[p.content for p in result.provisions]}"
+        )
+
+        # First provision: intro sentence at indent 0 (Issue #478)
+        intro = result.provisions[0]
+        assert "party moving" in intro.content, (
+            "Introductory sentence must appear as the first provision"
+        )
+        assert intro.indent_level == 0
+        assert intro.marker is None
+
+        # (a), (b), (c) at indent 1
+        assert "(a)" in result.provisions[1].content
+        assert result.provisions[1].indent_level == 1
+        assert "(b)" in result.provisions[2].content
+        assert result.provisions[2].indent_level == 1
+        assert "(c)" in result.provisions[3].content
+        assert result.provisions[3].indent_level == 1
+
+        # Docketing sentence as a separate provision at indent 0 (Issue #479)
+        docketing = result.provisions[4]
+        assert "docketed" in docketing.content, (
+            "Docketing sentence must appear as a distinct final provision"
+        )
+        assert docketing.indent_level == 0
+        assert docketing.marker is None
+
+    def test_docketing_sentence_not_merged_with_c_item(self) -> None:
+        """The docketing sentence must NOT be concatenated into the (c) content.
+
+        Regression test for Issue #479: the merged content was
+        '(c) ...application.The judgment shall be docketed...' (no space).
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="13",
+            heading="Application for order confirming, modifying, or correcting award",
+            full_citation="9 U.S.C. § 13",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content="The party moving for an order:",
+                    children=[
+                        ParsedSubsection(
+                            marker="(a)",
+                            heading=None,
+                            content="The agreement.",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(c)",
+                            heading=None,
+                            content=(
+                                "Each notice, affidavit, or other paper used upon an"
+                                " application to confirm, modify, or correct the award,"
+                                " and a copy of each order of the court upon such an"
+                                " application."
+                            ),
+                            level="paragraph",
+                        ),
+                    ],
+                    level="subsection",
+                    continuation=[
+                        "The judgment shall be docketed as if it was rendered in an action."
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Find the (c) provision
+        c_provision = next(
+            (p for p in result.provisions if p.content.startswith("(c)")), None
+        )
+        assert c_provision is not None, "Provision (c) must be present"
+
+        # (c) content must NOT include the docketing sentence
+        assert "docketed" not in c_provision.content, (
+            "Docketing sentence must NOT be merged into provision (c)"
+        )
+        # The no-space artifact must not appear
+        assert "application.The" not in c_provision.content, (
+            "Sentences must not be concatenated without a space"
+        )
+
+        # The docketing sentence must be a separate provision
+        docketing = next(
+            (p for p in result.provisions if "docketed" in p.content), None
+        )
+        assert docketing is not None, (
+            "Docketing sentence must appear as a distinct provision"
+        )
+        assert docketing.line_number > c_provision.line_number, (
+            "Docketing sentence must appear after provision (c)"
+        )
+
+
 class TestNormalizeNoteContent:
     """Tests for normalize_note_content function (notes parsing)."""
 
