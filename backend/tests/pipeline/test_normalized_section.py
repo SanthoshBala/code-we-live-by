@@ -2241,6 +2241,110 @@ class TestNoteTopicAmendmentParsing:
         assert 2007 in years
 
 
+class TestAmendmentsIndentLevel:
+    """Regression tests for issue #573: Amendments note lines must use indent_level=1.
+
+    The _amendment_lines fast-path previously hardcoded indent_level=0, causing
+    Amendments content to render flush-left while peer notes (Derivation,
+    References In Text) correctly used indent_level=1 from normalize_note_content.
+    All editorial note content lines must have the same base indent level.
+    """
+
+    def test_amendment_lines_indent_level_is_one(self) -> None:
+        """_amendment_lines returns lines with indent_level=1, matching peer notes."""
+        from pipeline.olrc.normalized_section import _amendment_lines
+
+        raw = (
+            "[NH]Amendments[/NH] "
+            "1954—Act Sept. 3, 1954, brought section into conformity with arbitration "
+            "rules of the Federal Rules of Civil Procedure."
+        )
+        lines = _amendment_lines(raw)
+
+        assert len(lines) > 0
+        for line in lines:
+            assert line.indent_level == 1, (
+                f"Expected indent_level=1 for Amendments line, got {line.indent_level}: "
+                f"{line.content!r}"
+            )
+
+    def test_amendments_indent_matches_peer_notes_issue_573(self) -> None:
+        """9 U.S.C. § 4 pattern: Amendments indent_level equals Derivation/References indent.
+
+        Amendments, Derivation, and References In Text are peer notes in the OLRC
+        XML. All three must produce lines with the same indent_level so the rendered
+        notes section is visually consistent. Closes #573.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note class="editorial">'
+            '<heading class="smallCaps">Editorial Notes</heading>'
+            '<note topic="derivation">'
+            "<heading>Derivation</heading>"
+            "<p>Act Feb. 12, 1925, ch. 213, § 4, 43 Stat. 883.</p>"
+            "</note>"
+            '<note topic="referencesInText">'
+            "<heading>References In Text</heading>"
+            "<p>Federal Rules of Civil Procedure, referred to in text,"
+            " are set out in the Appendix to Title 28.</p>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>1954—Act Sept. 3, 1954, brought section into conformity"
+            " with arbitration rules of the Federal Rules of Civil Procedure.</p>"
+            "</note>"
+            "</note>"
+            "</notes>"
+        )
+        notes_elem = etree.fromstring(xml)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+
+        # Collect all content lines (non-empty, non-header) by note header
+        content_lines_by_header: dict[str, list[int]] = {}
+        for note in notes.notes:
+            content_lines = [
+                line.indent_level
+                for line in note.lines
+                if line.content and not line.is_header
+            ]
+            if content_lines:
+                content_lines_by_header[note.header] = content_lines
+
+        assert "Derivation" in content_lines_by_header, "Derivation note not found"
+        assert "References In Text" in content_lines_by_header, (
+            "References In Text note not found"
+        )
+        assert "Amendments" in content_lines_by_header, "Amendments note not found"
+
+        derivation_indent = content_lines_by_header["Derivation"][0]
+        references_indent = content_lines_by_header["References In Text"][0]
+        amendments_indent = content_lines_by_header["Amendments"][0]
+
+        assert amendments_indent == derivation_indent, (
+            f"Amendments indent_level ({amendments_indent}) != "
+            f"Derivation indent_level ({derivation_indent})"
+        )
+        assert amendments_indent == references_indent, (
+            f"Amendments indent_level ({amendments_indent}) != "
+            f"References In Text indent_level ({references_indent})"
+        )
+        # Explicit check: all note content must be at indent_level=1
+        assert amendments_indent == 1, (
+            f"Expected indent_level=1 for all editorial note content, "
+            f"got {amendments_indent} for Amendments"
+        )
+
+
 class TestCleanHeading:
     """Tests for _clean_heading function."""
 
