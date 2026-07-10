@@ -1,17 +1,35 @@
-# Daily Ingestion Spot-Check Log
+# Daily Section Test Status
 
-This file tracks daily spot-checks comparing CWLB's ingested/parsed
-representation of a randomly selected US Code section against the
-authoritative OLRC source at the same release point.
+This file records the results of daily random-section tests comparing the CWLB backend's
+parsed representation against the authoritative OLRC source XML.
 
-## 2026.06.10
+Each row represents one tested section. "Clean" means no discrepancies were found between
+CWLB and the OLRC XML at the stated release point.
 
-- **Section tested**: 49 U.S.C. § 11707 (Liability when property is delivered
-  in violation of routing instructions)
-- **Title**: 49 (Transportation)
-- **Release point**: Public Law 113-21 (effective 2013-01-01)
-- **Result**: Clean. CWLB's `text_content`, provision/line breakdown,
-  citations, amendment notes (Prior Provisions), and cross-reference
-  extraction all match the OLRC XML
-  (`releasepoints/us/pl/113/21/xml_usc49@113-21.zip`) for this section.
-  No discrepancies found.
+| Date       | Title | Section | Heading                                          | Release Point | Status |
+|------------|-------|---------|--------------------------------------------------|---------------|---------|
+| 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership    | 113-21        | ✅ Clean |
+| 2026.06.10 | 49    | 11707   | Liability when property is delivered in violation of routing instructions | 113-21 | ✅ Clean |
+
+## Test methodology
+
+1. `GET /api/v1/revisions/latest?title={title}` — determine current release point.
+2. `GET /api/v1/titles` — pick a title at random.
+3. `GET /api/v1/titles/{title}/structure` — pick a non-repealed section at random.
+4. `GET /api/v1/sections/{title}/{section}` — fetch CWLB's parsed representation.
+5. Download OLRC XML bulk zip for the matching release point:
+   `https://uscode.house.gov/download/releasepoints/us/pl/{congress}/{law}/xml_usc{title}@{release}.zip`
+6. Parse the XML and compare: heading, main text provisions, source credit, enacted date,
+   amendment history, and notes (historical, editorial, statutory).
+7. File a GitHub issue with label `bug` for each discrepancy found; otherwise update this file.
+
+## Fields checked
+
+- Section heading
+- All subsection/paragraph text (chapeau, content, indentation)
+- Source credit / enacted date / last modified date
+- Citations and amendments in notes
+- Historical and revision notes (full text)
+- Editorial notes
+- Cross-references
+- `is_repealed`, `is_positive_law`, `group_ancestors`
