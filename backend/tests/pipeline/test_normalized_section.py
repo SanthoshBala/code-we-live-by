@@ -1,5 +1,7 @@
 """Tests for legal text line normalization."""
 
+import re
+
 from app.models.enums import NoteRefType
 from app.schemas import NoteReferenceSchema
 from pipeline.olrc.normalized_section import (
@@ -1628,6 +1630,69 @@ class TestParserNotesContent:
         assert '"SEC. 2."' in content
         assert "[QC:1]" in content
         assert "[QC:2]" in content
+
+    def test_paragraphs_direct_children_of_quoted_content(self) -> None:
+        """quotedContent whose direct children are <paragraph> (no enclosing
+        <section>/<subsection>), optionally preceded by a bare <inline> intro.
+
+        This mirrors the real OLRC structure for the 21 U.S.C. 822 "Findings"
+        statutory note (Pub. L. 111-273, Sec. 2), where <quotedContent> wraps
+        an <inline> intro line followed directly by sibling <paragraph>
+        elements -- some of which have nested <subparagraph> children -- with
+        no <section> or <subsection> wrapper at the top level (issue #536).
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes>
+            <quotedContent>
+                <inline>"Congress finds the following:</inline>
+                <paragraph>
+                    <num value="1">"(1)"</num>
+                    <content>The nonmedical use of prescription drugs is a growing problem.</content>
+                </paragraph>
+                <paragraph>
+                    <num value="2">"(2)"</num>
+                    <chapeau>According to the Department of Justice&#8212;</chapeau>
+                    <subparagraph>
+                        <num value="A">"(A)"</num>
+                        <content>the number of deaths has increased significantly; and</content>
+                    </subparagraph>
+                    <subparagraph>
+                        <num value="B">"(B)"</num>
+                        <content>treatment admissions increased.</content>
+                    </subparagraph>
+                </paragraph>
+            </quotedContent>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # The bare intro line and each enumerated paragraph/subparagraph
+        # must become its own [QC:level] marker rather than being flattened
+        # into a single block of concatenated text.
+        assert "Congress finds the following" in content
+        assert '"(1)"' in content
+        assert '"(2)"' in content
+        assert '"(A)"' in content
+        assert '"(B)"' in content
+        assert "[QC:1]" in content
+        assert "[QC:2]" in content
+
+        # The intro and each paragraph/subparagraph must be distinct QC
+        # blocks -- not one giant block containing all of the text below.
+        qc_blocks = re.findall(r"\[QC:\d+\](.*?)\[/QC\]", content, flags=re.DOTALL)
+        assert len(qc_blocks) >= 5
+        assert not any('"(1)"' in block and '"(2)"' in block for block in qc_blocks), (
+            "paragraphs (1) and (2) must not be merged into a single QC block"
+        )
+        assert not any('"(A)"' in block and '"(B)"' in block for block in qc_blocks), (
+            "subparagraphs (A) and (B) must not be merged into a single QC block"
+        )
 
     def test_is_quoted_flag_set_on_qc_lines(self) -> None:
         """Lines derived from quotedContent blocks have is_quoted=True."""
