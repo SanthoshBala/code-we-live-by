@@ -1112,3 +1112,108 @@ class TestNoteRefDataclass:
         assert ref.ref_type == "act"
         assert ref.act_date == "1935-08-14"
         assert ref.act_chapter == 531
+
+
+class TestExtractSourceCreditRefs:
+    """Tests for _extract_source_credit_refs — specifically the as-added date bug (Issue #480)."""
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_as_added_date_attributed_to_adding_law_not_framework(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Date after an 'as added' clause must go to the adding law, not the framework law.
+
+        Regression test for Issue #480:
+            (Pub. L. 87–195, pt. III, § 620G, as added Pub. L. 104–132,
+             title III, § 325, Apr. 24, 1996, 110 Stat. 1256.)
+
+        PL 87-195 has no date in this credit; the date belongs to PL 104-132.
+        """
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/22</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t22" number="22">
+      <heading>FOREIGN RELATIONS AND INTERCOURSE</heading>
+      <chapter identifier="/us/usc/t22/ch32" number="32">
+        <heading>FOREIGN ASSISTANCE</heading>
+        <section identifier="/us/usc/t22/s2377" number="2377">
+          <heading>Prohibition on assistance to countries that aid terrorist states</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/pl/87/195/tIII/s620G">Pub. L. 87–195</ref>, pt. III, § 620G, as added <ref href="/us/pl/104/132/tIII/s325">Pub. L. 104–132</ref>, title III, § 325, <date>Apr. 24, 1996</date>, <ref href="/us/stat/110/1256">110 Stat. 1256</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_as_added.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+
+        pl_refs = section.source_credit_refs
+        assert len(pl_refs) == 2, f"Expected 2 PL refs, got {len(pl_refs)}"
+
+        # PL 87-195 is the framework law — no date should be attributed to it
+        framework = pl_refs[0]
+        assert framework.congress == 87
+        assert framework.law_number == 195
+        assert framework.date is None, (
+            f"Framework law PL 87-195 should have date=None, got {framework.date!r}"
+        )
+
+        # PL 104-132 is the adding law — it gets the date "Apr. 24, 1996"
+        adding = pl_refs[1]
+        assert adding.congress == 104
+        assert adding.law_number == 132
+        assert adding.date == "Apr. 24, 1996", (
+            f"Adding law PL 104-132 should have date='Apr. 24, 1996', got {adding.date!r}"
+        )
+        assert adding.stat_volume == 110
+        assert adding.stat_page == 1256
+
+    def test_simple_single_law_date_attributed_correctly(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """A single PL ref should still get its date when there is no 'as added' clause."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>SUBJECT MATTER</heading>
+        <section identifier="/us/usc/t17/s101" number="101">
+          <heading>Definitions</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/pl/94/553">Pub. L. 94–553</ref>, <date>Oct. 19, 1976</date>, <ref href="/us/stat/90/2541">90 Stat. 2541</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_simple_credit.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+
+        pl_refs = section.source_credit_refs
+        assert len(pl_refs) == 1
+
+        ref = pl_refs[0]
+        assert ref.congress == 94
+        assert ref.law_number == 553
+        assert ref.date == "Oct. 19, 1976"
+        assert ref.stat_volume == 90
+        assert ref.stat_page == 2541
