@@ -2046,6 +2046,72 @@ class TestParserNotesContent:
                 f"Embedded newline in rendered signature line: {ln.content!r}"
             )
 
+    def test_sibling_role_after_signature_emits_separate_sig_line(self) -> None:
+        """Adjacent <signature> + <role> siblings each emit their own [SIG] line.
+
+        Regression test for issue #555: when a <role> element appears as a
+        sibling (not a child) of <signature> in a USLM note — as in
+        17 U.S.C. § 107, release point 113-21 — the parser must not collapse
+        them into a single content string with an embedded raw newline, nor
+        silently drop the role text.  Both elements must become distinct
+        is_signature=True lines with no \\n in their content.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Mirrors the actual OLRC USLM structure for the classroom-copying
+        # agreement note in 17 U.S.C. § 107 (release point 113-21).
+        xml = """<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">
+            <note>
+                <heading>House Report No. 94-1476</heading>
+                <p>Agreed upon in principle March 19, 1976.</p>
+                <p>Authors League of America:</p>
+                <signature>By Irwin Karp,</signature>
+                <role>Counsel.</role>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        raw = parser._get_notes_text_content(elem)
+
+        # Both the <signature> and the sibling <role> must produce separate
+        # [SIG] tokens — no embedded \n between them.
+        import re
+
+        sig_spans = re.findall(r"\[SIG\](.*?)\[/SIG\]", raw, re.DOTALL)
+        assert len(sig_spans) == 2, (
+            f"Expected 2 [SIG] tokens for sibling signature+role, "
+            f"got {len(sig_spans)}: {raw!r}"
+        )
+        for span in sig_spans:
+            assert "\n" not in span, (
+                f"Embedded newline inside [SIG] span: {span!r}"
+            )
+
+        # normalize_note_content must produce two is_signature=True lines
+        lines = normalize_note_content(raw)
+        sig_lines = [ln for ln in lines if ln.is_signature]
+        assert len(sig_lines) == 2, (
+            f"Expected 2 signature lines, got {len(sig_lines)}: "
+            + str([(ln.is_signature, ln.content) for ln in lines])
+        )
+        for ln in sig_lines:
+            assert "\n" not in ln.content, (
+                f"Embedded newline in rendered signature line: {ln.content!r}"
+            )
+
+        # The <role> line must have the same is_signature flag as the <signature>
+        # line — no role text should appear as a plain non-signature line.
+        non_sig_contents = [ln.content for ln in lines if not ln.is_signature]
+        for content in non_sig_contents:
+            assert "Counsel" not in content, (
+                f"Role text 'Counsel' ended up in a non-signature line: {content!r}"
+            )
+
 
 class TestStripNoteMarkers:
     """Tests for _strip_note_markers function."""
