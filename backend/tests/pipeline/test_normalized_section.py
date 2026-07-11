@@ -3008,6 +3008,45 @@ class TestAmendmentSubsectionPrefix:
         assert amendments[0].description.startswith("Pub. L. 112–239")
         assert "Subsec." not in amendments[0].description
 
+    def test_plural_subsecs_prefix_stays_with_its_paragraph(self) -> None:
+        """Regression test for 20 USC § 1057 Case A (issue #473).
+
+        The plural prefix 'Subsecs. (c), (d).' must stay with the paragraph
+        it introduces, not be appended to the preceding entry's description.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1998—Subsec. (b)(1). Pub. L. 105–244, § 301(c)(1), "
+            'substituted "section 1068h(a)(1)" for "section 1069f(a)(1)".\n'
+            "Subsecs. (c), (d). Pub. L. 105–244, § 303(a), added subsecs. (c) and (d).\n"
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+        # First entry: only Subsec. (b)(1) prefix, no trailing Subsecs. (c), (d).
+        assert amendments[0].description.startswith("Subsec. (b)(1).")
+        assert "Subsecs. (c), (d)." not in amendments[0].description
+        # Second entry: must start with the Subsecs. (c), (d). prefix
+        assert amendments[1].description.startswith("Subsecs. (c), (d).")
+
+    def test_range_style_subsec_prefix_preserved(self) -> None:
+        """Regression test for 20 USC § 1057 Case B (issue #473).
+
+        A range-style prefix like 'Subsec. (c)(7) to (13).' must be included
+        in the description of the paragraph it introduces.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "2008—Subsec. (c)(7) to (13). Pub. L. 110–315, "
+            "§ 301(2)(B)–(E), added par. (7), redesignated former pars.\n"
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].description.startswith("Subsec. (c)(7) to (13).")
+
 
 class TestAmendmentDateSpacing:
     """Tests for fixing whitespace inside quotes in amendments."""
