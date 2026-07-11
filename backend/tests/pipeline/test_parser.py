@@ -1389,11 +1389,10 @@ class TestCitationTailTextSubdivision:
             '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"'
             ' identifier="/us/usc/t23/s161">'
             '  <num value="161">§ 161.</num>'
-
             "  <heading>Some heading</heading>"
             "  <sourceCredit>"
             "    (<ref"
-            '      href="/us/pl/105/178/tI/s1103">' 
+            '      href="/us/pl/105/178/tI/s1103">'
             "Pub. L. 105–178, title I, § 1103("
             "</ref>"
             "<i>l</i>"
@@ -1422,8 +1421,8 @@ class TestCitationTailTextSubdivision:
     def test_collect_ref_subdivision_suffix_no_tail(self) -> None:
         """When there is no tail text or italic siblings, the suffix must be empty."""
         xml = (
-            '<sourceCredit xmlns="http://xml.house.gov/schemas/uslm/1.0">' 
-            '<ref href="/us/pl/94/553/tI/s101">' 
+            '<sourceCredit xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<ref href="/us/pl/94/553/tI/s101">'
             "Pub. L. 94–553, title I, § 101"
             "</ref>"
             ", Oct. 19, 1976, 90 Stat. 2546."
@@ -1444,11 +1443,10 @@ class TestCitationTailTextSubdivision:
             '<section xmlns="http://xml.house.gov/schemas/uslm/1.0"'
             ' identifier="/us/usc/t17/s101">'
             '  <num value="101">§ 101.</num>'
-
             "  <heading>Definitions</heading>"
             "  <sourceCredit>"
             "    (<ref"
-            '      href="/us/pl/94/553/tI/s101">' 
+            '      href="/us/pl/94/553/tI/s101">'
             "Pub. L. 94–553, title I, § 101"
             "</ref>"
             ", Oct. 19, 1976, "
