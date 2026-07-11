@@ -365,14 +365,17 @@ _REPORT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
+# Pattern to extract the optional subsection prefix and the FIRST Pub. L. reference
+# from a single amendment paragraph.  The description runs to end-of-string so that
+# secondary Pub. L. cross-references within the same paragraph are captured as part
+# of the description rather than triggering a new amendment record.
 _PUB_L_PATTERN = re.compile(
-    r"((?:Subsec\.?\s*"  # "Subsec." or "Subsec"
+    r"((?:Subsec[s]?\.?\s*"  # "Subsec.", "Subsec", "Subsecs.", "Subsecs"
     r"(?:\([^)]+\))+"  # One or more parenthesized markers like (c)(1)
     r"(?:\s*,\s*(?:\([^)]+\))+)*"  # Optional comma-separated markers like , (2)(A)
     r"\.?\s*)?)"  # Optional trailing period and whitespace
-    r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
-    r"(.*?)"  # Description (including any text after)
-    r"(?=Subsec\.?\s*(?:\([^)]+\))+|Pub\.\s*L\.\s*\d+[—–-]\d+|$)",  # Until next Subsec. or Pub. L. or end
+    r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # First Pub. L. reference (primary law)
+    r"(.*)",  # Description — extends to end of string (captures all secondary refs)
     re.DOTALL,
 )
 
@@ -1174,7 +1177,7 @@ def _parse_amendments(text: str) -> list[Amendment]:
         text: The amendments subsection text.
 
     Returns:
-        List of Amendment objects, one per Pub. L. reference.
+        List of Amendment objects, one per XML paragraph (one per primary law).
     """
     amendments = []
 
@@ -1190,47 +1193,58 @@ def _parse_amendments(text: str) -> list[Amendment]:
 
         year_block = text[start:end].strip()
 
-        # Find all Pub. L. references within this year block; save the list so we
-        # can reuse it below without running finditer a second time (Finding 2).
-        matches = list(_PUB_L_PATTERN.finditer(year_block))
+        # Split the year block into individual paragraphs.  Each paragraph
+        # corresponds to one <p> element in the USLM XML and represents a
+        # single amendment entry.  Paragraphs are delimited by double newlines
+        # (inserted by the XML parser as [PARA] -> "\n\n").  Single newlines
+        # inside a paragraph are collapsed to spaces during processing.
+        paragraphs = [p.strip() for p in re.split(r"\n\n+", year_block) if p.strip()]
 
-        for pub_match in matches:
-            subsec_prefix = (pub_match.group(1) or "").strip()
-            public_law_text = pub_match.group(2)
-            congress = int(pub_match.group(3))
-            law_number = int(pub_match.group(4))
-            after_text = pub_match.group(5)
+        found_any = False
+        for paragraph in paragraphs:
+            # Apply the pattern only ONCE per paragraph (first match only).
+            # Secondary Pub. L. references are captured inside group(5) as part
+            # of the description and must not create new records.
+            pub_match = _PUB_L_PATTERN.search(paragraph)
+            if pub_match:
+                subsec_prefix = (pub_match.group(1) or "").strip()
+                public_law_text = pub_match.group(2)
+                congress = int(pub_match.group(3))
+                law_number = int(pub_match.group(4))
+                after_text = pub_match.group(5)
 
-            # Build description: subsec prefix + Pub. L. + rest
-            if subsec_prefix:
-                description = f"{subsec_prefix} {public_law_text}{after_text}"
-            else:
-                description = f"{public_law_text}{after_text}"
+                # Build description: subsec prefix + Pub. L. + rest
+                if subsec_prefix:
+                    description = f"{subsec_prefix} {public_law_text}{after_text}"
+                else:
+                    description = f"{public_law_text}{after_text}"
 
-            # Clean up description - normalize whitespace (handles multiple spaces)
-            description = " ".join(description.split())
+                # Clean up description - normalize whitespace (handles multiple spaces)
+                description = " ".join(description.split())
 
-            # Fix whitespace inside quotes (from XML date element spacing)
-            # e.g., '" December 31, 2021 "' -> '"December 31, 2021"'
-            # Match quoted content and strip leading/trailing spaces inside quotes
-            # Handle both straight quotes (") and curly quotes (" ")
-            description = re.sub(r'"(\s*)(.*?)(\s*)"', r'"\2"', description)
-            # Curly quotes: " (U+201C left) and " (U+201D right)
-            description = re.sub(
-                r"\u201c(\s*)(.*?)(\s*)\u201d", "\u201c\\2\u201d", description
-            )
-
-            law = ParsedPublicLaw(congress=congress, law_number=law_number)
-            amendments.append(
-                Amendment(
-                    law=law,
-                    year=year,
-                    description=description,
+                # Fix whitespace inside quotes (from XML date element spacing)
+                # e.g., '" December 31, 2021 "' -> '"December 31, 2021"'
+                # Match quoted content and strip leading/trailing spaces inside quotes
+                # Handle both straight quotes (") and curly quotes (" ")
+                description = re.sub(r'"(\s*)(.*?)(\s*)"', r'"\2"', description)
+                # Curly quotes: " (U+201C left) and " (U+201D right)
+                description = re.sub(
+                    r"\u201c(\s*)(.*?)(\s*)\u201d", "\u201c\\2\u201d", description
                 )
-            )
 
-        # If no Pub. L. found in the block, still record the year with the description
-        if not matches and year_block:
+                found_any = True
+                law = ParsedPublicLaw(congress=congress, law_number=law_number)
+                amendments.append(
+                    Amendment(
+                        law=law,
+                        year=year,
+                        description=description,
+                    )
+                )
+
+        # If no Pub. L. found in any paragraph, try a simple fallback search
+        # over the whole year block to handle unusual formats.
+        if not found_any and year_block:
             # Try to extract any Pub. L. reference
             simple_pub_match = re.search(r"Pub\.\s*L\.\s*(\d+)[—–-](\d+)", year_block)
             if simple_pub_match:

@@ -3009,6 +3009,107 @@ class TestAmendmentSubsectionPrefix:
         assert "Subsec." not in amendments[0].description
 
 
+class TestAmendmentMultiRef:
+    """Tests for Issue #454 — amendment paragraphs containing multiple Pub. L. refs.
+
+    Each USLM <p> element must produce exactly ONE amendment record, even when
+    that paragraph contains inline cross-references to other public laws.
+    """
+
+    def test_single_ref_paragraph_produces_one_record(self) -> None:
+        """Regression: a paragraph with a single <ref> still produces one record."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # Simulates a single-paragraph year block (one <p> element, one Pub. L.)
+        text = "2002—Pub. L. 107–273 made a technical correction."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].year == 2002
+        assert amendments[0].law.congress == 107
+        assert amendments[0].law.law_number == 273
+        assert "technical correction" in amendments[0].description
+
+    def test_two_ref_paragraph_produces_one_record(self) -> None:
+        """Main bug case: a paragraph with two Pub. L. refs must emit ONE record.
+
+        The second Pub. L. is an inline cross-reference within the description
+        (e.g. 'made technical correction to directory language of Pub. L. 106-113'),
+        NOT a separate amendment entry.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # Two Pub. L. references within a single paragraph (single <p> element
+        # in USLM XML).  The second reference is a cross-reference inside the
+        # description text, not a new amendment.
+        text = (
+            "2002—Subsecs. (a), (c), (d). Pub. L. 107–273 made technical"
+            " correction to directory language of Pub. L. 106–113,"
+            " §  1000(a)(9) [title IV, §  4732(a)(10)(A)]."
+            " See 1999 Amendment notes below."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1, (
+            f"Expected 1 amendment, got {len(amendments)}: "
+            + ", ".join(
+                f"PL {a.law.congress}-{a.law.law_number} ({a.year})" for a in amendments
+            )
+        )
+        a = amendments[0]
+        assert a.year == 2002
+        assert a.law.congress == 107
+        assert a.law.law_number == 273
+        # Description must include the subsection prefix
+        assert "Subsecs. (a), (c), (d)." in a.description
+        # Description must include the cross-reference to the second law
+        assert "Pub. L. 106–113" in a.description
+        # Description must not be truncated before the cross-reference
+        assert "directory language" in a.description
+
+    def test_text_before_first_ref_stays_with_paragraph(self) -> None:
+        """Subsection prefix text before the first Pub. L. belongs to the same record.
+
+        Verifies that leading text (e.g. 'Subsecs. (a), (c), (d).') is NOT
+        appended to the previous paragraph's record (no prefix bleeding).
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # Two paragraphs separated by double newline (two <p> elements).
+        # The second paragraph has a subsection prefix.
+        text = (
+            "2002—Pub. L. 107–273 amended section generally.\n\n"
+            "Subsecs. (a), (b). Pub. L. 107–306 inserted text."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+        first, second = amendments[0], amendments[1]
+        # First amendment should NOT contain the second paragraph's subsec prefix
+        assert "Subsecs. (a), (b)." not in first.description
+        # Second amendment must include its own subsec prefix
+        assert "Subsecs. (a), (b)." in second.description
+        assert second.law.congress == 107
+        assert second.law.law_number == 306
+
+    def test_two_separate_paragraphs_in_same_year_produce_two_records(self) -> None:
+        """Two <p> elements in the same year block each produce their own record."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # Two paragraphs (two <p> elements) separated by double newline.
+        text = (
+            "1999—Pub. L. 106–113, § 1000(a)(9), substituted text.\n\n"
+            "Subsec. (a). Pub. L. 106–113, § 4803, redesignated text."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+        years = [a.year for a in amendments]
+        assert years == [1999, 1999]
+        congress_nums = [a.law.congress for a in amendments]
+        assert all(c == 106 for c in congress_nums)
+
+
 class TestAmendmentDateSpacing:
     """Tests for fixing whitespace inside quotes in amendments."""
 
