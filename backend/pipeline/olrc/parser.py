@@ -1624,7 +1624,9 @@ class USLMParser:
                         # before the dict lookup so the canonical display string is always
                         # found (issue #542).
                         normalized_topic = topic[0].lower() + topic[1:]
-                        display = _NOTE_TOPIC_DISPLAY.get(normalized_topic, topic.title())
+                        display = _NOTE_TOPIC_DISPLAY.get(
+                            normalized_topic, topic.title()
+                        )
                         nh_marker = f"[NH]{display}[/NH]"
                         # Skip the [NH] marker if an immediately-preceding cross-heading
                         # (a <heading> child of the parent <notes> element) already

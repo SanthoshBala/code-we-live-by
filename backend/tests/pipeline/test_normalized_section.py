@@ -2088,9 +2088,7 @@ class TestParserNotesContent:
             f"got {len(sig_spans)}: {raw!r}"
         )
         for span in sig_spans:
-            assert "\n" not in span, (
-                f"Embedded newline inside [SIG] span: {span!r}"
-            )
+            assert "\n" not in span, f"Embedded newline inside [SIG] span: {span!r}"
 
         # normalize_note_content must produce two is_signature=True lines
         lines = normalize_note_content(raw)
