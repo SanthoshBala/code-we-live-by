@@ -1675,6 +1675,32 @@ class USLMParser:
                 result.append(" " + stripped)
         return "".join(result).strip()
 
+    @staticmethod
+    def _extract_year_from_date_text(date_text: str) -> int | None:
+        """Extract the 4-digit year from a human-readable date string.
+
+        Handles formats such as "Nov. 18, 1988", "June 30, 1940", "Apr. 24, 1996".
+        Returns None when no 4-digit year can be found.
+        """
+        m = re.search(r"\b(\d{4})\b", date_text)
+        return int(m.group(1)) if m else None
+
+    @staticmethod
+    def _date_year_plausible_for_congress(year: int, congress: int) -> bool:
+        """Return True if *year* is plausible for a law enacted by *congress*.
+
+        Each Congress sits for roughly two calendar years.  The 1st Congress
+        started in 1789, so the start year of Congress N is 1789 + 2*(N-1).
+        We allow one year of slop on each side to handle bills signed in the
+        opening or closing days of a session that straddle a calendar year.
+
+        Examples:
+            100th Congress (1987-1989): years 1986-1990 accepted
+            106th Congress (1999-2001): years 1998-2002 accepted
+        """
+        congress_start = 1789 + 2 * (congress - 1)
+        return congress_start - 1 <= year <= congress_start + 2
+
     def _extract_source_credit_refs(
         self, section_elem: etree._Element
     ) -> tuple[list[SourceCreditRef], list[ActRef]]:
@@ -1777,9 +1803,27 @@ class USLMParser:
                 # PL refs only. Attribute each date to the most recently seen PL ref
                 # so that "as added" credits assign the date to the adding law, not
                 # the framework law that precedes the "as added" clause.
+                #
+                # Guard: some sourceCredit elements interleave non-PL references
+                # (e.g., Reorganization Plans, which use /us/rp/ hrefs that are not
+                # matched above) between two PL refs, and those non-PL references
+                # carry their own <date> elements.  Without this check the date for
+                # the non-PL reference bleeds into the immediately preceding PL ref,
+                # and the actual date for that PL ref (appearing later in the XML)
+                # bleeds into the *next* PL ref — shifting all subsequent dates by
+                # one position (Issues #588 / #587).
+                #
+                # We reject a <date> element when the year it contains is
+                # chronologically inconsistent with the most recently seen PL's
+                # Congress number, which is a precise signal that the date belongs
+                # to an interleaved non-PL reference rather than to that PL.
                 date_text = "".join(elem.itertext()).strip()
                 if last_ref_type == "pl" and pl_refs:
-                    pl_refs[-1].date = date_text
+                    year = self._extract_year_from_date_text(date_text)
+                    if year is None or self._date_year_plausible_for_congress(
+                        year, pl_refs[-1].congress
+                    ):
+                        pl_refs[-1].date = date_text
 
         return pl_refs, act_refs
 

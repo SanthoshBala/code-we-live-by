@@ -1426,3 +1426,70 @@ class TestExtractSourceCreditRefs:
         assert ref.date == "Oct. 19, 1976"
         assert ref.stat_volume == 90
         assert ref.stat_page == 2541
+
+    def test_reorganization_plan_date_does_not_bleed_into_pl_ref(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Reorganization Plan <date> elements must not bleed into adjacent PL ref dates.
+
+        Regression test for Issues #588 / #587:
+            27 U.S.C. § 205 sourceCredit contains a Reorganization Plan reference
+            (Reorg. Plan No. 3 of 1940, eff. June 30, 1940) that appears after
+            PL 100–690's <ref> element.  Without the congress-year guard the date
+            "June 30, 1940" was wrongly assigned to PL 100–690 (100th Congress,
+            1987–1989), and "Nov. 18, 1988" (PL 100–690's actual date) was shifted
+            to PL 106–113, leaving PL 106–113's real date "Nov. 29, 1999" uncaptured.
+
+        The fix rejects a <date> element whose year is outside the plausible range
+        for the most recently seen PL's Congress, so dates from non-PL references
+        interleaved in sourceCredit are silently skipped.
+        """
+        # Simplified version of 27 U.S.C. § 205's sourceCredit with the three
+        # key references: PL 100-690 (enactment), Reorg Plan (non-PL, no <ref>
+        # matched), and PL 106-113 (amendment).
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/27</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t27" number="27">
+      <heading>INTOXICATING LIQUORS</heading>
+      <chapter identifier="/us/usc/t27/ch8" number="8">
+        <heading>FEDERAL ALCOHOL ADMINISTRATION ACT</heading>
+        <section identifier="/us/usc/t27/s205" number="205">
+          <heading>Unfair competition and unlawful practices</heading>
+          <content><p>Test content.</p></content>
+          <sourceCredit>(<ref href="/us/pl/100/690/tIX/s9007">Pub. L. 100–690</ref>, title IX, § 9007, Nov. 18, 1988, <ref href="/us/stat/102/4518">102 Stat. 4518</ref>; Reorg. Plan No. 3 of 1940, §§2(a), 3(b), eff. <date>June 30, 1940</date>, 5 F.R. 2107, 54 Stat. 1231; <ref href="/us/pl/106/113/dB/s1000a(7)">Pub. L. 106–113</ref>, div. B, § 1000(a)(7), <date>Nov. 29, 1999</date>, <ref href="/us/stat/113/1536">113 Stat. 1536</ref>.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_reorg_plan_date.xml"
+        xml_path.write_text(xml_content)
+        result = parser.parse_file(xml_path)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+
+        pl_refs = section.source_credit_refs
+        assert len(pl_refs) == 2, f"Expected 2 PL refs, got {len(pl_refs)}"
+
+        # PL 100-690 (100th Congress, 1987-1989): date is Nov. 18, 1988 — NOT June 30, 1940
+        pl_100_690 = pl_refs[0]
+        assert pl_100_690.congress == 100
+        assert pl_100_690.law_number == 690
+        assert pl_100_690.date is None, (
+            f"PL 100-690 date should be None (no <date> element follows it before "
+            f"the Reorg Plan date), got {pl_100_690.date!r}"
+        )
+
+        # PL 106-113 (106th Congress, 1999-2001): date is Nov. 29, 1999 — NOT Nov. 18, 1988
+        pl_106_113 = pl_refs[1]
+        assert pl_106_113.congress == 106
+        assert pl_106_113.law_number == 113
+        assert pl_106_113.date == "Nov. 29, 1999", (
+            f"PL 106-113 should have date='Nov. 29, 1999', got {pl_106_113.date!r}"
+        )
+        assert pl_106_113.stat_volume == 113
+        assert pl_106_113.stat_page == 1536
