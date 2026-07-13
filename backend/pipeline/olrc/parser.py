@@ -1612,6 +1612,17 @@ class USLMParser:
                 # Add paragraph break marker before this <p> element
                 parts.append("[PARA]")
 
+            # Skip HTML table header cells — their text labels columns/rows in the
+            # table, not note content.  Including <th> text as plain content can
+            # trigger false note-header matches downstream (e.g. the
+            # historicalAndRevision note for 31 U.S.C. § 5311 has a <th> cell
+            # containing "Historical and Revision Notes" that would otherwise
+            # appear as the first content line and cause a spurious note match).
+            if tag == "th":
+                if el.tail:
+                    parts.append(el.tail)
+                return
+
             # Check if this is a heading element — always emit [NH] markers regardless
             # of whether it has class="smallCaps".  Some USLM releases use
             # <note topic="amendments"><heading>Amendments</heading> without the
@@ -1619,7 +1630,14 @@ class USLMParser:
             if tag == "heading":
                 text = "".join(el.itertext()).strip()
                 if text:
-                    parts.append(f"[NH]{text.title()}[/NH]")
+                    # Some USLM releases store the raw camelCase topic name as the
+                    # heading text (e.g. <heading>historicalAndRevision</heading>).
+                    # str.title() treats a camelCase string as a single word and
+                    # garbles it: "historicalAndRevision".title() → "Historicalandrevision".
+                    # Check _NOTE_TOPIC_DISPLAY first so known camelCase topics get
+                    # their canonical human-readable display string.
+                    display = _NOTE_TOPIC_DISPLAY.get(text, text.title())
+                    parts.append(f"[NH]{display}[/NH]")
                 return  # Don't process children
 
             # Track bold/italic state
