@@ -2814,6 +2814,157 @@ class TestNoteTopicAmendmentParsing:
         # Amendments note is also present and correct
         assert "Amendments" in headers
 
+    def test_historical_camelcase_heading_text_issue_591(self) -> None:
+        """Regression: <heading>historicalAndRevision</heading> must not garble the header.
+
+        Some USLM releases (e.g. 31 U.S.C. § 5311, release 113-21) store the raw
+        camelCase topic name as the <heading> element text instead of the human-
+        readable "Historical and Revision Notes".  str.title() treats the camelCase
+        string as a single word and produces "Historicalandrevision".
+
+        The fix applies _NOTE_TOPIC_DISPLAY before falling back to str.title() so
+        the canonical display string is used.  Closes #591.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="historicalAndRevision">'
+            "<heading>historicalAndRevision</heading>"
+            "<p>Based on 31:1051 (Oct. 26, 1970, Pub. L. 91–508, § 202, 84 Stat. 1118).</p>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2012—Pub. L. 112–239 made changes.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # No garbled "Historicalandrevision" header
+        assert not any("historicalandrevision" in h.lower() for h in headers), (
+            f"Garbled camelCase header found in: {headers}"
+        )
+        # Correct human-readable header
+        assert "Historical and Revision Notes" in headers, (
+            f"Expected 'Historical and Revision Notes' in: {headers}"
+        )
+        # Only one historical note — no duplicate
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 1, (
+            f"Expected exactly 1 historical note, got {len(hist_notes)}: {headers}"
+        )
+        # Amendments note is also present and correct
+        assert "Amendments" in headers
+
+    def test_historical_table_th_not_in_lines_issue_590_591(self) -> None:
+        """Regression: <th>Historical and Revision Notes</th> must not appear in lines.
+
+        31 U.S.C. § 5311 (release 113-21): the historicalAndRevision note contains
+        an XHTML table whose first row has a <th> spanning all columns with the text
+        "Historical and Revision Notes".  Two bugs result:
+
+        1. (Issue #591) The <th> text appears as the first content line, prepended to
+           the table data: "Historical and Revision Notes 5311 31:1051. ...".
+        2. (Issue #590) _parse_historical_notes finds "Historical and Revision Notes"
+           in the raw plain text (the <th> occurrence) and may absorb subsequent note
+           content into a spurious mega-note.
+
+        The fix skips <th> elements in _get_notes_text_content so their label text is
+        not emitted into the raw_notes string.  Closes #590, #591.
+        """
+        NS = "http://xml.house.gov/schemas/uslm/1.0"
+        XHTML_NS = "http://www.w3.org/1999/xhtml"
+        xml = (
+            f'<notes xmlns="{NS}" xmlns:xhtml="{XHTML_NS}">'
+            '<note topic="historicalAndRevision">'
+            "<xhtml:table>"
+            '<xhtml:tr><xhtml:th colspan="3">Historical and Revision Notes</xhtml:th></xhtml:tr>'
+            "<xhtml:tr>"
+            "<xhtml:td>5311</xhtml:td>"
+            "<xhtml:td>31:1051.</xhtml:td>"
+            "<xhtml:td>Oct. 26, 1970, Pub. L. 91–508, § 202, 84 Stat. 1118.</xhtml:td>"
+            "</xhtml:tr>"
+            "</xhtml:table>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2012—Pub. L. 112–239 made changes.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # Correct header present exactly once
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 1, (
+            f"Expected exactly 1 historical note, got {len(hist_notes)}: {headers}"
+        )
+        assert hist_notes[0].header == "Historical and Revision Notes"
+        # The <th> text must NOT appear as a content line
+        all_content = " ".join(line.content for line in hist_notes[0].lines)
+        assert not all_content.startswith("Historical and Revision Notes"), (
+            f"<th> text leaked into note lines: {all_content[:80]!r}"
+        )
+        # Amendments note is also present
+        assert "Amendments" in headers
+
+    def test_historical_camelcase_heading_plus_th_table_issue_590_591(self) -> None:
+        """Regression: camelCase heading + <th> table combo in historicalAndRevision note.
+
+        When the historicalAndRevision note has BOTH a <heading>historicalAndRevision
+        </heading> child AND a table with <th>Historical and Revision Notes</th>:
+
+        - Without the fix: the heading produces [NH]Historicalandrevision[/NH] (garbled),
+          the <th> text appears as plain text in raw_notes, _parse_historical_notes
+          creates a spurious note from the plain-text match, and _parse_flat_notes
+          creates a second note with the garbled header.
+        - With the fix: the heading produces [NH]Historical and Revision Notes[/NH]
+          (via _NOTE_TOPIC_DISPLAY), and the <th> text is suppressed, so only one
+          correct note is produced.  Closes #590, #591.
+        """
+        NS = "http://xml.house.gov/schemas/uslm/1.0"
+        XHTML_NS = "http://www.w3.org/1999/xhtml"
+        xml = (
+            f'<notes xmlns="{NS}" xmlns:xhtml="{XHTML_NS}">'
+            '<note topic="historicalAndRevision">'
+            "<heading>historicalAndRevision</heading>"
+            "<xhtml:table>"
+            '<xhtml:tr><xhtml:th colspan="3">Historical and Revision Notes</xhtml:th></xhtml:tr>'
+            "<xhtml:tr>"
+            "<xhtml:td>5311</xhtml:td>"
+            "<xhtml:td>31:1051.</xhtml:td>"
+            "<xhtml:td>Oct. 26, 1970, Pub. L. 91–508, § 202, 84 Stat. 1118.</xhtml:td>"
+            "</xhtml:tr>"
+            "</xhtml:table>"
+            "</note>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2012—Pub. L. 112–239 made changes.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # No garbled "Historicalandrevision" header
+        assert not any("historicalandrevision" in h.lower() for h in headers), (
+            f"Garbled camelCase header found in: {headers}"
+        )
+        # Correct header present exactly once
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 1, (
+            f"Expected exactly 1 historical note, got {len(hist_notes)}: {headers}"
+        )
+        assert hist_notes[0].header == "Historical and Revision Notes"
+        # The <th> text must NOT appear as a content line
+        all_content = " ".join(line.content for line in hist_notes[0].lines)
+        assert not all_content.startswith("Historical and Revision Notes"), (
+            f"<th> text leaked into note lines: {all_content[:80]!r}"
+        )
+        # Amendments note is also present
+        assert "Amendments" in headers
+
 
 class TestAmendmentsIndentLevel:
     """Regression tests for issue #573: Amendments note lines must use indent_level=1.
