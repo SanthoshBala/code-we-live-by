@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from app.schemas.us_code import (
     CodeLineSchema,
     GroupAncestorSchema,
+    NoteCategoryEnum,
+    SectionNoteSchema,
     SectionNotesSchema,
     SectionViewerSchema,
 )
@@ -246,3 +248,75 @@ def test_get_section_provisions_null_by_default(
     response = client.get("/api/v1/sections/17/106")
     assert response.status_code == 200
     assert response.json()["provisions"] is None
+
+
+@patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
+def test_get_section_note_categories_null_when_no_notes(
+    mock_get: AsyncMock, client: TestClient
+) -> None:
+    """note_categories is an empty list when notes is None (Issue #594)."""
+    mock_get.return_value = SectionViewerSchema(
+        title_number=17,
+        section_number="107",
+        heading="Limitations on exclusive rights: Fair use",
+        full_citation="17 U.S.C. § 107",
+        text_content="Notwithstanding the provisions of sections 106 and 106A...",
+        is_positive_law=True,
+        is_repealed=False,
+        notes=None,
+    )
+
+    response = client.get("/api/v1/sections/17/107")
+    assert response.status_code == 200
+    assert response.json()["note_categories"] == []
+
+
+@patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
+def test_get_section_note_categories_populated_from_notes(
+    mock_get: AsyncMock, client: TestClient
+) -> None:
+    """note_categories is derived from notes.notes entries (Issue #594).
+
+    17 U.S.C. § 107 has notes in three categories: editorial, historical,
+    and statutory. The detail endpoint must return all three so clients can
+    render note-type tabs without treating the section as category-free.
+    """
+    mock_get.return_value = SectionViewerSchema(
+        title_number=17,
+        section_number="107",
+        heading="Limitations on exclusive rights: Fair use",
+        full_citation="17 U.S.C. § 107",
+        text_content="Notwithstanding the provisions of sections 106 and 106A...",
+        is_positive_law=True,
+        is_repealed=False,
+        notes=SectionNotesSchema(
+            notes=[
+                SectionNoteSchema(
+                    header="Codification",
+                    category=NoteCategoryEnum.EDITORIAL,
+                    lines=[],
+                ),
+                SectionNoteSchema(
+                    header="House Report No. 94-1476",
+                    category=NoteCategoryEnum.HISTORICAL,
+                    lines=[],
+                ),
+                SectionNoteSchema(
+                    header="Effective Date of 1992 Amendment",
+                    category=NoteCategoryEnum.STATUTORY,
+                    lines=[],
+                ),
+                SectionNoteSchema(
+                    header="References in Text",
+                    category=NoteCategoryEnum.EDITORIAL,
+                    lines=[],
+                ),
+            ],
+        ),
+    )
+
+    response = client.get("/api/v1/sections/17/107")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["note_categories"] == ["editorial", "historical", "statutory"]
