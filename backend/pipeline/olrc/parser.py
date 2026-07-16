@@ -1590,6 +1590,20 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
+            # Handle <role> elements that appear as siblings to <signature>
+            # in USLM notes (e.g. the signature blocks in 17 U.S.C. § 107).
+            # These carry the signer's title/role and must be rendered as
+            # their own [SIG] line — consistent with how <role> children
+            # inside <signature> are handled — so that no raw \n ends up
+            # embedded in a single content string.
+            if tag == "role":
+                role_text = "".join(el.itertext()).strip().rstrip(".")
+                if role_text:
+                    parts.append(f"[PARA][SIG]— {role_text}[/SIG]")
+                if el.tail:
+                    parts.append(el.tail)
+                return
+
             # <note topic="..."> without a <heading> child: synthesize [NH] from topic.
             # Some USLM releases omit the heading element and rely solely on the
             # topic attribute (e.g. <note topic="amendments"><p>...</p>).
@@ -1603,8 +1617,29 @@ class USLMParser:
                         # Use the canonical display string for known camelCase topics;
                         # fall back to topic.title() for simple single-word topics like
                         # "amendments" → "Amendments".
-                        display = _NOTE_TOPIC_DISPLAY.get(topic, topic.title())
-                        parts.append(f"[NH]{display}[/NH]")
+                        #
+                        # Some OLRC releases capitalise the first character of the topic
+                        # attribute (e.g. "HistoricalAndRevision" instead of the standard
+                        # "historicalAndRevision").  Normalise to lowercase-first camelCase
+                        # before the dict lookup so the canonical display string is always
+                        # found (issue #542).
+                        normalized_topic = topic[0].lower() + topic[1:]
+                        display = _NOTE_TOPIC_DISPLAY.get(
+                            normalized_topic, topic.title()
+                        )
+                        nh_marker = f"[NH]{display}[/NH]"
+                        # Skip the [NH] marker if an immediately-preceding cross-heading
+                        # (a <heading> child of the parent <notes> element) already
+                        # emitted the equivalent header.  Both markers refer to the same
+                        # note; emitting both causes _parse_historical_notes to capture
+                        # empty content and _parse_flat_notes to add a duplicate note
+                        # (issue #542).  Compare case-insensitively to handle the
+                        # .title() capitalisation difference ("And" vs "and").
+                        last_non_ws = next(
+                            (p for p in reversed(parts) if p and p.strip()), ""
+                        )
+                        if last_non_ws.upper() != nh_marker.upper():
+                            parts.append(nh_marker)
 
             # Preserve paragraph boundaries with a special marker
             # We use [PARA] marker instead of \n\n because tail text often contains \n
