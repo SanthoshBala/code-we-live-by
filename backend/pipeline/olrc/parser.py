@@ -1707,7 +1707,14 @@ class USLMParser:
             stripped = part.strip()
             if not stripped:
                 continue
-            if not result or result[-1] == "\n\n" or stripped[0] in ";,.":
+            # Do not insert a space when the previous fragment ends with an em
+            # dash (U+2014).  In OLRC XML, amendment-year lines are split across
+            # the paragraph's own text node ("1981—") and a child <ref>
+            # element ("Pub. L. 97–34").  Stripping both fragments and
+            # joining them with a space produces a spurious "1981— Pub." —
+            # see issue #600.
+            prev_ends_em_dash = bool(result) and result[-1].endswith("—")
+            if not result or result[-1] == "\n\n" or stripped[0] in ";,." or prev_ends_em_dash:
                 result.append(stripped)
             else:
                 result.append(" " + stripped)
