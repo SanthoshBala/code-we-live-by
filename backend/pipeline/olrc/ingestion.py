@@ -238,18 +238,20 @@ class USCodeIngestionService:
                         f"{first_citation.act.stat_page}"
                     )
 
-        # Derive last_modified_date from the most recent amendment citation
-        # (full enactment date preferred over year-only approximation)
+        # Derive last_modified_date from the most recent non-Framework citation.
+        # Including Enactment citations covers sections enacted by a single law
+        # with no subsequent amendments — the enactment date IS the last-modified
+        # date.  Framework citations (pre-1957 structural context) are excluded.
         last_modified_date = None
         if normalized.section_notes:
-            amendment_dates = [
+            modification_dates = [
                 _parse_citation_date(c.date)
                 for c in normalized.section_notes.citations
-                if c.relationship == "Amendment" and c.date
+                if c.relationship != "Framework" and c.date
             ]
-            amendment_dates = [d for d in amendment_dates if d is not None]
-            if amendment_dates:
-                last_modified_date = max(amendment_dates)
+            modification_dates = [d for d in modification_dates if d is not None]
+            if modification_dates:
+                last_modified_date = max(modification_dates)
             elif normalized.section_notes.amendments:
                 # Fallback: year-only when citations lack dates
                 max_year = max(a.year for a in normalized.section_notes.amendments)

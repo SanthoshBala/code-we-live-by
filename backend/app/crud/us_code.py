@@ -487,21 +487,26 @@ async def get_section(
 
                 enacted_date = _parse_citation_date(law_data["date"])
 
-        # Extract last_modified_date from amendment citations (full enactment date
-        # preferred — yields the actual date rather than a Jan 1 approximation)
+        # Extract last_modified_date from the most recent non-Framework citation.
+        # Including Enactment citations covers sections that were enacted by a
+        # single law and never subsequently amended — in that case the enactment
+        # date IS the last-modified date.  Framework citations (pre-1957 Acts
+        # providing structural context only) are excluded because their dates
+        # pre-date the section's actual creation/modification.
         if citations:
             from pipeline.olrc.group_service import _parse_citation_date
 
-            amendment_dates = []
+            modification_dates = []
             for c in citations:
-                if c.get("relationship") == "Amendment":
-                    law_data = c.get("law") or c.get("act")
-                    if law_data and law_data.get("date"):
-                        parsed = _parse_citation_date(law_data["date"])
-                        if parsed is not None:
-                            amendment_dates.append(parsed)
-            if amendment_dates:
-                last_modified_date = max(amendment_dates)
+                if c.get("relationship") == "Framework":
+                    continue
+                law_data = c.get("law") or c.get("act")
+                if law_data and law_data.get("date"):
+                    parsed = _parse_citation_date(law_data["date"])
+                    if parsed is not None:
+                        modification_dates.append(parsed)
+            if modification_dates:
+                last_modified_date = max(modification_dates)
 
         # Fallback: use year-only from amendments when citation dates are unavailable
         if last_modified_date is None:

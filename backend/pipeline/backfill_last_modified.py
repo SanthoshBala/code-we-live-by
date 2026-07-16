@@ -55,18 +55,24 @@ async def backfill(*, dry_run: bool = True) -> int:
 
             lmd: date | None = None
 
-            # Prefer full date from amendment citations
+            # Prefer full date from non-Framework citations.  Including
+            # Enactment citations covers sections enacted by a single law
+            # with no subsequent amendments — the enactment date IS the
+            # last-modified date.  Framework (pre-1957 structural context)
+            # citations are excluded because their dates pre-date the
+            # section's actual creation/modification.
             citations = notes.get("citations", [])
-            amendment_dates = []
+            modification_dates = []
             for c in citations:
-                if c.get("relationship") == "Amendment":
-                    law_data = c.get("law") or c.get("act")
-                    if law_data and law_data.get("date"):
-                        parsed = _parse_citation_date(law_data["date"])
-                        if parsed is not None:
-                            amendment_dates.append(parsed)
-            if amendment_dates:
-                lmd = max(amendment_dates)
+                if c.get("relationship") == "Framework":
+                    continue
+                law_data = c.get("law") or c.get("act")
+                if law_data and law_data.get("date"):
+                    parsed = _parse_citation_date(law_data["date"])
+                    if parsed is not None:
+                        modification_dates.append(parsed)
+            if modification_dates:
+                lmd = max(modification_dates)
             else:
                 # Fallback: year-only from amendments
                 amendments = notes.get("amendments", [])
