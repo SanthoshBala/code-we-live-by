@@ -2135,11 +2135,11 @@ class TestParserNotesContent:
         # The <p> text node ends with an em dash immediately before the <ref>.
         xml = (
             "<notes>"
-            "<note topic=\"amendments\">"
+            '<note topic="amendments">'
             "<heading>Amendments</heading>"
-            "<p>1981—<ref href=\"/us/pl/97/34\">Pub. L. 97–34</ref>"
+            '<p>1981—<ref href="/us/pl/97/34">Pub. L. 97–34</ref>'
             ", § 442(a)(4)(D), substituted text.</p>"
-            "<p>1970—<ref href=\"/us/pl/91/614\">Pub. L. 91–614</ref>"
+            '<p>1970—<ref href="/us/pl/91/614">Pub. L. 91–614</ref>'
             " substituted other text.</p>"
             "<p>1998—Subsec. (c). Pub. L. 105–34 did something.</p>"
             "</note>"

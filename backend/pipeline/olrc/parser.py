@@ -1714,7 +1714,12 @@ class USLMParser:
             # joining them with a space produces a spurious "1981— Pub." —
             # see issue #600.
             prev_ends_em_dash = bool(result) and result[-1].endswith("—")
-            if not result or result[-1] == "\n\n" or stripped[0] in ";,." or prev_ends_em_dash:
+            if (
+                not result
+                or result[-1] == "\n\n"
+                or stripped[0] in ";,."
+                or prev_ends_em_dash
+            ):
                 result.append(stripped)
             else:
                 result.append(" " + stripped)
