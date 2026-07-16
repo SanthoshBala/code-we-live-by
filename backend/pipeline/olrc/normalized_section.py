@@ -1418,16 +1418,20 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
       Prior Provisions, Construction, Recodification, Effective Date of Repeal
     - Statutory: everything else (effective dates, savings, miscellaneous, etc.)
     """
+    # Verbatim OLRC heading text for headers classified as editorial.
+    # Comparison is case-insensitive so that legacy title-cased data and
+    # verbatim source text both match (see issue #509).
     EDITORIAL_HEADERS = {
         "Amendments",
-        "Change Of Name",
-        "References In Text",
+        "Change of Name",
+        "References in Text",
         "Codification",
         "Prior Provisions",
         "Construction",
         "Recodification",
-        "Effective Date Of Repeal",
+        "Effective Date of Repeal",
     }
+    editorial_headers_lower = {h.lower() for h in EDITORIAL_HEADERS}
 
     header_positions: list[tuple[int, int, str]] = []
     for match in _NH_HEADER_PATTERN.finditer(raw_notes):
@@ -1457,7 +1461,7 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
 
         category = (
             NoteCategory.EDITORIAL
-            if header in EDITORIAL_HEADERS
+            if header.lower() in editorial_headers_lower
             else NoteCategory.STATUTORY
         )
 
@@ -1652,11 +1656,14 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
 
     # Labels that are section-level cross-headings, not individual note headers.
     # These appear in both [NH] and [H1] marker scans and must be skipped.
+    # Comparison is case-insensitive so verbatim OLRC sentence-case text and any
+    # legacy title-cased variants in the DB both match (see issue #509).
     skip_headers = {
         "Editorial Notes",
-        "Statutory Notes And Related Subsidiaries",
+        "Statutory Notes and Related Subsidiaries",
         "Executive Documents",
     }
+    skip_headers_lower = {h.lower() for h in skip_headers}
 
     # Find note headers using [NH]...[/NH] markers from XML parser.
     # These markers are added for <heading> elements (with or without class="smallCaps").
@@ -1665,8 +1672,10 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     header_positions: list[tuple[int, int, str]] = []
     for match in _NH_HEADER_PATTERN.finditer(statutory_text):
         header = match.group(1).strip()
-        # Skip if empty or a cross-heading label
-        if not header or header in skip_headers:
+        # Skip if too short or a cross-heading label
+        if len(header.split()) < 2:
+            continue
+        if not header or header.lower() in skip_headers_lower:
             continue
         header_positions.append((match.start(), match.end(), header))
 
@@ -1677,7 +1686,7 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
     if not header_positions:
         for match in _H1_HEADER_PATTERN.finditer(statutory_text):
             header = match.group(1).strip()
-            if not header or header in skip_headers:
+            if not header or header.lower() in skip_headers_lower:
                 continue
             header_positions.append((match.start(), match.end(), header))
 

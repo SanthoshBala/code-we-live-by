@@ -1949,8 +1949,9 @@ class TestParserNotesContent:
     def test_smallcaps_heading_marked_with_nh(self) -> None:
         """Test that smallCaps headings are marked with [NH]...[/NH].
 
-        This prevents title-cased paragraph content (like "Memorandum Of
-        President...") from being incorrectly parsed as note headers.
+        The heading text must be preserved verbatim from the XML — no
+        title-casing applied (see issue #509).  Paragraph content must
+        NOT be wrapped in [NH] markers regardless of its capitalisation.
         """
         from lxml import etree
 
@@ -1969,8 +1970,10 @@ class TestParserNotesContent:
 
         content = parser._get_notes_text_content(elem)
 
-        # SmallCaps heading should be wrapped in [NH]...[/NH]
-        assert "[NH]Delegation Of Functions[/NH]" in content
+        # Heading must be wrapped in [NH]...[/NH] with verbatim text (issue #509)
+        assert "[NH]Delegation of Functions[/NH]" in content
+        # Title-cased variant must NOT appear
+        assert "[NH]Delegation Of Functions[/NH]" not in content
         # Paragraph content should NOT be wrapped in [NH]
         assert "[NH]Memorandum" not in content
         assert "Memorandum of President" in content
@@ -2750,11 +2753,13 @@ class TestNoteTopicAmendmentParsing:
 
         assert len(notes.notes) == 4
 
+        # Headers must be verbatim from the OLRC source XML <heading> elements —
+        # no title-casing applied (see issue #509).
         headers = [n.header for n in notes.notes]
-        assert "References In Text" in headers
+        assert "References in Text" in headers
         assert "Amendments" in headers
-        assert "Effective Date Of 1996 Amendment" in headers
-        assert "No Requirement Of Reimbursement" in headers
+        assert "Effective Date of 1996 Amendment" in headers
+        assert "No Requirement of Reimbursement" in headers
 
         editorial = [n for n in notes.notes if n.category.value == "editorial"]
         statutory = [n for n in notes.notes if n.category.value == "statutory"]
@@ -2916,6 +2921,98 @@ class TestAmendmentsIndentLevel:
         assert amendments_indent == 1, (
             f"Expected indent_level=1 for all editorial note content, "
             f"got {amendments_indent} for Amendments"
+        )
+
+
+class TestNoteHeadersVerbatim:
+    """Regression tests for issue #509: note headers must not be title-cased.
+
+    The OLRC XML <heading> element inside <note> contains verbatim headings
+    (e.g. "Effective Date of 1984 Amendment") that must be preserved exactly.
+    Applying .title() mangles lowercase connective words ("of" → "Of").
+    """
+
+    def _parse_xml_notes(self, xml_snippet: str) -> object:
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        notes_elem = etree.fromstring(xml_snippet)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+        return notes
+
+    def test_of_in_note_header_preserved_verbatim(self) -> None:
+        """'of' in a note <heading> must not become 'Of' (issue #509).
+
+        Mirrors the failing example from Title 3 § 6 of release 113-21:
+        OLRC XML: <heading>Effective Date of 1984 Amendment</heading>
+        Bug:      notes[].header == "Effective Date Of 1984 Amendment"
+        Fix:      notes[].header == "Effective Date of 1984 Amendment"
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="effectiveDateOfAmendment">'
+            "<heading>Effective Date of 1984 Amendment</heading>"
+            "<p>Pub. L. 98–497 effective Apr. 1, 1985, see section 301 of Pub. L. 98–497.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # Verbatim — lowercase "of" must be preserved
+        assert "Effective Date of 1984 Amendment" in headers
+        # Title-cased form must NOT appear
+        assert "Effective Date Of 1984 Amendment" not in headers
+
+    def test_connectives_in_note_headers_preserved(self) -> None:
+        """All common lowercase connectives must survive verbatim (issue #509)."""
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="miscellaneous">'
+            "<heading>Termination of Reporting Requirements</heading>"
+            "<p>Pub. L. 104–66 provided that the reporting requirement is terminated.</p>"
+            "</note>"
+            '<note topic="miscellaneous">'
+            "<heading>Applicability of Future Employment Laws</heading>"
+            "<p>Pub. L. 104–331 extended laws to Presidential offices.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        assert "Termination of Reporting Requirements" in headers, (
+            "lowercase 'of' must be preserved in note headers"
+        )
+        assert "Applicability of Future Employment Laws" in headers, (
+            "lowercase 'of' must be preserved in note headers"
+        )
+        # Title-cased variants must NOT appear
+        assert "Termination Of Reporting Requirements" not in headers
+        assert "Applicability Of Future Employment Laws" not in headers
+
+    def test_note_header_exactly_matches_xml_heading(self) -> None:
+        """note.header must equal the verbatim XML <heading> text, character-for-character."""
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note topic="referencesInText">'
+            "<heading>References in Text</heading>"
+            "<p>The Higher Education Act of 1965, referred to in text, is Pub. L. 89–329.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "References in Text", (
+            f"Expected 'References in Text' but got {notes.notes[0].header!r}"
         )
 
 

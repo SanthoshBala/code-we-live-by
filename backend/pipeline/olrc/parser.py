@@ -1619,7 +1619,10 @@ class USLMParser:
             if tag == "heading":
                 text = "".join(el.itertext()).strip()
                 if text:
-                    parts.append(f"[NH]{text.title()}[/NH]")
+                    # Preserve verbatim text from OLRC source — do NOT apply
+                    # .title() here because that mangles lowercase connective
+                    # words ("of" → "Of", "in" → "In", etc.).  See issue #509.
+                    parts.append(f"[NH]{text}[/NH]")
                 return  # Don't process children
 
             # Track bold/italic state
