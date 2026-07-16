@@ -3917,3 +3917,98 @@ class TestAmendmentMidSentencePubLFix:
         # The fifth 1976 entry must have the Subsecs. plural prefix
         fifth_1976 = [a for a in amendments if a.year == 1976][4]
         assert "Subsecs. (d) to (g)." in fifth_1976.description
+
+
+class TestReferencesInTextLines:
+    """Tests for _references_in_text_lines function.
+
+    Regression tests for Issue #601: a single <p> element in a References in
+    Text note must not be split into multiple lines by sentence-boundary
+    detection.  Each <p> element (represented by [PARA] markers in the raw
+    content) must produce exactly one ParsedLine.
+    """
+
+    def test_single_para_with_multiple_sentences_produces_one_line(self) -> None:
+        """A single <p> element with multiple sentences stays as one line.
+
+        Regression test for Issue #601: the sentence splitter was incorrectly
+        breaking a References in Text note paragraph into multiple lines.
+        The paragraph for 26 U.S.C. § 2504 contains three sentence-ending
+        periods but should appear as a single display line.
+        """
+        from pipeline.olrc.normalized_section import _references_in_text_lines
+
+        # One <p> element whose text contains three sentence-ending periods —
+        # the exact structure that triggered Issue #601.
+        raw = (
+            " The Tax Reform Act of 1976, referred to in subsec. (b), "
+            "is Pub. L. 94–455, Oct. 4, 1976, 90 Stat. 1520. "
+            "Section 2521 of the Internal Revenue Code of 1954 was repealed "
+            "by Pub. L. 94–455. "
+            "For complete classification of this Act to the Code, "
+            "see Tables."
+        )
+
+        lines = _references_in_text_lines(raw)
+
+        assert len(lines) == 1, (
+            f"Expected 1 line for single <p> with multiple sentences, "
+            f"got {len(lines)}: {[ln.content for ln in lines]}"
+        )
+        assert "Tax Reform Act" in lines[0].content
+        assert "Section 2521" in lines[0].content
+        assert "see Tables" in lines[0].content
+
+    def test_multiple_paras_produce_separate_lines(self) -> None:
+        """Multiple <p> elements (separated by [PARA]) each become one line."""
+        from pipeline.olrc.normalized_section import _references_in_text_lines
+
+        raw = (
+            " First paragraph text with multiple sentences. It continues here.[PARA]"
+            " Second paragraph with different content. Also multiple sentences here."
+        )
+
+        lines = _references_in_text_lines(raw)
+
+        assert len(lines) == 2, (
+            f"Expected 2 lines (one per <p> element), got {len(lines)}: "
+            f"{[ln.content for ln in lines]}"
+        )
+        assert "First paragraph" in lines[0].content
+        assert "Second paragraph" in lines[1].content
+
+    def test_nh_markers_stripped(self) -> None:
+        """[NH]...[/NH] note-header markers are stripped from content."""
+        from pipeline.olrc.normalized_section import _references_in_text_lines
+
+        raw = (
+            "[NH]References in Text[/NH]"
+            " The relevant act, Pub. L. 94–455, applies here."
+        )
+
+        lines = _references_in_text_lines(raw)
+
+        assert len(lines) == 1
+        assert "[NH]" not in lines[0].content
+        assert "Pub. L. 94–455" in lines[0].content
+
+    def test_empty_content_returns_empty_list(self) -> None:
+        """Empty or whitespace-only content returns an empty list."""
+        from pipeline.olrc.normalized_section import _references_in_text_lines
+
+        assert _references_in_text_lines("") == []
+        assert _references_in_text_lines("   ") == []
+        assert _references_in_text_lines("[NH]Header[/NH]") == []
+
+    def test_lines_have_indent_level_one(self) -> None:
+        """All parsed lines are at indent_level=1 (matching other note lines)."""
+        from pipeline.olrc.normalized_section import _references_in_text_lines
+
+        raw = "First reference paragraph.[PARA]Second reference paragraph."
+        lines = _references_in_text_lines(raw)
+
+        assert len(lines) == 2
+        for ln in lines:
+            assert ln.indent_level == 1
+            assert ln.marker is None
+            assert ln.is_header is False

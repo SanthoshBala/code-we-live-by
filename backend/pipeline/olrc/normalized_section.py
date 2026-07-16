@@ -1171,6 +1171,45 @@ def _amendment_lines(raw_content: str) -> list[ParsedLine]:
     return lines
 
 
+def _references_in_text_lines(raw_content: str) -> list[ParsedLine]:
+    """Preserve OLRC paragraph structure for References in Text notes.
+
+    Each <p> element in the source XML is represented as a [PARA]-separated
+    block.  Converting [PARA] to \\n\\n and splitting there — rather than
+    applying sentence-boundary detection — ensures that one <p> element
+    becomes exactly one display line.  This prevents multi-sentence paragraphs
+    (e.g. "The Tax Reform Act of 1976... Section 2521... 94-455.") from being
+    incorrectly split into multiple lines by _split_into_sentences.
+    """
+    cleaned = re.sub(r"\[NH\].*?\[/NH\]", "", raw_content, flags=re.DOTALL)
+    cleaned = re.sub(r"\[/NH\]", "", cleaned)
+    cleaned = re.sub(r"\[PARA\]", "\n\n", cleaned)
+    cleaned = cleaned.strip()
+
+    if not cleaned:
+        return []
+
+    lines: list[ParsedLine] = []
+    pos = 0
+    for para in re.split(r"\n\n+", cleaned):
+        content = para.strip()
+        if content:
+            lines.append(
+                ParsedLine(
+                    line_number=len(lines) + 1,
+                    content=content,
+                    indent_level=1,
+                    marker=None,
+                    is_header=False,
+                    is_signature=False,
+                    start_char=pos,
+                    end_char=pos + len(para.rstrip()),
+                )
+            )
+        pos += len(para) + 2  # +2 for the \n\n separator
+    return lines
+
+
 def _parse_amendments(text: str) -> list[Amendment]:
     """Parse amendment entries from the Amendments subsection.
 
@@ -1496,6 +1535,8 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
                 header=header,
                 lines=_amendment_lines(raw_content)
                 if header == "Amendments"
+                else _references_in_text_lines(raw_content)
+                if header == "References in Text"
                 else normalize_note_content(raw_content),
                 category=category,
             )
@@ -1651,6 +1692,8 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
                     header=header,
                     lines=_amendment_lines(raw_content)
                     if header == "Amendments"
+                    else _references_in_text_lines(raw_content)
+                    if header == "References in Text"
                     else normalize_note_content(raw_content),
                     category=NoteCategory.EDITORIAL,
                 )
