@@ -380,3 +380,89 @@ class TestUpsertSectionWithActRefs:
         # Verify statutes_at_large_citation is set
         added_section = mock_session.add.call_args[0][0]
         assert added_section.statutes_at_large_citation == "49 Stat. 477"
+
+
+class TestSourceCreditIngestion:
+    """Tests for source_credit field being stored in normalized_notes (Issue #581)."""
+
+    @pytest.fixture
+    def mock_session(self):
+        """Create a mock async session."""
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def parsed_section_with_source_credit(self):
+        """Create a ParsedSection that has source_credit text set."""
+        from pipeline.olrc.parser import (
+            ParsedSection,
+            ParsedSubsection,
+            SourceCreditRef,
+        )
+
+        return ParsedSection(
+            section_number="106",
+            heading="Exclusive rights in copyrighted works",
+            full_citation="17 U.S.C. § 106",
+            text_content="Subject to sections 107 through 122...",
+            source_credit=(
+                "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+            ),
+            subsections=[
+                ParsedSubsection(
+                    marker="(1)",
+                    heading=None,
+                    content="to reproduce the copyrighted work in copies",
+                    children=[],
+                ),
+            ],
+            source_credit_refs=[
+                SourceCreditRef(
+                    congress=94,
+                    law_number=553,
+                    division=None,
+                    title="I",
+                    section="106",
+                    date="Oct. 19, 1976",
+                    stat_volume=90,
+                    stat_page=2546,
+                    raw_text="Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546",
+                ),
+            ],
+            notes="(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)",
+        )
+
+    @pytest.mark.asyncio
+    async def test_upsert_section_stores_source_credit_in_normalized_notes(
+        self, mock_session, parsed_section_with_source_credit
+    ) -> None:
+        """source_credit text is stored in normalized_notes JSONB (Issue #581).
+
+        Before the fix the field did not exist anywhere in the stack, so API
+        responses always returned null.  After the fix the raw parenthetical
+        text of the <sourceCredit> XML element is saved to normalized_notes
+        and surfaced through SectionNotesSchema.source_credit.
+        """
+        from pipeline.olrc.ingestion import USCodeIngestionService
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_result
+
+        service = USCodeIngestionService(mock_session)
+        await service._upsert_section(
+            parsed_section_with_source_credit,
+            group_id=1,
+            title_number=17,
+            force=False,
+        )
+
+        added_section = mock_session.add.call_args[0][0]
+        assert added_section.normalized_notes is not None
+        assert "source_credit" in added_section.normalized_notes
+        assert added_section.normalized_notes["source_credit"] == (
+            "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+        )

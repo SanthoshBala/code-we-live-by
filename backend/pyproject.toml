@@ -89,5 +89,6 @@ omit = ["*/tests/*", "*/__pycache__/*"]
 [dependency-groups]
 dev = [
     "aiosqlite>=0.22.1",
+    "httpx2>=2.7.0",
     "mypy>=1.19.1",
 ]

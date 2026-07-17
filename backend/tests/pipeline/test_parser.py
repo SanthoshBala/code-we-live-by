@@ -190,6 +190,74 @@ class TestUSLMParser:
         assert "Pub. L." not in text
         assert "endowment" in text
 
+    def test_extract_source_credit_text_returns_parenthetical(
+        self, parser: USLMParser
+    ) -> None:
+        """_extract_source_credit_text returns the raw text of <sourceCredit>.
+
+        This is the parenthetical citation block at the end of a section,
+        e.g. '(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)'.
+        Regression test for GitHub issue #581.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s106">
+          <num value="106">§ 106.</num>
+          <heading>Exclusive rights in copyrighted works</heading>
+          <content>Subject to sections 107 through 122.</content>
+          <sourceCredit>(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        result = parser._extract_source_credit_text(elem)
+        assert result == "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+
+    def test_extract_source_credit_text_none_when_absent(
+        self, parser: USLMParser
+    ) -> None:
+        """_extract_source_credit_text returns None when no <sourceCredit> element exists."""
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s100">
+          <num value="100">§ 100.</num>
+          <heading>Placeholder</heading>
+          <content>No source credit here.</content>
+        </section>"""
+        elem = etree.fromstring(xml)
+        result = parser._extract_source_credit_text(elem)
+        assert result is None
+
+    def test_parse_section_stores_source_credit(
+        self, parser: USLMParser, tmp_path: Path
+    ) -> None:
+        """Parsed sections carry source_credit text on the ParsedSection object.
+
+        Regression test for GitHub issue #581: source_credit was always null
+        because the field did not exist on ParsedSection.
+        """
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/17</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t17" number="17">
+      <heading>COPYRIGHTS</heading>
+      <chapter identifier="/us/usc/t17/ch1" number="1">
+        <heading>SUBJECT MATTER AND SCOPE OF COPYRIGHT</heading>
+        <section identifier="/us/usc/t17/s106" number="106">
+          <heading>Exclusive rights in copyrighted works</heading>
+          <content>Subject to sections 107 through 122.</content>
+          <sourceCredit>(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)</sourceCredit>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>"""
+        xml_path = tmp_path / "title17_source_credit.xml"
+        xml_path.write_text(xml, encoding="utf-8")
+
+        result = parser.parse_file(xml_path)
+
+        assert len(result.sections) == 1
+        section = result.sections[0]
+        assert section.source_credit == "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+
     def test_extract_subsections_with_direct_paragraphs(
         self, parser: USLMParser
     ) -> None:

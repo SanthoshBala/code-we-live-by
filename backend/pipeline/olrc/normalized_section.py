@@ -2376,6 +2376,11 @@ def normalize_parsed_section(
         notes.raw_notes = parsed_section.notes
         _parse_notes_structure(parsed_section.notes, notes, citations=citations)
 
+    # Store the raw source credit text so API consumers can display it
+    # directly without needing to reconstruct it from structured citations.
+    if parsed_section.source_credit:
+        notes.source_credit = parsed_section.source_credit
+
     # Convert notes refs to schemas (Task 1.17b)
     if parsed_section.notes_refs:
         notes.references = note_refs_to_schemas(parsed_section.notes_refs)

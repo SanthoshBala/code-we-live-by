@@ -345,6 +345,18 @@ class SectionNotesSchema(BaseModel):
     )
 
     # =========================================================================
+    # SOURCE CREDIT
+    # =========================================================================
+
+    source_credit: str | None = Field(
+        None,
+        description=(
+            "Raw text of the <sourceCredit> element "
+            "(e.g. '(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)')"
+        ),
+    )
+
+    # =========================================================================
     # RAW/UNPARSED CONTENT
     # =========================================================================
 
@@ -452,6 +464,7 @@ class SectionViewerSchema(BaseModel):
     is_positive_law: bool = False
     is_repealed: bool = False
     notes: SectionNotesSchema | None = None
+    source_credit: str | None = None
     last_revision: HeadRevisionSchema | None = None
     group_ancestors: list[GroupAncestorSchema] = []
 

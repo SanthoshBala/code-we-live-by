@@ -522,6 +522,13 @@ async def get_section(
     if state.group_id is not None:
         group_ancestors = await _get_group_ancestors(session, state.group_id)
 
+    # Extract source_credit from normalized_notes JSONB or notes schema
+    source_credit: str | None = None
+    if notes is not None and notes.source_credit:
+        source_credit = notes.source_credit
+    elif state.normalized_notes:
+        source_credit = state.normalized_notes.get("source_credit")
+
     return SectionViewerSchema(
         title_number=title_number,
         section_number=state.section_number,
@@ -534,6 +541,7 @@ async def get_section(
         is_positive_law=is_positive_law,
         is_repealed=state.is_deleted,
         notes=notes,
+        source_credit=source_credit,
         last_revision=last_revision,
         group_ancestors=group_ancestors,
     )

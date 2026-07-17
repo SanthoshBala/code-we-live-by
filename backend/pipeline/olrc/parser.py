@@ -273,6 +273,7 @@ class ParsedSection:
     text_content: str  # Flattened text (for backwards compatibility)
     parent_group_key: str | None = None  # Key of immediate parent group
     notes: str | None = None  # Raw notes from XML
+    source_credit: str | None = None  # Raw text of <sourceCredit> element
     sort_order: int = 0
     subsections: list[ParsedSubsection] = field(
         default_factory=list
@@ -887,6 +888,9 @@ class USLMParser:
         # Extract notes if present
         notes = self._extract_notes(section_elem)
 
+        # Extract raw sourceCredit text separately for direct storage/display
+        source_credit_text = self._extract_source_credit_text(section_elem)
+
         # Extract structured citation refs from sourceCredit
         source_credit_refs, act_refs = self._extract_source_credit_refs(section_elem)
 
@@ -900,6 +904,7 @@ class USLMParser:
             text_content=text_content,
             parent_group_key=self._current_group_key,
             notes=notes,
+            source_credit=source_credit_text,
             sort_order=self._section_order,
             subsections=subsections,
             source_credit_refs=source_credit_refs,
@@ -1396,6 +1401,23 @@ class USLMParser:
 
         if parts:
             return " ".join(parts)
+        return None
+
+    def _extract_source_credit_text(
+        self, section_elem: etree._Element
+    ) -> str | None:
+        """Extract the raw text of the <sourceCredit> element.
+
+        Returns the parenthetical citation string exactly as it appears in
+        the XML (e.g. "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976,
+        90 Stat. 2546.)"), or None when the element is absent.
+        """
+        sc = section_elem.find(".//{*}sourceCredit")
+        if sc is None:
+            sc = section_elem.find(".//sourceCredit")
+        if sc is not None:
+            text = self._get_text_content(sc).strip()
+            return text if text else None
         return None
 
     def _format_quoted_content(self, elem: etree._Element) -> str:
