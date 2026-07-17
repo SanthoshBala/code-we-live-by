@@ -320,3 +320,56 @@ def test_get_section_note_categories_populated_from_notes(
 
     data = response.json()
     assert data["note_categories"] == ["editorial", "historical", "statutory"]
+
+
+@patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
+def test_get_section_returns_source_credit(mock_get: AsyncMock, client: TestClient) -> None:
+    """source_credit field in the response contains the raw parenthetical text (Issue #581).
+
+    Before the fix this field was absent from the schema entirely and thus
+    always null in API responses.
+    """
+    mock_get.return_value = SectionViewerSchema(
+        title_number=17,
+        section_number="106",
+        heading="Exclusive rights in copyrighted works",
+        full_citation="17 U.S.C. § 106",
+        text_content="Subject to sections 107 through 122...",
+        enacted_date=date(1976, 10, 19),
+        last_modified_date=None,
+        is_positive_law=True,
+        is_repealed=False,
+        notes=None,
+        source_credit=(
+            "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+        ),
+    )
+
+    response = client.get("/api/v1/sections/17/106")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["source_credit"] == (
+        "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+    )
+
+
+@patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
+def test_get_section_source_credit_null_when_absent(
+    mock_get: AsyncMock, client: TestClient
+) -> None:
+    """source_credit is null when no sourceCredit element was present in the XML."""
+    mock_get.return_value = SectionViewerSchema(
+        title_number=17,
+        section_number="106",
+        heading="Exclusive rights in copyrighted works",
+        full_citation="17 U.S.C. § 106",
+        text_content="Subject to sections 107 through 122...",
+        is_positive_law=True,
+        is_repealed=False,
+        notes=None,
+    )
+
+    response = client.get("/api/v1/sections/17/106")
+    assert response.status_code == 200
+    assert response.json()["source_credit"] is None
