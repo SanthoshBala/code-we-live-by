@@ -3199,6 +3199,120 @@ class TestAmendmentDateSpacing:
         assert '" December' not in desc
 
 
+class TestAmendmentLawMetadata:
+    """Tests for issue #582: amendment law objects have all-null metadata.
+
+    The amendment description text (e.g. "Pub. L. 111–295, §3(a), Dec. 9, 2010,
+    124 Stat. 3180") contains date, stat_volume, and stat_page.  These must be
+    parsed and stored in the law sub-object rather than left null.
+    """
+
+    def test_amendment_law_date_parsed(self) -> None:
+        """date is extracted from the amendment description citation."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "2010—Subsec. (c)(2). Pub. L. 111–295, §3(a), Dec. 9, 2010, 124 Stat. 3180, struck out something."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].law is not None
+        assert amendments[0].law.date == "Dec. 9, 2010"
+
+    def test_amendment_law_stat_volume_parsed(self) -> None:
+        """stat_volume is extracted from the amendment description citation."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "2010—Subsec. (c)(2). Pub. L. 111–295, §3(a), Dec. 9, 2010, 124 Stat. 3180, struck out something."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].law is not None
+        assert amendments[0].law.stat_volume == 124
+
+    def test_amendment_law_stat_page_parsed(self) -> None:
+        """stat_page is extracted from the amendment description citation."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "2010—Subsec. (c)(2). Pub. L. 111–295, §3(a), Dec. 9, 2010, 124 Stat. 3180, struck out something."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].law is not None
+        assert amendments[0].law.stat_page == 3180
+
+    def test_amendment_law_stat_reference_computed(self) -> None:
+        """stat_reference computed field returns 'N Stat. M' once volume/page populated."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "2010—Pub. L. 111–295, §3(a), Dec. 9, 2010, 124 Stat. 3180, struck out something."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].law is not None
+        assert amendments[0].law.stat_reference == "124 Stat. 3180"
+
+    def test_second_amendment_pl106_44(self) -> None:
+        """PL 106-44 metadata matches OLRC data for 17 USC § 512 (issue #582)."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1999—Subsec. (e). Pub. L. 106–44, §1(d)(1)(A), Aug. 5, 1999, "
+            "113 Stat. 222, substituted something for something else."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        law = amendments[0].law
+        assert law is not None
+        assert law.congress == 106
+        assert law.law_number == 44
+        assert law.date == "Aug. 5, 1999"
+        assert law.stat_volume == 113
+        assert law.stat_page == 222
+        assert law.stat_reference == "113 Stat. 222"
+
+    def test_amendment_without_stat_leaves_fields_null(self) -> None:
+        """Amendment citations without Stat. reference leave stat fields null."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "1988—Pub. L. 100–568 amended section generally."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].law is not None
+        assert amendments[0].law.stat_volume is None
+        assert amendments[0].law.stat_page is None
+        assert amendments[0].law.stat_reference is None
+
+    def test_multiple_amendments_each_get_metadata(self) -> None:
+        """Multiple amendments in the same section each get their own metadata."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "2010—Pub. L. 111–295, §3(a), Dec. 9, 2010, 124 Stat. 3180, struck out.\n\n"
+            "1999—Pub. L. 106–44, §1(d), Aug. 5, 1999, 113 Stat. 222, substituted."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+
+        # 2010 amendment
+        law_2010 = amendments[0].law
+        assert law_2010 is not None
+        assert law_2010.congress == 111
+        assert law_2010.stat_volume == 124
+        assert law_2010.stat_page == 3180
+        assert law_2010.date == "Dec. 9, 2010"
+
+        # 1999 amendment
+        law_1999 = amendments[1].law
+        assert law_1999 is not None
+        assert law_1999.congress == 106
+        assert law_1999.stat_volume == 113
+        assert law_1999.stat_page == 222
+        assert law_1999.date == "Aug. 5, 1999"
+
+
 class TestMultiSentenceSplitting:
     """Tests for splitting multi-sentence paragraphs onto separate provision lines.
 
