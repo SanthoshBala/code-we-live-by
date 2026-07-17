@@ -1250,7 +1250,9 @@ def _parse_amendments(text: str) -> list[Amendment]:
                 law = ParsedPublicLaw(
                     congress=congress,
                     law_number=law_number,
-                    date=_parsed_src.law.date if _parsed_src and _parsed_src.law else None,
+                    date=_parsed_src.law.date
+                    if _parsed_src and _parsed_src.law
+                    else None,
                     stat_volume=_parsed_src.law.stat_volume
                     if _parsed_src and _parsed_src.law
                     else None,
