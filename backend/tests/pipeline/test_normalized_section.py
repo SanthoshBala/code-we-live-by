@@ -3080,6 +3080,142 @@ class TestNoteHeadersVerbatim:
         )
 
 
+class TestReferencesInTextParagraphMapping:
+    """Regression tests for issue #537: 21 U.S.C. § 822 'References in Text'.
+
+    The OLRC source XML has exactly 2 <p> elements in this note. The parser
+    previously broke the first <p> into 3 fragment lines — cutting it off
+    mid-sentence right after the abbreviation "subsecs." — and inserted a
+    spurious empty line between the two source paragraphs. Each source <p>
+    must map to exactly one lines[] entry, matching the "Amendments" note's
+    existing 1:1 paragraph-to-line behavior.
+    """
+
+    def _parse_xml_notes(self, xml_snippet: str) -> object:
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        notes_elem = etree.fromstring(xml_snippet)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+        return notes
+
+    def test_21_usc_822_references_in_text_two_paragraphs_two_lines(self) -> None:
+        """21 U.S.C. § 822 References in Text note: 2 source <p> -> 2 lines[].
+
+        XML reproduced verbatim from usc21@113-21.xml (OLRC release point
+        113-21), including the <ref> and <date> inline children that
+        previously triggered the mid-sentence split.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0" type="uscNote">'
+            '<note class="editorial">'
+            '<heading class="smallCaps">Editorial Notes</heading>'
+            '<note topic="referencesInText">'
+            "<heading>References in Text</heading>"
+            '<p style="-uslm-lc:I21" class="indent0">This subchapter, referred to '
+            "in subsecs. (b), (c), and (g)(1), was in the original “this "
+            'title”, meaning title II of <ref href="/us/pl/91/513">Pub. L. '
+            '91–513</ref>, <date date="1970-10-27">Oct. 27, 1970</date>, '
+            '<ref href="/us/stat/84/1242">84 Stat. 1242</ref>, and is popularly '
+            "known as the “Controlled Substances Act”. For complete "
+            "classification of title II to the Code, see second paragraph of "
+            'Short Title note set out under <ref href="/us/usc/t21/s801">section '
+            "801 of this title</ref> and Tables.</p>"
+            '<p style="-uslm-lc:I21" class="indent0">'
+            '<ref href="/us/usc/t21/s802/25">Section 802(25) of this title</ref>, '
+            "referred to in subsec. (c)(3), was redesignated "
+            '<ref href="/us/usc/t21/s802/26">section 802(26) of this title</ref> '
+            'by <ref href="/us/pl/98/473/s507/a">Pub. L. 98–473, title II, '
+            '§ 507(a)</ref>, <date date="1984-10-12">Oct. 12, 1984</date>, '
+            '<ref href="/us/stat/98/2071">98 Stat. 2071</ref>, and was further '
+            'redesignated <ref href="/us/usc/t21/s802/27">section 802(27) of '
+            'this title</ref> by <ref href="/us/pl/99/570/s1003/b/2">Pub. L. '
+            "99–570, title I, § 1003(b)(2)</ref>, "
+            '<date date="1986-10-27">Oct. 27, 1986</date>, '
+            '<ref href="/us/stat/100/3207-6">100 Stat. 3207–6</ref>.</p>'
+            "</note>"
+            '<note topic="amendments"><heading>Amendments</heading>'
+            '<p style="-uslm-lc:I21" class="indent0">2010—Subsec. (g). '
+            '<ref href="/us/pl/111/273">Pub. L. 111–273</ref> added '
+            "subsec. (g).</p>"
+            "</note>"
+            "</note>"
+            "</notes>"
+        )
+
+        notes = self._parse_xml_notes(xml)
+
+        ref_notes = [n for n in notes.notes if n.header == "References In Text"]
+        assert len(ref_notes) == 1
+        lines = ref_notes[0].lines
+
+        # Exactly 2 lines — one per source <p> — with no spurious blank line.
+        assert len(lines) == 2
+        assert all(line.content != "" for line in lines)
+
+        # First line must NOT be cut off mid-sentence after "subsecs." and
+        # must contain the full first source paragraph, including its
+        # second sentence ("For complete classification...").
+        first = lines[0].content
+        assert first.startswith(
+            "This subchapter, referred to in subsecs. (b), (c), and (g)(1)"
+        )
+        assert "84 Stat. 1242" in first
+        assert "Controlled Substances Act" in first
+        assert "For complete classification of title II to the Code" in first
+        assert first.endswith("and Tables.")
+
+        # Second line is the second source paragraph, reproduced in full.
+        second = lines[1].content
+        assert second.startswith("Section 802(25) of this title")
+        assert second.endswith("100 Stat. 3207–6.")
+
+    def test_subsecs_abbreviation_not_split_in_general_path(self) -> None:
+        """normalize_note_content must not treat 'subsecs.' as a sentence end.
+
+        Direct unit test of the abbreviation-list gap, independent of the
+        Amendments/References-in-Text fast path, so other note categories
+        that still use normalize_note_content (e.g. statutory notes) also
+        benefit from the fix.
+        """
+        text = (
+            "This subchapter, referred to in subsecs. (b), (c), and (g)(1), "
+            "was in the original this title."
+        )
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 1
+        assert lines[0].content == text
+
+    def test_italic_date_not_split_mid_sentence(self) -> None:
+        """An <i> element not followed by '.—' stays inline (Issue #460-style).
+
+        Some OLRC releases wrap dates or other inline content in <i> without
+        an em-dash introducer; that must not be misread as a [H2] sub-header,
+        which would otherwise fragment the surrounding sentence onto its own
+        line (e.g. the issue's hypothesis about <i> + <ref> together).
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+        xml = "<notes><p>enacted on <i>Oct. 27, 1970</i>, and is binding.</p></notes>"
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        assert "[H2]" not in content
+        assert "Oct. 27, 1970" in content
+
+
 class TestCleanHeading:
     """Tests for _clean_heading function."""
 
