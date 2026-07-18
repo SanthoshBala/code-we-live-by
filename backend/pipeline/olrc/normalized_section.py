@@ -1267,7 +1267,26 @@ def _parse_amendments(text: str) -> list[Amendment]:
                     r"\u201c(\s*)(.*?)(\s*)\u201d", "\u201c\\2\u201d", description
                 )
 
-                law = ParsedPublicLaw(congress=congress, law_number=law_number)
+                # Parse date, stat_volume, and stat_page from the citation text.
+                # "Pub. L. NNN-NNN{after_text}" contains these fields — e.g.
+                # "Pub. L. 111-295, §3(a), Dec. 9, 2010, 124 Stat. 3180, struck out..."
+                # Use a plain hyphen so CITATION_PARSE_PATTERN always matches the
+                # law-number separator regardless of dash variant in source text.
+                _citation_text = f"Pub. L. {congress}-{law_number}{after_text}"
+                _parsed_src = parse_citation(_citation_text)
+                law = ParsedPublicLaw(
+                    congress=congress,
+                    law_number=law_number,
+                    date=_parsed_src.law.date
+                    if _parsed_src and _parsed_src.law
+                    else None,
+                    stat_volume=_parsed_src.law.stat_volume
+                    if _parsed_src and _parsed_src.law
+                    else None,
+                    stat_page=_parsed_src.law.stat_page
+                    if _parsed_src and _parsed_src.law
+                    else None,
+                )
                 amendments.append(
                     Amendment(
                         law=law,
@@ -1286,7 +1305,21 @@ def _parse_amendments(text: str) -> list[Amendment]:
             if simple_pub_match:
                 congress = int(simple_pub_match.group(1))
                 law_number = int(simple_pub_match.group(2))
-                law = ParsedPublicLaw(congress=congress, law_number=law_number)
+                # Also parse date/stat from the surrounding year_block text
+                _fallback_parsed = parse_citation(year_block)
+                law = ParsedPublicLaw(
+                    congress=congress,
+                    law_number=law_number,
+                    date=_fallback_parsed.law.date
+                    if _fallback_parsed and _fallback_parsed.law
+                    else None,
+                    stat_volume=_fallback_parsed.law.stat_volume
+                    if _fallback_parsed and _fallback_parsed.law
+                    else None,
+                    stat_page=_fallback_parsed.law.stat_page
+                    if _fallback_parsed and _fallback_parsed.law
+                    else None,
+                )
                 amendments.append(
                     Amendment(
                         law=law,
