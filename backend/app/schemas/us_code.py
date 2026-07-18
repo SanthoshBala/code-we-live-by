@@ -385,8 +385,25 @@ class SectionNotesSchema(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def has_amendments(self) -> bool:
-        """Return True if any amendments were parsed."""
-        return len(self.amendments) > 0
+        """Return True if this section has amendment history.
+
+        Checks three sources, any of which is sufficient:
+
+        1. Structured ``amendments`` list (populated from the Amendments
+           editorial note during ingestion).
+        2. An ``"Amendments"`` header present in ``notes.notes`` — catches
+           sections whose ``amendments`` list was not populated, e.g. those
+           amended by pre-Public-Law chapter acts before the PL numbering
+           system (issue #571: 9 U.S.C. § 4 amended in 1954).
+        3. Any non-original citation (``order > 0``) in ``notes.citations``,
+           which is an additional signal of amendment activity even when the
+           structured list is empty.
+        """
+        return (
+            len(self.amendments) > 0
+            or any(n.header == "Amendments" for n in self.notes)
+            or any(not c.is_original for c in self.citations)
+        )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
