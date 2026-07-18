@@ -2113,6 +2113,60 @@ class TestParserNotesContent:
                 f"Role text 'Counsel' ended up in a non-signature line: {content!r}"
             )
 
+    def test_no_space_inserted_after_em_dash_before_ref(self) -> None:
+        """No spurious space after em dash when a <ref> element immediately follows.
+
+        Regression test for issue #600: 26 U.S.C. § 2504 Amendments note lines
+        like "1981—Pub. L. 97–34, §..." were rendered as "1981— Pub. L. 97–34"
+        because the joiner always inserted a space between adjacent text fragments
+        even when the preceding fragment ended with an em dash (U+2014).
+
+        The OLRC XML splits the paragraph's text across the <p> text node
+        ("1981—") and a child <ref> element ("Pub. L. 97–34"), so stripping
+        both and joining with a space introduced the extra space.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Simulates: <p>1981—<ref href="...">Pub. L. 97–34</ref>, § 442(a).</p>
+        # The <p> text node ends with an em dash immediately before the <ref>.
+        xml = (
+            "<notes>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            '<p>1981—<ref href="/us/pl/97/34">Pub. L. 97–34</ref>'
+            ", § 442(a)(4)(D), substituted text.</p>"
+            '<p>1970—<ref href="/us/pl/91/614">Pub. L. 91–614</ref>'
+            " substituted other text.</p>"
+            "<p>1998—Subsec. (c). Pub. L. 105–34 did something.</p>"
+            "</note>"
+            "</notes>"
+        )
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # No space should appear between the em dash and "Pub."
+        assert "1981— Pub." not in content, (
+            f"Spurious space after em dash in '1981—' line: {content!r}"
+        )
+        assert "1981—Pub." in content, (
+            f"Expected '1981—Pub.' with no space: {content!r}"
+        )
+        assert "1970— Pub." not in content, (
+            f"Spurious space after em dash in '1970—' line: {content!r}"
+        )
+        assert "1970—Pub." in content, (
+            f"Expected '1970—Pub.' with no space: {content!r}"
+        )
+        # Lines using plain text (no child ref element) must be unaffected
+        assert "1998—Subsec." in content, (
+            f"Expected '1998—Subsec.' to be unchanged: {content!r}"
+        )
+
 
 class TestStripNoteMarkers:
     """Tests for _strip_note_markers function."""
