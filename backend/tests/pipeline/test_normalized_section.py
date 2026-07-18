@@ -2965,6 +2965,82 @@ class TestNoteTopicAmendmentParsing:
         # Amendments note is also present and correct
         assert "Amendments" in headers
 
+    def test_cross_heading_plus_capitalized_topic_no_duplicate_issue_542(
+        self,
+    ) -> None:
+        """Regression: crossHeading + <note topic="HistoricalAndRevision"> must not produce a duplicate.
+
+        32 U.S.C. § 106 and § 107 use an XML structure where the parent <notes>
+        element has a <heading class="crossHeading"> AND the child <note> has a
+        topic attribute with a capital first letter ("HistoricalAndRevision" instead
+        of the standard "historicalAndRevision"):
+
+            <notes>
+              <heading class="crossHeading">Historical and Revision Notes</heading>
+              <note topic="HistoricalAndRevision">
+                <table>...</table>
+                <p>The words "issue of" are substituted...</p>
+              </note>
+            </notes>
+
+        Before the fix, two bugs combined to produce a duplicate note:
+          1. The capital-H topic attribute fell through to topic.title() →
+             "Historicalandrevision" (camelCase treated as one word), which was
+             NOT in _NOTE_TOPIC_DISPLAY, so the lookup failed.
+          2. The cross-heading emitted [NH]Historical And Revision Notes[/NH]
+             while the note topic emitted [NH]Historicalandrevision[/NH].
+          3. _parse_historical_notes captured empty content (stopped at the second
+             [NH] marker), and _parse_flat_notes then added the garbled
+             "Historicalandrevision" note as a second STATUTORY entry.
+
+        After the fix:
+          - topic is normalised to lowercase-first ("historicalAndRevision") before
+            the _NOTE_TOPIC_DISPLAY lookup, so the canonical display string is found.
+          - The topic-attribute [NH] emission is skipped when the immediately-
+            preceding cross-heading already emitted the same header (case-insensitive
+            comparison), so only one [NH] marker appears in the raw notes.
+
+        Closes #542.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<heading class="crossHeading">Historical and Revision Notes</heading>'
+            '<note topic="HistoricalAndRevision">'
+            "<table>"
+            "<tr><th>Revised Section</th><th>Source (U.S.C., 1952 ed.)</th></tr>"
+            "<tr><td>32:106</td><td>50:282</td></tr>"
+            "</table>"
+            '<p>The words "issue of" are substituted for "organized under" '
+            "for uniformity and to distinguish between the National Guard "
+            "of the various States.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes = self._parse_xml_notes(xml)
+
+        headers = [n.header for n in notes.notes]
+        # Exactly one historical note — no duplicate
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 1, (
+            f"Expected exactly 1 historical note, got {len(hist_notes)}: {headers}"
+        )
+        # Header is the canonical display string, not the garbled camelCase fallback
+        assert hist_notes[0].header == "Historical and Revision Notes"
+        assert hist_notes[0].category.value == "historical"
+        # No garbled "Historicalandrevision" header
+        assert not any("historicalandrevision" in h.lower() for h in headers), (
+            f"Garbled camelCase header found in: {headers}"
+        )
+        # Content must NOT be empty — the note text must be captured
+        content_lines = [line.content for line in hist_notes[0].lines if line.content]
+        assert len(content_lines) > 0, (
+            "Historical note must have content lines, not be empty"
+        )
+        full_content = " ".join(content_lines)
+        assert "issue of" in full_content, (
+            f"Note content must include the note text, got: {full_content!r}"
+        )
+
 
 class TestAmendmentsIndentLevel:
     """Regression tests for issue #573: Amendments note lines must use indent_level=1.
