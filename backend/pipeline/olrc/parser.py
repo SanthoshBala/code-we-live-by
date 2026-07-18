@@ -878,8 +878,14 @@ class USLMParser:
         # Build full citation
         full_citation = f"{title_number} U.S.C. § {section_number}"
 
-        # Extract text content (flattened for backwards compatibility)
+        # Extract text content (flattened for backwards compatibility).
+        # Inline footnote markers (e.g. "[1]") are included by
+        # _itertext_skip_footnotes; footnote body texts are collected separately
+        # and appended so they are accessible without requiring a schema change.
         text_content = self._extract_section_text(section_elem)
+        footnote_texts = self._collect_footnote_texts(section_elem)
+        if footnote_texts:
+            text_content = text_content + " " + " ".join(footnote_texts)
 
         # Extract structured subsections from XML
         subsections = self._extract_subsections(section_elem)
@@ -1044,7 +1050,11 @@ class USLMParser:
         ) -> Generator[str, None, None]:
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
             if strip_footnotes:
+                # Include inline footnote marker as [N] rather than skipping.
                 if tag == "ref" and el.get("class", "") == "footnoteRef":
+                    ref_num = (el.text or "").strip()
+                    if ref_num:
+                        yield f"[{ref_num}]"
                     return
                 if tag == "note" and el.get("type", "") == "footnote":
                     return
@@ -1068,11 +1078,22 @@ class USLMParser:
 
     @staticmethod
     def _itertext_skip_footnotes(elem: etree._Element) -> Generator[str, None, None]:
-        """Like elem.itertext() but skips footnote refs and notes."""
+        """Like elem.itertext() but preserves inline footnote markers and skips note bodies.
+
+        For ``<ref class="footnoteRef">`` elements, yields a bracketed marker like
+        ``[1]`` so the footnote reference number appears in the extracted text.
+        For ``<note type="footnote">`` elements, the body text is skipped inline
+        (callers that need the full footnote text should call
+        ``_collect_footnote_texts()`` separately).
+        """
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
-        # Skip footnote reference links and footnote note bodies
+        # Footnote reference link: include the marker number as [N].
         if tag == "ref" and elem.get("class", "") == "footnoteRef":
+            ref_num = (elem.text or "").strip()
+            if ref_num:
+                yield f"[{ref_num}]"
             return
+        # Footnote note body: skip entirely (avoid injecting note prose inline).
         if tag == "note" and elem.get("type", "") == "footnote":
             return
         if elem.text:
@@ -1081,6 +1102,26 @@ class USLMParser:
             yield from USLMParser._itertext_skip_footnotes(child)
             if child.tail:
                 yield child.tail
+
+    @staticmethod
+    def _collect_footnote_texts(section_elem: etree._Element) -> list[str]:
+        """Return a list of footnote body texts from ``<note type="footnote">`` elements.
+
+        These elements are typically siblings of ``<ref class="footnoteRef">``
+        inside a subsection.  Their prose is excluded from inline text extraction
+        by ``_itertext_skip_footnotes``; this method gathers them so callers can
+        append the footnote bodies to ``text_content`` or surface them separately.
+        """
+        footnote_texts: list[str] = []
+        for note_elem in section_elem.iter():
+            note_tag = (
+                note_elem.tag.split("}")[-1] if "}" in note_elem.tag else note_elem.tag
+            )
+            if note_tag == "note" and note_elem.get("type", "") == "footnote":
+                text = "".join(note_elem.itertext()).strip()
+                if text:
+                    footnote_texts.append(text)
+        return footnote_texts
 
     def _extract_section_text(self, section_elem: etree._Element) -> str:
         """Extract the full text content of a section."""
