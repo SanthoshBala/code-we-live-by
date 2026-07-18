@@ -2045,17 +2045,18 @@ class USLMParser:
             # Parse /us/usc/tTITLE/sSECTION hrefs (US Code sections)
             elif "/us/usc/" in href:
                 match = re.match(
-                    r"/us/usc/t(\d+)/s([\w-]+)",  # Title and section
+                    r"/us/usc/t(\d+)/s([\w–-]+)",  # Title and section (includes en-dash)
                     href,
                 )
                 if match:
+                    section = match.group(2).replace("–", "-")
                     refs.append(
                         NoteRef(
                             ref_type="usc_section",
                             href=href,
                             display_text=text,
                             usc_title=int(match.group(1)),
-                            usc_section=match.group(2),
+                            usc_section=section,
                         )
                     )
 

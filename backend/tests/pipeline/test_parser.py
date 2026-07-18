@@ -1264,6 +1264,51 @@ class TestExtractNotesRefs:
         section = result.sections[0]
         assert len(section.notes_refs) == 0
 
+    @pytest.fixture
+    def xml_with_en_dash_usc_ref(self, tmp_path: Path) -> Path:
+        """Create XML with a USC section ref containing an en-dash in the section number."""
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/22</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t22" number="22">
+      <heading>FOREIGN RELATIONS AND INTERCOURSE</heading>
+      <chapter identifier="/us/usc/t22/ch32" number="32">
+        <heading>Test Chapter</heading>
+        <section identifier="/us/usc/t22/s2377" number="2377">
+          <heading>Test section</heading>
+          <content><p>Test content.</p></content>
+          <notes>
+            <note>
+              <heading>References in Text</heading>
+              <p>See <ref href="/us/usc/t22/s2349aa–10">section 2349aa–10 of this title</ref>.</p>
+            </note>
+          </notes>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_en_dash_usc_ref.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    def test_extract_usc_section_ref_with_en_dash(
+        self, parser: USLMParser, xml_with_en_dash_usc_ref: Path
+    ) -> None:
+        """Test that en-dash in USC section number is normalized to ASCII hyphen."""
+        result = parser.parse_file(xml_with_en_dash_usc_ref)
+
+        section = result.sections[0]
+        assert len(section.notes_refs) == 1
+
+        ref = section.notes_refs[0]
+        assert ref.ref_type == "usc_section"
+        assert ref.usc_title == 22
+        assert ref.usc_section == "2349aa-10"
+        assert ref.href == "/us/usc/t22/s2349aa–10"
+
 
 class TestNoteRefDataclass:
     """Tests for NoteRef dataclass."""
