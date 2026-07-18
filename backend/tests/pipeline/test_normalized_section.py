@@ -3953,6 +3953,27 @@ class TestPrePLAmendmentCitations:
         assert modern.law.congress == 106
         assert pre_pl.law is None
 
+    def test_9usc4_exact_amendment_text(self) -> None:
+        """9 U.S.C. § 4: exact 1954 chapter-act amendment text is parsed correctly.
+
+        Regression for issue #571: the 1954 amendment to 9 U.S.C. § 4 reads
+        '1954—Act Sept. 3, 1954, brought section into conformity with present
+        terms and practice.' which must produce a single Amendment with
+        year=1954, law=None.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1954—Act Sept. 3, 1954, brought section into conformity"
+            " with present terms and practice."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].year == 1954
+        assert amendments[0].law is None
+        assert "Act Sept. 3, 1954" in amendments[0].description
+
 
 class TestAmendmentMidSentencePubLFix:
     """Regression tests for issue #558: amendment parser splits mid-sentence on
