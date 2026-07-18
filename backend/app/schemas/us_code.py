@@ -472,6 +472,19 @@ class SectionViewerSchema(BaseModel):
     last_revision: HeadRevisionSchema | None = None
     group_ancestors: list[GroupAncestorSchema] = []
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def note_categories(self) -> list[str]:
+        """Return the distinct note categories present in notes, sorted.
+
+        Mirrors the note_categories field on SectionSummarySchema so that
+        clients receive consistent data from both the listing and detail
+        endpoints.
+        """
+        if self.notes is None:
+            return []
+        return sorted({n.category.value for n in self.notes.notes})
+
 
 class TitleSummarySchema(BaseModel):
     """Summary of a US Code title for list views."""
