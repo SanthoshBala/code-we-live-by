@@ -2948,15 +2948,15 @@ class TestAmendmentsIndentLevel:
     """
 
     def test_amendment_lines_indent_level_is_one(self) -> None:
-        """_amendment_lines returns lines with indent_level=1, matching peer notes."""
-        from pipeline.olrc.normalized_section import _amendment_lines
+        """_paragraph_lines returns lines with indent_level=1, matching peer notes."""
+        from pipeline.olrc.normalized_section import _paragraph_lines
 
         raw = (
             "[NH]Amendments[/NH] "
             "1954—Act Sept. 3, 1954, brought section into conformity with arbitration "
             "rules of the Federal Rules of Civil Procedure."
         )
-        lines = _amendment_lines(raw)
+        lines = _paragraph_lines(raw)
 
         assert len(lines) > 0
         for line in lines:
@@ -3971,3 +3971,118 @@ class TestAmendmentMidSentencePubLFix:
         # The fifth 1976 entry must have the Subsecs. plural prefix
         fifth_1976 = [a for a in amendments if a.year == 1976][4]
         assert "Subsecs. (d) to (g)." in fifth_1976.description
+
+
+class TestReferencesInTextAbbreviationPeriods:
+    """Regression tests for issue #551: 17 U.S.C. § 1201 note paragraphs split at 'subsecs.' period.
+
+    The OLRC source renders each "References in Text" note entry as a complete
+    paragraph, but the parser was splitting lines mid-sentence at "subsecs." because
+    that abbreviation was missing from LEGAL_ABBREVIATIONS and the sentence-boundary
+    detector treated the period in "subsecs. (a)(1)(A)" as a sentence end.
+    """
+
+    def _parse_editorial_notes_xml(self, xml_snippet: str) -> object:
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        notes_elem = etree.fromstring(xml_snippet)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+        return notes
+
+    def test_subsecs_abbreviation_not_split_via_normalize_note_content(self) -> None:
+        """normalize_note_content must not treat 'subsecs.' as a sentence boundary.
+
+        This is the root cause: 'subsecs.' was not in LEGAL_ABBREVIATIONS so
+        '_is_sentence_boundary' returned True for the period in 'subsecs. (a)(1)(A)',
+        cutting the paragraph mid-sentence.
+        """
+        text = (
+            "The date of the enactment of this chapter, referred to in subsecs. "
+            "(a)(1)(A), (g)(5), and (k)(1), (4)(E), is the date of enactment of "
+            "Pub. L. 105-304, which was approved Oct. 28, 1998."
+        )
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 1, (
+            f"Expected 1 line but got {len(lines)}: {[line.content for line in lines]}"
+        )
+        assert lines[0].content == text
+
+    def test_subsec_singular_abbreviation_not_split(self) -> None:
+        """Singular 'subsec.' abbreviation also should not cause a split."""
+        text = (
+            "Section 802(25) of this title, referred to in subsec. (c)(3), "
+            "was redesignated section 802(26) of this title."
+        )
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 1, (
+            f"Expected 1 line but got {len(lines)}: {[line.content for line in lines]}"
+        )
+        assert lines[0].content == text
+
+    def test_17_usc_1201_references_in_text_two_paragraphs_two_lines(self) -> None:
+        """17 U.S.C. § 1201 References in Text: each source <p> maps to exactly one line.
+
+        The OLRC source has two distinct note paragraphs. Before the fix these were
+        split into multiple fragments because 'subsecs.' caused mid-sentence cuts.
+        After the fix each source <p> must produce exactly one lines[] entry.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0" type="uscNote">'
+            '<note class="editorial">'
+            "<heading>Editorial Notes</heading>"
+            '<note topic="referencesInText">'
+            "<heading>References in Text</heading>"
+            '<p class="indent0">The date of the enactment of this chapter, '
+            "referred to in subsecs. (a)(1)(A), (g)(5), and (k)(1), (4)(E), "
+            "is the date of enactment of "
+            '<ref href="/us/pl/105/304">Pub. L. 105–304</ref>, which was '
+            "approved Oct. 28, 1998.</p>"
+            '<p class="indent0">The Computer Fraud and Abuse Act of 1986, '
+            "referred to in subsecs. (g)(2)(D) and (j)(2), is "
+            '<ref href="/us/pl/99/474">Pub. L. 99–474</ref>, Oct. 16, 1986, '
+            "100 Stat. 1213, which is classified principally to chapter 47 "
+            "of Title 18.</p>"
+            "</note>"
+            "</note>"
+            "</notes>"
+        )
+
+        notes = self._parse_editorial_notes_xml(xml)
+
+        ref_notes = [n for n in notes.notes if n.header == "References in Text"]
+        assert len(ref_notes) == 1, (
+            f"Expected 1 References in Text note, got {len(ref_notes)}"
+        )
+        lines = ref_notes[0].lines
+
+        # Exactly 2 lines -- one per source <p> -- no spurious blank lines or splits.
+        non_empty = [line for line in lines if line.content]
+        assert len(non_empty) == 2, (
+            f"Expected 2 non-empty lines but got {len(non_empty)}: "
+            f"{[line.content for line in lines]}"
+        )
+
+        # First line must contain the full first paragraph, not be cut at "subsecs."
+        first = non_empty[0].content
+        assert "subsecs. (a)(1)(A), (g)(5), and (k)(1), (4)(E)" in first, (
+            f"First line was cut at 'subsecs.': {first!r}"
+        )
+        assert "Pub. L. 105" in first
+        assert first.endswith("1998.")
+
+        # Second line must contain the full second paragraph.
+        second = non_empty[1].content
+        assert "subsecs. (g)(2)(D) and (j)(2)" in second, (
+            f"Second line was cut at 'subsecs.': {second!r}"
+        )
+        assert "Computer Fraud and Abuse Act of 1986" in second
