@@ -837,6 +837,12 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
     # Clean up the text — strip note header markers and convert [PARA]
     text = re.sub(r"\[NH\].*?\[/NH\]", "", text, flags=re.DOTALL)
     text = re.sub(r"\[/NH\]", "", text)
+    # Strip orphaned opening [NH] markers (no matching [/NH]).  These arise when
+    # content is sliced at a section boundary: the lookahead in
+    # _parse_historical_notes stops at the plain text "Editorial Notes" but
+    # leaves the immediately-preceding "[NH]" inside the raw_content of the
+    # last note, producing a spurious "[NH]" with no closing tag.
+    text = re.sub(r"\[NH\]", "", text)
     text = re.sub(r"\[PARA\]", "\n\n", text)
     text = text.strip()
     if not text:
