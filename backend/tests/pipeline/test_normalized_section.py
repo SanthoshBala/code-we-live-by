@@ -3299,6 +3299,44 @@ class TestCleanHeading:
         assert _clean_heading("") == ""
         assert _clean_heading(None) is None
 
+    def test_soft_hyphen_stripped_before_title_case(self) -> None:
+        """Soft hyphen (U+00AD) mid-word is stripped before title-casing.
+
+        OLRC XML sometimes embeds soft hyphens (U+00AD) in heading text as
+        presentational line-break hints from old typesetting.  When the heading
+        is in ALL-CAPS, str.title() treats the soft hyphen as a word boundary
+        and capitalizes the character that follows it, producing garbled output
+        like "Bicenten\\xadNial" instead of "Bicentennial".  The fix strips
+        soft hyphens before the ALL-CAPS check.  See issue #609.
+        """
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        # ALL-CAPS heading with soft hyphen: should produce clean title case
+        assert (
+            _clean_heading(
+                "EX. ORD. NO. 12001. TRANSFERRING CERTAIN BICENTEN\xadNIAL FUNCTIONS"
+            )
+            == "Ex. Ord. No. 12001. Transferring Certain Bicentennial Functions"
+        )
+        # Minimal case: single word with soft hyphen in ALL-CAPS
+        assert _clean_heading("BICENTEN\xadNIAL") == "Bicentennial"
+
+    def test_soft_hyphen_stripped_from_mixed_case(self) -> None:
+        """Soft hyphen (U+00AD) is stripped from mixed-case headings too.
+
+        Even when no title-casing is applied (heading is already mixed-case),
+        soft hyphens must be removed so they do not appear in rendered output
+        or cause unexpected word-breaks in HTML.
+        """
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        assert (
+            _clean_heading("Ex. Ord. No. 12001. Bicenten\xadnial Functions")
+            == "Ex. Ord. No. 12001. Bicentennial Functions"
+        )
+        # Soft hyphen at word start / end (edge cases)
+        assert _clean_heading("Bi\xadcentennial") == "Bicentennial"
+
 
 class TestAmendmentSubsectionPrefix:
     """Tests for amendment parsing with subsection prefix."""
