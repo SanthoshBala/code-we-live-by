@@ -1559,8 +1559,17 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     # wrapper in the OLRC XML.  Without the [NH] lookahead the regex
     # greedily consumed sibling note content (e.g. "References in Text")
     # into the Historical note — Issue #504.
+    #
+    # The leading anchor (?:^|\[NH\]) ensures the phrase is only matched as
+    # a section *header* — either at the very start of the notes string
+    # (plain-text heading, e.g. 11 U.S.C. § 1163) or immediately after a
+    # [NH] marker (XML-emitted heading, e.g. 41 U.S.C. § 4706).  Without
+    # this anchor the regex matched "historical and revision notes" when it
+    # appears as an *inline cross-reference* inside another note (e.g. the
+    # Ex. Ord. No. 10637 note in 3 U.S.C. § 301), creating a spurious note
+    # and mangling nearby USC citations — Issue #607.
     hist_match = re.search(
-        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|\[NH\]|$)",
+        r"(?:^|\[NH\])Historical and Revision Notes(?:\[/NH\])?\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|\[NH\]|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )

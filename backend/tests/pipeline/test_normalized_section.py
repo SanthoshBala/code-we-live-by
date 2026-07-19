@@ -3041,6 +3041,63 @@ class TestNoteTopicAmendmentParsing:
             f"Note content must include the note text, got: {full_content!r}"
         )
 
+    def test_inline_cross_reference_not_spurious_historical_note_issue_607(
+        self,
+    ) -> None:
+        """Regression: 'historical and revision notes' as an inline cross-reference
+        must NOT create a spurious Historical and Revision Notes note.
+
+        3 U.S.C. § 301 has no historicalAndRevision note in OLRC XML, but its
+        executive-order notes contain the phrase "historical and revision notes"
+        as a cross-reference (e.g. "set out as a note in historical and revision
+        notes under 10 U.S.C. 5501").  Before the fix, _parse_historical_notes
+        matched this phrase mid-text, creating a spurious note labelled "Historical
+        and Revision Notes" whose content started with "set out under 10 U.S.C.
+        5501]".  Closes #607.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # Simulate the raw notes for 3 U.S.C. § 301: statutory notes wrapper
+        # followed by executive-order notes that contain the phrase
+        # "historical and revision notes" as an inline cross-reference.
+        raw_notes = (
+            "Statutory Notes and Related Subsidiaries "
+            "[NH]Transfer of Functions[/NH]"
+            " Functions of President under this section transferred."
+            " [NH]Ex. Ord. No. 10637[/NH]"
+            " Ex. Ord. No. 10637, Sept. 22, 1955, 20 F.R. 7025, as amended,"
+            " set out as a note in historical and revision notes"
+            " set out under 10 U.S.C. 5501],"
+            " to make appointments of officers below flag rank"
+            " without the advice and consent of the Senate,"
+            " insofar as relates to officers of the Army, Navy, Air Force,"
+            " and Marine Corps of and below the grade of colonel and Navy captain;"
+            " and officers of the Coast Guard below flag rank."
+            " Delegated authority over 14 U.S.C. 2104, 2125 as specified."
+            " [NH]Ex. Ord. No. 10940[/NH]"
+            " Ex. Ord. No. 10940, May 5, 1961, 26 F.R. 3945."
+        )
+
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        # No historical note must be created — the phrase appears only as a
+        # cross-reference inside an executive-order note, not as a section header.
+        hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
+        assert len(hist_notes) == 0, (
+            f"Expected no historical notes for 3 U.S.C. § 301 pattern, "
+            f"got: {[n.header for n in hist_notes]}"
+        )
+
+        # The note_categories must not include "historical" for this pattern.
+        categories = {n.category.value for n in notes.notes}
+        assert "historical" not in categories, (
+            f"'historical' category must not appear, got categories: {categories}"
+        )
+
 
 class TestAmendmentsIndentLevel:
     """Regression tests for issue #573: Amendments note lines must use indent_level=1.
