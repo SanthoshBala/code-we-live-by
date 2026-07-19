@@ -3292,6 +3292,30 @@ class TestCleanHeading:
         assert _clean_heading("Implementation") == "Implementation"
         assert _clean_heading("Sense of congress") == "Sense of congress"
 
+    def test_all_caps_roman_numerals_preserved(self) -> None:
+        """Test that Roman numerals stay fully uppercase when ALL-CAPS heading is title-cased.
+
+        Regression test for issue #608: "PART II" was incorrectly converted
+        to "Part Ii" because str.title() lowercases all non-first letters.
+        """
+        from pipeline.olrc.normalized_section import _clean_heading
+
+        # Core cases from issue #608 (3 USC § 301, Ex. Ord. No. 10530 sub-note)
+        assert _clean_heading("PART II") == "Part II"
+        assert _clean_heading("PART III") == "Part III"
+        assert _clean_heading("PART I") == "Part I"
+        # Other common Roman-numeral patterns in OLRC headings
+        assert _clean_heading("TITLE IV") == "Title IV"
+        assert _clean_heading("TITLE VI") == "Title VI"
+        assert _clean_heading("TITLE IX") == "Title IX"
+        assert _clean_heading("PART XI") == "Part XI"
+        assert _clean_heading("PART XII") == "Part XII"
+        # Mixed heading with Roman numeral and normal words
+        assert (
+            _clean_heading("THE OFFICE OF PERSONNEL MANAGEMENT")
+            == "The Office Of Personnel Management"
+        )
+
     def test_empty_heading(self) -> None:
         """Test empty headings."""
         from pipeline.olrc.normalized_section import _clean_heading
