@@ -1464,10 +1464,21 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
     so the three category-aware parsers find nothing.
 
     Category assignment uses the header text:
+    - Historical: Derivation, Historical and Revision Notes (legislative-provenance notes)
     - Editorial: Amendments, Change of Name, References in Text, Codification,
       Prior Provisions, Construction, Recodification, Effective Date of Repeal
     - Statutory: everything else (effective dates, savings, miscellaneous, etc.)
     """
+    # Verbatim OLRC heading text for headers classified as historical.
+    # "Derivation" notes record the original pre-codification statute from which
+    # a section derives; OLRC marks them topic="derivation" in USLM XML.
+    # Comparison is case-insensitive so that verbatim and title-cased variants match.
+    HISTORICAL_HEADERS = {
+        "Derivation",
+        "Historical and Revision Notes",
+    }
+    historical_headers_lower = {h.lower() for h in HISTORICAL_HEADERS}
+
     # Verbatim OLRC heading text for headers classified as editorial.
     # Comparison is case-insensitive so that legacy title-cased data and
     # verbatim source text both match (see issue #509).
@@ -1510,7 +1521,9 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
             continue
 
         category = (
-            NoteCategory.EDITORIAL
+            NoteCategory.HISTORICAL
+            if header.lower() in historical_headers_lower
+            else NoteCategory.EDITORIAL
             if header.lower() in editorial_headers_lower
             else NoteCategory.STATUTORY
         )
