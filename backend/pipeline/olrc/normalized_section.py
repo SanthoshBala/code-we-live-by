@@ -1755,7 +1755,9 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     # into the Historical note — Issue #504.
     # Use _find_wrapper_heading so an inline cross-reference like "See
     # Historical and Revision Notes ..." inside another note's body isn't
-    # mistaken for the start of this section (issue #529).
+    # mistaken for the start of this section (issue #529), which also covers
+    # the case of a cross-reference with no preceding [NH] marker at all,
+    # e.g. the Ex. Ord. No. 10637 note in 3 U.S.C. § 301 (issue #607).
     #
     # In the old OLRC XML format (pre-USLM 2.0), Historical and Revision
     # Notes and References in Text can be adjacent in the same XML table,
