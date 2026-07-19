@@ -3084,8 +3084,6 @@ class TestNoteTopicAmendmentParsing:
         notes = SectionNotes()
         _parse_notes_structure(raw_notes, notes)
 
-        headers = [n.header for n in notes.notes]
-
         # No historical note must be created — the phrase appears only as a
         # cross-reference inside an executive-order note, not as a section header.
         hist_notes = [n for n in notes.notes if "historical" in n.header.lower()]
