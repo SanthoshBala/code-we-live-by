@@ -239,19 +239,29 @@ SUBSECTION_HEADER_PATTERN = re.compile(
 def _clean_heading(heading: str) -> str:
     """Clean heading text for display.
 
-    Applies three transformations:
-    1. Strip trailing '.—' (period + em-dash) heading terminators.
-    2. Strip trailing standalone periods.
-    3. Convert ALL-CAPS headings to Title Case.
+    Applies four transformations:
+    1. Strip invisible presentational characters (U+00AD soft hyphen).
+    2. Strip trailing '.—' (period + em-dash) heading terminators.
+    3. Strip trailing standalone periods.
+    4. Convert ALL-CAPS headings to Title Case.
 
     Examples:
         "Implementation of New START Treaty.—" -> "Implementation of New START Treaty"
         "DEFINITIONS." -> "Definitions"
         "PENALTIES" -> "Penalties"
         "Sense of congress .—" -> "Sense of Congress"
+        "BICENTEN\xadNIAL" -> "Bicentennial"
     """
     if not heading:
         return heading
+    # Strip soft hyphens (U+00AD) before any other processing.
+    # Soft hyphens are purely presentational line-break hints from old typesetting
+    # and carry no semantic meaning in legal headings.  They must be removed before
+    # title-casing because str.title() treats any non-letter as a word boundary and
+    # would capitalize the character following the soft hyphen (e.g. the ALL-CAPS
+    # heading "BICENTEN\xadNIAL" would become "Bicenten\xadNial" instead of the
+    # correct "Bicentennial").  See issue #609.
+    heading = heading.replace("­", "")
     # Strip trailing .— or . — (with optional space before period)
     heading = re.sub(r"\s*\.—\s*$", "", heading)
     # Strip trailing period(s)
@@ -1595,7 +1605,7 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     # Extract unique report sections
     seen_headers: set[str] = set()
     for i, match in enumerate(matches):
-        header = match.group(1).strip().title()
+        header = match.group(1).strip().replace("­", "").title()
         if header in seen_headers:
             continue
         seen_headers.add(header)
@@ -1789,7 +1799,7 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
             if is_header_like and len(note_body) > 30:
                 notes.notes.append(
                     SectionNote(
-                        header=candidate_header.title(),
+                        header=candidate_header.replace("­", "").title(),
                         lines=normalize_note_content(note_body),
                         category=NoteCategory.STATUTORY,
                     )
