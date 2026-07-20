@@ -141,6 +141,33 @@ class TestSentenceBoundaryDetection:
         assert "H.R." in plain[0]
         assert "Rep. No. 83" in plain[0]
 
+    def test_par_abbreviation_not_boundary(self) -> None:
+        """'par.' (paragraph) abbreviation followed by '(digit' is not a sentence boundary.
+
+        Regression test for issue #614: 13 U.S.C. § 23 — the phrase 'in par.'
+        followed by a newline and '(1) of subsection (a)' was incorrectly split.
+        """
+        text = (
+            "were inserted after 'Director of the Census' in par.\n"
+            "(1) of subsection (a), to conform with such 1950 Reorganization Plan."
+        )
+        pos = text.index("par.") + len("par.") - 1
+        assert _is_sentence_boundary(text, pos) is False
+
+    def test_ed_abbreviation_not_boundary(self) -> None:
+        """'ed.' (edition) abbreviation is not a sentence boundary.
+
+        Regression test for issue #614: 13 U.S.C. § 23 — the phrase '1952 ed.'
+        followed by a newline and '(which has been transferred...' was incorrectly split.
+        """
+        text = (
+            "is incorporated in this subchapter, see Distribution Table, "
+            "title 13, U.S.C., 1952 ed.\n"
+            "(which has been transferred in its entirety to this revised title)."
+        )
+        pos = text.index("ed.") + len("ed.") - 1
+        assert _is_sentence_boundary(text, pos) is False
+
 
 class TestNormalizeSectionBasic:
     """Basic tests for section normalization."""
@@ -3143,6 +3170,87 @@ class TestAmendmentsIndentLevel:
         assert amendments_indent == 1, (
             f"Expected indent_level=1 for all editorial note content, "
             f"got {amendments_indent} for Amendments"
+        )
+
+
+class TestAmendmentsStartCharOffset:
+    """Regression tests for issue #616: Amendments note lines must start at start_char=0.
+
+    When raw_content passed to _paragraph_lines begins with "\\n\\n" (the gap
+    between the [/NH] header marker and the first <p> element), the pos counter
+    was being incremented twice before reaching the first non-empty line, making
+    start_char=2 for the first content line instead of 0.
+    """
+
+    def test_paragraph_lines_first_line_start_char_is_zero(self) -> None:
+        """_paragraph_lines first content line must have start_char=0 (issue #616).
+
+        The raw_content for an Amendments note typically begins with "\\n\\n" because
+        the content is sliced from editorial_text immediately after the [/NH] closing
+        tag and the first paragraph is preceded by a double-newline separator.
+        _paragraph_lines must normalise this leading whitespace before computing
+        byte-position offsets so that start_char for the first line is always 0.
+        """
+        from pipeline.olrc.normalized_section import _paragraph_lines
+
+        # Simulate the raw_content as received from _parse_editorial_notes:
+        # starts with "\n\n" (the gap between [/NH] and the first <p>).
+        raw = (
+            "\n\n1976—Subsec. (c). Pub. L. 94–521 added subsec. (c).\n\n"
+            "1964—Subsec. (b). Pub. L. 88–448 inserted provisions."
+        )
+        lines = _paragraph_lines(raw)
+
+        assert len(lines) >= 1, "Expected at least one content line"
+        assert lines[0].start_char == 0, (
+            f"Expected start_char=0 for first Amendments line, got {lines[0].start_char}"
+        )
+
+    def test_amendments_note_start_char_zero_via_xml(self) -> None:
+        """13 U.S.C. § 23 pattern: first Amendments note line has start_char=0 (issue #616).
+
+        Exercises the full XML parsing → notes structure pipeline to confirm that
+        start_char for the first line of an Amendments note is 0 when the note is
+        parsed from real OLRC-style XML with a <heading> element and <p> paragraphs.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            '<note class="editorial">'
+            '<heading class="smallCaps">Editorial Notes</heading>'
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>1976—Subsec. (c). Pub. L. 94–521 added subsec. (c).</p>"
+            "<p>1964—Subsec. (b). Pub. L. 88–448 inserted provisions.</p>"
+            "<p>1960—Subsec. (a). Pub. L. 86–769 substituted provisions.</p>"
+            "</note>"
+            "</note>"
+            "</notes>"
+        )
+        notes_elem = etree.fromstring(xml)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+
+        amendments = next(
+            (n for n in notes.notes if n.header == "Amendments"), None
+        )
+        assert amendments is not None, "Amendments note not found"
+
+        content_lines = [ln for ln in amendments.lines if ln.content]
+        assert len(content_lines) >= 1, "Expected at least one content line in Amendments note"
+
+        first_line = content_lines[0]
+        assert first_line.start_char == 0, (
+            f"Expected start_char=0 for first Amendments note line, "
+            f"got start_char={first_line.start_char} for content: {first_line.content!r}"
         )
 
 
