@@ -3239,13 +3239,13 @@ class TestAmendmentsStartCharOffset:
         notes = SectionNotes()
         _parse_notes_structure(raw, notes)
 
-        amendments = next(
-            (n for n in notes.notes if n.header == "Amendments"), None
-        )
+        amendments = next((n for n in notes.notes if n.header == "Amendments"), None)
         assert amendments is not None, "Amendments note not found"
 
         content_lines = [ln for ln in amendments.lines if ln.content]
-        assert len(content_lines) >= 1, "Expected at least one content line in Amendments note"
+        assert len(content_lines) >= 1, (
+            "Expected at least one content line in Amendments note"
+        )
 
         first_line = content_lines[0]
         assert first_line.start_char == 0, (

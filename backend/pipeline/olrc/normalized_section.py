@@ -101,9 +101,9 @@ LEGAL_ABBREVIATIONS = {
     "cl.",
     "Para.",
     "para.",
-    "Par.",     # Paragraph (e.g., "in par. (1) of subsection (a)")
+    "Par.",  # Paragraph (e.g., "in par. (1) of subsection (a)")
     "par.",
-    "Pars.",    # Plural paragraphs
+    "Pars.",  # Plural paragraphs
     "pars.",
     "Subsec.",  # Subsection (e.g., "referred to in subsec. (c)(3)")
     "subsec.",
@@ -137,7 +137,7 @@ LEGAL_ABBREVIATIONS = {
     "Oct.",
     "Nov.",
     "Dec.",
-    "ed.",   # edition (e.g., "U.S.C., 1952 ed.")
+    "ed.",  # edition (e.g., "U.S.C., 1952 ed.")
     "Ed.",
 }
 
