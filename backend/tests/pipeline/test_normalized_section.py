@@ -4294,3 +4294,56 @@ class TestReferencesInTextAbbreviationPeriods:
             f"Second line was cut at 'subsecs.': {second!r}"
         )
         assert "Computer Fraud and Abuse Act of 1986" in second
+
+
+class TestNoteParAbbrevContinuations:
+    """Regression tests for issue #614: 13 U.S.C. § 23 note paragraphs split at
+    'par.' and 'ed.' abbreviation periods followed by a continuation parenthetical.
+
+    Both defects involve a single <p> element in the OLRC XML that contained a
+    legal abbreviation ending in '.' immediately followed by a newline and a
+    continuation fragment starting with '('. The sentence-boundary detector
+    treated the period as a sentence end, splitting one source paragraph into two
+    lines[] entries.
+    """
+
+    def test_par_abbreviation_single_line(self) -> None:
+        """'in par.' followed by '(1) of subsection...' must remain a single line.
+
+        Defect 1 from issue #614: the fragment '(1) of subsection (a)' was
+        orphaned as a separate line because 'par.' was not in LEGAL_ABBREVIATIONS
+        and the detector treated the period as a sentence end.
+        """
+        text = (
+            "words were inserted after 'Director of the Census' in par.\n"
+            "(1) of subsection (a), to conform with such 1950 Reorganization Plan."
+        )
+        lines = normalize_note_content(text)
+        non_empty = [ln for ln in lines if ln.content]
+        assert len(non_empty) == 1, (
+            f"Expected 1 line but got {len(non_empty)}: {[ln.content for ln in non_empty]}"
+        )
+        assert "(1) of subsection (a)" in non_empty[0].content, (
+            f"Continuation fragment missing from line: {non_empty[0].content!r}"
+        )
+
+    def test_ed_abbreviation_single_line(self) -> None:
+        """'1952 ed.' followed by '(which has been transferred...)' must remain a single line.
+
+        Defect 2 from issue #614: the fragment '(which has been transferred in its
+        entirety to this revised title)' was orphaned because 'ed.' was not in
+        LEGAL_ABBREVIATIONS.
+        """
+        text = (
+            "Remainder of section 203 of title 13, U.S.C., 1952 ed.\n"
+            "(which has been transferred in its entirety to this revised title),"
+            " see Distribution Table."
+        )
+        lines = normalize_note_content(text)
+        non_empty = [ln for ln in lines if ln.content]
+        assert len(non_empty) == 1, (
+            f"Expected 1 line but got {len(non_empty)}: {[ln.content for ln in non_empty]}"
+        )
+        assert "(which has been transferred" in non_empty[0].content, (
+            f"Continuation fragment missing from line: {non_empty[0].content!r}"
+        )
