@@ -760,10 +760,7 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
     # parentheticals use a year or a capital letter inside (e.g. "(1976—…)",
     # "(See also…)"), not a bare digit.
     after_stripped = remaining.lstrip()
-    if re.match(r"\(\d", after_stripped):
-        return False
-
-    return True
+    return not re.match(r"\(\d", after_stripped)
 
 
 PARAGRAPH_BREAK_MARKER = "[__PARA_BREAK__]"
