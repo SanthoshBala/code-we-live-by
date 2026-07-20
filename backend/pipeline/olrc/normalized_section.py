@@ -101,6 +101,10 @@ LEGAL_ABBREVIATIONS = {
     "cl.",
     "Para.",
     "para.",
+    "Par.",  # Paragraph (e.g., "in par. (1) of subsection (a)")
+    "par.",
+    "Pars.",  # Plural paragraphs
+    "pars.",
     "Subsec.",  # Subsection (e.g., "referred to in subsec. (c)(3)")
     "subsec.",
     "Subsecs.",  # Plural subsection (e.g., "referred to in subsecs. (b), (c)")
@@ -133,6 +137,8 @@ LEGAL_ABBREVIATIONS = {
     "Oct.",
     "Nov.",
     "Dec.",
+    "ed.",  # edition (e.g., "U.S.C., 1952 ed.")
+    "Ed.",
 }
 
 # Compiled once: match any known abbreviation at the END of a string.
@@ -747,7 +753,14 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
         if _ABBREV_PREFIX_RE.match(after_stripped):
             return False
 
-    return True
+    # Continuation parentheticals cannot start a new sentence.
+    # A fragment like "(1) of subsection (a)" is always a continuation of the
+    # preceding clause (e.g. "in par.\n(1) of subsection (a), to conform…"),
+    # never the opening of a new sentence.  Genuine sentence-starting
+    # parentheticals use a year or a capital letter inside (e.g. "(1976—…)",
+    # "(See also…)"), not a bare digit.
+    after_stripped = remaining.lstrip()
+    return not re.match(r"\(\d", after_stripped)
 
 
 PARAGRAPH_BREAK_MARKER = "[__PARA_BREAK__]"
@@ -1559,8 +1572,14 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     # wrapper in the OLRC XML.  Without the [NH] lookahead the regex
     # greedily consumed sibling note content (e.g. "References in Text")
     # into the Historical note — Issue #504.
+    # In the old OLRC XML format (pre-USLM 2.0), Historical and Revision
+    # Notes and References in Text can be adjacent in the same XML table,
+    # separated only by a plain-text heading row (no <heading> element, so
+    # no [NH] marker is emitted).  Adding "References in Text" as a plain-
+    # text stop signal mirrors "Editorial Notes" / "Statutory Notes" —
+    # Issue #615.
     hist_match = re.search(
-        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|\[NH\]|$)",
+        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|References in Text|\[NH\]|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )

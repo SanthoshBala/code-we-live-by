@@ -141,6 +141,33 @@ class TestSentenceBoundaryDetection:
         assert "H.R." in plain[0]
         assert "Rep. No. 83" in plain[0]
 
+    def test_par_abbreviation_not_boundary(self) -> None:
+        """'par.' (paragraph) abbreviation followed by '(digit' is not a sentence boundary.
+
+        Regression test for issue #614: 13 U.S.C. § 23 — the phrase 'in par.'
+        followed by a newline and '(1) of subsection (a)' was incorrectly split.
+        """
+        text = (
+            "were inserted after 'Director of the Census' in par.\n"
+            "(1) of subsection (a), to conform with such 1950 Reorganization Plan."
+        )
+        pos = text.index("par.") + len("par.") - 1
+        assert _is_sentence_boundary(text, pos) is False
+
+    def test_ed_abbreviation_not_boundary(self) -> None:
+        """'ed.' (edition) abbreviation is not a sentence boundary.
+
+        Regression test for issue #614: 13 U.S.C. § 23 — the phrase '1952 ed.'
+        followed by a newline and '(which has been transferred...' was incorrectly split.
+        """
+        text = (
+            "is incorporated in this subchapter, see Distribution Table, "
+            "title 13, U.S.C., 1952 ed.\n"
+            "(which has been transferred in its entirety to this revised title)."
+        )
+        pos = text.index("ed.") + len("ed.") - 1
+        assert _is_sentence_boundary(text, pos) is False
+
 
 class TestNormalizeSectionBasic:
     """Basic tests for section normalization."""
@@ -2672,6 +2699,83 @@ class TestFlatNotesParser:
         ref_content = " ".join(line.content for line in ref_note.lines)
         assert "set out in the Appendix to Title 5" in ref_content
 
+    def test_references_in_text_plain_text_stop_signal_issue_615(self) -> None:
+        """Regression: plain-text 'References in Text' heading must stop Historical note.
+
+        In the old OLRC XML format (pre-USLM 2.0) for 13 U.S.C. § 23
+        ("Additional officers and employees", release 113-21), Historical and
+        Revision Notes and References in Text are adjacent in the same XML
+        table, separated only by a plain-text heading row.  Because that
+        heading is not a <heading> element, the parser emits no [NH] marker
+        for it — it appears as bare "References in Text" in raw_notes.
+
+        Prior to the fix, _parse_historical_notes stopped only at
+        "Editorial Notes", "Statutory Notes", [NH], or end-of-string.  The
+        plain-text "References in Text" heading was not a recognised boundary,
+        so the regex absorbed the two references paragraphs into hist_text.
+        Those paragraphs then appeared in both the Historical note and the
+        References In Text note (the latter built from the sibling
+        [NH]References In Text[/NH] block).
+
+        After the fix, "References in Text" is added as a plain-text stop
+        signal alongside "Editorial Notes" / "Statutory Notes".  Closes #615.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # Mirrors the raw_notes string produced for 13 U.S.C. § 23 (release
+        # 113-21): the old OLRC table places the "References in Text" heading
+        # as a plain text row (no <heading> element, so no [NH] marker).  A
+        # separate [NH]References In Text[/NH] block (from the sibling <note>
+        # element) carries the canonical copy of the same paragraphs.
+        raw_notes = (
+            "Historical and Revision Notes "
+            "Section 23 is new and provides for additional officers and employees. "
+            "See Distribution Table. "
+            "References in Text "
+            "The Classification Act of 1949, referred to in subsec. (a), is act Oct. 28, 1949, "
+            "ch. 782, 63 Stat. 954, as amended, which was repealed by Pub. L. 89–554. "
+            "Section 301 of the Dual Compensation Act, referred to in subsec. (b), "
+            "was classified to section 3105 of former Title 5. "
+            "[NH]References In Text[/NH] "
+            "The Classification Act of 1949, referred to in subsec. (a), is act Oct. 28, 1949, "
+            "ch. 782, 63 Stat. 954, as amended, which was repealed by Pub. L. 89–554. "
+            "Section 301 of the Dual Compensation Act, referred to in subsec. (b), "
+            "was classified to section 3105 of former Title 5."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        headers = [n.header for n in notes.notes]
+
+        # The Historical note must be present.
+        assert any(n.category.value == "historical" for n in notes.notes), (
+            f"Expected a historical note, got headers: {headers}"
+        )
+
+        # The References In Text note must be present.
+        assert any("references" in h.lower() for h in headers), (
+            f"Expected a References In Text note, got headers: {headers}"
+        )
+
+        # The Historical note must NOT contain the References in Text paragraphs.
+        # "was classified to section 3105" is unique to the References note.
+        hist_note = next(n for n in notes.notes if n.category.value == "historical")
+        hist_content = " ".join(line.content for line in hist_note.lines)
+        assert "was classified to section 3105" not in hist_content, (
+            "References in Text paragraphs must not bleed into Historical note. "
+            f"Got: {hist_content!r}"
+        )
+
+        # The References In Text note must contain the paragraph.
+        ref_note = next(n for n in notes.notes if "references" in n.header.lower())
+        ref_content = " ".join(line.content for line in ref_note.lines)
+        assert "was classified to section 3105" in ref_content, (
+            f"References In Text note must contain the paragraph. Got: {ref_content!r}"
+        )
+
     def test_amendments_populated_from_flat_notes_issue_284(self) -> None:
         """Regression: notes.amendments must be populated when 'Amendments' is a flat note.
 
@@ -4190,3 +4294,56 @@ class TestReferencesInTextAbbreviationPeriods:
             f"Second line was cut at 'subsecs.': {second!r}"
         )
         assert "Computer Fraud and Abuse Act of 1986" in second
+
+
+class TestNoteParAbbrevContinuations:
+    """Regression tests for issue #614: 13 U.S.C. § 23 note paragraphs split at
+    'par.' and 'ed.' abbreviation periods followed by a continuation parenthetical.
+
+    Both defects involve a single <p> element in the OLRC XML that contained a
+    legal abbreviation ending in '.' immediately followed by a newline and a
+    continuation fragment starting with '('. The sentence-boundary detector
+    treated the period as a sentence end, splitting one source paragraph into two
+    lines[] entries.
+    """
+
+    def test_par_abbreviation_single_line(self) -> None:
+        """'in par.' followed by '(1) of subsection...' must remain a single line.
+
+        Defect 1 from issue #614: the fragment '(1) of subsection (a)' was
+        orphaned as a separate line because 'par.' was not in LEGAL_ABBREVIATIONS
+        and the detector treated the period as a sentence end.
+        """
+        text = (
+            "words were inserted after 'Director of the Census' in par.\n"
+            "(1) of subsection (a), to conform with such 1950 Reorganization Plan."
+        )
+        lines = normalize_note_content(text)
+        non_empty = [ln for ln in lines if ln.content]
+        assert len(non_empty) == 1, (
+            f"Expected 1 line but got {len(non_empty)}: {[ln.content for ln in non_empty]}"
+        )
+        assert "(1) of subsection (a)" in non_empty[0].content, (
+            f"Continuation fragment missing from line: {non_empty[0].content!r}"
+        )
+
+    def test_ed_abbreviation_single_line(self) -> None:
+        """'1952 ed.' followed by '(which has been transferred...)' must remain a single line.
+
+        Defect 2 from issue #614: the fragment '(which has been transferred in its
+        entirety to this revised title)' was orphaned because 'ed.' was not in
+        LEGAL_ABBREVIATIONS.
+        """
+        text = (
+            "Remainder of section 203 of title 13, U.S.C., 1952 ed.\n"
+            "(which has been transferred in its entirety to this revised title),"
+            " see Distribution Table."
+        )
+        lines = normalize_note_content(text)
+        non_empty = [ln for ln in lines if ln.content]
+        assert len(non_empty) == 1, (
+            f"Expected 1 line but got {len(non_empty)}: {[ln.content for ln in non_empty]}"
+        )
+        assert "(which has been transferred" in non_empty[0].content, (
+            f"Continuation fragment missing from line: {non_empty[0].content!r}"
+        )
