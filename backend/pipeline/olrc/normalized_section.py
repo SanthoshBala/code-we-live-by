@@ -1572,8 +1572,14 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     # wrapper in the OLRC XML.  Without the [NH] lookahead the regex
     # greedily consumed sibling note content (e.g. "References in Text")
     # into the Historical note — Issue #504.
+    # In the old OLRC XML format (pre-USLM 2.0), Historical and Revision
+    # Notes and References in Text can be adjacent in the same XML table,
+    # separated only by a plain-text heading row (no <heading> element, so
+    # no [NH] marker is emitted).  Adding "References in Text" as a plain-
+    # text stop signal mirrors "Editorial Notes" / "Statutory Notes" —
+    # Issue #615.
     hist_match = re.search(
-        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|\[NH\]|$)",
+        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|References in Text|\[NH\]|$)",
         raw_notes,
         re.DOTALL | re.IGNORECASE,
     )
