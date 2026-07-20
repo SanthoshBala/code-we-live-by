@@ -101,6 +101,10 @@ LEGAL_ABBREVIATIONS = {
     "cl.",
     "Para.",
     "para.",
+    "Par.",  # Paragraph (e.g., "in par. (1) of subsection (a)")
+    "par.",
+    "Pars.",  # Plural paragraphs
+    "pars.",
     "Subsec.",  # Subsection (e.g., "referred to in subsec. (c)(3)")
     "subsec.",
     "Subsecs.",  # Plural subsection (e.g., "referred to in subsecs. (b), (c)")
@@ -133,6 +137,8 @@ LEGAL_ABBREVIATIONS = {
     "Oct.",
     "Nov.",
     "Dec.",
+    "ed.",  # edition (e.g., "U.S.C., 1952 ed.")
+    "Ed.",
 }
 
 # Compiled once: match any known abbreviation at the END of a string.
@@ -747,7 +753,14 @@ def _is_sentence_boundary(text: str, pos: int) -> bool:
         if _ABBREV_PREFIX_RE.match(after_stripped):
             return False
 
-    return True
+    # Continuation parentheticals cannot start a new sentence.
+    # A fragment like "(1) of subsection (a)" is always a continuation of the
+    # preceding clause (e.g. "in par.\n(1) of subsection (a), to conform…"),
+    # never the opening of a new sentence.  Genuine sentence-starting
+    # parentheticals use a year or a capital letter inside (e.g. "(1976—…)",
+    # "(See also…)"), not a bare digit.
+    after_stripped = remaining.lstrip()
+    return not re.match(r"\(\d", after_stripped)
 
 
 PARAGRAPH_BREAK_MARKER = "[__PARA_BREAK__]"
@@ -1176,6 +1189,11 @@ def _paragraph_lines(raw_content: str) -> list[ParsedLine]:
     cleaned = re.sub(r"\[NH\].*?\[/NH\]", "", raw_content, flags=re.DOTALL)
     cleaned = re.sub(r"\[/NH\]", "", cleaned)
     cleaned = re.sub(r"\[PARA\]", "\n\n", cleaned)
+    # Strip leading whitespace so that the first content line gets start_char=0.
+    # Without this, raw_content often begins with "\n\n" (the gap between the
+    # [/NH] header marker and the first <p> element), causing pos to advance
+    # by 2 before the first non-empty line is processed (issue #616).
+    cleaned = cleaned.lstrip()
 
     lines: list[ParsedLine] = []
     pos = 0
