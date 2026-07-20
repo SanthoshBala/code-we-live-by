@@ -1736,8 +1736,15 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     # Use _find_wrapper_heading so an inline cross-reference like "See
     # Historical and Revision Notes ..." inside another note's body isn't
     # mistaken for the start of this section (issue #529).
+    #
+    # In the old OLRC XML format (pre-USLM 2.0), Historical and Revision
+    # Notes and References in Text can be adjacent in the same XML table,
+    # separated only by a plain-text heading row (no <heading> element, so
+    # no [NH] marker is emitted).  Adding "References in Text" as a plain-
+    # text stop signal mirrors "Editorial Notes" / "Statutory Notes" —
+    # Issue #615.
     hist_match = _find_wrapper_heading(
-        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|\[NH\]|$)",
+        r"Historical and Revision Notes\s*(.*?)(?=\[H1\]Editorial Notes|\[H1\]Statutory Notes|Editorial Notes|Statutory Notes|References in Text|\[NH\]|$)",
         raw_notes,
     )
     if not hist_match:
