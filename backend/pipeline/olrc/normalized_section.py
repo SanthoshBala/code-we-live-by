@@ -1251,6 +1251,11 @@ def _paragraph_lines(raw_content: str) -> list[ParsedLine]:
     # display lines are correct even for data ingested before the parser fix.
     # (See issue #626.)
     cleaned = re.sub("—\\s+(?=Pub\\.)", "—", cleaned)
+    # Strip leading whitespace so that the first content line gets start_char=0.
+    # Without this, raw_content often begins with "\n\n" (the gap between the
+    # [/NH] header marker and the first <p> element), causing pos to advance
+    # by 2 before the first non-empty line is processed (issue #616).
+    cleaned = cleaned.lstrip()
 
     lines: list[ParsedLine] = []
     pos = 0
