@@ -3889,7 +3889,7 @@ class TestPerNoteReferenceAttribution:
     contains a reference to section 151 of this title.
     """
 
-    def _build_section_with_notes_refs(self) -> "ParsedSection":  # type: ignore[name-defined]
+    def _build_section_with_notes_refs(self) -> "ParsedSection":  # type: ignore[name-defined]  # noqa: F821
         """Build a ParsedSection that mimics 29 USC § 157 note structure."""
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import NoteRef, ParsedSection
