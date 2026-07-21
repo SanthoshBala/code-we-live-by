@@ -3878,6 +3878,152 @@ class TestNoteReferenceSchema:
         assert schema.target_id == "/us/pl/unknown"
 
 
+class TestPerNoteReferenceAttribution:
+    """Regression tests for Issue #620 — per-note reference attribution.
+
+    Cross-references found within individual notes must appear in both:
+    1. notes.references (global list) — already worked before the fix
+    2. The specific note's SectionNoteSchema.references field — was always empty
+
+    Representative case: 29 USC § 157, "Effective Date Of 1947 Amendment" note
+    contains a reference to section 151 of this title.
+    """
+
+    def _build_section_with_notes_refs(self) -> "ParsedSection":  # type: ignore[name-defined]
+        """Build a ParsedSection that mimics 29 USC § 157 note structure."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import NoteRef, ParsedSection
+
+        # Simulate the raw_notes string that the parser would produce for 29 USC § 157.
+        # The key part is the [NH] marker matching the note_heading on the NoteRef.
+        raw_notes = (
+            "Statutory Notes and Related Subsidiaries\n"
+            "[NH]Effective Date Of 1947 Amendment[/NH] "
+            "For effective date of amendment by act June 23, 1947, see section 104 "
+            "of act June 23, 1947, set out as a note under section 151 of this title.\n"
+            "[NH]References in Text[/NH] "
+            "The Labor Management Relations Act of 1947 is Pub. L. 80–101."
+        )
+
+        notes_refs = [
+            NoteRef(
+                ref_type="usc_section",
+                href="/us/usc/t29/s151",
+                display_text="section 151 of this title",
+                usc_title=29,
+                usc_section="151",
+                note_heading="Effective Date Of 1947 Amendment",
+            ),
+            NoteRef(
+                ref_type="public_law",
+                href="/us/pl/80/101",
+                display_text="Pub. L. 80–101",
+                congress=80,
+                law_number=101,
+                note_heading="References in Text",
+            ),
+        ]
+
+        section = ParsedSection(
+            section_number="157",
+            heading="Right of employees as to organization",
+            full_citation="29 U.S.C. § 157",
+            text_content="Employees shall have the right to self-organization.",
+            notes=raw_notes,
+            notes_refs=notes_refs,
+        )
+        return normalize_parsed_section(section)
+
+    def test_global_references_populated(self) -> None:
+        """Global notes.references is populated (regression guard — was already correct)."""
+        result = self._build_section_with_notes_refs()
+        assert result.section_notes is not None
+        assert len(result.section_notes.references) == 2
+
+    def test_per_note_references_populated(self) -> None:
+        """Each note's .references list contains only its own refs (Issue #620)."""
+        result = self._build_section_with_notes_refs()
+        notes = result.section_notes
+        assert notes is not None
+
+        # Find the "Effective Date Of 1947 Amendment" note.
+        eff_date_notes = [
+            n
+            for n in notes.notes
+            if "effective date of 1947 amendment" in n.header.lower()
+        ]
+        assert eff_date_notes, "Expected to find 'Effective Date Of 1947 Amendment' note"
+        eff_date_note = eff_date_notes[0]
+
+        assert len(eff_date_note.references) == 1
+        ref = eff_date_note.references[0]
+        assert ref.href == "/us/usc/t29/s151"
+        assert ref.usc_title == 29
+        assert ref.usc_section == "151"
+
+    def test_refs_attributed_to_correct_note(self) -> None:
+        """Refs from different notes are attributed to their respective notes (Issue #620)."""
+        result = self._build_section_with_notes_refs()
+        notes = result.section_notes
+        assert notes is not None
+
+        # Find the "References in Text" note.
+        ref_in_text_notes = [
+            n for n in notes.notes if "references in text" in n.header.lower()
+        ]
+        assert ref_in_text_notes, "Expected to find 'References in Text' note"
+        ref_note = ref_in_text_notes[0]
+
+        assert len(ref_note.references) == 1
+        ref = ref_note.references[0]
+        assert ref.href == "/us/pl/80/101"
+        assert ref.congress == 80
+
+    def test_note_without_refs_has_empty_references(self) -> None:
+        """A note that has no cross-references keeps an empty .references list."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import NoteRef, ParsedSection
+
+        raw_notes = (
+            "Statutory Notes and Related Subsidiaries\n"
+            "[NH]Short Title[/NH] "
+            "This chapter may be cited as the National Labor Relations Act.\n"
+            "[NH]Effective Date Of 1947 Amendment[/NH] "
+            "For effective date of amendment see section 151 of this title."
+        )
+
+        # Only the "Effective Date" note has a ref — "Short Title" has none.
+        notes_refs = [
+            NoteRef(
+                ref_type="usc_section",
+                href="/us/usc/t29/s151",
+                display_text="section 151 of this title",
+                usc_title=29,
+                usc_section="151",
+                note_heading="Effective Date Of 1947 Amendment",
+            ),
+        ]
+
+        section = ParsedSection(
+            section_number="157",
+            heading="Right of employees",
+            full_citation="29 U.S.C. § 157",
+            text_content="Employees shall have the right to self-organization.",
+            notes=raw_notes,
+            notes_refs=notes_refs,
+        )
+        result = normalize_parsed_section(section)
+        notes_obj = result.section_notes
+        assert notes_obj is not None
+
+        short_title_notes = [
+            n for n in notes_obj.notes if "short title" in n.header.lower()
+        ]
+        assert short_title_notes, "Expected to find 'Short Title' note"
+        short_title_note = short_title_notes[0]
+        assert short_title_note.references == []
+
+
 class TestPrePLAmendmentCitations:
     """Regression tests for issues #566 and #567.
 
