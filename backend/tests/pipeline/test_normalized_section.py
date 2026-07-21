@@ -2777,6 +2777,131 @@ class TestFlatNotesParser:
             "Effective Date note should contain its own text"
         )
 
+    def test_house_report_note_does_not_absorb_guidelines_issue_570(self) -> None:
+        """Regression: House Report note for 17 USC §107 must not absorb classroom guidelines.
+
+        17 U.S.C. § 107 (release 113-21): the notes section contains a House Report
+        No. 94-1476 flat note followed by several sibling notes describing classroom
+        copying guidelines and music guidelines, plus Amendments and Effective Date.
+        Without the [NH] boundary markers and the |\\[NH\\] lookahead in
+        _parse_historical_notes, hist_text captured all content to end-of-string
+        and the House Report's content_end was set to len(hist_text), absorbing all
+        253 lines of subsequent guideline text.  Closes #570.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        # Representative reproduction of the 17 USC §107 flat-notes structure from
+        # release 113-21.  Content is abbreviated but covers every structural note
+        # that appeared in the original bug report (House Report, classroom guidelines,
+        # music guidelines, Amendments, Effective Date).
+        raw_notes = (
+            "[NH]Historical and Revision Notes[/NH] "
+            "[NH]house report no. 94–1476[/NH] "
+            "General Background of the Problem. The judicial doctrine of fair use, "
+            "one of the most important and well-established limitations on the exclusive "
+            "right of copyright owners, would be given express statutory recognition "
+            "for the first time in section 107. "
+            "The four statutory factors are: (1) the purpose and character of the use; "
+            "(2) the nature of the copyrighted work; "
+            "(3) the amount and substantiality of the portion used; and "
+            "(4) the effect of the use on the potential market for the work. "
+            "[NH]Agreement on Guidelines for Classroom Copying in Not-For-Profit "
+            "Educational Institutions[/NH] "
+            "[NH]with respect to books and periodicals[/NH] "
+            "The purpose of the following guidelines is to state the minimum and not "
+            "the maximum standards of educational fair use under Section 107. "
+            "[NH]guidelines[/NH] "
+            "I. Single Copying for Teachers "
+            "A single copy may be made of any of the following by or for a teacher: "
+            "A. A chapter from a book; "
+            "B. An article from a periodical or newspaper; "
+            "II. Multiple Copies for Classroom Use "
+            "Multiple copies, not exceeding one copy per pupil in a course, may be made "
+            "by or for the teacher giving the course. "
+            "[NH]guidelines for educational uses of music[/NH] "
+            "The purpose of the following guidelines is to state the minimum and not "
+            "the maximum standards of educational fair use under Section 107 for music. "
+            "A. Permissible uses. Emergency copying to replace purchased copies "
+            "which for any reason are not available for an imminent performance. "
+            "[NH]Amendments[/NH] "
+            "1992—Pub. L. 102–492 inserted at end 'The fact that a work is "
+            "unpublished shall not itself bar a finding of fair use.' "
+            "1990—Pub. L. 101–650 substituted 'sections 106 and 106A' for "
+            "'section 106' in introductory provisions. "
+            "[NH]Effective Date of 1990 Amendment[/NH] "
+            "Amendment by Pub. L. 101–650 effective 6 months after Dec. 1, 1990, "
+            "see section 610 of Pub. L. 101–650, set out as an Effective Date note "
+            "under section 106A of this title."
+        )
+
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        # All six substantive notes must be present as separate entries.
+        headers = [n.header for n in notes.notes]
+        assert any(
+            "94" in h and "1476" in h for h in headers
+        ), f"House Report note missing; notes: {headers}"
+        assert any(
+            "with respect to books" in h.lower() for h in headers
+        ), f"'with respect to books and periodicals' note missing; notes: {headers}"
+        assert any(
+            h.lower() == "guidelines" for h in headers
+        ), f"'guidelines' note missing; notes: {headers}"
+        assert any(
+            "music" in h.lower() for h in headers
+        ), f"'guidelines for educational uses of music' note missing; notes: {headers}"
+        assert any(
+            h.lower() == "amendments" for h in headers
+        ), f"Amendments note missing; notes: {headers}"
+        assert any(
+            "effective date" in h.lower() for h in headers
+        ), f"Effective Date note missing; notes: {headers}"
+
+        # The House Report note must be tightly bounded — not 253 lines.
+        house_report = next(
+            n for n in notes.notes if "94" in n.header and "1476" in n.header
+        )
+        assert len(house_report.lines) <= 50, (
+            f"House Report absorbed too much content: {len(house_report.lines)} lines "
+            f"(expected ≤50; it should not absorb classroom guidelines)"
+        )
+
+        # The House Report note must NOT contain classroom guidelines text.
+        house_text = " ".join(line.content for line in house_report.lines)
+        assert "single copy may be made" not in house_text.lower(), (
+            "House Report note must not absorb 'single copy' classroom guideline text"
+        )
+        assert "multiple copies" not in house_text.lower(), (
+            "House Report note must not absorb 'multiple copies' classroom guideline text"
+        )
+        assert "educational uses of music" not in house_text.lower(), (
+            "House Report note must not absorb music guidelines text"
+        )
+        assert "Pub. L. 102" not in house_text, (
+            "House Report note must not absorb 1992 Amendments text"
+        )
+
+        # Each sibling note must contain its own content.
+        guidelines_note = next(
+            n for n in notes.notes if n.header.lower() == "guidelines"
+        )
+        guidelines_text = " ".join(line.content for line in guidelines_note.lines)
+        assert "single copy may be made" in guidelines_text.lower(), (
+            "'guidelines' note should contain its own classroom copying text"
+        )
+
+        amendments_note = next(
+            n for n in notes.notes if n.header.lower() == "amendments"
+        )
+        amendments_text = " ".join(line.content for line in amendments_note.lines)
+        assert "Pub. L. 102" in amendments_text, (
+            "Amendments note should contain its own Pub. L. reference"
+        )
+
 
 class TestNoteTopicAmendmentParsing:
     """Regression tests for issue #216: <note topic="amendments"> not parsed.
