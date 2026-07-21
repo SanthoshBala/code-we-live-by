@@ -1305,6 +1305,37 @@ def _parse_amendments(text: str) -> list[Amendment]:
                     )
                 )
 
+    # Fallback: if no YEAR— prefix markers were found, the entire text may be a
+    # single pre-1957 Act citation whose year prefix was absent or was stripped
+    # before reaching this function.  Two sub-cases arise in OLRC USLM XML for
+    # older sections (e.g. 29 USC §157 with its 1947 amendment):
+    #
+    #   (a) The year appeared in a bold (<b>YEAR</b>) element that _strip_note_markers
+    #       removes, leaving the content starting with a bare em-dash followed by the
+    #       Act citation, e.g. "—Act June 23, 1947, restated rights…".
+    #   (b) The OLRC XML omitted the YEAR— prefix entirely, encoding only the Act
+    #       citation text "Act June 23, 1947, ch. 120, …" in the paragraph body.
+    #
+    # In both cases the year is recoverable from the embedded date in the citation
+    # (e.g. "Act June 23, 1947" → year 1947).
+    if not amendments and text.strip():
+        # Strip any leading dash that survives after the year element is removed.
+        fallback_text = re.sub(r"^\s*[—–-]\s*", "", text.strip())
+        if re.search(r"\bAct\b", fallback_text):
+            year_from_date = re.search(
+                r"\bAct\s+\w+\.?\s+\d{1,2},?\s+(\d{4})",
+                fallback_text,
+            )
+            if year_from_date:
+                year = int(year_from_date.group(1))
+                amendments.append(
+                    Amendment(
+                        law=None,
+                        year=year,
+                        description=" ".join(fallback_text.split()),
+                    )
+                )
+
     return amendments
 
 
