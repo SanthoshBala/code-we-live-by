@@ -2407,6 +2407,23 @@ def normalize_parsed_section(
     if parsed_section.notes_refs:
         notes.references = note_refs_to_schemas(parsed_section.notes_refs)
 
+        # Populate per-note references (Issue #620).
+        # Each NoteRef now carries a note_heading field identifying which <note>
+        # element the <ref> was found in.  Build a heading -> schemas map and
+        # assign matching schemas to each SectionNoteSchema.references list.
+        heading_to_schemas: dict[str, list[NoteReferenceSchema]] = {}
+        for raw_ref, schema_ref in zip(
+            parsed_section.notes_refs, notes.references, strict=True
+        ):
+            if raw_ref.note_heading:
+                key = raw_ref.note_heading.strip().lower()
+                heading_to_schemas.setdefault(key, []).append(schema_ref)
+
+        for note in notes.notes:
+            key = note.header.strip().lower()
+            if key in heading_to_schemas:
+                note.references = heading_to_schemas[key]
+
     # Populate the section with normalized data
     parsed_section.provisions = lines
     parsed_section.normalized_text = normalized_text

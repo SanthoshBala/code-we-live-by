@@ -255,6 +255,10 @@ class NoteRef:
     stat_volume: int | None = None  # For STATUTE
     stat_page: int | None = None  # For STATUTE
 
+    # Source attribution (Issue #620): heading of the <note> element that
+    # contains this <ref>, enabling per-note reference attribution.
+    note_heading: str | None = None
+
 
 @dataclass
 class ParsedSection:
@@ -2049,6 +2053,10 @@ class USLMParser:
 
             text = "".join(ref_elem.itertext()).strip()
 
+            # Walk up the XML tree to find the heading of the enclosing <note>
+            # element (Issue #620 — per-note reference attribution).
+            note_heading = _get_note_heading_for_ref(ref_elem)
+
             # Parse /us/pl/CONGRESS/LAW/... hrefs (Public Laws, post-1957)
             if "/us/pl/" in href:
                 match = re.match(
@@ -2063,6 +2071,7 @@ class USLMParser:
                             display_text=text,
                             congress=int(match.group(1)),
                             law_number=int(match.group(2)),
+                            note_heading=note_heading,
                         )
                     )
 
@@ -2080,6 +2089,7 @@ class USLMParser:
                             display_text=text,
                             act_date=match.group(1),
                             act_chapter=int(match.group(2)),
+                            note_heading=note_heading,
                         )
                     )
 
@@ -2098,6 +2108,7 @@ class USLMParser:
                             display_text=text,
                             usc_title=int(match.group(1)),
                             usc_section=section,
+                            note_heading=note_heading,
                         )
                     )
 
@@ -2112,10 +2123,47 @@ class USLMParser:
                             display_text=text,
                             stat_volume=int(match.group(1)),
                             stat_page=int(match.group(2)),
+                            note_heading=note_heading,
                         )
                     )
 
         return refs
+
+
+def _get_note_heading_for_ref(ref_elem: etree._Element) -> str | None:
+    """Walk up the XML tree from a <ref> element to find its enclosing <note> heading.
+
+    Each <ref> element belongs to a <note> element somewhere up the tree.
+    Returns the text of the <heading> child of that <note>, or the display
+    string derived from the note's ``topic`` attribute when no <heading>
+    child is present.  Returns None if no enclosing <note> is found.
+
+    Args:
+        ref_elem: A <ref> XML element.
+
+    Returns:
+        The note heading string, or None.
+    """
+    elem = ref_elem.getparent()
+    while elem is not None:
+        local_tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        if local_tag == "note":
+            # Try to get heading text from a <heading> child element.
+            for child in elem:
+                child_tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                if child_tag == "heading":
+                    heading_text = "".join(child.itertext()).strip()
+                    if heading_text:
+                        return heading_text
+            # Fall back to the topic attribute (synthesized heading).
+            topic: str = elem.get("topic", "") or ""
+            if topic:
+                normalized_topic = topic[0].lower() + topic[1:]
+                fallback: str = topic.title()
+                return _NOTE_TOPIC_DISPLAY.get(normalized_topic, fallback)
+            return None
+        elem = elem.getparent()
+    return None
 
 
 def compute_text_hash(text: str) -> str:
