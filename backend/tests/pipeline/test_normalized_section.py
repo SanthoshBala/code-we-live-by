@@ -2842,24 +2842,24 @@ class TestFlatNotesParser:
 
         # All six substantive notes must be present as separate entries.
         headers = [n.header for n in notes.notes]
-        assert any(
-            "94" in h and "1476" in h for h in headers
-        ), f"House Report note missing; notes: {headers}"
-        assert any(
-            "with respect to books" in h.lower() for h in headers
-        ), f"'with respect to books and periodicals' note missing; notes: {headers}"
-        assert any(
-            h.lower() == "guidelines" for h in headers
-        ), f"'guidelines' note missing; notes: {headers}"
-        assert any(
-            "music" in h.lower() for h in headers
-        ), f"'guidelines for educational uses of music' note missing; notes: {headers}"
-        assert any(
-            h.lower() == "amendments" for h in headers
-        ), f"Amendments note missing; notes: {headers}"
-        assert any(
-            "effective date" in h.lower() for h in headers
-        ), f"Effective Date note missing; notes: {headers}"
+        assert any("94" in h and "1476" in h for h in headers), (
+            f"House Report note missing; notes: {headers}"
+        )
+        assert any("with respect to books" in h.lower() for h in headers), (
+            f"'with respect to books and periodicals' note missing; notes: {headers}"
+        )
+        assert any(h.lower() == "guidelines" for h in headers), (
+            f"'guidelines' note missing; notes: {headers}"
+        )
+        assert any("music" in h.lower() for h in headers), (
+            f"'guidelines for educational uses of music' note missing; notes: {headers}"
+        )
+        assert any(h.lower() == "amendments" for h in headers), (
+            f"Amendments note missing; notes: {headers}"
+        )
+        assert any("effective date" in h.lower() for h in headers), (
+            f"Effective Date note missing; notes: {headers}"
+        )
 
         # The House Report note must be tightly bounded — not 253 lines.
         house_report = next(
