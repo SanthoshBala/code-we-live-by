@@ -2412,7 +2412,9 @@ def normalize_parsed_section(
         # element the <ref> was found in.  Build a heading -> schemas map and
         # assign matching schemas to each SectionNoteSchema.references list.
         heading_to_schemas: dict[str, list[NoteReferenceSchema]] = {}
-        for raw_ref, schema_ref in zip(parsed_section.notes_refs, notes.references, strict=True):
+        for raw_ref, schema_ref in zip(
+            parsed_section.notes_refs, notes.references, strict=True
+        ):
             if raw_ref.note_heading:
                 key = raw_ref.note_heading.strip().lower()
                 heading_to_schemas.setdefault(key, []).append(schema_ref)

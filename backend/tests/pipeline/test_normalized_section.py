@@ -3952,7 +3952,9 @@ class TestPerNoteReferenceAttribution:
             for n in notes.notes
             if "effective date of 1947 amendment" in n.header.lower()
         ]
-        assert eff_date_notes, "Expected to find 'Effective Date Of 1947 Amendment' note"
+        assert eff_date_notes, (
+            "Expected to find 'Effective Date Of 1947 Amendment' note"
+        )
         eff_date_note = eff_date_notes[0]
 
         assert len(eff_date_note.references) == 1
