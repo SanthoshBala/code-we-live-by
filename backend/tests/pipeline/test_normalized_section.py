@@ -3953,6 +3953,132 @@ class TestPrePLAmendmentCitations:
         assert modern.law.congress == 106
         assert pre_pl.law is None
 
+    def test_29_usc_157_with_year_prefix(self) -> None:
+        """Regression #619: 29 USC §157 — canonical form with YEAR— prefix works.
+
+        This is the clean form of the 1947 amendment as it would appear when the
+        OLRC XML includes the year in the paragraph text itself ("1947—Act…").
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1947—Act June 23, 1947, restated rights of employees to bargain "
+            "collectively and inserted provision that they have right to refrain "
+            "from joining in concerted activities with their fellow employees."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert amendments[0].year == 1947
+        assert amendments[0].law is None
+        assert "Act June 23, 1947" in amendments[0].description
+
+    def test_29_usc_157_without_year_prefix(self) -> None:
+        """Regression #619: 29 USC §157 — YEAR— prefix absent in paragraph body.
+
+        Some OLRC USLM XML releases encode pre-1957 amendment paragraphs without
+        the leading "YEAR—" marker, starting directly with the Act citation.  The
+        year must then be recovered from the embedded date ("Act June 23, 1947").
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "Act June 23, 1947, restated rights of employees to bargain "
+            "collectively and inserted provision that they have right to refrain "
+            "from joining in concerted activities with their fellow employees."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1, (
+            f"Expected 1 amendment but got {len(amendments)}: "
+            + str([a.description for a in amendments])
+        )
+        assert amendments[0].year == 1947
+        assert amendments[0].law is None
+        assert "Act June 23, 1947" in amendments[0].description
+
+    def test_29_usc_157_leading_emdash_year_stripped(self) -> None:
+        """Regression #619: 29 USC §157 — year in bold element, stripped to leading dash.
+
+        When the year appears in a <b>1947</b> element, _strip_note_markers removes
+        the [H1]1947[/H1] marker, leaving the content starting with a bare em-dash:
+        "—Act June 23, 1947, restated rights…".  The year must be extracted from
+        the embedded Act date in this case too.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "—Act June 23, 1947, restated rights of employees to bargain "
+            "collectively and inserted provision that they have right to refrain "
+            "from joining in concerted activities with their fellow employees."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1, (
+            f"Expected 1 amendment but got {len(amendments)}: "
+            + str([a.description for a in amendments])
+        )
+        assert amendments[0].year == 1947
+        assert amendments[0].law is None
+        assert "Act June 23, 1947" in amendments[0].description
+
+    def test_29_usc_157_full_notes_structure_no_year_prefix(self) -> None:
+        """Regression #619: full _parse_notes_structure populates notes.amendments.
+
+        End-to-end test using the flat raw_notes format that 29 USC §157 produces
+        when the OLRC XML omits the YEAR— prefix from the amendment paragraph.
+        notes.amendments must be non-empty and notes.has_amendments must be True.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Amendments[/NH] "
+            "Act June 23, 1947, ch. 120, title I, §101, 61 Stat. 140, "
+            "restated rights of employees to bargain collectively and inserted "
+            "provision that they have right to refrain from joining in concerted "
+            "activities with their fellow employees."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        assert len(notes.amendments) == 1, (
+            f"Expected 1 amendment, got {len(notes.amendments)}"
+        )
+        assert notes.amendments[0].year == 1947
+        assert notes.amendments[0].law is None
+        assert notes.has_amendments is True
+
+    def test_29_usc_157_full_notes_structure_bold_year(self) -> None:
+        """Regression #619: full _parse_notes_structure with H1-wrapped year.
+
+        When the OLRC XML has <b>1947</b>—Act…, the parser emits
+        [H1]1947[/H1]—Act… in the raw_notes.  _strip_note_markers removes the
+        [H1] block, leaving "—Act June 23, 1947, …" for _parse_amendments.
+        notes.amendments must still be populated with year=1947.
+        """
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = (
+            "[NH]Amendments[/NH] "
+            "[H1]1947[/H1]—Act June 23, 1947, ch. 120, title I, §101, "
+            "61 Stat. 140, restated rights of employees to bargain collectively."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        assert len(notes.amendments) == 1, (
+            f"Expected 1 amendment, got {len(notes.amendments)}"
+        )
+        assert notes.amendments[0].year == 1947
+        assert notes.amendments[0].law is None
+        assert notes.has_amendments is True
+
 
 class TestAmendmentMidSentencePubLFix:
     """Regression tests for issue #558: amendment parser splits mid-sentence on
