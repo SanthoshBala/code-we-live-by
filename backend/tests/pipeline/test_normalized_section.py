@@ -7,9 +7,11 @@ from app.schemas import NoteReferenceSchema
 from pipeline.olrc.normalized_section import (
     PARAGRAPH_BREAK_MARKER,
     ParsedPublicLaw,
+    SectionNotes,
     SourceLaw,
     _detect_marker_level,
     _is_sentence_boundary,
+    _parse_notes_structure,
     _split_into_sentences,
     _strip_note_markers,
     char_span_to_line_span,
@@ -3416,8 +3418,6 @@ class TestAmendmentEmDashSpaceFix:
         Simulates stored raw notes text (with the legacy space artifact) flowing
         through _parse_notes_structure and verifies the rendered lines are clean.
         """
-        from pipeline.olrc.normalized_section import SectionNotes, _parse_notes_structure
-
         # Mimic what the DB stores for a section ingested before the #600 fix:
         # the Amendments entry has "2002— Pub." with a space after the em dash.
         raw_notes = (
