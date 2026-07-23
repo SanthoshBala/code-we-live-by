@@ -4190,3 +4190,64 @@ class TestReferencesInTextAbbreviationPeriods:
             f"Second line was cut at 'subsecs.': {second!r}"
         )
         assert "Computer Fraud and Abuse Act of 1986" in second
+
+    def test_17_usc_121_references_in_text_two_paragraphs_two_lines(self) -> None:
+        """17 U.S.C. § 121 References in Text: each source <p> maps to exactly one line.
+
+        Regression test for issue #625. The first paragraph contains 'subsecs.'
+        which previously triggered a spurious sentence-boundary split because
+        'subsecs.' was absent from LEGAL_ABBREVIATIONS and the note was being
+        processed by normalize_note_content() instead of _paragraph_lines().
+
+        After both fixes — adding 'subsecs.' to LEGAL_ABBREVIATIONS and adding
+        'References in Text' to PARAGRAPH_LINE_HEADERS — each source <p> must
+        produce exactly one lines[] entry.
+        """
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0" type="uscNote">'
+            '<note class="editorial">'
+            "<heading>Editorial Notes</heading>"
+            '<note topic="referencesInText">'
+            "<heading>References in Text</heading>"
+            '<p class="indent0">Sections 612, 613, and 674 of the Individuals with '
+            "Disabilities Education Act, referred to in subsecs. (c) and (d)(3), "
+            "are classified to sections 1412, 1413, and 1474, respectively, "
+            "of Title 20, Education.</p>"
+            '<p class="indent0">The Act approved March 3, 1931, referred to in '
+            "subsec. (d)(2), is act Mar. 3, 1931, ch. 400, 46 Stat. 1487, as amended, "
+            "which is classified generally to sections 135a and 135b of Title 2, "
+            "The Congress. For complete classification of this Act to the Code, "
+            "see Tables.</p>"
+            "</note>"
+            "</note>"
+            "</notes>"
+        )
+
+        notes = self._parse_editorial_notes_xml(xml)
+
+        ref_notes = [n for n in notes.notes if n.header == "References in Text"]
+        assert len(ref_notes) == 1, (
+            f"Expected 1 References in Text note, got {len(ref_notes)}"
+        )
+        lines = ref_notes[0].lines
+
+        # Exactly 2 non-empty lines — one per source <p> — no spurious splits
+        non_empty = [line for line in lines if line.content]
+        assert len(non_empty) == 2, (
+            f"Expected 2 non-empty lines but got {len(non_empty)}: "
+            f"{[line.content for line in lines]}"
+        )
+
+        # First line: full first paragraph — not split at "subsecs."
+        first = non_empty[0].content
+        assert "subsecs. (c) and (d)(3)" in first, (
+            f"First line was split at 'subsecs.': {first!r}"
+        )
+        assert first.endswith("Title 20, Education.")
+
+        # Second line: full second paragraph — not split at "subsec." or truncated
+        second = non_empty[1].content
+        assert "subsec. (d)(2)" in second, (
+            f"Second line was split at 'subsec.': {second!r}"
+        )
+        assert second.endswith("see Tables.")
