@@ -1176,6 +1176,14 @@ def _paragraph_lines(raw_content: str) -> list[ParsedLine]:
     cleaned = re.sub(r"\[NH\].*?\[/NH\]", "", raw_content, flags=re.DOTALL)
     cleaned = re.sub(r"\[/NH\]", "", cleaned)
     cleaned = re.sub(r"\[PARA\]", "\n\n", cleaned)
+    # Strip spurious whitespace between an amendment-year em dash and the
+    # following "Pub. L." citation.  Older parser versions (before issue #600)
+    # always joined adjacent text fragments with a space, so XML like
+    # "<p>2002—<ref>Pub. L. 107–273</ref>…</p>" produced "2002— Pub. L. 107–273"
+    # in the stored raw notes text.  Removing that space here ensures the
+    # display lines are correct even for data ingested before the parser fix.
+    # (See issue #626.)
+    cleaned = re.sub("—\\s+(?=Pub\\.)", "—", cleaned)
 
     lines: list[ParsedLine] = []
     pos = 0
