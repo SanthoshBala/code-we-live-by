@@ -27,7 +27,6 @@ import sys
 from sqlalchemy import text
 
 from app.models.base import async_session_maker
-from app.schemas.us_code import SectionNotesSchema
 from pipeline.olrc.normalized_section import SectionNotes, _parse_notes_structure
 
 logger = logging.getLogger(__name__)
@@ -67,9 +66,7 @@ def _renormalize_notes_list(raw_notes: str) -> list[dict]:
     """Return the re-parsed notes[] list for the given raw notes text."""
     schema = SectionNotes()
     _parse_notes_structure(raw_notes, schema)
-    return [
-        note.model_dump(mode="json", exclude_none=True) for note in schema.notes
-    ]
+    return [note.model_dump(mode="json", exclude_none=True) for note in schema.notes]
 
 
 async def _backfill_table(
@@ -82,9 +79,7 @@ async def _backfill_table(
     changed = 0
 
     async with async_session_maker() as session:
-        result = await session.execute(
-            text(_SELECT_SQL.format(table=table, pk=pk))
-        )
+        result = await session.execute(text(_SELECT_SQL.format(table=table, pk=pk)))
         rows = result.all()
         logger.info("[%s] Found %d candidate rows", table, len(rows))
 
