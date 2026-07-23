@@ -3401,8 +3401,7 @@ class TestAmendmentEmDashSpaceFix:
         from pipeline.olrc.normalized_section import _paragraph_lines
 
         raw_content = (
-            "[NH]Amendments[/NH]"
-            "[PARA]1996—Pub. L. 104–159 substituted other text."
+            "[NH]Amendments[/NH][PARA]1996—Pub. L. 104–159 substituted other text."
         )
         lines = _paragraph_lines(raw_content)
         contents = [line.content for line in lines if line.content]
