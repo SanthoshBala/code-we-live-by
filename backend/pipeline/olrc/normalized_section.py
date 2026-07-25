@@ -158,6 +158,16 @@ _ABBREV_PREFIX_RE = re.compile(
 # Compiled once: sentence boundary requires whitespace then capital/open-paren/quote.
 _SENTENCE_FOLLOWS_RE = re.compile(r'\s+[A-Z("\'"\']')
 
+# Compiled once: matches a standalone Roman numeral word (case-insensitive).
+# Used in _clean_heading to preserve Roman numerals as fully uppercase when
+# converting ALL-CAPS headings to title case (e.g. "PART II" -> "Part II",
+# not "Part Ii"). Covers numerals I through ~XXXIX and common outline
+# structures used in OLRC XML (Part I/II/III, Title IV/V/VI, etc.).
+_HEADING_ROMAN_NUMERAL_RE = re.compile(
+    r"^(I{1,3}|IV|VI{0,3}|IX|X[CL]?|L?X{0,3}(?:IX|IV|V?I{0,3}))$",
+    re.IGNORECASE,
+)
+
 # Pattern for list item markers: (a), (1), (A), (i), (I), etc.
 # Also handles deeper nesting like (a)(1)(A)
 # This pattern is permissive; we filter out references in _is_reference_not_marker()
@@ -260,7 +270,16 @@ def _clean_heading(heading: str) -> str:
     # Consider a heading "all caps" if its letters are all uppercase.
     alpha_chars = [c for c in heading if c.isalpha()]
     if alpha_chars and all(c.isupper() for c in alpha_chars):
-        heading = heading.title()
+        # Title-case word by word, preserving Roman numerals as fully uppercase.
+        # Python's str.title() lowercases all non-first letters, converting
+        # "II" → "Ii" and "IV" → "Iv". By checking each word against the Roman
+        # numeral pattern first, we keep "PART II" → "Part II" instead of "Part Ii".
+        heading = " ".join(
+            word.upper()
+            if (len(word) >= 2 and _HEADING_ROMAN_NUMERAL_RE.match(word))
+            else word.title()
+            for word in heading.split()
+        )
     # Normalize any remaining extra whitespace
     heading = " ".join(heading.split())
     return heading
