@@ -1772,11 +1772,24 @@ class USLMParser:
             # joining them with a space produces a spurious "1981— Pub." —
             # see issue #600.
             prev_ends_em_dash = bool(result) and result[-1].endswith("—")
+            # Do not insert a space when the previous fragment ends with an
+            # opening curly-quote (U+201C) or the current fragment starts with
+            # a closing curly-quote (U+201D).  In OLRC XML, amendment notes
+            # encode quoted cross-references as:
+            #   “<ref href="...">section X of this title</ref>”
+            # The opening quote is the tail of the preceding element and the
+            # closing quote is the text of the following node.  Stripping and
+            # joining with spaces produces spurious
+            # "“ section X of this title ”" — see issue #632.
+            prev_ends_open_quote = bool(result) and result[-1].endswith("“")
+            current_starts_close_quote = bool(stripped) and stripped[0] == "”"
             if (
                 not result
                 or result[-1] == "\n\n"
                 or stripped[0] in ";,."
                 or prev_ends_em_dash
+                or prev_ends_open_quote
+                or current_starts_close_quote
             ):
                 result.append(stripped)
             else:
