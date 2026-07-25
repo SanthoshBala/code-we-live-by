@@ -1661,9 +1661,13 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         if content and len(content) <= 30:
             continue
 
+        # House/Senate Report No. headers are sub-notes of Historical and
+        # Revision Notes — classify them as HISTORICAL regardless of the
+        # editorial_headers set.  (Issue #526)
         category = (
             NoteCategory.HISTORICAL
             if header.lower() in historical_headers_lower
+            or _REPORT_PATTERN.search(header)
             else NoteCategory.EDITORIAL
             if header.lower() in editorial_headers_lower
             else NoteCategory.STATUTORY
@@ -1768,6 +1772,15 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
                 category=NoteCategory.HISTORICAL,
             )
         )
+        return
+
+    # If the captured text contains only marker artifacts (e.g. "[/NH]" from a
+    # <note topic="historicalAndRevision"> that has only a <heading> child and
+    # no inline <p> content), stripping markers yields empty string.  In that
+    # pattern the actual sub-notes (e.g. "House Report No. 94–1476") live in
+    # sibling <note> elements and will be picked up by _parse_flat_notes.
+    # Skip creating an empty shell note here.  (Issue #526)
+    if not _strip_note_markers(hist_text):
         return
 
     # Look for report headers (e.g., "House Report No. 94-1476")
