@@ -2566,6 +2566,60 @@ class TestFlatNotesParser:
 
         assert len(notes.notes) == 0
 
+    def test_flat_derivation_note_is_historical_issue_605(self) -> None:
+        """Flat 'Derivation' note is categorised as HISTORICAL, not STATUTORY.
+
+        9 U.S.C. §§ 1–14 have <note topic="derivation"> elements without an
+        "Editorial Notes" / "Statutory Notes" category wrapper.  Prior to the
+        fix, _parse_flat_notes defaulted unknown headers to NoteCategory.STATUTORY.
+        OLRC's own classification marks derivation notes as historical provenance
+        (topic="derivation"), so they must land in NoteCategory.HISTORICAL.
+        Closes #605.
+        """
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = (
+            "[NH]Derivation[/NH] "
+            "Act Feb. 12, 1925, ch. 213, § 1, 43 Stat. 883; "
+            "Act July 30, 1947, ch. 392, § 1, 61 Stat. 669."
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 1
+        assert notes.notes[0].header == "Derivation"
+        assert notes.notes[0].category.value == "historical", (
+            f"Expected 'historical', got {notes.notes[0].category.value!r}"
+        )
+
+    def test_flat_derivation_and_amendments_categories_issue_605(self) -> None:
+        """Flat Derivation note is historical; peer Amendments note is editorial.
+
+        Simulates a Title 9 section (e.g. 9 U.S.C. § 1) that has both a
+        Derivation note and an Amendments note as flat <note> siblings.
+        """
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = (
+            "[NH]Derivation[/NH] "
+            "Act Feb. 12, 1925, ch. 213, § 1, 43 Stat. 883; "
+            "Act July 30, 1947, ch. 392, § 1, 61 Stat. 669. "
+            "[NH]Amendments[/NH] "
+            "1954—Act Sept. 3, 1954, ch. 1262, § 1, 68 Stat. 1233, "
+            "substituted 'district courts of the United States' for 'United States district courts'."
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 2
+        categories = {n.header: n.category.value for n in notes.notes}
+        assert categories["Derivation"] == "historical", (
+            f"Derivation should be 'historical', got {categories['Derivation']!r}"
+        )
+        assert categories["Amendments"] == "editorial", (
+            f"Amendments should be 'editorial', got {categories['Amendments']!r}"
+        )
+
     def test_flat_notes_after_historical_note_issue_283(self) -> None:
         """Regression: flat notes after 'Historical and Revision Notes' must not be swallowed.
 
