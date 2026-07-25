@@ -2259,7 +2259,9 @@ class TestParserNotesContent:
         amendment_text = next(
             (ln.content for ln in lines if "substituted" in ln.content), None
         )
-        assert amendment_text is not None, "No 'substituted' line found in normalized content"
+        assert amendment_text is not None, (
+            "No 'substituted' line found in normalized content"
+        )
         assert "“ section 50501" not in amendment_text, (
             f"Spurious space in normalized content: {amendment_text!r}"
         )
