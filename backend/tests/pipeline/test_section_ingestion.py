@@ -380,3 +380,133 @@ class TestUpsertSectionWithActRefs:
         # Verify statutes_at_large_citation is set
         added_section = mock_session.add.call_args[0][0]
         assert added_section.statutes_at_large_citation == "49 Stat. 477"
+
+
+class TestUpsertSectionAsAdded:
+    """Tests for enacted_date when a section has 'as added' in the source credit.
+
+    Issue #474: For sections where the source credit contains "as added",
+    the enacted_date should reflect the adding law's date, not the parent
+    organic statute's date.
+
+    Example (21 U.S.C. § 353b):
+        Source credit:
+            (June 25, 1938, ch. 675, § 503B, as added
+             Pub. L. 110–85, title IX, § 901(d)(2), Sept. 27, 2007, 121 Stat. 939.)
+        Wrong: enacted_date = 1938-06-25  (parent organic statute)
+        Right: enacted_date = 2007-09-27  (the adding law)
+    """
+
+    @pytest.fixture
+    def mock_session(self):
+        """Create a mock async session."""
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def parsed_section_as_added(self):
+        """Create a ParsedSection mirroring 21 U.S.C. § 353b.
+
+        Source credit:
+            (June 25, 1938, ch. 675, § 503B, as added Pub. L. 110-85,
+             title IX, § 901(d)(2), Sept. 27, 2007, 121 Stat. 939.)
+
+        This produces:
+          - act_refs: [ActRef(date="1938-06-25", chapter=675)]  → Framework
+          - source_credit_refs: [SourceCreditRef(congress=110, law_number=85,
+                date="Sept. 27, 2007", stat_volume=121, stat_page=939)]  → Enactment
+        """
+        from pipeline.olrc.parser import ActRef, ParsedSection, SourceCreditRef
+
+        return ParsedSection(
+            section_number="353b",
+            heading="Outsourcing Facility",
+            full_citation="21 U.S.C. § 353b",
+            text_content="Conditions for exemption from pharmacy compounding...",
+            subsections=[],
+            act_refs=[
+                ActRef(
+                    date="1938-06-25",
+                    chapter=675,
+                    section="503B",
+                    stat_volume=None,
+                    stat_page=None,
+                    raw_text="June 25, 1938, ch. 675, § 503B",
+                ),
+            ],
+            source_credit_refs=[
+                SourceCreditRef(
+                    congress=110,
+                    law_number=85,
+                    title="IX",
+                    section="901(d)(2)",
+                    date="Sept. 27, 2007",
+                    stat_volume=121,
+                    stat_page=939,
+                    raw_text="Pub. L. 110-85, title IX, § 901(d)(2), Sept. 27, 2007, 121 Stat. 939",
+                ),
+            ],
+            notes=(
+                "(June 25, 1938, ch. 675, § 503B, as added Pub. L. 110-85, "
+                "title IX, § 901(d)(2), Sept. 27, 2007, 121 Stat. 939.)"
+            ),
+        )
+
+    @pytest.mark.asyncio
+    async def test_as_added_section_uses_adding_law_date(
+        self, mock_session, parsed_section_as_added
+    ) -> None:
+        """enacted_date must be the adding law's date, not the organic statute's date.
+
+        Before the fix, citations[0] (the 1938 Framework Act) was used, returning
+        1938-06-25.  The correct date is 2007-09-27 from the Enactment citation.
+        """
+        from pipeline.olrc.ingestion import USCodeIngestionService
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_result
+
+        service = USCodeIngestionService(mock_session)
+        await service._upsert_section(
+            parsed_section_as_added,
+            group_id=1,
+            title_number=21,
+            force=False,
+        )
+
+        added_section = mock_session.add.call_args[0][0]
+        # Must be the adding law date (2007-09-27), NOT the organic statute (1938-06-25)
+        assert added_section.enacted_date == date(2007, 9, 27), (
+            f"Expected 2007-09-27 (adding law date) but got {added_section.enacted_date}. "
+            "The enacted_date must come from the Enactment citation, not the Framework Act."
+        )
+
+    @pytest.mark.asyncio
+    async def test_as_added_section_uses_adding_law_statutes_citation(
+        self, mock_session, parsed_section_as_added
+    ) -> None:
+        """statutes_at_large_citation must come from the adding law, not the organic statute."""
+        from pipeline.olrc.ingestion import USCodeIngestionService
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_result
+
+        service = USCodeIngestionService(mock_session)
+        await service._upsert_section(
+            parsed_section_as_added,
+            group_id=1,
+            title_number=21,
+            force=False,
+        )
+
+        added_section = mock_session.add.call_args[0][0]
+        # Must be from the adding law (Pub. L. 110-85), not the organic statute
+        assert added_section.statutes_at_large_citation == "121 Stat. 939", (
+            f"Expected '121 Stat. 939' (adding law) but got "
+            f"'{added_section.statutes_at_large_citation}'."
+        )

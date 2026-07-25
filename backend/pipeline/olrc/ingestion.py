@@ -17,6 +17,7 @@ from app.models import (
     SectionGroup,
     USCodeSection,
 )
+from app.models.enums import SourceRelationship
 from pipeline.olrc.downloader import OLRCDownloader
 from pipeline.olrc.group_service import (
     _parse_citation_date,
@@ -211,31 +212,50 @@ class USCodeIngestionService:
         if normalized.section_notes:
             normalized_notes = normalized.section_notes.model_dump(mode="json")
 
-            # Extract enacted_date and statutes_at_large_citation from first citation
+            # Extract enacted_date and statutes_at_large_citation from the
+            # enacting citation.  When a section has an "as added" source
+            # credit (e.g. "June 25, 1938, ch. 675, § 503B, as added
+            # Pub. L. 110–85, … Sept. 27, 2007"), the citations list contains:
+            #   [0] Framework Act (1938) — the parent organic statute
+            #   [1] Enactment PL (2007) — the law that actually created this section
+            # Using citations[0] in that case produces the wrong date.  Instead,
+            # prefer the first citation whose relationship is ENACTMENT; fall back
+            # to citations[0] when no explicit enactment citation is present (e.g.
+            # older sections that only have a single Act reference).
             if normalized.section_notes.citations:
-                first_citation = normalized.section_notes.citations[0]
+                enactment_citation = next(
+                    (
+                        c
+                        for c in normalized.section_notes.citations
+                        if c.relationship == SourceRelationship.ENACTMENT
+                    ),
+                    normalized.section_notes.citations[0],
+                )
 
-                # Get date from the first citation (either Public Law or Act)
-                if first_citation.law and first_citation.law.date:
-                    enacted_date = _parse_citation_date(first_citation.law.date)
-                elif first_citation.act and first_citation.act.date:
-                    enacted_date = _parse_citation_date(first_citation.act.date)
+                # Get date from the enacting citation (either Public Law or Act)
+                if enactment_citation.law and enactment_citation.law.date:
+                    enacted_date = _parse_citation_date(enactment_citation.law.date)
+                elif enactment_citation.act and enactment_citation.act.date:
+                    enacted_date = _parse_citation_date(enactment_citation.act.date)
 
                 # Get Statutes at Large citation
-                if first_citation.law:
-                    if first_citation.law.stat_volume and first_citation.law.stat_page:
+                if enactment_citation.law:
+                    if (
+                        enactment_citation.law.stat_volume
+                        and enactment_citation.law.stat_page
+                    ):
                         statutes_at_large_citation = (
-                            f"{first_citation.law.stat_volume} Stat. "
-                            f"{first_citation.law.stat_page}"
+                            f"{enactment_citation.law.stat_volume} Stat. "
+                            f"{enactment_citation.law.stat_page}"
                         )
                 elif (
-                    first_citation.act
-                    and first_citation.act.stat_volume
-                    and first_citation.act.stat_page
+                    enactment_citation.act
+                    and enactment_citation.act.stat_volume
+                    and enactment_citation.act.stat_page
                 ):
                     statutes_at_large_citation = (
-                        f"{first_citation.act.stat_volume} Stat. "
-                        f"{first_citation.act.stat_page}"
+                        f"{enactment_citation.act.stat_volume} Stat. "
+                        f"{enactment_citation.act.stat_page}"
                     )
 
         # Derive last_modified_date from the most recent amendment citation
