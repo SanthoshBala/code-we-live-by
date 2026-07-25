@@ -3873,7 +3873,10 @@ class TestTitle17Section106Notes:
     def _parse(self) -> "SectionNotes":  # type: ignore[name-defined]  # noqa: F821
         from lxml import etree
 
-        from pipeline.olrc.normalized_section import SectionNotes, _parse_notes_structure
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
         from pipeline.olrc.parser import USLMParser
 
         notes_elem = etree.fromstring(self._XML)
