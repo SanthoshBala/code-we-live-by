@@ -1367,6 +1367,73 @@ class TestExtractNotesRefs:
         assert ref.usc_section == "2349aa-10"
         assert ref.href == "/us/usc/t22/s2349aa–10"
 
+    @pytest.fixture
+    def xml_with_multi_note_refs(self, tmp_path: Path) -> Path:
+        """Create XML with refs distributed across two named notes (Issue #620).
+
+        Models the structure of 29 USC § 157 where the "Effective Date Of 1947
+        Amendment" note contains a reference to section 151, and a separate
+        "References in Text" note contains a reference to a Public Law.
+        """
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<usc xmlns="http://xml.house.gov/schemas/uslm/1.0">
+  <meta><identifier>usc/29</identifier></meta>
+  <main>
+    <title identifier="/us/usc/t29" number="29">
+      <heading>LABOR</heading>
+      <chapter identifier="/us/usc/t29/ch7" number="7">
+        <heading>LABOR-MANAGEMENT RELATIONS</heading>
+        <section identifier="/us/usc/t29/s157" number="157">
+          <heading>Right of employees as to organization, collective bargaining, etc.</heading>
+          <content><p>Employees shall have the right to self-organization.</p></content>
+          <notes>
+            <note topic="effectiveDateOfAmendment">
+              <heading>Effective Date Of 1947 Amendment</heading>
+              <p>For effective date of amendment by act June 23, 1947, see section 104
+              of act June 23, 1947, set out as a note under
+              <ref href="/us/usc/t29/s151">section 151 of this title</ref>.</p>
+            </note>
+            <note topic="referencesInText">
+              <heading>References in Text</heading>
+              <p>The Labor Management Relations Act of 1947 is
+              <ref href="/us/pl/80/101">Pub. L. 80-101</ref>.</p>
+            </note>
+          </notes>
+        </section>
+      </chapter>
+    </title>
+  </main>
+</usc>
+"""
+        xml_path = tmp_path / "test_multi_note_refs.xml"
+        xml_path.write_text(xml_content)
+        return xml_path
+
+    def test_note_heading_attributed_per_note(
+        self, parser: USLMParser, xml_with_multi_note_refs: Path
+    ) -> None:
+        """Each NoteRef carries the heading of its enclosing <note> (Issue #620).
+
+        Regression test for 29 USC § 157 where a USC section ref inside the
+        "Effective Date Of 1947 Amendment" note had note_heading=None.
+        """
+        result = parser.parse_file(xml_with_multi_note_refs)
+        section = result.sections[0]
+
+        assert len(section.notes_refs) == 2
+
+        # First ref (USC section) should be attributed to the effective date note.
+        usc_ref = section.notes_refs[0]
+        assert usc_ref.ref_type == "usc_section"
+        assert usc_ref.usc_section == "151"
+        assert usc_ref.note_heading == "Effective Date Of 1947 Amendment"
+
+        # Second ref (Public Law) should be attributed to the references note.
+        pl_ref = section.notes_refs[1]
+        assert pl_ref.ref_type == "public_law"
+        assert pl_ref.congress == 80
+        assert pl_ref.note_heading == "References in Text"
+
 
 class TestNoteRefDataclass:
     """Tests for NoteRef dataclass."""
@@ -1424,6 +1491,29 @@ class TestNoteRefDataclass:
         assert ref.ref_type == "act"
         assert ref.act_date == "1935-08-14"
         assert ref.act_chapter == 531
+
+    def test_note_heading_defaults_to_none(self) -> None:
+        """NoteRef.note_heading defaults to None when not provided (Issue #620)."""
+        ref = NoteRef(
+            ref_type="usc_section",
+            href="/us/usc/t29/s151",
+            display_text="section 151 of this title",
+            usc_title=29,
+            usc_section="151",
+        )
+        assert ref.note_heading is None
+
+    def test_note_heading_can_be_set(self) -> None:
+        """NoteRef.note_heading stores the enclosing note's heading (Issue #620)."""
+        ref = NoteRef(
+            ref_type="usc_section",
+            href="/us/usc/t29/s151",
+            display_text="section 151 of this title",
+            usc_title=29,
+            usc_section="151",
+            note_heading="Effective Date Of 1947 Amendment",
+        )
+        assert ref.note_heading == "Effective Date Of 1947 Amendment"
 
 
 class TestCitationTailTextSubdivision:
