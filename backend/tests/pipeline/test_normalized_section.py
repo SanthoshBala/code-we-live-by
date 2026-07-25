@@ -2195,6 +2195,86 @@ class TestParserNotesContent:
             f"Expected '1998—Subsec.' to be unchanged: {content!r}"
         )
 
+    def test_no_space_inside_quoted_ref_spans(self) -> None:
+        """No spurious spaces inside curly-quote spans when a <ref> is the quoted text.
+
+        Regression test for issue #632: 46 U.S.C. §53105 amendment notes
+        like '...substituted “section 50501 of this title”...'
+        were rendered as '...“ section 50501 of this title ”...'
+        because the result-assembling joiner inserted a space between the
+        opening curly-quote (tail of the preceding element) and the <ref>
+        text, and again between the <ref> text and the closing curly-quote
+        (text of the following node).
+
+        In OLRC XML, amendment notes encode quoted cross-references as:
+            ...“<ref href="...">section 50501 of this title</ref>”...
+        where “ is the opening curly-quote preceding the <ref>, and
+        ” is the closing curly-quote in the ref's tail.  Stripping and
+        joining fragments with spaces inserts spurious spaces inside the
+        typographic quote marks.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Simulates the 46 U.S.C. §53105 2008 amendment note structure:
+        # <p>...<ref>Pub. L. 110–181</ref> substituted “<ref href="...">
+        # section 50501 of this title</ref>” for “section 2...”.</p>
+        # U+201C = opening curly-quote, U+201D = closing curly-quote
+        xml = (
+            "<notes>"
+            '<note topic="amendments">'
+            "<heading>Amendments</heading>"
+            "<p>2008—Subsec. (e)(2). "
+            '<ref href="/us/pl/110/181">Pub. L. 110–181</ref>'
+            " substituted “"
+            '<ref href="/us/usc/t46/s50501">section 50501 of this title</ref>'
+            "” for “section 2 of the Shipping Act, 1916 "
+            "(46 U.S.C. App. 802),”.</p>"
+            "</note>"
+            "</notes>"
+        )
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # No space should appear immediately after the opening curly-quote
+        # or immediately before the closing curly-quote (issue #632).
+        assert "“ section 50501" not in content, (
+            f"Spurious space after opening curly-quote: {content!r}"
+        )
+        assert "this title ”" not in content, (
+            f"Spurious space before closing curly-quote: {content!r}"
+        )
+        # The quoted text must appear with no internal padding
+        assert "“section 50501 of this title”" in content, (
+            f"Expected clean curly-quoted form: {content!r}"
+        )
+
+        # Also verify the normalize_note_content output is clean
+        lines = normalize_note_content(content)
+        amendment_text = next(
+            (ln.content for ln in lines if "substituted" in ln.content), None
+        )
+        assert amendment_text is not None, "No 'substituted' line found in normalized content"
+        assert "“ section 50501" not in amendment_text, (
+            f"Spurious space in normalized content: {amendment_text!r}"
+        )
+        assert "this title ”" not in amendment_text, (
+            f"Spurious space in normalized content: {amendment_text!r}"
+        )
+        assert "“section 50501 of this title”" in amendment_text, (
+            f"Expected clean curly-quoted form in normalized content: {amendment_text!r}"
+        )
+
+        # The second quoted string (plain text, no <ref>) must be unaffected
+        assert "“section 2 of the Shipping Act" in content, (
+            f"Expected second quoted string unchanged: {content!r}"
+        )
+
 
 class TestStripNoteMarkers:
     """Tests for _strip_note_markers function."""
