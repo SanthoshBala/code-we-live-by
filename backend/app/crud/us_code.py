@@ -488,13 +488,18 @@ async def get_section(
                 enacted_date = _parse_citation_date(law_data["date"])
 
         # Extract last_modified_date from amendment citations (full enactment date
-        # preferred — yields the actual date rather than a Jan 1 approximation)
+        # preferred — yields the actual date rather than a Jan 1 approximation).
+        # Includes "Amendment" relationship citations AND any non-original citation
+        # (is_original == false) — the latter covers pre-Public Law chapter-numbered
+        # acts (e.g. "Oct. 31, 1951, ch. 655") whose relationship is "Framework".
         if citations:
             from pipeline.olrc.group_service import _parse_citation_date
 
             amendment_dates = []
             for c in citations:
-                if c.get("relationship") == "Amendment":
+                if c.get("relationship") == "Amendment" or not c.get(
+                    "is_original", True
+                ):
                     law_data = c.get("law") or c.get("act")
                     if law_data and law_data.get("date"):
                         parsed = _parse_citation_date(law_data["date"])
