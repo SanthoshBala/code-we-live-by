@@ -1789,6 +1789,17 @@ class USLMParser:
                 # Add paragraph break marker before this <p> element
                 parts.append("[PARA]")
 
+            # Skip HTML table header cells — their text labels columns/rows in the
+            # table, not note content.  Including <th> text as plain content can
+            # trigger false note-header matches downstream (e.g. the
+            # historicalAndRevision note for 31 U.S.C. § 5311 has a <th> cell
+            # containing "Historical and Revision Notes" that would otherwise
+            # appear as the first content line and cause a spurious note match).
+            if tag == "th":
+                if el.tail:
+                    parts.append(el.tail)
+                return
+
             # Check if this is a heading element — always emit [NH] markers regardless
             # of whether it has class="smallCaps".  Some USLM releases use
             # <note topic="amendments"><heading>Amendments</heading> without the
@@ -1796,10 +1807,16 @@ class USLMParser:
             if tag == "heading":
                 text = "".join(el.itertext()).strip()
                 if text:
-                    # Preserve verbatim text from OLRC source — do NOT apply
-                    # .title() here because that mangles lowercase connective
-                    # words ("of" → "Of", "in" → "In", etc.).  See issue #509.
-                    parts.append(f"[NH]{text}[/NH]")
+                    # Some USLM releases store the raw camelCase topic name as the
+                    # heading text (e.g. <heading>historicalAndRevision</heading>).
+                    # Look up known camelCase topics in _NOTE_TOPIC_DISPLAY first so
+                    # they get their canonical human-readable display string.
+                    # Otherwise, preserve the heading text verbatim from the OLRC
+                    # source — do NOT apply .title() here because that mangles
+                    # lowercase connective words ("of" → "Of", "in" → "In", etc.).
+                    # See issue #509.
+                    display = _NOTE_TOPIC_DISPLAY.get(text, text)
+                    parts.append(f"[NH]{display}[/NH]")
                 return  # Don't process children
 
             # Track bold/italic state
