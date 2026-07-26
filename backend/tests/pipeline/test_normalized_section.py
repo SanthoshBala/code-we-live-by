@@ -3820,6 +3820,122 @@ class TestFlatNotesParser:
         assert "historical and revision notes" not in headers
 
 
+class TestTitle17Section106Notes:
+    """Regression tests for issue #526: notes not parsed for 17 U.S.C. § 106.
+
+    The OLRC XML for § 106 has a <note topic="historicalAndRevision"> with only
+    a <heading> child and no inline <p> content, followed by sibling <note>
+    elements including a <note topic="miscellaneous"> with heading
+    "house report no. 94–1476".
+
+    Before the fix:
+    - _parse_historical_notes emitted an empty SectionNote (header only, no lines)
+      because "[/NH]" is truthy but strips to "".
+    - _parse_flat_notes classified "house report no. 94–1476" as STATUTORY.
+
+    After the fix:
+    - Empty historical shell note is suppressed.
+    - House/Senate Report No. headers are classified as HISTORICAL.
+    """
+
+    _XML = (
+        '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+        '<note topic="historicalAndRevision">'
+        "<heading>Historical and Revision Notes</heading>"
+        "</note>"
+        '<note topic="miscellaneous">'
+        "<heading>house report no. 94–1476</heading>"
+        "<p>General Scope of Copyright. The five fundamental rights that "
+        "the copyright owner would have to authorize are the rights of "
+        "reproduction, adaptation, publication, performance, and display.</p>"
+        "<p>Additional legislative history content regarding exclusive rights.</p>"
+        "</note>"
+        '<note topic="amendments">'
+        "<heading>Amendments</heading>"
+        "<p>2002—Pub. L. 107–273 substituted “122” for "
+        "“121”.</p>"
+        "</note>"
+        '<note topic="effectiveDateOfAmendment">'
+        "<heading>Effective Date of 1995 Amendment</heading>"
+        "<p>Amendment by Pub. L. 104–39 effective 3 months after "
+        "Nov. 1, 1995.</p>"
+        "</note>"
+        '<note topic="effectiveDateOfAmendment">'
+        "<heading>Effective Date of 1990 Amendment</heading>"
+        "<p>Amendment by Pub. L. 101–650 applicable to any architectural "
+        "work created on or after Dec. 1, 1990.</p>"
+        "<p>Pub. L. 101–318, § 3(e)(3), provided additional "
+        "applicability rules.</p>"
+        "</note>"
+        "</notes>"
+    )
+
+    def _parse(self) -> "SectionNotes":  # type: ignore[name-defined]  # noqa: F821
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        notes_elem = etree.fromstring(self._XML)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+        return notes
+
+    def test_note_count(self) -> None:
+        """Exactly 4 notes returned — empty historical shell is suppressed."""
+        notes = self._parse()
+        assert len(notes.notes) == 4, (
+            f"Expected 4 notes, got {len(notes.notes)}: "
+            + str([n.header for n in notes.notes])
+        )
+
+    def test_house_report_classified_as_historical(self) -> None:
+        """House Report No. header is HISTORICAL, not STATUTORY."""
+        notes = self._parse()
+        headers = [n.header for n in notes.notes]
+        assert any("report" in h.lower() for h in headers), (
+            "house report no. note is missing"
+        )
+        report_note = next(n for n in notes.notes if "report" in n.header.lower())
+        assert report_note.category.value == "historical", (
+            f"Expected historical, got {report_note.category.value}"
+        )
+
+    def test_house_report_has_content_lines(self) -> None:
+        """House Report note has actual content (not empty)."""
+        notes = self._parse()
+        report_note = next(n for n in notes.notes if "report" in n.header.lower())
+        assert len(report_note.lines) > 0
+
+    def test_amendments_is_editorial(self) -> None:
+        """Amendments note is classified as EDITORIAL."""
+        notes = self._parse()
+        amendments = next(n for n in notes.notes if n.header == "Amendments")
+        assert amendments.category.value == "editorial"
+
+    def test_effective_date_notes_are_statutory(self) -> None:
+        """Effective Date notes are classified as STATUTORY."""
+        notes = self._parse()
+        eff_notes = [n for n in notes.notes if "Effective Date" in n.header]
+        assert len(eff_notes) == 2
+        for note in eff_notes:
+            assert note.category.value == "statutory", (
+                f"{note.header!r} should be statutory, got {note.category.value}"
+            )
+
+    def test_no_empty_historical_shell(self) -> None:
+        """'Historical and Revision Notes' header is not surfaced as a bare note."""
+        notes = self._parse()
+        headers_lower = [n.header.lower() for n in notes.notes]
+        assert "historical and revision notes" not in headers_lower, (
+            "Empty 'Historical and Revision Notes' shell must be suppressed"
+        )
+
+
 class TestNoteTopicAmendmentParsing:
     """Regression tests for issue #216: <note topic="amendments"> not parsed.
 
