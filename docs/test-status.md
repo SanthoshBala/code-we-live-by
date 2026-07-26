@@ -22,6 +22,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.06.26 | 3     | 456     | Confidentiality                                                                        | 113-21        | ✅ Clean |
 | 2026.06.29 | 44    | 910     | Congressional Record: subscriptions; sale of current, individual numbers, and bound sets; postage rate | 113-21 | ✅ Clean (known issue applies — see notes) |
 | 2026.07.08 | 9     | 8       | Proceedings begun by libel in admiralty and seizure of vessel or property              | 113-21        | ✅ Clean |
+| 2026.07.26 | 33    | 401     | Construction of bridges, causeways, dams or dikes generally; exemptions                | 113-21        | ✅ Clean |
 
 ## Notes
 
