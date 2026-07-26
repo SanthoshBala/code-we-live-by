@@ -2091,27 +2091,53 @@ class USLMParser:
                         href,
                     )
                     if match:
+                        href_title = match.group(3)
                         href_section = match.group(4)
-                        # Reconstruct subsection specifiers encoded as extra href path
-                        # segments, mirroring the PL href handling above.
-                        href_subsection_tail = match.group(5)
-                        if href_section and href_subsection_tail:
-                            sub_parts = [
-                                p for p in href_subsection_tail.split("/") if p
-                            ]
-                            href_section = href_section + "".join(
-                                f"({p})" for p in sub_parts
+                        # If href lacks both title and section, parse them from the
+                        # tail text. OLRC XML sometimes encodes only the chapter in
+                        # the href and writes the sub-path (e.g. ", title I, § 1,")
+                        # as tail text after the closing </ref> tag.
+                        tail_title: str | None = href_title
+                        act_section_value: str | None
+                        if href_title is None and href_section is None:
+                            tail_section: str | None = href_section
+                            tail = (elem.tail or "").strip()
+                            if tail:
+                                title_match = re.match(
+                                    r",?\s*title\s+([IVXLCDM]+)",
+                                    tail,
+                                    re.IGNORECASE,
+                                )
+                                if title_match:
+                                    tail_title = title_match.group(1).upper()
+                                sec_match = re.search(
+                                    r"§\s*([\w()]+)",
+                                    tail,
+                                )
+                                if sec_match:
+                                    tail_section = sec_match.group(1)
+                            act_section_value = tail_section
+                        else:
+                            # Reconstruct subsection specifiers encoded as extra href
+                            # path segments, mirroring the PL href handling above.
+                            href_subsection_tail = match.group(5)
+                            if href_section and href_subsection_tail:
+                                sub_parts = [
+                                    p for p in href_subsection_tail.split("/") if p
+                                ]
+                                href_section = href_section + "".join(
+                                    f"({p})" for p in sub_parts
+                                )
+                            act_section_value = (
+                                href_section + bridge + subdivision_suffix
+                                if subdivision_suffix and href_section
+                                else href_section
                             )
-                        section_value = (
-                            href_section + bridge + subdivision_suffix
-                            if subdivision_suffix and href_section
-                            else href_section
-                        )
                         act_ref = ActRef(
                             date=match.group(1),  # e.g., "1935-08-14"
                             chapter=int(match.group(2)),
-                            title=match.group(3),
-                            section=section_value,
+                            title=tail_title,
+                            section=act_section_value,
                             raw_text=full_text,
                         )
                         act_refs.append(act_ref)
