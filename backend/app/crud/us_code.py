@@ -490,15 +490,20 @@ async def get_section(
         # Extract last_modified_date from the most recent non-Framework citation.
         # Including Enactment citations covers sections that were enacted by a
         # single law and never subsequently amended — in that case the enactment
-        # date IS the last-modified date.  Framework citations (pre-1957 Acts
-        # providing structural context only) are excluded because their dates
-        # pre-date the section's actual creation/modification.
+        # date IS the last-modified date.  Original Framework citations (pre-1957
+        # Acts providing structural context only) are excluded because their
+        # dates pre-date the section's actual creation/modification. Non-original
+        # Framework citations (e.g. chapter acts, issue #563) are still included
+        # since they represent an actual amendment to the section.
         if citations:
             from pipeline.olrc.group_service import _parse_citation_date
 
             modification_dates = []
             for c in citations:
-                if c.get("relationship") == "Framework":
+                is_original_framework = c.get("relationship") == "Framework" and c.get(
+                    "is_original", True
+                )
+                if is_original_framework:
                     continue
                 law_data = c.get("law") or c.get("act")
                 if law_data and law_data.get("date"):
