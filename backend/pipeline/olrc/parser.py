@@ -2059,7 +2059,9 @@ class USLMParser:
                         # embedding it inline in the /s segment (e.g. "/s12(a)").
                         href_subsection_tail = match.group(6)
                         if href_section and href_subsection_tail:
-                            sub_parts = [p for p in href_subsection_tail.split("/") if p]
+                            sub_parts = [
+                                p for p in href_subsection_tail.split("/") if p
+                            ]
                             href_section = href_section + "".join(
                                 f"({p})" for p in sub_parts
                             )
@@ -2094,7 +2096,9 @@ class USLMParser:
                         # segments, mirroring the PL href handling above.
                         href_subsection_tail = match.group(5)
                         if href_section and href_subsection_tail:
-                            sub_parts = [p for p in href_subsection_tail.split("/") if p]
+                            sub_parts = [
+                                p for p in href_subsection_tail.split("/") if p
+                            ]
                             href_section = href_section + "".join(
                                 f"({p})" for p in sub_parts
                             )
