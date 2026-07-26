@@ -2,7 +2,7 @@
 
 from app.models.enums import SourceRelationship
 from app.schemas.public_law import SourceLawSchema
-from app.schemas.us_code import SectionNotesSchema
+from app.schemas.us_code import NoteCategoryEnum, SectionNoteSchema, SectionNotesSchema
 
 
 class TestRawNotesMarkupStripping:
@@ -117,3 +117,154 @@ class TestSourceLawSchemaRawTextStripping:
         result = self._make_citation(raw)
         assert "[/NH]" not in result.raw_text
         assert "Pub. L. 87-649" in result.raw_text
+
+
+class TestHasAmendments:
+    """Tests for SectionNotesSchema.has_amendments (issue #571).
+
+    9 U.S.C. § 4 was amended in 1954 by a pre-Public-Law chapter act.
+    The section was ingested before chapter-act support was added, so
+    ``notes.amendments`` is empty in the DB.  Despite this, the section
+    has an ``"Amendments"`` editorial note and a non-original citation.
+    ``has_amendments`` must return True in all such cases.
+    """
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _amendments_note() -> SectionNoteSchema:
+        """Return a minimal Amendments editorial note (mirrors 9 U.S.C. § 4)."""
+        return SectionNoteSchema(
+            header="Amendments",
+            category=NoteCategoryEnum.EDITORIAL,
+            lines=[],
+        )
+
+    @staticmethod
+    def _act_citation(order: int) -> dict:
+        """Return a dict suitable for SourceLawSchema.model_validate with a pre-1957 Act."""
+        dates = {0: "1947-07-30", 1: "1954-09-03"}
+        chapters = {0: "392", 1: "1263"}
+        raws = {
+            0: "July 30, 1947, ch. 392, 61 Stat. 671",
+            1: "Sept. 3, 1954, ch. 1263, § 19, 68 Stat. 1233",
+        }
+        return {
+            "act": {"date": dates[order], "chapter": chapters[order]},
+            "relationship": "Framework",
+            "raw_text": raws[order],
+            "order": order,
+        }
+
+    # ------------------------------------------------------------------
+    # Baseline: all sources empty
+    # ------------------------------------------------------------------
+
+    def test_false_when_no_amendments_at_all(self) -> None:
+        """has_amendments is False when amendments list, notes, and citations are empty."""
+        notes = SectionNotesSchema()
+        assert notes.has_amendments is False
+
+    def test_false_when_only_original_citation(self) -> None:
+        """has_amendments is False when there is only a single (original) citation."""
+        citation = SourceLawSchema.model_validate(self._act_citation(0))
+        notes = SectionNotesSchema(citations=[citation])
+        assert notes.has_amendments is False
+
+    # ------------------------------------------------------------------
+    # Source 1: structured amendments list
+    # ------------------------------------------------------------------
+
+    def test_true_from_structured_amendments_list(self) -> None:
+        """has_amendments is True when the structured amendments list is non-empty."""
+        from app.schemas.us_code import AmendmentSchema
+
+        notes = SectionNotesSchema(
+            amendments=[AmendmentSchema(year=1954, description="Amended by Act.")]
+        )
+        assert notes.has_amendments is True
+
+    # ------------------------------------------------------------------
+    # Source 2: "Amendments" header in notes.notes
+    # ------------------------------------------------------------------
+
+    def test_true_from_amendments_note_header(self) -> None:
+        """has_amendments is True when notes.notes contains an Amendments header."""
+        notes = SectionNotesSchema(
+            amendments=[],
+            notes=[self._amendments_note()],
+        )
+        assert notes.has_amendments is True
+
+    def test_false_when_only_non_amendments_note_header(self) -> None:
+        """has_amendments is False when the only note header is not 'Amendments'."""
+        notes = SectionNotesSchema(
+            amendments=[],
+            notes=[
+                SectionNoteSchema(
+                    header="References In Text",
+                    category=NoteCategoryEnum.EDITORIAL,
+                )
+            ],
+        )
+        assert notes.has_amendments is False
+
+    # ------------------------------------------------------------------
+    # Source 3: non-original citation
+    # ------------------------------------------------------------------
+
+    def test_true_from_non_original_citation(self) -> None:
+        """has_amendments is True when any citation has is_original False (order > 0)."""
+        citations = [
+            SourceLawSchema.model_validate(self._act_citation(0)),
+            SourceLawSchema.model_validate(self._act_citation(1)),
+        ]
+        notes = SectionNotesSchema(amendments=[], citations=citations)
+        assert notes.has_amendments is True
+
+    # ------------------------------------------------------------------
+    # 9 U.S.C. § 4 regression (issue #571)
+    # ------------------------------------------------------------------
+
+    def test_9usc4_scenario_has_amendments_true(self) -> None:
+        """9 U.S.C. § 4: has_amendments is True even when amendments list is empty.
+
+        The section was amended in 1954 by Act ch. 1263, § 19, but was ingested
+        before pre-PL chapter-act support was added so notes.amendments is [].
+        Both the Amendments editorial note (source 2) and the non-original
+        citation (source 3) must independently produce has_amendments=True.
+        """
+        citations = [
+            SourceLawSchema.model_validate(self._act_citation(0)),
+            SourceLawSchema.model_validate(self._act_citation(1)),
+        ]
+        notes = SectionNotesSchema(
+            amendments=[],
+            notes=[self._amendments_note()],
+            citations=citations,
+        )
+        # Both source-2 and source-3 fire; overall result must be True.
+        assert notes.has_amendments is True
+
+    def test_9usc4_scenario_source2_alone_suffices(self) -> None:
+        """Amendments note alone (no citation) is sufficient for has_amendments=True."""
+        notes = SectionNotesSchema(
+            amendments=[],
+            notes=[self._amendments_note()],
+            citations=[SourceLawSchema.model_validate(self._act_citation(0))],
+        )
+        # Only one citation, is_original=True → source 3 does NOT fire.
+        # Source 2 (Amendments note) must still produce True.
+        assert notes.has_amendments is True
+
+    def test_9usc4_scenario_source3_alone_suffices(self) -> None:
+        """Non-original citation alone (no Amendments note) gives has_amendments=True."""
+        citations = [
+            SourceLawSchema.model_validate(self._act_citation(0)),
+            SourceLawSchema.model_validate(self._act_citation(1)),
+        ]
+        notes = SectionNotesSchema(amendments=[], notes=[], citations=citations)
+        # Source 3 fires (citation at order=1 → is_original=False).
+        assert notes.has_amendments is True
