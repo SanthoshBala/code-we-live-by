@@ -164,8 +164,10 @@ class NoteReferenceSchema(BaseModel):
     usc_section: str | None = Field(
         None, description="US Code section (for USC_SECTION, e.g., '106')"
     )
-    stat_volume: int | None = Field(
-        None, description="Statutes at Large volume (for STATUTE)"
+    stat_volume: str | None = Field(
+        None,
+        description="Statutes at Large volume (for STATUTE). String since "
+        "pre-1957 codification volumes may have a letter suffix (e.g. '70A').",
     )
     stat_page: int | None = Field(
         None, description="Statutes at Large page (for STATUTE)"
