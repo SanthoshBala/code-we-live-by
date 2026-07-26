@@ -1657,8 +1657,16 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         content = _strip_note_markers(raw_content)
 
         # Skip only short non-empty fragments that are likely noise.
-        # Heading-only notes (empty content) are preserved as standalone headers.
+        # Heading-only notes (empty content) are preserved as standalone headers,
+        # except for the "Historical and Revision Notes" wrapper heading itself:
+        # an empty wrapper heading here is the same marker-artifact-only pattern
+        # (e.g. "[/NH]") that _parse_historical_notes already suppresses when it
+        # has only a <heading> child and no <p> content — the real content lives
+        # in sibling notes (e.g. "House Report No. 94-1476") and would otherwise
+        # be duplicated by a contentless shell note surfacing here.  (Issue #526)
         if content and len(content) <= 30:
+            continue
+        if not content and header.lower() == "historical and revision notes":
             continue
 
         # House/Senate Report No. headers are sub-notes of Historical and
