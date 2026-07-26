@@ -1610,7 +1610,9 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         raw_content = raw_notes[end:content_end]
         content = _strip_note_markers(raw_content)
 
-        if not content or len(content) <= 30:
+        # Skip only short non-empty fragments that are likely noise.
+        # Heading-only notes (empty content) are preserved as standalone headers.
+        if content and len(content) <= 30:
             continue
 
         category = (
@@ -1621,7 +1623,7 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
             else NoteCategory.STATUTORY
         )
 
-        if header == "Amendments":
+        if header == "Amendments" and content:
             notes.amendments = _parse_amendments(content)
 
         notes.notes.append(
@@ -1675,6 +1677,14 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
 
     hist_text = hist_match.group(1).strip()
     if not hist_text:
+        # Heading-only note: preserve as a standalone header with no content lines.
+        notes.notes.append(
+            SectionNote(
+                header="Historical and Revision Notes",
+                lines=[],
+                category=NoteCategory.HISTORICAL,
+            )
+        )
         return
 
     # Look for report headers (e.g., "House Report No. 94-1476")
@@ -1774,9 +1784,12 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
         raw_content = editorial_text[end:content_end]
         content = _strip_note_markers(raw_content)
 
-        if content:
+        # Emit the note when there is content, OR when content is completely
+        # empty (heading-only note).  Skip only short non-empty fragments that
+        # are noise (the 1–30 char case).
+        if not content or len(content) > 30:
             # Special handling for Amendments - also populate structured field
-            if header == "Amendments":
+            if header == "Amendments" and content:
                 notes.amendments = _parse_amendments(content)
 
             notes.notes.append(
@@ -1862,14 +1875,18 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
         raw_content = statutory_text[end:content_end]
         content = _strip_note_markers(raw_content)
 
-        if content and len(content) > 30:
-            notes.notes.append(
-                SectionNote(
-                    header=header,
-                    lines=normalize_note_content(raw_content),
-                    category=NoteCategory.STATUTORY,
-                )
+        # Preserve heading-only notes (empty content) as standalone headers.
+        # Skip only short non-empty fragments that are likely noise.
+        if content and len(content) <= 30:
+            continue
+
+        notes.notes.append(
+            SectionNote(
+                header=header,
+                lines=normalize_note_content(raw_content),
+                category=NoteCategory.STATUTORY,
             )
+        )
 
     # Final fallback: if no headers were found via any marker, the statutory
     # block may consist of a single note whose heading appears as plain text
