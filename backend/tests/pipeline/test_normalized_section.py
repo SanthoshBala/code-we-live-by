@@ -7,9 +7,11 @@ from app.schemas import NoteReferenceSchema
 from pipeline.olrc.normalized_section import (
     PARAGRAPH_BREAK_MARKER,
     ParsedPublicLaw,
+    SectionNotes,
     SourceLaw,
     _detect_marker_level,
     _is_sentence_boundary,
+    _parse_notes_structure,
     _split_into_sentences,
     _strip_note_markers,
     char_span_to_line_span,
@@ -4722,6 +4724,87 @@ class TestAmendmentLawMetadata:
         assert law_1999.stat_volume == "113"
         assert law_1999.stat_page == 222
         assert law_1999.date == "Aug. 5, 1999"
+
+
+class TestAmendmentEmDashSpaceFix:
+    """Regression tests for issue #626: spurious space after em dash in Amendments.
+
+    Older parser versions (before issue #600) joined adjacent XML text fragments
+    with a plain space even when the preceding fragment ended with an em dash.
+    This produced raw notes text like "2002— Pub. L. 107–273" (with a space).
+    The _paragraph_lines() function must strip that space so the stored
+    normalized_notes JSONB and the displayed content are both correct.
+    """
+
+    def test_paragraph_lines_strips_space_after_em_dash_before_pub_l(self) -> None:
+        """_paragraph_lines strips spurious space between year em dash and Pub. L.
+
+        Regression test for issue #626: the raw notes column in the DB retains
+        the artifact from old ingest runs.  Normalizing via _paragraph_lines
+        must remove the extra space so the rendered line reads correctly.
+        """
+        from pipeline.olrc.normalized_section import _paragraph_lines
+
+        # Simulates a raw_content slice from an Amendments note where the
+        # 2002 entry has a spurious space (stored in the DB from old ingest).
+        raw_content = (
+            "[NH]Amendments[/NH]"
+            "[PARA]2002— Pub. L. 107–273 substituted text."
+            "[PARA]1996—Pub. L. 104–159 substituted other text."
+        )
+        lines = _paragraph_lines(raw_content)
+        contents = [line.content for line in lines if line.content]
+
+        # The spurious space must be gone from the 2002 entry
+        assert any("2002—Pub." in c for c in contents), (
+            f"Expected '2002—Pub.' (no space) in lines, got: {contents!r}"
+        )
+        assert not any("2002— Pub." in c for c in contents), (
+            f"Spurious space still present in 2002 line: {contents!r}"
+        )
+
+    def test_paragraph_lines_does_not_alter_lines_without_artifact(self) -> None:
+        """Lines that already lack the spurious space are unchanged."""
+        from pipeline.olrc.normalized_section import _paragraph_lines
+
+        raw_content = (
+            "[NH]Amendments[/NH][PARA]1996—Pub. L. 104–159 substituted other text."
+        )
+        lines = _paragraph_lines(raw_content)
+        contents = [line.content for line in lines if line.content]
+
+        # Correctly formatted entry must be preserved as-is
+        assert any("1996—Pub." in c for c in contents), (
+            f"Expected '1996—Pub.' unchanged in lines, got: {contents!r}"
+        )
+
+    def test_amendment_em_dash_space_stripped_end_to_end(self) -> None:
+        """End-to-end: _parse_editorial_notes strips spurious space in Amendments lines.
+
+        Simulates stored raw notes text (with the legacy space artifact) flowing
+        through _parse_notes_structure and verifies the rendered lines are clean.
+        """
+        # Mimic what the DB stores for a section ingested before the #600 fix:
+        # the Amendments entry has "2002— Pub." with a space after the em dash.
+        raw_notes = (
+            "[H1]Editorial Notes[/H1]"
+            "[NH]Amendments[/NH]"
+            "[PARA]2002— Pub. L. 107–273 substituted text."
+            "[PARA]1996—Pub. L. 104–159 substituted other text."
+        )
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        amend_note = next((n for n in notes.notes if n.header == "Amendments"), None)
+        assert amend_note is not None, "Amendments note not found in parsed notes"
+
+        line_contents = [line.content for line in amend_note.lines if line.content]
+        assert any("2002—Pub." in c for c in line_contents), (
+            f"Expected '2002—Pub.' (no space) in amendment lines; got: {line_contents!r}"
+        )
+        assert not any("2002— Pub." in c for c in line_contents), (
+            f"Spurious space still present after end-to-end normalization: {line_contents!r}"
+        )
 
 
 class TestMultiSentenceSplitting:
