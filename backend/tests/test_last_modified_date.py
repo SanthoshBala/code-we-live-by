@@ -14,6 +14,12 @@ returning 1992-01-01 instead of 1992-10-24 (Pub. L. 102-492, Oct. 24, 1992)
 because the primary derivation path read a year-only ``amendments`` entry and
 constructed date(year, 1, 1) rather than parsing the full date from the
 corresponding citation.
+
+Regression coverage for issue #546: sections enacted by a single Public Law
+and never subsequently amended have only an Enactment-relationship citation
+(order 0, is_original == true). That citation's date IS the last-modified
+date and must not be excluded — only *Framework* citations that are also
+original are excluded (pre-1957 Acts providing structural context only).
 """
 
 from datetime import date
@@ -24,14 +30,20 @@ from pipeline.olrc.group_service import _parse_citation_date
 def _compute_last_modified_date_from_citations(citations: list[dict]) -> date | None:
     """Mirror of the citation-based derivation in get_section() for unit testing.
 
-    Includes citations with relationship ``"Amendment"`` OR any non-original
-    citation (is_original == false) — the latter covers pre-Public Law
-    chapter-numbered acts (relationship ``"Framework"``) that modified the section
-    after original enactment. Returns None when no eligible citations have dates.
+    Excludes only citations that are both relationship ``"Framework"`` AND
+    original (is_original == true) — pre-1957 Acts providing structural
+    context only, whose dates pre-date the section's actual creation or
+    modification. Every other citation (Enactment, Amendment, or a
+    non-original Framework citation such as a pre-Public-Law chapter act,
+    issue #563) is eligible. Returns None when no eligible citations have
+    dates.
     """
     amendment_dates = []
     for c in citations:
-        if c.get("relationship") == "Amendment" or not c.get("is_original", True):
+        is_original_framework = c.get("relationship") == "Framework" and c.get(
+            "is_original", True
+        )
+        if not is_original_framework:
             law_data = c.get("law") or c.get("act")
             if law_data and law_data.get("date"):
                 parsed = _parse_citation_date(law_data["date"])
@@ -110,13 +122,29 @@ class TestLastModifiedDateFromCitations:
         result = _compute_last_modified_date_from_citations(citations)
         assert result == date(2007, 11, 8)
 
-    def test_no_amendment_citations_returns_none(self) -> None:
-        """When no citation has relationship Amendment, result is None."""
+    def test_lone_enactment_citation_used_as_last_modified_date(self) -> None:
+        """A section enacted by a single law with no amendments uses that
+        Enactment citation's date as last_modified_date (issue #546) — it must
+        not be excluded just because its relationship isn't 'Amendment'.
+        """
         citations = [
             {
                 "law_id": "PL 99-662",
                 "law": {"date": "Nov. 17, 1986"},
                 "relationship": "Enactment",
+            },
+        ]
+        result = _compute_last_modified_date_from_citations(citations)
+        assert result == date(1986, 11, 17)
+
+    def test_no_eligible_citations_returns_none(self) -> None:
+        """When the only citation is an original Framework citation, result is None."""
+        citations = [
+            {
+                "raw_text": "July 30, 1947, ch. 392, § 1",
+                "relationship": "Framework",
+                "is_original": True,
+                "act": {"date": "1947-07-30", "chapter": 392},
             },
         ]
         result = _compute_last_modified_date_from_citations(citations)
@@ -349,8 +377,10 @@ class TestLastModifiedDateFromNotes:
         # Falls back to year-only since citation has no date
         assert result == date(1992, 1, 1)
 
-    def test_no_amendments_and_no_citation_dates_returns_none(self) -> None:
-        """Returns None when neither citations nor amendments provide dates."""
+    def test_lone_enactment_citation_used_when_no_amendments(self) -> None:
+        """A section with only an Enactment citation and no amendments uses the
+        Enactment citation's date (issue #546), not the year-only fallback.
+        """
         normalized_notes = {
             "citations": [
                 {
@@ -358,6 +388,15 @@ class TestLastModifiedDateFromNotes:
                     "relationship": "Enactment",
                 },
             ],
+            "amendments": [],
+        }
+        result = _compute_last_modified_date_from_notes(normalized_notes)
+        assert result == date(1976, 10, 19)
+
+    def test_no_amendments_and_no_citation_dates_returns_none(self) -> None:
+        """Returns None when neither citations nor amendments provide dates."""
+        normalized_notes = {
+            "citations": [],
             "amendments": [],
         }
         result = _compute_last_modified_date_from_notes(normalized_notes)

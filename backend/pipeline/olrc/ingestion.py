@@ -261,13 +261,15 @@ class USCodeIngestionService:
         # Derive last_modified_date from the most recent non-Framework citation.
         # Including Enactment citations covers sections enacted by a single law
         # with no subsequent amendments — the enactment date IS the last-modified
-        # date.  Framework citations (pre-1957 structural context) are excluded.
+        # date.  Original Framework citations (pre-1957 structural context) are
+        # excluded; non-original Framework citations (e.g. chapter acts, issue
+        # #563) are still included since they represent an actual amendment.
         last_modified_date = None
         if normalized.section_notes:
             modification_dates = [
                 _parse_citation_date(c.date)
                 for c in normalized.section_notes.citations
-                if c.relationship != "Framework" and c.date
+                if not (c.relationship == "Framework" and c.is_original) and c.date
             ]
             modification_dates = [d for d in modification_dates if d is not None]
             if modification_dates:
