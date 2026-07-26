@@ -1828,6 +1828,13 @@ class USLMParser:
         # Always strip whitespace from each part and join with a single
         # space so that inconsistent leading/trailing spaces in XML
         # text/tail never produce double-spaces or missing separators.
+        #
+        # Exception: do NOT add a separator space when the previous token ends
+        # with a quote character or the current token starts with a quote
+        # character.  This prevents spurious spaces inside quoted spans that
+        # arise when a <ref> element is directly adjacent to a " character in
+        # the XML (e.g. `"<ref>section 104</ref>"` → `"section 104"` not
+        # `" section 104 "`).
         result: list[str] = []
         for part in parts:
             if part == "[PARA]":
@@ -1854,6 +1861,15 @@ class USLMParser:
             # "“ section X of this title ”" — see issue #632.
             prev_ends_open_quote = bool(result) and result[-1].endswith("“")
             current_starts_close_quote = bool(stripped) and stripped[0] == "”"
+            # Do not insert a space when the previous fragment ends with a
+            # straight double-quote (") or the current fragment starts with
+            # one.  Some OLRC XML uses a plain " character (instead of the
+            # curly “ ” pair above) around a <ref> cross-reference, e.g.
+            # `substituted "<ref>section 1069f(a)(1) of this title</ref>"`.
+            # Stripping and joining with spaces produces spurious
+            # `" section 1069f(a)(1) of this title "` — see issue #472.
+            prev_ends_straight_quote = bool(result) and result[-1].endswith('"')
+            current_starts_straight_quote = bool(stripped) and stripped[0] == '"'
             if (
                 not result
                 or result[-1] == "\n\n"
@@ -1861,6 +1877,8 @@ class USLMParser:
                 or prev_ends_em_dash
                 or prev_ends_open_quote
                 or current_starts_close_quote
+                or prev_ends_straight_quote
+                or current_starts_straight_quote
             ):
                 result.append(stripped)
             else:
