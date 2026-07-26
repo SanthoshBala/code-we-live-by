@@ -344,7 +344,9 @@ class TestUSLMParser:
         </section>"""
         elem = etree.fromstring(xml)
         result = parser._extract_source_credit_text(elem)
-        assert result == "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+        assert (
+            result == "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+        )
 
     def test_extract_source_credit_text_none_when_absent(
         self, parser: USLMParser
@@ -392,7 +394,10 @@ class TestUSLMParser:
 
         assert len(result.sections) == 1
         section = result.sections[0]
-        assert section.source_credit == "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+        assert (
+            section.source_credit
+            == "(Pub. L. 94–553, title I, § 106, Oct. 19, 1976, 90 Stat. 2546.)"
+        )
 
     def test_extract_subsections_with_direct_paragraphs(
         self, parser: USLMParser

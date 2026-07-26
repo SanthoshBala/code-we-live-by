@@ -323,7 +323,9 @@ def test_get_section_note_categories_populated_from_notes(
 
 
 @patch("app.api.v1.sections.get_section", new_callable=AsyncMock)
-def test_get_section_returns_source_credit(mock_get: AsyncMock, client: TestClient) -> None:
+def test_get_section_returns_source_credit(
+    mock_get: AsyncMock, client: TestClient
+) -> None:
     """source_credit field in the response contains the raw parenthetical text (Issue #581).
 
     Before the fix this field was absent from the schema entirely and thus

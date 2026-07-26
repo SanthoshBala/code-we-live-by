@@ -1540,9 +1540,7 @@ class USLMParser:
             return " ".join(parts)
         return None
 
-    def _extract_source_credit_text(
-        self, section_elem: etree._Element
-    ) -> str | None:
+    def _extract_source_credit_text(self, section_elem: etree._Element) -> str | None:
         """Extract the raw text of the <sourceCredit> element.
 
         Returns the parenthetical citation string exactly as it appears in
