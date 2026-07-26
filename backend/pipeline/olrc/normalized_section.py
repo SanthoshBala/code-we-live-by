@@ -101,6 +101,8 @@ LEGAL_ABBREVIATIONS = {
     "cl.",
     "Para.",
     "para.",
+    "Par.",  # Paragraph (e.g., "Par. (11). Pub. L. ...")
+    "par.",  # Paragraph (e.g., "inserted two pars. relating to par. (11)")
     "Subsec.",  # Subsection (e.g., "referred to in subsec. (c)(3)")
     "subsec.",
     "Subsecs.",  # Plural subsection (e.g., "referred to in subsecs. (b), (c)")
