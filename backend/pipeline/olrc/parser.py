@@ -2047,11 +2047,24 @@ class USLMParser:
                         r"/us/pl/(\d+)/(\d+)"  # Congress and law number
                         r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
                         r"(?:/t([IVXLCDM]+))?"  # Optional title
-                        r"(?:/s([\w()]+))?",  # Optional section
+                        r"(?:/s([\w()]+))?"  # Optional section
+                        r"((?:/[a-z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1)
                         href,
                     )
                     if match:
                         href_section = match.group(5)
+                        # Reconstruct subsection specifiers encoded as extra href path
+                        # segments (e.g. "/s12/a" -> "12(a)"). OLRC sometimes splits the
+                        # subsection out into its own slash-delimited segment instead of
+                        # embedding it inline in the /s segment (e.g. "/s12(a)").
+                        href_subsection_tail = match.group(6)
+                        if href_section and href_subsection_tail:
+                            sub_parts = [
+                                p for p in href_subsection_tail.split("/") if p
+                            ]
+                            href_section = href_section + "".join(
+                                f"({p})" for p in sub_parts
+                            )
                         section_value: str | None = (
                             href_section + bridge + subdivision_suffix
                             if subdivision_suffix and href_section
@@ -2073,11 +2086,22 @@ class USLMParser:
                     match = re.match(
                         r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
                         r"(?:/t([IVXLCDM]+))?"  # Optional title
-                        r"(?:/s([\w()]+))?",  # Optional section
+                        r"(?:/s([\w()]+))?"  # Optional section
+                        r"((?:/[a-z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1)
                         href,
                     )
                     if match:
                         href_section = match.group(4)
+                        # Reconstruct subsection specifiers encoded as extra href path
+                        # segments, mirroring the PL href handling above.
+                        href_subsection_tail = match.group(5)
+                        if href_section and href_subsection_tail:
+                            sub_parts = [
+                                p for p in href_subsection_tail.split("/") if p
+                            ]
+                            href_section = href_section + "".join(
+                                f"({p})" for p in sub_parts
+                            )
                         section_value = (
                             href_section + bridge + subdivision_suffix
                             if subdivision_suffix and href_section
