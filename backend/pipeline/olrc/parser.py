@@ -157,6 +157,21 @@ _NOTE_TOPIC_DISPLAY: dict[str, str] = {
     "constructionOfAmendment": "Construction of Amendment",
 }
 
+# Matches leading comma-separated parenthetical sub-citation clauses that
+# trail a sourceCredit PL <ref> as plain text, e.g. the "(b)(3)(I)" in
+# "<ref>...§ 1901(a)(130)</ref>, (b)(3)(I), <date>...". Only matches simple
+# "(x)(y)..." groups — stops before free text like "title" or "§" so more
+# complex trailing citation text (rare) is left uncaptured rather than
+# mis-parsed.
+_SOURCE_CREDIT_EXTRA_SECTIONS_RE = re.compile(
+    r"^,\s*((?:\([^()\s]*\))+(?:\s*,\s*(?:\([^()\s]*\))+)*)"
+)
+
+# Matches leading comma-separated Stat. page numbers that trail a
+# sourceCredit Stat. <ref> as plain text, e.g. the "1793" in
+# "<ref>90 Stat. 1786</ref>, 1793;".
+_SOURCE_CREDIT_EXTRA_STAT_PAGES_RE = re.compile(r"^,\s*(\d+(?:\s*,\s*\d+)*)")
+
 
 @dataclass
 class ParsedGroup:
@@ -223,6 +238,14 @@ class SourceCreditRef:
     stat_page: int | None = None  # e.g., 501
     raw_text: str = ""  # The display text from the ref element
     is_framework: bool = False  # True if this is the "as added" parent reference
+    # Additional comma-separated sub-citations that follow the ref's own
+    # section (e.g., the "(b)(3)(I)" in "§ 1901(a)(130), (b)(3)(I)"). These
+    # appear as plain text (not inside a <ref>) in the source XML.
+    extra_sections: list[str] = field(default_factory=list)
+    # Additional comma-separated Stat. pages that follow the ref's own page
+    # (e.g., the "1793" in "90 Stat. 1786, 1793"). These also appear as
+    # plain text trailing the <ref> for the first Stat. page.
+    extra_stat_pages: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -2026,6 +2049,12 @@ class USLMParser:
             if local_tag == "ref":
                 href = elem.get("href", "")
                 text = "".join(elem.itertext()).strip()
+                # Plain text trailing the </ref> closing tag. Some multi-part
+                # amendment citations encode additional sub-citations/Stat. pages
+                # here as plain text rather than in their own <ref> element, e.g.
+                # the "(b)(3)(I)" and "1793" in "...§ 1901(a)(130), (b)(3)(I), ...
+                # 90 Stat. 1786, 1793".
+                ref_tail = elem.tail or ""
 
                 # Collect any subdivision text following the </ref> closing tag.
                 # In OLRC XML, italic letters in subdivision specifiers (e.g., the 'l'
@@ -2073,6 +2102,19 @@ class USLMParser:
                             if subdivision_suffix and href_section
                             else href_section
                         )
+
+                        # Capture additional comma-separated sub-citation clauses
+                        # in the tail text, e.g. "(b)(3)(I)" following
+                        # "§ 1901(a)(130), (b)(3)(I), <date>...".
+                        extra_sections: list[str] = []
+                        extra_match = _SOURCE_CREDIT_EXTRA_SECTIONS_RE.match(ref_tail)
+                        if extra_match:
+                            extra_sections = [
+                                part.strip()
+                                for part in extra_match.group(1).split(",")
+                                if part.strip()
+                            ]
+
                         ref = SourceCreditRef(
                             congress=int(match.group(1)),
                             law_number=int(match.group(2)),
@@ -2080,6 +2122,7 @@ class USLMParser:
                             title=match.group(4),
                             section=section_value,
                             raw_text=full_text,
+                            extra_sections=extra_sections,
                         )
                         pl_refs.append(ref)
                         last_ref_type = "pl"
@@ -2155,12 +2198,27 @@ class USLMParser:
                     if match:
                         stat_volume = match.group(1)
                         stat_page = int(match.group(2))
+
+                        # Capture additional comma-separated Stat. pages in the
+                        # tail text, e.g. "1793" following "90 Stat. 1786, 1793;".
+                        extra_stat_pages: list[int] = []
+                        extra_pages_match = _SOURCE_CREDIT_EXTRA_STAT_PAGES_RE.match(
+                            ref_tail
+                        )
+                        if extra_pages_match:
+                            extra_stat_pages = [
+                                int(part.strip())
+                                for part in extra_pages_match.group(1).split(",")
+                                if part.strip()
+                            ]
+
                         # Apply to the most recent ref, and fold the Stat ref's own
                         # display text into raw_text so the full citation (e.g.
                         # "Aug. 10, 1956, ch. 1041, 70A Stat. 599") is preserved.
                         if last_ref_type == "pl" and pl_refs:
                             pl_refs[-1].stat_volume = stat_volume
                             pl_refs[-1].stat_page = stat_page
+                            pl_refs[-1].extra_stat_pages = extra_stat_pages
                             if text:
                                 pl_refs[-1].raw_text = f"{pl_refs[-1].raw_text}, {text}"
                         elif last_ref_type == "act" and act_refs:
