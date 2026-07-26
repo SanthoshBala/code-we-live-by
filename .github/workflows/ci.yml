@@ -41,6 +41,15 @@ jobs:
       - name: Run type checking (mypy)
         run: uv run mypy app --ignore-missing-imports
 
+      - name: Check for multiple Alembic heads
+        run: |
+          head_count=$(uv run alembic heads 2>/dev/null | grep -c "(head)" || true)
+          if [ "$head_count" -gt 1 ]; then
+            echo "ERROR: $head_count Alembic heads detected. Add a merge migration before merging."
+            uv run alembic heads
+            exit 1
+          fi
+
       - name: Run tests
         run: uv run pytest --cov=app --cov-report=xml
 
