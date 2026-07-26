@@ -2143,7 +2143,7 @@ class TestExtractSourceCreditActRefs:
         assert act_ref.section == "1", (
             "section sub-path must be captured from tail text"
         )
-        assert act_ref.stat_volume == 48
+        assert act_ref.stat_volume == "48"
         assert act_ref.stat_page == 1022
 
     def test_act_ref_href_with_title_and_section_unchanged(

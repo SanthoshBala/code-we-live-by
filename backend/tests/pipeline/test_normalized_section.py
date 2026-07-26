@@ -4148,7 +4148,7 @@ class TestAmendmentLawMetadata:
 
         assert len(amendments) == 1
         assert amendments[0].law is not None
-        assert amendments[0].law.stat_volume == 124
+        assert amendments[0].law.stat_volume == "124"
 
     def test_amendment_law_stat_page_parsed(self) -> None:
         """stat_page is extracted from the amendment description citation."""
@@ -4188,7 +4188,7 @@ class TestAmendmentLawMetadata:
         assert law.congress == 106
         assert law.law_number == 44
         assert law.date == "Aug. 5, 1999"
-        assert law.stat_volume == 113
+        assert law.stat_volume == "113"
         assert law.stat_page == 222
         assert law.stat_reference == "113 Stat. 222"
 
@@ -4221,7 +4221,7 @@ class TestAmendmentLawMetadata:
         law_2010 = amendments[0].law
         assert law_2010 is not None
         assert law_2010.congress == 111
-        assert law_2010.stat_volume == 124
+        assert law_2010.stat_volume == "124"
         assert law_2010.stat_page == 3180
         assert law_2010.date == "Dec. 9, 2010"
 
@@ -4229,7 +4229,7 @@ class TestAmendmentLawMetadata:
         law_1999 = amendments[1].law
         assert law_1999 is not None
         assert law_1999.congress == 106
-        assert law_1999.stat_volume == 113
+        assert law_1999.stat_volume == "113"
         assert law_1999.stat_page == 222
         assert law_1999.date == "Aug. 5, 1999"
 
