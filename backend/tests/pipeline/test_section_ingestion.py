@@ -417,7 +417,7 @@ class TestUpsertSectionAsAdded:
         This produces:
           - act_refs: [ActRef(date="1938-06-25", chapter=675)]  → Framework
           - source_credit_refs: [SourceCreditRef(congress=110, law_number=85,
-                date="Sept. 27, 2007", stat_volume=121, stat_page=939)]  → Enactment
+                date="Sept. 27, 2007", stat_volume="121", stat_page=939)]  → Enactment
         """
         from pipeline.olrc.parser import ActRef, ParsedSection, SourceCreditRef
 
@@ -444,7 +444,7 @@ class TestUpsertSectionAsAdded:
                     title="IX",
                     section="901(d)(2)",
                     date="Sept. 27, 2007",
-                    stat_volume=121,
+                    stat_volume="121",
                     stat_page=939,
                     raw_text="Pub. L. 110-85, title IX, § 901(d)(2), Sept. 27, 2007, 121 Stat. 939",
                 ),
