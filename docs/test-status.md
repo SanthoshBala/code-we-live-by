@@ -23,6 +23,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.06.29 | 44    | 910     | Congressional Record: subscriptions; sale of current, individual numbers, and bound sets; postage rate | 113-21 | ✅ Clean (known issue applies — see notes) |
 | 2026.07.08 | 9     | 8       | Proceedings begun by libel in admiralty and seizure of vessel or property              | 113-21        | ✅ Clean |
 | 2026.07.26 | 33    | 401     | Construction of bridges, causeways, dams or dikes generally; exemptions                | 113-21        | ✅ Clean |
+| 2026.07.27 | 28    | 1391    | Venue generally                                                                        | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
@@ -49,6 +50,19 @@ exactly.
 systemic Jan-1-placeholder bug already tracked in #466, #483, #491, #510, #538, and #546 (most
 recently #548), and already has a correct, reviewed fix sitting unmerged in PR #469 — not
 re-filed here.
+
+### 2026.07.27 — 28 U.S.C. § 1391
+
+All fields matched: heading, full body text (subsections (a)–(g)), source credit, all
+13 citations in the source credit, 19 amendment history entries, and all 8 note sections
+(Historical and Revision Notes, References in Text, Amendments, and 5 Effective Date notes
+for the 2011, 2002, 1992, 1988, and 1976 amendments). `last_modified_date` is correctly
+set to `2011-12-07` (actual PL 112-63 enactment date) — no Jan-1 placeholder bug on this
+section. Data staleness (only one revision ingested, release point 113-21 from 2013) is a
+systemic known issue tracked in #483, #564, #578, #583 — not re-filed here. Since the
+section was last amended in December 2011, the text at release point 113-21 matches the
+current OLRC prelim verbatim.
+
 
 ### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
 
