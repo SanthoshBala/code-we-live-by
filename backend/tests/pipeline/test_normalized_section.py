@@ -650,6 +650,35 @@ class TestCitationParsing:
         assert citation2.section == "2(c)"
         assert citation2.path_display == "§2(c)"
 
+    def test_path_display_preserves_uppercase_letter_subparagraph(self) -> None:
+        """path_display must include terminal uppercase-letter subparagraph designators.
+
+        Regression test for Issue #525: citations with href
+        /us/pl/107/273/dC/tIII/s13210/4/A were displayed as §13210(4), dropping
+        the (A) subparagraph designator. The section value produced by the parser
+        must include the full specifier so that path_display shows "§13210(4)(A)".
+        """
+        from app.models.enums import LawLevel
+        from app.schemas import LawPathComponent
+
+        law = ParsedPublicLaw(congress=107, law_number=273)
+
+        # Simulate what the fixed parser produces: section="13210(4)(A)"
+        citation = SourceLaw(
+            law=law,
+            path=[
+                LawPathComponent(level=LawLevel.DIVISION, value="C"),
+                LawPathComponent(level=LawLevel.TITLE, value="III"),
+                LawPathComponent(level=LawLevel.SECTION, value="13210(4)(A)"),
+            ],
+            raw_text="Pub. L. 107–273, div. C, title III, §13210(4)(A), Nov. 2, 2002, 116 Stat. 1909",
+        )
+        assert citation.section == "13210(4)(A)"
+        assert citation.path_display == "div. C, tit. III, §13210(4)(A)", (
+            f"Expected 'div. C, tit. III, §13210(4)(A)' but got {citation.path_display!r}; "
+            "terminal uppercase-letter segment (A) must be included in path_display"
+        )
+
     def test_parse_multi_subcitation_and_stat_pages(self) -> None:
         """Regression test for GitHub issue #547 (26 U.S.C. § 1037).
 

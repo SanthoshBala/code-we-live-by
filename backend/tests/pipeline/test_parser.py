@@ -326,6 +326,51 @@ class TestUSLMParser:
             "subsection specifier (c) was dropped from the path"
         )
 
+    def test_extract_source_credit_refs_preserves_uppercase_letter_segments(
+        self, parser: USLMParser
+    ) -> None:
+        """Terminal uppercase-letter path segments must be included in the section value.
+
+        OLRC encodes subparagraph designators as uppercase-letter href segments:
+        /us/pl/107/273/dC/tIII/s13210/4/A → section "13210(4)(A)". Previously
+        the subsection tail regex only matched [a-z0-9]+, so the /A segment was
+        silently dropped, producing section="13210(4)" and path_display="§13210(4)"
+        instead of "§13210(4)(A)".
+
+        The structural /dC and /tIII markers are parsed separately (as division
+        and title fields) and must NOT appear in the section value.
+
+        Regression test for Issue #525 (Title 17, release point 113-21).
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s106">
+          <num value="106">§ 106.</num>
+          <heading>Test section</heading>
+          <content>Some content here.</content>
+          <sourceCredit>(<ref href="/us/pl/107/273/dC/tIII/s13210/4/A">Pub. L. 107–273, div. C, title III, §13210(4)(A)</ref>,
+          <date date="2002-11-02">Nov. 2, 2002</date>,
+          <ref href="/us/stat/116/1909">116 Stat. 1909</ref>.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, _act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 1
+        ref = pl_refs[0]
+        assert ref.congress == 107
+        assert ref.law_number == 273
+        assert ref.division == "C", (
+            f"Expected division='C' but got {ref.division!r}; "
+            "the /dC structural marker must be parsed as division, not section"
+        )
+        assert ref.title == "III", (
+            f"Expected title='III' but got {ref.title!r}; "
+            "the /tIII structural marker must be parsed as title, not section"
+        )
+        assert ref.section == "13210(4)(A)", (
+            f"Expected '13210(4)(A)' but got {ref.section!r}; "
+            "terminal uppercase-letter segment /A must be included in section"
+        )
+
     def test_extract_source_credit_text_returns_parenthetical(
         self, parser: USLMParser
     ) -> None:
