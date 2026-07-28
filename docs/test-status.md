@@ -24,6 +24,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.08 | 9     | 8       | Proceedings begun by libel in admiralty and seizure of vessel or property              | 113-21        | ✅ Clean |
 | 2026.07.26 | 33    | 401     | Construction of bridges, causeways, dams or dikes generally; exemptions                | 113-21        | ✅ Clean |
 | 2026.07.27 | 28    | 1391    | Venue generally                                                                        | 113-21        | ✅ Clean |
+| 2026.07.28 | 17    | 106     | Exclusive rights in copyrighted works                                                  | 113-21        | ⚠️ Known issues apply (see notes) |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
@@ -62,6 +63,30 @@ section. Data staleness (only one revision ingested, release point 113-21 from 2
 systemic known issue tracked in #483, #564, #578, #583 — not re-filed here. Since the
 section was last amended in December 2011, the text at release point 113-21 matches the
 current OLRC prelim verbatim.
+
+
+### 2026.07.28 — 17 U.S.C. § 106
+
+Section heading, main text (6 numbered paragraphs), source credit, enacted date
+(`1976-10-19`), and `last_modified_date` (`2002-11-02`) all match the OLRC XML.
+Amendment notes (5 entries) and effective-date notes (2 entries) are all present and
+correct. Four of five citation path_displays are now correct (§3(d), §704(b)(2), §1(g)(2),
+§2 — consistent with a partial fix since issue #525 was filed in June).
+
+Two known-issue occurrences found and commented on existing open issues:
+
+1. **Citation path drops terminal uppercase-letter subparagraph** (issue #525) — The
+   citation for Pub. L. 107–273 shows `path_display: "§13210(4)"` but the OLRC
+   `href` is `/us/pl/107/273/dC/tIII/s13210/4/A` and the raw text reads
+   `§ 13210(4)(A)`. The `(A)` suffix is still being dropped. Comment added to #525.
+
+2. **Heading-only `historicalAndRevision` note silently dropped** (issue #217) — The OLRC
+   XML contains a `<note topic="historicalAndRevision">` with only a
+   `<heading>Historical and Revision Notes</heading>` child and no body elements. This
+   note does not appear in CWLB's `notes.notes` array. The four substantive notes that
+   follow it (house report, amendments, two effective-date notes) are all present and
+   correctly separated — an improvement over the full-collapse behaviour described in #217
+   — but the heading-only container node is still dropped. Comment added to #217.
 
 
 ### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
