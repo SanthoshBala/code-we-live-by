@@ -1794,8 +1794,18 @@ def _parse_historical_notes(raw_notes: str, notes: SectionNotes) -> None:
     # no inline <p> content), stripping markers yields empty string.  In that
     # pattern the actual sub-notes (e.g. "House Report No. 94–1476") live in
     # sibling <note> elements and will be picked up by _parse_flat_notes.
-    # Skip creating an empty shell note here.  (Issue #526)
+    # Emit the wrapper heading as a standalone header so it surfaces in
+    # notes.notes; _parse_flat_notes will add the sibling sub-notes after it.
+    # _parse_flat_notes skips "Historical and Revision Notes" via existing_lower,
+    # so no duplicate is produced.  (Issue #217)
     if not _strip_note_markers(hist_text):
+        notes.notes.append(
+            SectionNote(
+                header="Historical and Revision Notes",
+                lines=[],
+                category=NoteCategory.HISTORICAL,
+            )
+        )
         return
 
     # Look for report headers (e.g., "House Report No. 94-1476")
