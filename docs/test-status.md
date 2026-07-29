@@ -25,6 +25,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.26 | 33    | 401     | Construction of bridges, causeways, dams or dikes generally; exemptions                | 113-21        | ✅ Clean |
 | 2026.07.27 | 28    | 1391    | Venue generally                                                                        | 113-21        | ✅ Clean |
 | 2026.07.28 | 17    | 106     | Exclusive rights in copyrighted works                                                  | 113-21        | ⚠️ Known issues apply (see notes) |
+| 2026.07.29 | 37    | 206     | Reserves; members of National Guard: inactive-duty training                            | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
@@ -87,6 +88,25 @@ Two known-issue occurrences found and commented on existing open issues:
    follow it (house report, amendments, two effective-date notes) are all present and
    correctly separated — an improvement over the full-collapse behaviour described in #217
    — but the heading-only container node is still dropped. Comment added to #217.
+
+
+### 2026.07.29 — 37 U.S.C. § 206
+
+Compared CWLB against the current OLRC prelim (PL 119-100, 2026-06-26). Differences found:
+
+- **Heading**: CWLB returns "Reserves; members of National Guard: inactive-duty training";
+  current OLRC heading is "Reserves; members of National Guard; members of the Space Force:
+  inactive-duty training" ("members of the Space Force" added by 2025 amendment).
+- **Text body**: CWLB text omits Space Force coverage in subsection (a) (2025 amendment) and
+  the parental/family leave provision in subsection (a) (2021/2023 amendments).
+- **`last_modified_date`**: CWLB returns `2008-01-28`, consistent with Pub. L. 110-181
+  (enacted 2008-01-28, the most recent amendment within release point 113-21). Not a parsing
+  error.
+
+All discrepancies are attributable to the known stale-ingestion defect: CWLB is at release
+point 113-21 (2013-01-01) while the current OLRC is at PL 119-100 (2026-06-26), a gap of
+~13 years. No novel parsing errors were found. Comment added to #578; stale-data defect class
+already tracked in #578, #583, #564, #485.
 
 
 ### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
