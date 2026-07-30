@@ -26,6 +26,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.27 | 28    | 1391    | Venue generally                                                                        | 113-21        | ✅ Clean |
 | 2026.07.28 | 17    | 106     | Exclusive rights in copyrighted works                                                  | 113-21        | ⚠️ Known issues apply (see notes) |
 | 2026.07.29 | 37    | 206     | Reserves; members of National Guard: inactive-duty training                            | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.07.30 | 31    | 5311    | Declaration of purpose                                                                 | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
@@ -107,6 +108,18 @@ All discrepancies are attributable to the known stale-ingestion defect: CWLB is 
 point 113-21 (2013-01-01) while the current OLRC is at PL 119-100 (2026-06-26), a gap of
 ~13 years. No novel parsing errors were found. Comment added to #578; stale-data defect class
 already tracked in #578, #583, #564, #485.
+
+
+### 2026.07.30 — 31 U.S.C. § 5311
+
+CWLB returns the pre-2021 single-sentence text for "Declaration of purpose" (`last_modified_date:
+"2001-10-26"`, `is_repealed: false`). The current OLRC text is the five-provision enumerated
+version enacted by the Anti-Money Laundering Act of 2020 (Pub. L. 116–283, div. F, title LXI,
+§6101(a), Jan. 1, 2021, 134 Stat. 4549), which completely repealed and replaced the prior
+single-sentence provision. The extensive notes added by Pub. L. 116–283 (severability,
+interagency coordination, personnel rotation, information-sharing frameworks, innovation
+officer positions, supervisory teams, regulatory reviews) are also absent. All discrepancies
+are attributable to the known stale release point already tracked in #583.
 
 
 ### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
