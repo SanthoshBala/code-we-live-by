@@ -27,6 +27,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.28 | 17    | 106     | Exclusive rights in copyrighted works                                                  | 113-21        | ⚠️ Known issues apply (see notes) |
 | 2026.07.29 | 37    | 206     | Reserves; members of National Guard: inactive-duty training                            | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.07.30 | 31    | 5311    | Declaration of purpose                                                                 | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.07.31 | 9     | 10      | Same; vacation; grounds; rehearing                                                     | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
@@ -120,6 +121,27 @@ single-sentence provision. The extensive notes added by Pub. L. 116–283 (sever
 interagency coordination, personnel rotation, information-sharing frameworks, innovation
 officer positions, supervisory teams, regulatory reviews) are also absent. All discrepancies
 are attributable to the known stale release point already tracked in #583.
+
+
+### 2026.07.31 — 9 U.S.C. § 10
+
+All fields matched: heading ("Same; vacation; grounds; rehearing"), full body text (subsections
+(a) chapeau + paragraphs (1)–(4), (b), (c)), source credit, enacted date (1947-07-30), and
+last_modified_date (2002-05-07). Derivation note (category: historical) and Amendments note
+(category: editorial) both match the OLRC XML verbatim, including all six amendment paragraphs
+for 2002, 1992, and 1990 changes. In-note cross-references to Pub. L. 107-169, 102-354, and
+101-552 are all present and correct. The `is_positive_law: true` and `group_ancestors` (Chapter 1)
+fields are accurate.
+
+`notes.amendments[*].law` objects for all four citation entries have `date: null`,
+`official_title: null`, `short_title: null`, `stat_volume: null`, `stat_page: null`,
+`stat_reference: null`, and `display_title: null` — only `congress`, `law_number`, and
+`public_law_id` are populated. This is the systemic amendment law metadata null bug already
+tracked in #561 — not re-filed; commented on that issue with this occurrence.
+
+OLRC XML used: release point 119-102 (current as of 2026-07-12), downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/119/102/xml_usc09@119-102.zip`.
+Section was last amended in 2002 so content is identical between 113-21 and 119-102.
 
 
 ### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
