@@ -408,6 +408,7 @@ _REPORT_PATTERN = re.compile(
     r"((?:House|Senate)\s+Report\s+No\.\s*[\d–-]+)",
     re.IGNORECASE,
 )
+_EFFECTIVE_DATE_PATTERN = re.compile(r"^Effective Date of\b", re.IGNORECASE)
 _YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
 # Per-paragraph pattern for amendment parsing.
 #
@@ -1683,6 +1684,7 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
             or _REPORT_PATTERN.search(header)
             else NoteCategory.EDITORIAL
             if header.lower() in editorial_headers_lower
+            or _EFFECTIVE_DATE_PATTERN.search(header)
             else NoteCategory.STATUTORY
         )
 
