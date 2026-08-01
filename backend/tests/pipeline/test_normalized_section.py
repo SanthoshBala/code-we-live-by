@@ -4113,8 +4113,12 @@ class TestNoteTopicAmendmentParsing:
 
         editorial = [n for n in notes.notes if n.category.value == "editorial"]
         statutory = [n for n in notes.notes if n.category.value == "statutory"]
-        assert len(editorial) == 3  # References in Text + Amendments + Effective Date of 1996 Amendment
-        assert len(statutory) == 1  # No Requirement (effectiveDateOfAmendment is now editorial, issue #652)
+        assert (
+            len(editorial) == 3
+        )  # References in Text + Amendments + Effective Date of 1996 Amendment
+        assert (
+            len(statutory) == 1
+        )  # No Requirement (effectiveDateOfAmendment is now editorial, issue #652)
 
         assert len(notes.amendments) >= 2
         years = [a.year for a in notes.amendments]
