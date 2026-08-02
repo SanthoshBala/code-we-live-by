@@ -28,6 +28,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.29 | 37    | 206     | Reserves; members of National Guard: inactive-duty training                            | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.07.30 | 31    | 5311    | Declaration of purpose                                                                 | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.07.31 | 9     | 10      | Same; vacation; grounds; rehearing                                                     | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
@@ -142,6 +143,16 @@ tracked in #561 — not re-filed; commented on that issue with this occurrence.
 OLRC XML used: release point 119-102 (current as of 2026-07-12), downloaded from
 `https://uscode.house.gov/download/releasepoints/us/pl/119/102/xml_usc09@119-102.zip`.
 Section was last amended in 2002 so content is identical between 113-21 and 119-102.
+
+
+### 2026.08.02 — 43 U.S.C. § 597a
+
+Simple unamended section (enacted Mar. 14, 1940; never amended). All fields matched: heading,
+full body text (single unnumbered paragraph), source credit, enacted date, no notes, no
+amendments, and group ancestors (Chapter 12 / Subchapter XVII). The apparent text difference
+between CWLB and the OLRC HTML view (spaces before commas in "Provided ," and "title 25 ,")
+is an HTML rendering artifact from OLRC hyperlink markup — the underlying statutory text is
+identical. No new bugs filed.
 
 
 ### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
