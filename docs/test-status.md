@@ -23,6 +23,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.06.29 | 44    | 910     | Congressional Record: subscriptions; sale of current, individual numbers, and bound sets; postage rate | 113-21 | ✅ Clean (known issue applies — see notes) |
 | 2026.07.08 | 9     | 8       | Proceedings begun by libel in admiralty and seizure of vessel or property              | 113-21        | ✅ Clean |
 | 2026.07.26 | 33    | 401     | Construction of bridges, causeways, dams or dikes generally; exemptions                | 113-21        | ✅ Clean |
+| 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -48,6 +49,24 @@ exactly.
 systemic Jan-1-placeholder bug already tracked in #466, #483, #491, #510, #538, and #546 (most
 recently #548), and already has a correct, reviewed fix sitting unmerged in PR #469 — not
 re-filed here.
+
+### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
+
+Statutory text matches OLRC verbatim: all four fair-use factors plus the 1992 unpublished-works
+sentence. Source credit matches exactly (PL 94-553, PL 101-650, PL 102-492). Historical and
+Revision Notes (H.Rpt. 94-1476, ~12,000 words), classroom copying agreement, books/periodicals
+guidelines, and music education guidelines are all present with full content. Two amendment
+entries are present (1992 and 1990). Structure, heading, enacted date (1976-10-19), and
+last_modified_date (1992-10-24) are all correct.
+
+Two known defects confirmed active on this section:
+- **Issue #652**: `Effective Date of 1990 Amendment` note returned with `category: "statutory"`
+  instead of `"editorial"`. § 107 is already listed in that issue's evidence table.
+- **Issue #561**: `notes.amendments[*].law` objects have `date`, `official_title`,
+  `short_title`, `stat_volume`, `stat_page`, and `stat_reference` all `null` for both
+  PL 102-492 and PL 101-650. Already filed specifically about this section.
+
+No new defects found. Comments added to both issues confirming reproduction.
 
 ## Test methodology
 
