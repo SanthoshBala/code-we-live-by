@@ -30,6 +30,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.31 | 9     | 10      | Same; vacation; grounds; rehearing                                                     | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
+| 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -172,6 +173,20 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.08.04 — 9 U.S.C. § 1
+
+All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
+paragraph defining "maritime transactions" and "commerce" with the seamen/railroad exclusion),
+source credit `(July 30, 1947, ch. 392, 61 Stat. 670.)`, and the Derivation note citing the
+original Act of Feb. 12, 1925, ch. 213, § 1, 43 Stat. 883. `has_amendments: false` and
+`amendments: []` are correct — § 1 has not been amended since its 1947 codification.
+
+The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC prelim page
+(which records that the Ending Forced Arbitration Act enacted chapter 4 and amended §§ 2, 208,
+and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
+systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
+
+
 
 ## Test methodology
 
