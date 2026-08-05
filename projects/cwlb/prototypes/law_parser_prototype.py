@@ -25,13 +25,14 @@ from collections import Counter
 
 
 # Configuration
-GOVINFO_API_KEY = os.getenv('GOVINFO_API_KEY', 'DEMO_KEY')
-GOVINFO_BASE_URL = 'https://api.govinfo.gov'
+GOVINFO_API_KEY = os.getenv("GOVINFO_API_KEY", "DEMO_KEY")
+GOVINFO_BASE_URL = "https://api.govinfo.gov"
 
 
 @dataclass
 class LawMetadata:
     """Structured metadata for a Public Law."""
+
     package_id: str
     title: str
     short_title: Optional[str]
@@ -45,6 +46,7 @@ class LawMetadata:
 @dataclass
 class SectionChange:
     """Represents a change to a US Code section."""
+
     title: int
     section: str
     change_type: str  # 'amended', 'added', 'repealed'
@@ -60,12 +62,12 @@ class PublicLawParser:
 
     # Common legal language patterns for amendments
     AMENDMENT_PATTERNS = {
-        'section_amended': r'Section\s+(\d+[A-Za-z]?)\s+(?:of title (\d+))?.*?is amended',
-        'strike_insert': r'striking\s+["\'](.+?)["\']\s+and inserting\s+["\'](.+?)["\']',
-        'add_at_end': r'adding at the end(?:\s+thereof)?\s+the following',
-        'section_repealed': r'Section\s+(\d+[A-Za-z]?).*?is(?:\s+hereby)?\s+repealed',
-        'title_amended': r'Title\s+(\d+).*?is amended',
-        'insert_after': r'inserting after section\s+(\d+[A-Za-z]?)\s+the following',
+        "section_amended": r"Section\s+(\d+[A-Za-z]?)\s+(?:of title (\d+))?.*?is amended",
+        "strike_insert": r'striking\s+["\'](.+?)["\']\s+and inserting\s+["\'](.+?)["\']',
+        "add_at_end": r"adding at the end(?:\s+thereof)?\s+the following",
+        "section_repealed": r"Section\s+(\d+[A-Za-z]?).*?is(?:\s+hereby)?\s+repealed",
+        "title_amended": r"Title\s+(\d+).*?is amended",
+        "insert_after": r"inserting after section\s+(\d+[A-Za-z]?)\s+the following",
     }
 
     def __init__(self, api_key: str = GOVINFO_API_KEY):
@@ -76,17 +78,17 @@ class PublicLawParser:
     def fetch_package_summary(self, package_id: str) -> Dict:
         """Fetch package summary metadata from GovInfo API."""
         url = f"{GOVINFO_BASE_URL}/packages/{package_id}/summary"
-        params = {'api_key': self.api_key}
+        params = {"api_key": self.api_key}
 
         response = self.session.get(url, params=params)
         response.raise_for_status()
 
         return response.json()
 
-    def fetch_law_text(self, package_id: str, format_type: str = 'htm') -> str:
+    def fetch_law_text(self, package_id: str, format_type: str = "htm") -> str:
         """Fetch law text content from GovInfo."""
         url = f"{GOVINFO_BASE_URL}/packages/{package_id}/{format_type}"
-        params = {'api_key': self.api_key}
+        params = {"api_key": self.api_key}
 
         response = self.session.get(url, params=params)
         response.raise_for_status()
@@ -98,21 +100,21 @@ class PublicLawParser:
         # Parse law number from package ID
         # Format: PLAW-{congress}publ{number}
         law_number = None
-        match = re.match(r'PLAW-(\d+)publ(\d+)', summary.get('packageId', ''))
+        match = re.match(r"PLAW-(\d+)publ(\d+)", summary.get("packageId", ""))
         if match:
             congress_num = match.group(1)
             law_num = match.group(2)
             law_number = f"{congress_num}-{law_num}"
 
         return LawMetadata(
-            package_id=summary.get('packageId'),
-            title=summary.get('title'),
-            short_title=summary.get('shortTitle'),
-            date_issued=summary.get('dateIssued'),
-            congress=summary.get('congress'),
-            session=summary.get('session'),
+            package_id=summary.get("packageId"),
+            title=summary.get("title"),
+            short_title=summary.get("shortTitle"),
+            date_issued=summary.get("dateIssued"),
+            congress=summary.get("congress"),
+            session=summary.get("session"),
             law_number=law_number,
-            law_type='Public Law'
+            law_type="Public Law",
         )
 
     def find_amendment_patterns(self, text: str) -> List[Tuple[str, str]]:
@@ -126,29 +128,27 @@ class PublicLawParser:
 
         return findings
 
-    def extract_section_changes(self, text: str, title: int = 17) -> List[SectionChange]:
+    def extract_section_changes(
+        self, text: str, title: int = 17
+    ) -> List[SectionChange]:
         """Extract section changes from law text."""
         changes = []
 
         # Pattern 1: Section X is amended
-        amended_pattern = r'Section\s+(\d+[A-Za-z]?).*?is amended'
+        amended_pattern = r"Section\s+(\d+[A-Za-z]?).*?is amended"
         for match in re.finditer(amended_pattern, text, re.IGNORECASE):
             section = match.group(1)
-            changes.append(SectionChange(
-                title=title,
-                section=section,
-                change_type='amended'
-            ))
+            changes.append(
+                SectionChange(title=title, section=section, change_type="amended")
+            )
 
         # Pattern 2: Section X is repealed
-        repealed_pattern = r'Section\s+(\d+[A-Za-z]?).*?is(?:\s+hereby)?\s+repealed'
+        repealed_pattern = r"Section\s+(\d+[A-Za-z]?).*?is(?:\s+hereby)?\s+repealed"
         for match in re.finditer(repealed_pattern, text, re.IGNORECASE):
             section = match.group(1)
-            changes.append(SectionChange(
-                title=title,
-                section=section,
-                change_type='repealed'
-            ))
+            changes.append(
+                SectionChange(title=title, section=section, change_type="repealed")
+            )
 
         return changes
 
@@ -158,13 +158,15 @@ class PublicLawParser:
         old_lines = old_text.splitlines(keepends=True)
         new_lines = new_text.splitlines(keepends=True)
 
-        diff = list(unified_diff(
-            old_lines,
-            new_lines,
-            fromfile=f"{section_ref} (before)",
-            tofile=f"{section_ref} (after)",
-            lineterm=''
-        ))
+        diff = list(
+            unified_diff(
+                old_lines,
+                new_lines,
+                fromfile=f"{section_ref} (before)",
+                tofile=f"{section_ref} (after)",
+                lineterm="",
+            )
+        )
 
         return diff
 
@@ -177,10 +179,10 @@ class PublicLawParser:
         diff_lines = list(unified_diff(old_lines, new_lines))
 
         return {
-            'old_line_count': len(old_lines),
-            'new_line_count': len(new_lines),
-            'lines_added': sum(1 for line in diff_lines if line.startswith('+')),
-            'lines_removed': sum(1 for line in diff_lines if line.startswith('-')),
+            "old_line_count": len(old_lines),
+            "new_line_count": len(new_lines),
+            "lines_added": sum(1 for line in diff_lines if line.startswith("+")),
+            "lines_removed": sum(1 for line in diff_lines if line.startswith("-")),
         }
 
 
@@ -192,7 +194,7 @@ def main():
     print("=" * 70)
 
     parser = PublicLawParser()
-    package_id = 'PLAW-94publ553'
+    package_id = "PLAW-94publ553"
 
     # Step 1: Fetch metadata
     print("\n1. Fetching law metadata...")
@@ -211,7 +213,7 @@ def main():
     # Step 2: Fetch law text
     print("\n2. Fetching law text...")
     try:
-        law_text = parser.fetch_law_text(package_id, 'htm')
+        law_text = parser.fetch_law_text(package_id, "htm")
         print(f"   ✓ Successfully fetched {len(law_text):,} characters")
     except Exception as e:
         print(f"   ✗ Error fetching law text: {e}")
@@ -289,5 +291,5 @@ Subject to sections 107 through 122, the owner of copyright has exclusive rights
     print("\n" + "=" * 70)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

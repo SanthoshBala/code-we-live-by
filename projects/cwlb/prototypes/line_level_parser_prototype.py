@@ -24,6 +24,7 @@ from enum import Enum
 
 class LineType(Enum):
     """Types of lines in legal text."""
+
     HEADING = "Heading"
     PROSE = "Prose"
     LIST_ITEM = "ListItem"
@@ -32,6 +33,7 @@ class LineType(Enum):
 @dataclass
 class USCodeLine:
     """Represents a single line in a US Code section with tree structure."""
+
     line_id: int
     section_id: str  # e.g., "17-106"
     parent_line_id: Optional[int]
@@ -49,7 +51,7 @@ class USCodeLine:
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
         d = asdict(self)
-        d['line_type'] = self.line_type.value
+        d["line_type"] = self.line_type.value
         return d
 
 
@@ -59,13 +61,13 @@ class SectionLineLevelParser:
     # Regex patterns for detecting subsection markers
     PATTERNS = {
         # Match patterns like (a), (b), (1), (2), (A), (B), (i), (ii), etc.
-        'subsection_marker': r'^\s*(\([a-zA-Z0-9]+\))\s*(.*)$',
+        "subsection_marker": r"^\s*(\([a-zA-Z0-9]+\))\s*(.*)$",
         # Match section headings like "§ 106." or "Section 106."
-        'section_heading': r'^\s*(?:§|Section)\s+(\d+[A-Za-z]?)\.\s*(.*)$',
+        "section_heading": r"^\s*(?:§|Section)\s+(\d+[A-Za-z]?)\.\s*(.*)$",
         # Match numbered lists like "1.", "2.", etc.
-        'numbered_list': r'^\s*(\d+)\.\s+(.*)$',
+        "numbered_list": r"^\s*(\d+)\.\s+(.*)$",
         # Match patterns like "(c)(1)(A)" - compound subsection paths
-        'compound_marker': r'^\s*((?:\([a-zA-Z0-9]+\))+)\s*(.*)$',
+        "compound_marker": r"^\s*((?:\([a-zA-Z0-9]+\))+)\s*(.*)$",
     }
 
     def __init__(self):
@@ -90,7 +92,7 @@ class SectionLineLevelParser:
         self.line_id_map = {}
 
         # Split text into raw lines
-        raw_lines = section_text.split('\n')
+        raw_lines = section_text.split("\n")
 
         # Parse each line and build tree structure
         current_parent_stack: List[Tuple[int, str, int]] = []  # (line_id, path, depth)
@@ -110,7 +112,13 @@ class SectionLineLevelParser:
                 # Update parent stack based on line type and depth
                 if parsed.line_type == LineType.HEADING:
                     # Reset stack for new heading
-                    current_parent_stack = [(parsed.line_id, parsed.subsection_path or "", parsed.depth_level)]
+                    current_parent_stack = [
+                        (
+                            parsed.line_id,
+                            parsed.subsection_path or "",
+                            parsed.depth_level,
+                        )
+                    ]
                 elif parsed.subsection_path:
                     # Update stack for subsection markers
                     self._update_parent_stack(current_parent_stack, parsed)
@@ -118,10 +126,7 @@ class SectionLineLevelParser:
         return self.lines
 
     def _parse_line(
-        self,
-        raw_line: str,
-        section_id: str,
-        parent_stack: List[Tuple[int, str, int]]
+        self, raw_line: str, section_id: str, parent_stack: List[Tuple[int, str, int]]
     ) -> Optional[USCodeLine]:
         """Parse a single raw line and determine its properties."""
 
@@ -133,11 +138,15 @@ class SectionLineLevelParser:
         line_number = self.line_counter
 
         # Check for section heading
-        heading_match = re.match(self.PATTERNS['section_heading'], line_text)
+        heading_match = re.match(self.PATTERNS["section_heading"], line_text)
         if heading_match:
             section_num = heading_match.group(1)
             heading_text = heading_match.group(2).strip()
-            full_text = f"§ {section_num}. {heading_text}" if heading_text else f"§ {section_num}"
+            full_text = (
+                f"§ {section_num}. {heading_text}"
+                if heading_text
+                else f"§ {section_num}"
+            )
 
             return USCodeLine(
                 line_id=line_number,
@@ -147,18 +156,18 @@ class SectionLineLevelParser:
                 line_type=LineType.HEADING,
                 text_content=full_text,
                 subsection_path=None,
-                depth_level=0
+                depth_level=0,
             )
 
         # Check for compound subsection marker like "(c)(1)(A)"
-        compound_match = re.match(self.PATTERNS['compound_marker'], line_text)
+        compound_match = re.match(self.PATTERNS["compound_marker"], line_text)
         if compound_match:
             markers = compound_match.group(1)
             content = compound_match.group(2).strip()
 
             # Extract individual markers
-            individual_markers = re.findall(r'\([a-zA-Z0-9]+\)', markers)
-            subsection_path = ''.join(individual_markers)
+            individual_markers = re.findall(r"\([a-zA-Z0-9]+\)", markers)
+            subsection_path = "".join(individual_markers)
 
             # Determine depth based on number of markers
             depth = len(individual_markers)
@@ -168,7 +177,11 @@ class SectionLineLevelParser:
 
             # Determine if this is a heading or list item
             # If content is empty or very short, it's likely a heading
-            line_type = LineType.HEADING if len(content) < 50 and content.endswith('.') else LineType.LIST_ITEM
+            line_type = (
+                LineType.HEADING
+                if len(content) < 50 and content.endswith(".")
+                else LineType.LIST_ITEM
+            )
 
             full_text = f"{markers} {content}" if content else markers
 
@@ -180,11 +193,11 @@ class SectionLineLevelParser:
                 line_type=line_type,
                 text_content=full_text,
                 subsection_path=subsection_path,
-                depth_level=depth
+                depth_level=depth,
             )
 
         # Check for simple subsection marker like "(a)" or "(1)"
-        subsection_match = re.match(self.PATTERNS['subsection_marker'], line_text)
+        subsection_match = re.match(self.PATTERNS["subsection_marker"], line_text)
         if subsection_match:
             marker = subsection_match.group(1)
             content = subsection_match.group(2).strip()
@@ -211,7 +224,7 @@ class SectionLineLevelParser:
                 line_type=LineType.LIST_ITEM,
                 text_content=full_text,
                 subsection_path=subsection_path,
-                depth_level=depth
+                depth_level=depth,
             )
 
         # If no special markers, treat as prose
@@ -227,12 +240,14 @@ class SectionLineLevelParser:
             line_type=LineType.PROSE,
             text_content=line_text,
             subsection_path=None,
-            depth_level=depth
+            depth_level=depth,
         )
 
-    def _estimate_depth_from_marker(self, marker: str, parent_stack: List[Tuple[int, str, int]]) -> int:
+    def _estimate_depth_from_marker(
+        self, marker: str, parent_stack: List[Tuple[int, str, int]]
+    ) -> int:
         """Estimate depth level based on marker type and context."""
-        marker_content = marker.strip('()')
+        marker_content = marker.strip("()")
 
         # Check marker type
         if marker_content.isalpha():
@@ -249,7 +264,9 @@ class SectionLineLevelParser:
             # Roman numerals (i, ii, iii, iv) - typically depth 4
             return 4
 
-    def _build_subsection_path(self, marker: str, parent_stack: List[Tuple[int, str, int]], depth: int) -> str:
+    def _build_subsection_path(
+        self, marker: str, parent_stack: List[Tuple[int, str, int]], depth: int
+    ) -> str:
         """Build full subsection path by combining with parent path."""
         if not parent_stack:
             return marker
@@ -264,7 +281,9 @@ class SectionLineLevelParser:
         # If no matching parent, just return marker
         return marker
 
-    def _find_parent_id(self, parent_stack: List[Tuple[int, str, int]], depth: int) -> Optional[int]:
+    def _find_parent_id(
+        self, parent_stack: List[Tuple[int, str, int]], depth: int
+    ) -> Optional[int]:
         """Find the appropriate parent line ID based on depth."""
         if not parent_stack:
             return None
@@ -313,21 +332,21 @@ class SectionLineLevelParser:
             depth_counts[line.depth_level] = depth_counts.get(line.depth_level, 0) + 1
 
         return {
-            'total_lines': len(self.lines),
-            'max_depth': max(line.depth_level for line in self.lines),
-            'type_distribution': type_counts,
-            'depth_distribution': depth_counts,
-            'has_subsections': any(line.subsection_path for line in self.lines)
+            "total_lines": len(self.lines),
+            "max_depth": max(line.depth_level for line in self.lines),
+            "type_distribution": type_counts,
+            "depth_distribution": depth_counts,
+            "has_subsections": any(line.subsection_path for line in self.lines),
         }
 
     def export_to_json(self, filename: str):
         """Export parsed lines to JSON file."""
         data = {
-            'lines': [line.to_dict() for line in self.lines],
-            'statistics': self.get_tree_statistics()
+            "lines": [line.to_dict() for line in self.lines],
+            "statistics": self.get_tree_statistics(),
         }
 
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             json.dump(data, f, indent=2)
 
         print(f"Exported {len(self.lines)} lines to {filename}")
@@ -371,7 +390,9 @@ Subject to sections 107 through 122, the owner of copyright under this title has
         print(f"{key}: {value}")
 
     # Export to JSON
-    parser.export_to_json("/home/user/claude-code-sandbox/projects/cwlb/prototypes/section_106_parsed.json")
+    parser.export_to_json(
+        "/home/user/claude-code-sandbox/projects/cwlb/prototypes/section_106_parsed.json"
+    )
 
     return parser
 
@@ -424,7 +445,9 @@ The limitations on liability established in this subsection apply to a service p
         print(f"{key}: {value}")
 
     # Export to JSON
-    parser.export_to_json("/home/user/claude-code-sandbox/projects/cwlb/prototypes/section_512c_parsed.json")
+    parser.export_to_json(
+        "/home/user/claude-code-sandbox/projects/cwlb/prototypes/section_512c_parsed.json"
+    )
 
     return parser
 
