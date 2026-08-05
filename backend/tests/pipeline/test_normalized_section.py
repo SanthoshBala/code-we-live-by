@@ -2058,6 +2058,63 @@ class TestNormalizeNoteContent:
         assert "par. (11)" in non_blank[0].content
         assert "Par. (11)" in non_blank[1].content
 
+    def test_h1_header_trailing_period_preserved(self) -> None:
+        """H1 bold headers with a trailing period must keep that period.
+
+        Regression test for issue #657: OLRC inline bold note sub-heads end
+        with a period (e.g. <strong>In General.</strong>), but the parser was
+        stripping it via rstrip('.').
+        """
+        text = (
+            "[H1]In General.[/H1] The basic copyright term is life plus seventy years."
+        )
+        lines = normalize_note_content(text)
+
+        header_lines = [ln for ln in lines if ln.is_header]
+        assert len(header_lines) == 1
+        assert header_lines[0].content == "In General."
+
+    def test_h2_header_trailing_period_preserved(self) -> None:
+        """H2 italic sub-headers with a trailing period must keep that period.
+
+        Regression test for issue #657: period was stripped from H2 headers
+        via rstrip('.') in normalized_section.py.
+        """
+        text = "[H2]Basic Term.[/H2] The term of copyright for a work."
+        lines = normalize_note_content(text)
+
+        header_lines = [ln for ln in lines if ln.is_header]
+        assert len(header_lines) == 1
+        assert header_lines[0].content == "Basic Term."
+
+    def test_17usc302_inline_bold_subheadings_preserve_periods(self) -> None:
+        """All five bold inline sub-headings from 17 U.S.C. § 302 historical notes
+        must preserve their trailing periods.
+
+        Regression test for issue #657: the live API returned headers without
+        trailing periods (e.g. 'In General' instead of 'In General.').
+        """
+        text = (
+            "[H1]In General.[/H1] Life plus seventy years."
+            " [H1]Basic Copyright Term.[/H1] The term is seventy years after death."
+            " [H1]Joint Works.[/H1] The term endures for seventy years."
+            " [H1]Works Made for Hire.[/H1] The term is 95 years."
+            " [H1]Anonymous Works.[/H1] The term is 95 years from publication."
+        )
+        lines = normalize_note_content(text)
+
+        header_lines = [ln for ln in lines if ln.is_header]
+        assert len(header_lines) == 5
+        expected_headers = [
+            "In General.",
+            "Basic Copyright Term.",
+            "Joint Works.",
+            "Works Made for Hire.",
+            "Anonymous Works.",
+        ]
+        actual_headers = [ln.content for ln in header_lines]
+        assert actual_headers == expected_headers
+
 
 class TestSentenceSplittingWithParagraphs:
     """Tests for sentence splitting with paragraph break detection."""
