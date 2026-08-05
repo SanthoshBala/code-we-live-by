@@ -3928,10 +3928,10 @@ class TestTitle17Section106Notes:
         return notes
 
     def test_note_count(self) -> None:
-        """Exactly 4 notes returned — empty historical shell is suppressed."""
+        """Exactly 5 notes returned — heading-only historical note is included."""
         notes = self._parse()
-        assert len(notes.notes) == 4, (
-            f"Expected 4 notes, got {len(notes.notes)}: "
+        assert len(notes.notes) == 5, (
+            f"Expected 5 notes, got {len(notes.notes)}: "
             + str([n.header for n in notes.notes])
         )
 
@@ -3973,12 +3973,32 @@ class TestTitle17Section106Notes:
                 f"{note.header!r} should be editorial, got {note.category.value}"
             )
 
-    def test_no_empty_historical_shell(self) -> None:
-        """'Historical and Revision Notes' header is not surfaced as a bare note."""
+    def test_historical_heading_only_note_surfaced(self) -> None:
+        """Heading-only 'Historical and Revision Notes' note appears as first entry.
+
+        When the historicalAndRevision <note> element has only a <heading> child
+        and no <p> body paragraphs, the heading must surface as a SectionNote
+        with an empty lines list, placed before the sibling sub-notes.
+        Closes #217.
+        """
         notes = self._parse()
         headers_lower = [n.header.lower() for n in notes.notes]
-        assert "historical and revision notes" not in headers_lower, (
-            "Empty 'Historical and Revision Notes' shell must be suppressed"
+        assert "historical and revision notes" in headers_lower, (
+            "Heading-only 'Historical and Revision Notes' must appear in notes.notes"
+        )
+        hist_note = next(
+            n
+            for n in notes.notes
+            if n.header.lower() == "historical and revision notes"
+        )
+        assert hist_note.lines == [], (
+            f"Heading-only note must have empty lines, got: {hist_note.lines}"
+        )
+        assert hist_note.category.value == "historical"
+        # Must be the first note — it precedes the sibling sub-notes
+        assert notes.notes[0].header.lower() == "historical and revision notes", (
+            f"Expected 'Historical and Revision Notes' first; "
+            f"got: {[n.header for n in notes.notes]}"
         )
 
 
