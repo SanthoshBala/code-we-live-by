@@ -2129,7 +2129,7 @@ class USLMParser:
                         r"(?:/d([A-Z]+))?"  # Optional division (can be multi-letter: LL, FF)
                         r"(?:/t([IVXLCDM]+))?"  # Optional title
                         r"(?:/s([\w()]+))?"  # Optional section
-                        r"((?:/[a-z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1)
+                        r"((?:/[a-zA-Z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1, /A)
                         href,
                     )
                     if match:
@@ -2182,7 +2182,7 @@ class USLMParser:
                         r"/us/act/(\d{4}-\d{2}-\d{2})/ch(\d+)"  # Date and chapter
                         r"(?:/t([IVXLCDM]+))?"  # Optional title
                         r"(?:/s([\w()]+))?"  # Optional section
-                        r"((?:/[a-z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1)
+                        r"((?:/[a-zA-Z0-9]+)*)?",  # Optional subsection path segments (e.g. /a, /a/1, /A)
                         href,
                     )
                     if match:
