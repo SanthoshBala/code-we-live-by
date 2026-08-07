@@ -898,6 +898,38 @@ class TestCitationsFromSourceCreditRefs:
         assert citations[1].extra_sections == ["(b)(3)(I)"]
         assert citations[1].extra_stat_pages == [1793]
 
+    def test_title_in_source_credit_ref_appears_in_path(self) -> None:
+        """Regression test for Issue #659: a SourceCreditRef whose title is
+        populated (whether from the href /t segment or from the display-text
+        fallback) must produce a path that includes a title-level component
+        before the section component.
+
+        Before the fix the title was silently dropped for PL hrefs that lacked
+        a /t segment, so the path contained only the section entry.
+        """
+        from app.models.enums import LawLevel
+
+        ref = SourceCreditRef(
+            congress=109,
+            law_number=177,
+            title="VII",
+            section="713",
+            date="Mar. 9, 2006",
+            stat_volume="120",
+            stat_page=263,
+            raw_text="Pub. L. 109–177, title VII, § 713",
+        )
+
+        citations = citations_from_source_credit_refs([ref])
+
+        assert len(citations) == 1
+        path = citations[0].path
+        assert len(path) == 2, f"Expected 2 path components, got {path}"
+        assert path[0].level == LawLevel.TITLE
+        assert path[0].value == "VII"
+        assert path[1].level == LawLevel.SECTION
+        assert path[1].value == "713"
+
 
 class TestNormalizeParsedSection:
     """Tests for normalizing ParsedSection with structured subsections."""
