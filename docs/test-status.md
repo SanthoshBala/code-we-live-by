@@ -24,7 +24,13 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.08 | 9     | 8       | Proceedings begun by libel in admiralty and seizure of vessel or property              | 113-21        | ✅ Clean |
 | 2026.07.26 | 33    | 401     | Construction of bridges, causeways, dams or dikes generally; exemptions                | 113-21        | ✅ Clean |
 | 2026.07.27 | 28    | 1391    | Venue generally                                                                        | 113-21        | ✅ Clean |
+| 2026.07.28 | 17    | 106     | Exclusive rights in copyrighted works                                                  | 113-21        | ⚠️ Known issues apply (see notes) |
+| 2026.07.29 | 37    | 206     | Reserves; members of National Guard: inactive-duty training                            | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.07.30 | 31    | 5311    | Declaration of purpose                                                                 | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.07.31 | 9     | 10      | Same; vacation; grounds; rehearing                                                     | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
+| 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -64,6 +70,92 @@ section was last amended in December 2011, the text at release point 113-21 matc
 current OLRC prelim verbatim.
 
 
+### 2026.07.28 — 17 U.S.C. § 106
+
+Section heading, main text (6 numbered paragraphs), source credit, enacted date
+(`1976-10-19`), and `last_modified_date` (`2002-11-02`) all match the OLRC XML.
+Amendment notes (5 entries) and effective-date notes (2 entries) are all present and
+correct. Four of five citation path_displays are now correct (§3(d), §704(b)(2), §1(g)(2),
+§2 — consistent with a partial fix since issue #525 was filed in June).
+
+Two known-issue occurrences found and commented on existing open issues:
+
+1. **Citation path drops terminal uppercase-letter subparagraph** (issue #525) — The
+   citation for Pub. L. 107–273 shows `path_display: "§13210(4)"` but the OLRC
+   `href` is `/us/pl/107/273/dC/tIII/s13210/4/A` and the raw text reads
+   `§ 13210(4)(A)`. The `(A)` suffix is still being dropped. Comment added to #525.
+
+2. **Heading-only `historicalAndRevision` note silently dropped** (issue #217) — The OLRC
+   XML contains a `<note topic="historicalAndRevision">` with only a
+   `<heading>Historical and Revision Notes</heading>` child and no body elements. This
+   note does not appear in CWLB's `notes.notes` array. The four substantive notes that
+   follow it (house report, amendments, two effective-date notes) are all present and
+   correctly separated — an improvement over the full-collapse behaviour described in #217
+   — but the heading-only container node is still dropped. Comment added to #217.
+
+
+### 2026.07.29 — 37 U.S.C. § 206
+
+Compared CWLB against the current OLRC prelim (PL 119-100, 2026-06-26). Differences found:
+
+- **Heading**: CWLB returns "Reserves; members of National Guard: inactive-duty training";
+  current OLRC heading is "Reserves; members of National Guard; members of the Space Force:
+  inactive-duty training" ("members of the Space Force" added by 2025 amendment).
+- **Text body**: CWLB text omits Space Force coverage in subsection (a) (2025 amendment) and
+  the parental/family leave provision in subsection (a) (2021/2023 amendments).
+- **`last_modified_date`**: CWLB returns `2008-01-28`, consistent with Pub. L. 110-181
+  (enacted 2008-01-28, the most recent amendment within release point 113-21). Not a parsing
+  error.
+
+All discrepancies are attributable to the known stale-ingestion defect: CWLB is at release
+point 113-21 (2013-01-01) while the current OLRC is at PL 119-100 (2026-06-26), a gap of
+~13 years. No novel parsing errors were found. Comment added to #578; stale-data defect class
+already tracked in #578, #583, #564, #485.
+
+
+### 2026.07.30 — 31 U.S.C. § 5311
+
+CWLB returns the pre-2021 single-sentence text for "Declaration of purpose" (`last_modified_date:
+"2001-10-26"`, `is_repealed: false`). The current OLRC text is the five-provision enumerated
+version enacted by the Anti-Money Laundering Act of 2020 (Pub. L. 116–283, div. F, title LXI,
+§6101(a), Jan. 1, 2021, 134 Stat. 4549), which completely repealed and replaced the prior
+single-sentence provision. The extensive notes added by Pub. L. 116–283 (severability,
+interagency coordination, personnel rotation, information-sharing frameworks, innovation
+officer positions, supervisory teams, regulatory reviews) are also absent. All discrepancies
+are attributable to the known stale release point already tracked in #583.
+
+
+### 2026.07.31 — 9 U.S.C. § 10
+
+All fields matched: heading ("Same; vacation; grounds; rehearing"), full body text (subsections
+(a) chapeau + paragraphs (1)–(4), (b), (c)), source credit, enacted date (1947-07-30), and
+last_modified_date (2002-05-07). Derivation note (category: historical) and Amendments note
+(category: editorial) both match the OLRC XML verbatim, including all six amendment paragraphs
+for 2002, 1992, and 1990 changes. In-note cross-references to Pub. L. 107-169, 102-354, and
+101-552 are all present and correct. The `is_positive_law: true` and `group_ancestors` (Chapter 1)
+fields are accurate.
+
+`notes.amendments[*].law` objects for all four citation entries have `date: null`,
+`official_title: null`, `short_title: null`, `stat_volume: null`, `stat_page: null`,
+`stat_reference: null`, and `display_title: null` — only `congress`, `law_number`, and
+`public_law_id` are populated. This is the systemic amendment law metadata null bug already
+tracked in #561 — not re-filed; commented on that issue with this occurrence.
+
+OLRC XML used: release point 119-102 (current as of 2026-07-12), downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/119/102/xml_usc09@119-102.zip`.
+Section was last amended in 2002 so content is identical between 113-21 and 119-102.
+
+
+### 2026.08.02 — 43 U.S.C. § 597a
+
+Simple unamended section (enacted Mar. 14, 1940; never amended). All fields matched: heading,
+full body text (single unnumbered paragraph), source credit, enacted date, no notes, no
+amendments, and group ancestors (Chapter 12 / Subchapter XVII). The apparent text difference
+between CWLB and the OLRC HTML view (spaces before commas in "Provided ," and "title 25 ,")
+is an HTML rendering artifact from OLRC hyperlink markup — the underlying statutory text is
+identical. No new bugs filed.
+
+
 ### 2026.08.03 — 17 U.S.C. § 107 (Fair use)
 
 Statutory text matches OLRC verbatim: all four fair-use factors plus the 1992 unpublished-works
@@ -81,6 +173,20 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.08.04 — 9 U.S.C. § 1
+
+All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
+paragraph defining "maritime transactions" and "commerce" with the seamen/railroad exclusion),
+source credit `(July 30, 1947, ch. 392, 61 Stat. 670.)`, and the Derivation note citing the
+original Act of Feb. 12, 1925, ch. 213, § 1, 43 Stat. 883. `has_amendments: false` and
+`amendments: []` are correct — § 1 has not been amended since its 1947 codification.
+
+The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC prelim page
+(which records that the Ending Forced Arbitration Act enacted chapter 4 and amended §§ 2, 208,
+and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
+systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
+
+
 
 ## Test methodology
 
