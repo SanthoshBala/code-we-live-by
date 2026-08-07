@@ -1025,7 +1025,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
 
         if h1_text:
             # H1 is a bold header (section-level)
-            header_text = h1_text.strip().rstrip(".")
+            header_text = h1_text.strip()
             if header_text:
                 line_number += 1
                 lines.append(
@@ -1043,7 +1043,7 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
 
         elif h2_text:
             # H2 is an italic sub-header
-            header_text = h2_text.strip().rstrip(".")
+            header_text = h2_text.strip()
             if header_text:
                 line_number += 1
                 lines.append(
