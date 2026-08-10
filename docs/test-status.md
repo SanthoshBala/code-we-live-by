@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.10 | 26    | 222     | Qualified tuition and related expenses                                                 | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -186,6 +187,35 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.10 — 26 U.S.C. § 222
+
+OLRC XML used: `xml_usc26@113-21.zip` (release point 113-21, dated 2013-07-29).
+
+All content fields matched the OLRC XML at the 113-21 baseline: heading ("Qualified tuition
+and related expenses"), full statutory text (subsections (a)–(e) covering allowance, dollar
+limitations, no-double-benefit rules, definitions/special rules, and termination), source
+credit, enacted date (`2001-06-07`), and `last_modified_date` (`2013-01-02`, correctly
+reflecting Pub. L. 112–240 enacted January 2, 2013). `is_repealed: false` is correct at this
+release point; the section was later repealed by Pub. L. 116–260 (December 2020), which
+postdates 113-21. All 8 notes are present and match verbatim: Prior Provisions, Amendments
+(6 entries for 2004–2013), Effective Date of 2013/2010/2008/2006/2004 Amendment, and
+Effective Date. Quoted statutory content within notes (the "provided that: …" passages) is
+correctly split into two lines per note.
+
+Two known defects confirmed active on this section:
+
+1. **Issue #659** (citation path truncates, drops title/div): All five amendment source-credit
+   citations include a named division or title before the section number (e.g., "title IV,
+   § 431(a)"; "div. A, title I, § 101(a)"; "title VII, § 724(a)"). In every case `path` is
+   `[{"level": "section", "value": "…"}]`, dropping the title/div prefix. Comment added to #659.
+
+2. **Issue #561** (amendment law metadata null): All six `notes.amendments[*].law` objects
+   have `date`, `official_title`, `short_title`, `stat_volume`, `stat_page`, `stat_reference`,
+   and `display_title` set to `null`; only `congress`, `law_number`, and `public_law_id` are
+   populated. Comment added to #561.
+
+No new defects found.
 
 
 ## Test methodology
