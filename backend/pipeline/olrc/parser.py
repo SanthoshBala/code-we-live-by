@@ -332,6 +332,9 @@ class ParsedSection:
     notes_refs: list[NoteRef] = field(
         default_factory=list
     )  # Hyperlinks in notes sections (Task 1.17b)
+    inline_footnotes: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (marker, text) pairs from <note type="footnote"> elements (Issue #667)
 
     # ParsedLine fields (populated after normalization)
     provisions: list[ParsedLine] = field(default_factory=list)
@@ -948,6 +951,9 @@ class USLMParser:
         # Extract hyperlink refs from notes sections (Task 1.17b)
         notes_refs = self._extract_notes_refs(section_elem)
 
+        # Collect inline footnotes as structured (marker, text) pairs (Issue #667)
+        inline_footnotes = self._collect_inline_footnotes(section_elem)
+
         is_repealed = section_elem.get("status") == "repealed"
 
         return ParsedSection(
@@ -964,6 +970,7 @@ class USLMParser:
             source_credit_refs=source_credit_refs,
             act_refs=act_refs,
             notes_refs=notes_refs,
+            inline_footnotes=inline_footnotes,
         )
 
     def _get_level_type(self, elem: etree._Element) -> str | None:
@@ -1223,6 +1230,50 @@ class USLMParser:
                 if text:
                     footnote_texts.append(text)
         return footnote_texts
+
+    @staticmethod
+    def _collect_inline_footnotes(
+        section_elem: etree._Element,
+    ) -> list[tuple[str, str]]:
+        """Return structured (marker, body_text) pairs from ``<note type="footnote">`` elements.
+
+        OLRC XML embeds editorial footnotes as ``<note type="footnote">`` elements
+        whose text content begins with the marker number (e.g. ``"1 So in
+        original. Probably should be followed by a closing parenthesis."``).
+        This method extracts the marker and annotation body separately so callers
+        can surface them in the notes structure (Issue #667).
+
+        Args:
+            section_elem: The section XML element to search.
+
+        Returns:
+            List of (marker, body_text) tuples, one per footnote note element,
+            in document order.
+        """
+        footnotes: list[tuple[str, str]] = []
+        for note_elem in section_elem.iter():
+            note_tag = (
+                note_elem.tag.split("}")[-1] if "}" in note_elem.tag else note_elem.tag
+            )
+            if note_tag == "note" and note_elem.get("type", "") == "footnote":
+                text = "".join(note_elem.itertext()).strip()
+                if not text:
+                    continue
+                # The note text begins with the marker token followed by a
+                # space then the annotation body (e.g. "1 So in original...").
+                # Use a non-greedy match on the first whitespace-delimited token
+                # so numeric markers ("1"), symbolic markers ("*"), and
+                # multi-character markers ("1a") are all captured correctly.
+                m = re.match(r"^(\S+)\s+", text)
+                if m:
+                    marker = m.group(1)
+                    body = text[m.end() :].strip()
+                else:
+                    # No leading marker token — use sequential numbering.
+                    marker = str(len(footnotes) + 1)
+                    body = text
+                footnotes.append((marker, body))
+        return footnotes
 
     def _extract_section_text(self, section_elem: etree._Element) -> str:
         """Extract the full text content of a section."""
