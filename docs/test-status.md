@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.13 | 13    | 22      | Qualifications of permanent personnel                                                  | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,33 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.13 — 13 U.S.C. § 22
+
+Simple section (last amended Sept. 13, 1960 by Pub. L. 86–769). All fields matched the
+OLRC HTML source: heading ("Qualifications of permanent personnel"), full body text
+("All permanent officers and employees of the Bureau shall be citizens of the United
+States."), source credit `(Aug. 31, 1954, ch. 1158, 68 Stat. 1014; Pub. L. 86–769, § 1,
+Sept. 13, 1960, 74 Stat. 911.)`, enacted date (1954-08-31), and last_modified_date
+(1960-09-13). All three notes are present and correct:
+- **Historical and Revision Notes** (category: historical) — 14 lines, matching OLRC verbatim
+  including the unskilled laborers exception note and the Veterans' Preference Act note.
+- **Amendments** (category: editorial) — 1960 Pub. L. 86–769 entry correct.
+- **Program for Employment of Spanish-Origin Personnel in Bureau; Report to Congress**
+  (category: statutory) — Pub. L. 94–311, § 6 note correct.
+
+In-note cross-references match OLRC exactly, including three separate hyperlinks to
+13 U.S.C. § 5 within the historical note (corresponding to three distinct textual references).
+
+`notes.amendments[0].law` has `date: null`, `official_title: null`, `short_title: null`,
+`stat_volume: null`, `stat_page: null`, `stat_reference: null` — only `congress: 86`,
+`law_number: 769`, and `public_law_id: "PL 86-769"` are populated. This is the systemic
+amendment law metadata null bug already tracked in #561 — not re-filed; comment added to
+that issue with this occurrence.
+
+Since § 22 was last amended in 1960, data staleness (known issues #485, #564, #578, #583)
+does not affect content accuracy for this section. OLRC release point checked: 113-21
+(2013-01-01, the only ingested revision).
 
 
 ## Test methodology
