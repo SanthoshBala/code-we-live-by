@@ -2488,51 +2488,37 @@ def _normalize_subsection_recursive(
         # If there's no content, children go at base + 1 (directly under header)
         child_indent = base_indent + 2 if subsection.content else base_indent + 1
     else:
-        # No heading - marker and content on one line.
-        # Split multi-sentence content so each sentence gets its own line.
-        # The first sentence stays with the marker; subsequent sentences
-        # appear indented one level deeper, flush with the text (not the marker).
+        # No heading - marker and all content on one line.
+        # A single <content> XML element is one indivisible provision regardless
+        # of how many sentences it contains.  Splitting at sentence boundaries
+        # creates phantom sub-provisions at a deeper indent level, making them
+        # appear as structural children of the marker when they are simply
+        # continuation sentences of the same paragraph (Issue #672).
         if subsection.content:
-            sentences = _split_into_sentences(subsection.content)
-            real_sentences = [
-                (text.strip(), s, e)
-                for text, s, e in sentences
-                if text.strip() and text != PARAGRAPH_BREAK_MARKER
-            ]
+            # Collapse internal whitespace (newlines, multiple spaces) into a
+            # single space so the provision renders on one line.
+            normalized_content = re.sub(r"\s+", " ", subsection.content).strip()
+            content = (
+                f"{subsection.marker} {normalized_content}"
+                if subsection.marker
+                else normalized_content
+            )
+            marker = subsection.marker if subsection.marker else None
 
-            for i, (sentence_text, _s_start, _s_end) in enumerate(real_sentences):
-                if i == 0:
-                    content = (
-                        f"{subsection.marker} {sentence_text}"
-                        if subsection.marker
-                        else sentence_text
-                    )
-                    marker = subsection.marker if subsection.marker else None
-                    line_indent = base_indent
-                else:
-                    content = sentence_text
-                    marker = None
-                    # Indent one level deeper so continuation lines align with
-                    # the text portion of the first line, not the marker.
-                    # Only applies when there is a marker; without one, all
-                    # sentences are flush at base_indent (e.g. 17 U.S.C. § 107
-                    # chapeau where both sentences are section-level text).
-                    line_indent = base_indent + 1 if subsection.marker else base_indent
-
-                line_counter[0] += 1
-                start_pos = char_pos[0]
-                char_pos[0] += len(content) + 1
-                lines.append(
-                    ParsedLine(
-                        line_number=line_counter[0],
-                        content=content,
-                        indent_level=line_indent,
-                        marker=marker,
-                        is_header=False,
-                        start_char=start_pos,
-                        end_char=char_pos[0],
-                    )
+            line_counter[0] += 1
+            start_pos = char_pos[0]
+            char_pos[0] += len(content) + 1
+            lines.append(
+                ParsedLine(
+                    line_number=line_counter[0],
+                    content=content,
+                    indent_level=base_indent,
+                    marker=marker,
+                    is_header=False,
+                    start_char=start_pos,
+                    end_char=char_pos[0],
                 )
+            )
         elif subsection.marker:
             # Just a marker with no content (rare but possible)
             line_counter[0] += 1

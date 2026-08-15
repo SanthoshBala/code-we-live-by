@@ -5161,16 +5161,25 @@ class TestAmendmentEmDashSpaceFix:
 
 
 class TestMultiSentenceSplitting:
-    """Tests for splitting multi-sentence paragraphs onto separate provision lines.
+    """Tests for multi-sentence paragraph handling.
 
-    Covers both the XML-based path (normalize_parsed_section) and the
-    fallback heuristic path (normalize_section).
+    The XML-based path (normalize_parsed_section) treats a single <content>
+    element as one indivisible provision and never splits it at sentence
+    boundaries (Issue #672 fix).
+
+    The fallback heuristic path (normalize_section) still splits multi-sentence
+    list items because it has no structural XML information to rely on.
     """
 
     # -- XML-based path (normalize_parsed_section) --
 
     def test_xml_heading_multi_sentence_content(self) -> None:
-        """Multi-sentence content under a heading produces one line per sentence."""
+        """Multi-sentence content under a heading produces one line per sentence.
+
+        The WITH-HEADING code path still splits at sentence boundaries because
+        each sentence appears as a separate indented content line beneath the
+        header.  Only the NO-HEADING path changed in Issue #672.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5210,7 +5219,13 @@ class TestMultiSentenceSplitting:
         assert result.provisions[2].indent_level == 1
 
     def test_xml_no_heading_multi_sentence_content(self) -> None:
-        """Multi-sentence content without a heading splits after the marker."""
+        """Multi-sentence content without a heading produces exactly one provision.
+
+        Fix for Issue #672: the old code split at sentence boundaries and bumped
+        continuation sentences to indent_level+1, creating phantom sub-provisions.
+        The entire <content> element must now be emitted as a single provision at
+        the marker's indent level.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5233,17 +5248,12 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        # 2 lines: marker + first sentence, then second sentence
-        assert result.provision_count == 2
-        assert result.provisions[0].content == ("(a) First sentence of provision.")
+        # One provision containing both sentences
+        assert result.provision_count == 1
+        assert "First sentence of provision." in result.provisions[0].content
+        assert "Second sentence continues here." in result.provisions[0].content
         assert result.provisions[0].marker == "(a)"
-        assert result.provisions[1].content == "Second sentence continues here."
-        assert result.provisions[1].marker is None
-        # Continuation line is indented one level deeper, flush with the text
-        # portion of line 0 (not the marker). Fixes: github.com/SanthoshBala/code-we-live-by/issues/122
-        assert (
-            result.provisions[1].indent_level == result.provisions[0].indent_level + 1
-        )
+        assert result.provisions[0].indent_level == 0
 
     def test_xml_single_sentence_unchanged(self) -> None:
         """Single-sentence content still produces exactly one line."""
@@ -5271,7 +5281,12 @@ class TestMultiSentenceSplitting:
         assert result.provisions[0].content == "(a) Only one sentence here."
 
     def test_xml_abbreviations_not_split(self) -> None:
-        """Legal abbreviations like U.S.C. are not treated as sentence boundaries."""
+        """The XML path never splits content; abbreviations are a non-issue here.
+
+        With the Issue #672 fix the entire <content> element is always a single
+        provision, so U.S.C., et seq., and similar abbreviations cannot cause
+        spurious splits regardless of the sentence-boundary detector's outcome.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5295,13 +5310,12 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        # "U.S.C." should NOT be a sentence boundary, so the first two
-        # sentences merge.  Only the period after "broadly." triggers a real
-        # split, producing 2 lines total (not 3).
-        assert result.provision_count == 2
+        # All three sentence-fragments in one provision — no splitting at all
+        assert result.provision_count == 1
         first = result.provisions[0].content
         assert "U.S.C." in first
         assert "applies broadly." in first
+        assert "Additional provisions may apply." in first
 
     def test_xml_pub_l_abbreviation_not_split(self) -> None:
         """Pub. L. abbreviation does not cause a false sentence split."""
@@ -5332,7 +5346,12 @@ class TestMultiSentenceSplitting:
         assert "Pub. L. 116–136" in result.provisions[0].content
 
     def test_xml_three_sentences(self) -> None:
-        """Three sentences in one paragraph produce three lines."""
+        """Three sentences from one <content> element produce exactly one provision.
+
+        Fix for Issue #672: previously produced three lines (marker line + two
+        phantom sub-provisions at indent+1).  Now produces one provision at the
+        marker's base indent with all sentence text joined.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5357,13 +5376,13 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        assert result.provision_count == 3
-        assert result.provisions[0].content.startswith("(c) The Secretary")
-        assert result.provisions[0].marker == "(c)"
-        assert result.provisions[1].content.startswith("Such regulations")
-        assert result.provisions[1].marker is None
-        assert result.provisions[2].content.startswith("Nothing in this paragraph")
-        assert result.provisions[2].marker is None
+        assert result.provision_count == 1
+        prov = result.provisions[0]
+        assert prov.content.startswith("(c) The Secretary")
+        assert prov.marker == "(c)"
+        assert "Such regulations shall take effect" in prov.content
+        assert "Nothing in this paragraph" in prov.content
+        assert prov.indent_level == 0
 
     def test_xml_chapeau_not_split_on_colon(self) -> None:
         """Chapeau text ending with a colon stays on one line."""
@@ -5441,7 +5460,12 @@ class TestMultiSentenceSplitting:
         assert "Pub. L. 116–136" in result.provisions[0].content
 
     def test_xml_et_seq_abbreviation_not_split(self) -> None:
-        """'et seq.' abbreviation does not trigger a false split."""
+        """'et seq.' content element produces exactly one provision.
+
+        With the Issue #672 fix the XML path never splits content, so et seq.
+        abbreviation handling is irrelevant here.  Both sentences stay in one
+        provision.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5465,19 +5489,18 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        # "et seq." ends with a period but should not trigger a split
-        # because "seq." is in LEGAL_ABBREVIATIONS (via "et." check)
-        # The "Additional" starts a new sentence after "seq. "
-        # This should produce 2 lines
-        assert result.provision_count == 2
+        assert result.provision_count == 1
         assert "et seq." in result.provisions[0].content
+        assert "Additional requirements apply." in result.provisions[0].content
 
     def test_xml_no_heading_continuation_indent_2usc31_2(self) -> None:
-        """Continuation lines of a no-heading provision are indented one level
-        deeper than the marker line (flush with the text portion).
+        """Multi-sentence <content> for 2 U.S.C. § 31-2 produces one provision.
 
-        Regression test for 2 U.S.C. § 31-2 L18-19 being flush with the marker
-        instead of the text. See: github.com/SanthoshBala/code-we-live-by/issues/122
+        Historical context: Issue #122 found that continuation sentences were
+        rendered flush with the marker rather than flush with the text.  That
+        visual defect is now moot because Issue #672 removes sentence splitting
+        in the no-heading XML path entirely: all sentences stay in one provision
+        at the marker's base indent level.
         """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
@@ -5504,13 +5527,14 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        assert result.provision_count == 3
-        # First line: marker + first sentence at base indent
-        assert result.provisions[0].marker == "(a)"
-        marker_indent = result.provisions[0].indent_level
-        # Continuation lines (L18-19 equivalent) must be one level deeper
-        assert result.provisions[1].indent_level == marker_indent + 1
-        assert result.provisions[2].indent_level == marker_indent + 1
+        # All three sentences collapsed into one provision — no phantom sub-lines
+        assert result.provision_count == 1
+        prov = result.provisions[0]
+        assert prov.marker == "(a)"
+        assert "lump-sum payment." in prov.content
+        assert "Such payment shall be in lieu" in prov.content
+        assert "The amount shall be determined" in prov.content
+        assert prov.indent_level == 0
 
 
 class TestNoteRefsToSchemas:
@@ -6402,3 +6426,182 @@ class TestNoteParAbbrevContinuations:
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
         )
+
+
+class TestMultiSentenceContentElement:
+    """Regression tests for Issue #672: multi-sentence <content> elements were
+    being split into separate provisions with continuation sentences bumped to a
+    deeper indent level, making them appear as structural sub-provisions.
+
+    The root cause was sentence-boundary splitting in _normalize_subsection_recursive
+    for the 'no heading' code path.  A single <content> XML element must produce
+    exactly ONE provision at base_indent regardless of sentence count.
+    """
+
+    def test_multi_sentence_content_is_single_provision(self) -> None:
+        """Three sentences from one <content> element must produce one provision.
+
+        Regression test for Issue #672: 14 U.S.C. § 670 paragraph (b)(3) has a
+        single <content> element with three sentences.  Before the fix the API
+        returned three provisions — the first at indent_level=1 and the other two
+        at indent_level=2 — creating phantom structural depth.
+
+        After the fix exactly one provision is produced at the correct indent.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        # Mirrors the (b)(3) paragraph from 14 U.S.C. § 670 that triggered #672.
+        multi_sentence_content = (
+            "A multiyear contract authorized under subsection (a) of this section "
+            "shall contain cancellation and termination provisions consistent with "
+            "section 2306b of title 10 and may include consideration of both "
+            "recurring and nonrecurring costs. "
+            "The contract may provide for a cancellation payment to be made. "
+            "Amounts that were originally obligated for the cost of the contract "
+            "may be used for cancellation or termination costs."
+        )
+
+        section = ParsedSection(
+            section_number="670",
+            heading="Multiyear procurement authority for Coast Guard vessels and aircraft",
+            full_citation="14 U.S.C. § 670",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(b)",
+                    heading=None,
+                    content="A contract entered into under this section—",
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(1)",
+                            heading=None,
+                            content="shall be for a period not to exceed five years;",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(2)",
+                            heading=None,
+                            content="shall require the obligation of funds annually;",
+                            level="paragraph",
+                        ),
+                        ParsedSubsection(
+                            marker="(3)",
+                            heading=None,
+                            content=multi_sentence_content,
+                            level="paragraph",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Find the (3) provision(s)
+        para3_provisions = [p for p in result.provisions if "(3)" in p.content]
+        assert len(para3_provisions) == 1, (
+            f"Expected exactly 1 provision for (3), got {len(para3_provisions)}: "
+            f"{[p.content for p in para3_provisions]}"
+        )
+
+        para3 = para3_provisions[0]
+
+        # The provision must carry the marker
+        assert para3.marker == "(3)"
+
+        # All three sentences must be present in the one provision
+        assert "cancellation and termination provisions" in para3.content
+        assert "The contract may provide for a cancellation payment" in para3.content
+        assert "Amounts that were originally obligated" in para3.content
+
+        # The provision must be at the same indent level as its siblings (not deeper)
+        para1 = next(p for p in result.provisions if "(1)" in p.content)
+        assert para3.indent_level == para1.indent_level, (
+            f"(3) at indent {para3.indent_level} but (1) at indent {para1.indent_level}; "
+            "continuation sentences must not bump the indent level"
+        )
+
+        # No orphan provisions between (3) and the end that have no marker and
+        # contain text from the (3) content block
+        orphan_provisions = [
+            p
+            for p in result.provisions
+            if p.marker is None
+            and (
+                "The contract may provide" in p.content
+                or "Amounts that were originally" in p.content
+            )
+        ]
+        assert len(orphan_provisions) == 0, (
+            f"Found orphaned continuation sentences as separate provisions: "
+            f"{[p.content for p in orphan_provisions]}"
+        )
+
+    def test_single_sentence_content_unchanged(self) -> None:
+        """Single-sentence <content> elements are unaffected by the fix."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="670",
+            heading="Test",
+            full_citation="14 U.S.C. § 670",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="This is the only sentence.",
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.provision_count == 1
+        assert result.provisions[0].content == "(a) This is the only sentence."
+        assert result.provisions[0].indent_level == 0
+        assert result.provisions[0].marker == "(a)"
+
+    def test_multi_sentence_no_marker_stays_at_base_indent(self) -> None:
+        """Multi-sentence content with no marker stays at base_indent (not bumped).
+
+        Regression guard for the no-marker variant of Issue #672: even before the
+        fix, sentences without a marker were kept at base_indent, but the fix must
+        not regress that behaviour and must now also join them into one provision.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="101",
+            heading="Test",
+            full_citation="1 U.S.C. § 101",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="",
+                    heading=None,
+                    content=(
+                        "First sentence of the chapeau. "
+                        "Second sentence continues the same thought."
+                    ),
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # Both sentences are joined into one provision at indent 0
+        non_header = [p for p in result.provisions if not p.is_header]
+        assert len(non_header) == 1, (
+            f"Expected 1 chapeau provision, got {len(non_header)}: "
+            f"{[p.content for p in non_header]}"
+        )
+        assert non_header[0].indent_level == 0
+        assert "First sentence" in non_header[0].content
+        assert "Second sentence" in non_header[0].content
