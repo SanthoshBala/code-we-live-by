@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.16 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues apply — see notes; #652 fix verified) |
 
 ## Notes
 
@@ -173,6 +174,22 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.08.16 — 17 U.S.C. § 107 (Fair use, repeat)
+
+Section 17/107 was also tested on 2026.08.03. Today's re-test confirms:
+
+- **Statutory text**: matches OLRC verbatim (all four fair-use factors + 1992 unpublished-works sentence).
+- **Source credit**: matches exactly (PL 94-553, PL 101-650, PL 102-492).
+- **All notes present**: H.Rpt. 94-1476 historical note, classroom copying agreement headings and sub-sections, books/periodicals guidelines, music education guidelines, Amendments, and Effective Date of 1990 Amendment — all present with correct content.
+- **Effective Date note category**: now correctly `"editorial"` ✅ — confirming that Issue #652 fix (PR #653, merged 2026-08-05) is working in production.
+
+Known systemic issues still active:
+- **Issue #561**: `notes.amendments[*].law` objects still have `date`, `official_title`, `short_title`, `stat_volume`, `stat_page`, and `stat_reference` all `null` for both PL 102-492 and PL 101-650.
+- **Issues #485/#564/#578/#583**: CWLB data at release point 113-21 (2013-01-01); § 107 has not been amended since 1992 so content is identical to current OLRC prelim.
+
+No new defects found.
+
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
