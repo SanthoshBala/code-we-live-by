@@ -6174,6 +6174,74 @@ class TestAmendmentMidSentencePubLFix:
         fifth_1976 = [a for a in amendments if a.year == 1976][4]
         assert "Subsecs. (d) to (g)." in fifth_1976.description
 
+    def test_year_in_mid_description_not_treated_as_year_group(self) -> None:
+        """Year number inside description text must not trigger a false year-group split.
+
+        Regression test for issue #675: 13 USC §9 amendment notes contain
+        a phrase like "Appropriations Act, 1998-" where "1998-" is part of
+        an act name mid-sentence.  The old _YEAR_PATTERN matched
+        "1998-" (plain hyphen) inside the description and split the year block
+        there, causing:
+          - PL 105-119 description truncated before "1998-"
+          - PL 105-113 assigned year=1998 (wrong) instead of year=1997
+
+        The fix restricts _YEAR_PATTERN to only em-dash (—) and en-dash (–),
+        not plain hyphen (-).  Year-group headers from USLM XML always use
+        typographic dashes; a plain hyphen after a year number in an act name
+        is never a year-group delimiter.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1997—Subsec. (a). Pub. L. 105–119 directed substitution, "
+            "in introductory provisions, of “of this title or section 210 of "
+            "the Departments of Commerce, Justice, and State, the Judiciary, and "
+            "Related Agencies Appropriations Act, 1998-” for “of this "
+            "title-”, executed.\n\n"
+            "Pub. L. 105–113 inserted “or section 2(f) of the Census of "
+            "Agriculture Act of 1997” after “chapter 10 of this title”."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2, (
+            f"Expected 2 amendments but got {len(amendments)}: "
+            + str([(a.year, a.law.congress, a.law.law_number) for a in amendments])
+        )
+
+        # Both amendments must be attributed to year 1997
+        assert all(a.year == 1997 for a in amendments), (
+            "Expected both amendments to have year=1997, got: "
+            + str([(a.year, a.law.congress, a.law.law_number) for a in amendments])
+        )
+
+        pl_105_119 = next(
+            (
+                a
+                for a in amendments
+                if a.law.congress == 105 and a.law.law_number == 119
+            ),
+            None,
+        )
+        assert pl_105_119 is not None, "PL 105-119 not found in parsed amendments"
+        # Description must NOT be truncated before "1998-"
+        assert "1998-" in pl_105_119.description, (
+            f"PL 105-119 description was truncated before '1998-': "
+            f"{pl_105_119.description!r}"
+        )
+
+        pl_105_113 = next(
+            (
+                a
+                for a in amendments
+                if a.law.congress == 105 and a.law.law_number == 113
+            ),
+            None,
+        )
+        assert pl_105_113 is not None, "PL 105-113 not found in parsed amendments"
+        assert pl_105_113.year == 1997, (
+            f"PL 105-113 must have year=1997, got year={pl_105_113.year}"
+        )
+
 
 class TestReferencesInTextAbbreviationPeriods:
     """Regression tests for issue #551: 17 U.S.C. § 1201 note paragraphs split at 'subsecs.' period.
