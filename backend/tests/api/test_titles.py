@@ -102,6 +102,17 @@ def test_get_title_structure_success(mock_get: AsyncMock, client: TestClient) ->
                         heading="Preliminary provisions",
                         sort_order=0,
                     ),
+                    # Pre-1957 chapter-style amendment (issue #679): the
+                    # amending act has no PL number, so `last_amendment_law`
+                    # must fall back to a Statutes-at-Large citation instead
+                    # of returning null.
+                    SectionSummarySchema(
+                        section_number="102",
+                        heading="Historic provisions",
+                        sort_order=1,
+                        last_amendment_year=1951,
+                        last_amendment_law="Act Oct. 31, 1951, ch. 655, 65 Stat. 715",
+                    ),
                 ],
             ),
         ],
@@ -119,7 +130,7 @@ def test_get_title_structure_success(mock_get: AsyncMock, client: TestClient) ->
     assert chapter["group_type"] == "chapter"
     assert chapter["number"] == "1"
     assert len(chapter["children"]) == 1
-    assert len(chapter["sections"]) == 1
+    assert len(chapter["sections"]) == 2
 
     subchapter = chapter["children"][0]
     assert subchapter["group_type"] == "subchapter"
@@ -135,6 +146,14 @@ def test_get_title_structure_success(mock_get: AsyncMock, client: TestClient) ->
     assert chapter["sections"][0]["section_number"] == "100"
     assert chapter["sections"][0]["last_amendment_year"] is None
     assert chapter["sections"][0]["last_amendment_law"] is None
+
+    # Pre-1957 amendment carries a Statutes-at-Large citation (issue #679)
+    assert chapter["sections"][1]["section_number"] == "102"
+    assert chapter["sections"][1]["last_amendment_year"] == 1951
+    assert (
+        chapter["sections"][1]["last_amendment_law"]
+        == "Act Oct. 31, 1951, ch. 655, 65 Stat. 715"
+    )
 
 
 @patch("app.api.v1.titles.get_title_structure", new_callable=AsyncMock)

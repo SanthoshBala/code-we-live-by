@@ -5,6 +5,7 @@ revision parameter for time-travel queries. Group hierarchy comes from
 SectionGroup (populated by both ingestion and bootstrap).
 """
 
+import re
 import uuid
 from typing import Any
 
@@ -28,6 +29,56 @@ from app.schemas.us_code import (
 )
 from pipeline.olrc.snapshot_service import SectionState, SnapshotService
 
+# Chapter-style ("Act <date>, ch. <n>, <vol> Stat. <p>") citations used by
+# pre-Public-Law-numbering amendments (i.e., statutes enacted before the PL
+# numbering system began with the 84th Congress in 1957).  These citations
+# never yield a "PL X-Y" identifier, so _extract_last_amendment falls back to
+# rebuilding a normalized citation from the amendment's description text.
+_PRE_PL_ACT_DATE_PATTERN = re.compile(r"Act\s+\S+\.?\s+\d{1,2},?\s+\d{4}")
+_PRE_PL_CHAPTER_PATTERN = re.compile(r"^ch\.\s*\d+[A-Za-z]?$", re.IGNORECASE)
+_PRE_PL_STAT_PATTERN = re.compile(r"^\d+[A-Za-z]?\s+Stat\.\s*\d+$")
+_PRE_PL_SECTION_PATTERN = re.compile(r"^§+\s*\S+")
+
+
+def _pre_pl_act_citation(description: str) -> str | None:
+    """Build a Statutes-at-Large-style citation from a pre-1957 amendment.
+
+    Extracts the leading "Act <date>" from ``description`` and, when present,
+    appends the chapter ("ch. NNN") and Statutes-at-Large reference
+    ("NN Stat. NN") fragments.  Section-number fragments ("§ NN") are skipped
+    because they identify a location inside the amending act rather than the
+    act itself.  Returns ``None`` when no Act date is found.
+
+    Examples:
+        "Act Oct. 31, 1951, ch. 655, § 14, 65 Stat. 715, substituted …"
+            -> "Act Oct. 31, 1951, ch. 655, 65 Stat. 715"
+        "Act Sept. 3, 1954, brought section into conformity …"
+            -> "Act Sept. 3, 1954"
+    """
+    if not description:
+        return None
+    date_match = _PRE_PL_ACT_DATE_PATTERN.search(description)
+    if not date_match:
+        return None
+    parts = [date_match.group(0)]
+    remainder = description[date_match.end() :]
+    for frag_match in re.finditer(r",\s*([^,]*)", remainder):
+        fragment = frag_match.group(1).strip().rstrip(".")
+        if not fragment:
+            continue
+        if _PRE_PL_CHAPTER_PATTERN.match(fragment) or _PRE_PL_STAT_PATTERN.match(
+            fragment
+        ):
+            parts.append(fragment)
+        elif _PRE_PL_SECTION_PATTERN.match(fragment):
+            # Section-number-inside-act reference (e.g. "§ 14"); keep scanning
+            # for a possible following Stat. reference but omit from citation.
+            continue
+        else:
+            # Narrative text ("substituted …", "brought …") — citation ends.
+            break
+    return ", ".join(parts)
+
 
 def _extract_last_amendment(
     notes: dict[str, Any] | None,
@@ -35,7 +86,13 @@ def _extract_last_amendment(
     """Extract the most recent amendment year and law from normalized_notes.
 
     The amendments list is stored newest-first per the parser convention.
-    Returns (year, "PL {congress}-{law_number}") or (None, None).
+    Returns (year, law_citation) or (None, None).
+
+    ``law_citation`` is ``"PL {congress}-{law_number}"`` for modern
+    (post-1957) amendments and a Statutes-at-Large-style citation
+    (e.g. ``"Act Oct. 31, 1951, ch. 655, 65 Stat. 715"``) for pre-1957 Acts
+    that lack a Public Law number.  Falls back to ``None`` only when neither
+    a PL identifier nor a parseable Act citation can be recovered.
     """
     if not notes:
         return None, None
@@ -49,7 +106,9 @@ def _extract_last_amendment(
     law_number = law.get("law_number")
     if congress is not None and law_number is not None:
         return year, f"PL {congress}-{law_number}"
-    return year, None
+    # Pre-1957 chapter-style amendment: reconstruct a citation from the
+    # amendment description text since no PL identifier exists.
+    return year, _pre_pl_act_citation(latest.get("description") or "")
 
 
 def _extract_note_categories(notes: dict[str, Any] | None) -> list[str]:
