@@ -7,7 +7,8 @@ Each row represents one tested section. "Clean" means no discrepancies were foun
 CWLB and the OLRC XML at the stated release point.
 
 | Date       | Title | Section | Heading                                                                                | Release Point | Status |
-|------------|-------|---------|----------------------------------------------------------------------------------------|---------------|--------|
+|------------|-------|---------|----------------------------------------------------------------------------------------|---------------|
+--------|
 | 2026.05.20 | 21    | 692     | Inspection extended to reindeer                                                        | 113-21        | ✅ Clean |
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership                                          | 113-21        | ✅ Clean |
 | 2026.05.28 | 29    | 567     | Labor-management dispute settlement expenses                                          | 113-21        | ✅ Clean |
@@ -31,6 +32,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.22 | 40    | 8502    | National Capital Service Director                                                      | 113-21        | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +188,36 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.22 — 40 U.S.C. § 8502
+
+Compared CWLB against OLRC HTML view (current prelim, August 21, 2026). Section was last
+amended by Pub. L. 109–284 (Sept. 27, 2006), well within the 113-21 release point, so text
+should be identical across both the ingested and current OLRC versions.
+
+All fields matched:
+- **Heading**: "National Capital Service Director" ✓
+- **Main text**: All three subsections — (a) Establishment and Compensation, (b) Personnel,
+  (c)(1) President and (c)(2) Director — match the OLRC verbatim, including the cross-references
+  to sections 8501(a), 5101, 5102, 6101, and the citation to "section 11 of the Act of August
+  4, 1950 (2 U.S.C. 167j)".
+- **Source credit**: `(Pub. L. 107–217, Aug. 21, 2002, 116 Stat. 1215; Pub. L. 109–284,
+  § 6(25), (26), Sept. 27, 2006, 120 Stat. 1213.)` ✓
+- **Enacted date**: `2002-08-21` ✓
+- **`last_modified_date`**: `2006-09-27` ✓ (matches PL 109-284 enactment date — no
+  Jan-1-placeholder bug here)
+- **Citations**: 2 citations (PL 107-217 enactment, PL 109-284 amendment) with correct
+  relationship types and statute references ✓
+- **Amendments**: 2 entries for 2006, both correctly attributed to PL 109-284 with accurate
+  descriptions (§6(25) substituted "5315" for "5314" in subsec. (a); §6(26) inserted
+  "of this title" after "sections 5101 and 5102" in subsec. (c)(2)) ✓
+- **Historical and Revision Notes**: Full table content present and matching (source citations
+  back to Pub. L. 93–198, § 739(b),(c), Dec. 24, 1973; explanatory text for subsections
+  (a), (b), and (c)) ✓
+- **`is_positive_law`**: `true` ✓
+- **`is_repealed`**: `false` ✓
+
+No new bugs filed.
 
 
 ## Test methodology
