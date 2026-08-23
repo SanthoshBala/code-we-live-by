@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.23 | 1     | 112b    | United States international agreements; transmission to Congress                       | 113-21        | ✅ Clean (known issues apply — see notes) |
 
 ## Notes
 
@@ -186,6 +187,38 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.23 — 1 U.S.C. § 112b
+
+Compared CWLB against the OLRC 2012 Main Ed. (1/15/2013), which corresponds to release point
+113-21. Section heading, full statutory text (subsections (a)–(f)), source credit, enacted date
+(1972-08-22), and `last_modified_date` (2004-12-17) all match the OLRC XML exactly.
+
+All five notes are present and accurate:
+- **Amendments** (editorial): all 8 amendment paragraphs for 2004, 1994, 1978, and 1977
+  match verbatim.
+- **Change of Name** (editorial): Committee on International Relations → Committee on Foreign
+  Affairs (House Resolution No. 6, 110th Congress, Jan. 5, 2007) — matches.
+- **Short Title** (statutory): "This section is popularly known as the Case-Zablocki Act." —
+  matches.
+- **Termination of Reporting Requirements** (statutory): termination effective May 15, 2000,
+  cross-referencing section 3003 of Pub. L. 104–66 — matches.
+- **Enforcement** (statutory): Pub. L. 100–204, § 139, as amended by Pub. L. 108–458, § 7121(e),
+  full quoted text of subsections (a)–(b) — matches.
+
+Two known defects confirmed active on this section (not re-filed):
+
+1. **Citation path drops title hierarchy** (#659): The citation for Pub. L. 108–458 has
+   `path_display: "§7121(b)–(d)"` but the OLRC source credit reads `title VII, § 7121(b)–(d)`.
+   "title VII" is not captured. This is the systemic defect already tracked in #659.
+
+2. **Amendment law metadata null** (#561): All `notes.amendments[*].law` objects have `date`,
+   `official_title`, `short_title`, `stat_volume`, `stat_page`, and `stat_reference` as `null`
+   for all five citation entries (PL 92-403, PL 95-45, PL 95-426, PL 103-437, PL 108-458).
+   Only `congress`, `law_number`, and `public_law_id` are populated. This is the systemic
+   defect already tracked in #561.
+
+No new defects found. No new issues filed.
 
 
 ## Test methodology
