@@ -22,14 +22,29 @@ from app.schemas.us_code import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_stat_citation_parts(citation: str | None) -> tuple[str | None, int | None]:
+    """Extract stat_volume and stat_page from a 'N Stat. M' citation string."""
+    import re
+
+    if not citation or not isinstance(citation, str):
+        return None, None
+    m = re.match(r"^(\w+)\s+Stat\.\s+(\d+)", citation)
+    if m:
+        return m.group(1), int(m.group(2))
+    return None, None
+
+
 def _law_to_schema(law: PublicLaw) -> PublicLawSchema:
     """Convert a PublicLaw ORM model to a PublicLawSchema."""
+    stat_volume, stat_page = _parse_stat_citation_parts(law.statutes_at_large_citation)
     return PublicLawSchema(
         congress=law.congress,
         law_number=int(law.law_number),
         date=law.enacted_date.isoformat() if law.enacted_date else None,
         official_title=law.official_title,
         short_title=law.short_title,
+        stat_volume=stat_volume,
+        stat_page=stat_page,
     )
 
 

@@ -13,6 +13,7 @@ def _make_law(
     law_number: str = "97",
     enacted_date: date | None = None,
     short_title: str | None = "Tax Cuts and Jobs Act",
+    statutes_at_large_citation: str | None = None,
 ) -> MagicMock:
     """Create a minimal mock PublicLaw."""
     law = MagicMock()
@@ -21,6 +22,7 @@ def _make_law(
     law.enacted_date = enacted_date or date(2017, 12, 22)
     law.official_title = None
     law.short_title = short_title
+    law.statutes_at_large_citation = statutes_at_large_citation
     return law
 
 
@@ -128,3 +130,38 @@ class TestNotesUpdater:
         schema = SectionNotesSchema.model_validate(updated_dict)
         assert len(schema.short_titles) == 1
         assert schema.short_titles[0].title == "Tax Reform Act of 1986"
+
+    def test_amendment_law_stores_stat_volume_and_page(self) -> None:
+        """Amendment law schema includes stat_volume and stat_page when available (issue #561).
+
+        Notes updated via notes_updater must store stat fields so that the
+        amendments[].law object is not missing metadata that citations[].law has.
+        """
+        law = _make_law(statutes_at_large_citation="131 Stat. 2054")
+        updated_dict, _ = update_notes_for_applied_law(
+            existing_notes=None,
+            raw_notes=None,
+            law=law,
+            change_type=ChangeType.MODIFY,
+            description="amended subsection (a).",
+        )
+        schema = SectionNotesSchema.model_validate(updated_dict)
+        assert len(schema.amendments) == 1
+        assert schema.amendments[0].law is not None
+        assert schema.amendments[0].law.stat_volume == "131"
+        assert schema.amendments[0].law.stat_page == 2054
+
+    def test_amendment_law_stat_none_when_no_citation(self) -> None:
+        """Amendment law schema has null stat fields when statutes_at_large_citation is absent."""
+        law = _make_law(statutes_at_large_citation=None)
+        updated_dict, _ = update_notes_for_applied_law(
+            existing_notes=None,
+            raw_notes=None,
+            law=law,
+            change_type=ChangeType.MODIFY,
+            description="amended subsection (b).",
+        )
+        schema = SectionNotesSchema.model_validate(updated_dict)
+        assert schema.amendments[0].law is not None
+        assert schema.amendments[0].law.stat_volume is None
+        assert schema.amendments[0].law.stat_page is None
