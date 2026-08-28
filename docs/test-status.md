@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.28 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ⚠️ Known issues confirmed (retest — see notes) |
 
 ## Notes
 
@@ -173,6 +174,31 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.08.28 — 17 U.S.C. § 107 (Fair use, retest)
+
+Random selection landed on the same section as 2026.08.03. All checks repeated against OLRC
+prelim and release point 113-21 (2013-01-01).
+
+Statutory text matches OLRC verbatim: all four fair-use factors plus the 1992 unpublished-works
+clause. Source credit, enacted date (1976-10-19), and `last_modified_date` (1992-10-24) are
+all correct. The seven note items (H.Rpt. 94-1476, Classroom Copying Agreement, two guideline
+sub-sections, music guidelines, Amendments, and Effective Date of 1990 Amendment) are all
+present with expected content.
+
+Three known defects confirmed still active, all previously tracked:
+
+- **Issue #689**: Sub-headings nested inside the Historical and Revision Notes section
+  (Agreement on Guidelines, "with respect to books and periodicals", "guidelines" ×2)
+  are returned with `category: "statutory"` instead of `"historical"`.
+- **Issue #686**: "Effective Date of 1990 Amendment" note returned with `category: "editorial"`
+  instead of `"statutory"`.
+- **Issue #561**: `notes.amendments[*].law` objects have `date`, `stat_volume`, `stat_page`,
+  and `stat_reference` all `null` for both PL 102-492 and PL 101-650; these values are
+  present in the section's `source_credit` string but not parsed into the structured field.
+
+No new defects found. No new issues filed.
+
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
