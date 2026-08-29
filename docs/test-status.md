@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.29 | 27    | 122     | Shipments into States for possession or sale in violation of State law                 | 113-21        | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +187,29 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+
+### 2026.08.29 — 27 U.S.C. § 122
+
+Tested against OLRC XML at release point 113-21 (`xml_usc27@113-21.zip`). Title 27 (Intoxicating
+Liquors) was selected at random from the 49 ingested titles; § 122 was selected at random from the
+six non-repealed, non-omitted sections in the title.
+
+All fields matched: heading ("Shipments into States for possession or sale in violation of State
+law"), full statutory text (single paragraph, 972 chars), source credit `(Aug. 27, 1935, ch. 740,
+§ 202(b), 49 Stat. 877.)`, `enacted_date: "1935-08-27"`, `last_modified_date: null` (no
+amendments — correct), and both notes ("Prior Provisions" category: editorial; "Short Title"
+category: statutory) with their full text and in-note cross-references.
+
+Additionally verified § 122a ("Injunctive relief in Federal district court") — a more complex
+section with subsections (a)–(f), quoted statutory-note content, and two law citations. All
+provisions, subsection headings, chapeau paragraphs, and source credit matched. The two notes
+("Effective Date", "Impact Study", both category: statutory) were present with their quoted
+content correctly marked `is_quoted: true`. `last_modified_date: "2000-10-28"` (the "as added"
+date) is correct; `enacted_date: "1913-03-01"` reflects the original Webb-Kenyon Act framework
+date, consistent with the source credit structure.
+
+No new bugs found. No known-issue occurrences to comment on.
 
 
 ## Test methodology
