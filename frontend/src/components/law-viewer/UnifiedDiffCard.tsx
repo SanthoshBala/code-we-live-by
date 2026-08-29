@@ -29,18 +29,6 @@ function ChangeTypeBadge({ changeType }: { changeType: string }) {
   );
 }
 
-/** Confidence score indicator. */
-function ConfidenceBadge({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const color =
-    pct >= 80
-      ? 'text-green-700'
-      : pct >= 50
-        ? 'text-yellow-700'
-        : 'text-red-700';
-  return <span className={`text-xs ${color}`}>{pct}%</span>;
-}
-
 /** Display line number with SECTION_HEADER_LINES offset for consistency. */
 function displayLineNum(ln: number | null): string {
   if (ln == null) return '';
@@ -671,20 +659,6 @@ export default function UnifiedDiffCard({ diff }: UnifiedDiffCardProps) {
         {changeTypes.map((ct) => (
           <ChangeTypeBadge key={ct} changeType={ct} />
         ))}
-        {diff.amendments.map((a, i) => (
-          <span
-            key={i}
-            className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
-          >
-            {a.pattern_name}
-            <ConfidenceBadge score={a.confidence} />
-          </span>
-        ))}
-        {diff.amendments.some((a) => a.needs_review) && (
-          <span className="text-xs font-medium text-amber-600">
-            Needs Review
-          </span>
-        )}
       </div>
 
       {/* Diff body */}
