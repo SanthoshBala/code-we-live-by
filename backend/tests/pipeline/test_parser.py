@@ -2427,6 +2427,9 @@ class TestExtractSourceCreditRefsMultiSubcitation:
         original_ref = pl_refs[0]
         assert original_ref.congress == 86
         assert original_ref.law_number == 346
+        # href /us/pl/86/346/s201/a has no /t segment; title must be parsed
+        # from the display text "Pub. L. 86-346, title II, § 201(a)".
+        assert original_ref.title == "II"
         assert original_ref.extra_sections == []
         assert original_ref.extra_stat_pages == []
 
@@ -2438,6 +2441,9 @@ class TestExtractSourceCreditRefsMultiSubcitation:
         multi_ref = pl_refs[1]
         assert multi_ref.congress == 94
         assert multi_ref.law_number == 455
+        # href /us/pl/94/455/s1901/a/130 has no /t segment; title must be
+        # parsed from the display text "Pub. L. 94-455, title XIX, § 1901(a)(130)".
+        assert multi_ref.title == "XIX"
         assert multi_ref.section == "1901(a)(130)"
         assert multi_ref.date == "Oct. 4, 1976"
         assert multi_ref.stat_volume == "90"
@@ -2450,6 +2456,66 @@ class TestExtractSourceCreditRefsMultiSubcitation:
         assert trailing_ref.law_number == 452
         assert trailing_ref.extra_sections == []
         assert trailing_ref.extra_stat_pages == []
+
+    def test_pl_title_parsed_from_display_text_when_href_lacks_t_segment(
+        self, parser: USLMParser
+    ) -> None:
+        """PL hrefs sometimes omit the /t segment even when display text
+        names a title (Issue #659). The title must be parsed from the
+        display text as a fallback, mirroring the ActRef tail-text fallback.
+
+        Example from 21 U.S.C. § 826: href /us/pl/109/177/s713 has no /tVII
+        segment, but the display text reads "Pub. L. 109-177, title VII, § 713".
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t21/s826">
+          <sourceCredit>
+            (amended <ref href="/us/pl/109/177/s713">Pub. L. 109&#8211;177,
+            title VII, &#167; 713</ref>, <date date="2006-03-09">Mar. 9, 2006</date>,
+            <ref href="/us/stat/120/263">120 Stat. 263</ref>.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml.encode())
+
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert act_refs == []
+        assert len(pl_refs) == 1
+
+        ref = pl_refs[0]
+        assert ref.congress == 109
+        assert ref.law_number == 177
+        assert ref.section == "713"
+        # Title must be recovered from display text despite absent /t segment.
+        assert ref.title == "VII"
+
+    def test_pl_title_from_href_takes_precedence_over_display_text(
+        self, parser: USLMParser
+    ) -> None:
+        """When the href already encodes the /t segment, it wins and the
+        display-text fallback is not invoked. This guards against inadvertent
+        double-parsing when both sources are present.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s106">
+          <sourceCredit>
+            (<ref href="/us/pl/94/553/tI/s106">Pub. L. 94&#8211;553, title I,
+            &#167; 106</ref>, <date date="1976-10-19">Oct. 19, 1976</date>,
+            <ref href="/us/stat/90/2546">90 Stat. 2546</ref>.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml.encode())
+
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert act_refs == []
+        assert len(pl_refs) == 1
+
+        ref = pl_refs[0]
+        assert ref.congress == 94
+        assert ref.law_number == 553
+        assert ref.section == "106"
+        assert ref.title == "I"
 
     def test_single_subcitation_unchanged(self, parser: USLMParser) -> None:
         """Regression test: a normal single sub-citation/Stat. page

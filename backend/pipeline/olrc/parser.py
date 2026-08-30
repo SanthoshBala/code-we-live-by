@@ -2164,11 +2164,25 @@ class USLMParser:
                                 if part.strip()
                             ]
 
+                        # The href sometimes omits the /t segment even when the
+                        # display text reads "title VII, § 713". Fall back to
+                        # parsing the title from the display text, mirroring
+                        # the ActRef tail-text fallback below.
+                        href_pl_title = match.group(4)
+                        if href_pl_title is None:
+                            pl_title_match = re.search(
+                                r",?\s*title\s+([IVXLCDM]+)",
+                                full_text,
+                                re.IGNORECASE,
+                            )
+                            if pl_title_match:
+                                href_pl_title = pl_title_match.group(1).upper()
+
                         ref = SourceCreditRef(
                             congress=int(match.group(1)),
                             law_number=int(match.group(2)),
                             division=match.group(3),
-                            title=match.group(4),
+                            title=href_pl_title,
                             section=section_value,
                             raw_text=full_text,
                             extra_sections=extra_sections,
