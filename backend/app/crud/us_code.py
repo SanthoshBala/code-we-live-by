@@ -6,6 +6,7 @@ SectionGroup (populated by both ingestion and bootstrap).
 """
 
 import uuid
+from datetime import date
 from typing import Any
 
 from sqlalchemy import func, select, text, tuple_
@@ -314,44 +315,104 @@ async def get_title_structure(
     )
 
 
+def _format_enacted_date(d: date) -> str:
+    """Format a Python date object to the prose format used in source credit citations.
+
+    Examples: date(1990, 12, 1) -> "Dec. 1, 1990"
+    """
+    month_names = {
+        1: "Jan.",
+        2: "Feb.",
+        3: "Mar.",
+        4: "Apr.",
+        5: "May",
+        6: "June",
+        7: "July",
+        8: "Aug.",
+        9: "Sept.",
+        10: "Oct.",
+        11: "Nov.",
+        12: "Dec.",
+    }
+    return f"{month_names[d.month]} {d.day}, {d.year}"
+
+
+def _parse_stat_citation(citation: str | None) -> tuple[str | None, int | None]:
+    """Parse a Statutes at Large citation string into (stat_volume, stat_page).
+
+    Example: "104 Stat. 5134" -> ("104", 5134)
+    Returns (None, None) if the citation is absent or does not match.
+    """
+    import re
+
+    if not citation:
+        return None, None
+    m = re.match(r"^(\w+)\s+Stat\.\s+(\d+)", citation)
+    if m:
+        return m.group(1), int(m.group(2))
+    return None, None
+
+
 async def _enrich_notes_with_titles(
     session: AsyncSession, notes: SectionNotesSchema
 ) -> None:
-    """Populate law titles on citations and amendments.
+    """Populate law metadata on citations and amendments from the public_law table.
 
     Three-tier lookup (no API calls — all local):
-    1. Batch query the public_law table (short_title + official_title)
+    1. Batch query the public_law table (short_title + official_title + date + stat)
     2. Hardcoded titles for major historical laws (title_lookup.py)
     3. OLRC short_titles from statutory notes on this section
+
+    Date and Statutes at Large fields (date, stat_volume, stat_page) are populated
+    for any law entry where those fields are null in the stored JSONB — this fixes
+    amendments whose JSONB was written before the pipeline stored date/stat from the
+    amendment note text (issue #561).
     """
     import re
 
     from pipeline.olrc.title_lookup import HARDCODED_TITLES
 
-    # Collect all (congress, law_number) pairs that need enrichment
+    # Collect all (congress, law_number) pairs that need enrichment.
+    # Include a law when any of the enrichable fields is missing so that
+    # amendments with null date/stat are captured even when short_title is set.
     pairs: set[tuple[int, str]] = set()
     for c in notes.citations:
-        if c.law and not c.law.short_title:
+        if c.law and (not c.law.short_title or not c.law.date or not c.law.stat_volume):
             pairs.add((c.law.congress, str(c.law.law_number)))
     for a in notes.amendments:
-        if a.law and not a.law.short_title:
+        if a.law and (not a.law.short_title or not a.law.date or not a.law.stat_volume):
             pairs.add((a.law.congress, str(a.law.law_number)))
 
     if not pairs:
         return
 
-    # Tier 1: batch query public_law table (short_title + official_title)
+    # Tier 1: batch query public_law table
+    # Fetch short_title, official_title, enacted_date, and statutes_at_large_citation
+    # so that date and Stat. fields can be backfilled for amendments whose JSONB
+    # predates date/stat parsing (issue #561).
     stmt = select(
         PublicLaw.congress,
         PublicLaw.law_number,
         PublicLaw.short_title,
         PublicLaw.official_title,
+        PublicLaw.enacted_date,
+        PublicLaw.statutes_at_large_citation,
     ).where(tuple_(PublicLaw.congress, PublicLaw.law_number).in_(list(pairs)))
     result = await session.execute(stmt)
-    # Store (short_title, official_title) per PL key
-    db_lookup: dict[str, tuple[str | None, str | None]] = {}
+    # Store (short_title, official_title, date_str, stat_volume, stat_page) per PL key
+    db_lookup: dict[
+        str, tuple[str | None, str | None, str | None, str | None, int | None]
+    ] = {}
     for row in result:
-        db_lookup[f"PL {row[0]}-{row[1]}"] = (row[2], row[3])
+        date_str = _format_enacted_date(row[4]) if row[4] else None
+        stat_vol, stat_pg = _parse_stat_citation(row[5])
+        db_lookup[f"PL {row[0]}-{row[1]}"] = (
+            row[2],
+            row[3],
+            date_str,
+            stat_vol,
+            stat_pg,
+        )
 
     # Tier 2: hardcoded titles for major historical laws
     short_title_lookup: dict[str, str] = {}
@@ -375,15 +436,21 @@ async def _enrich_notes_with_titles(
                     short_title_lookup[key] = st.title
 
     def _apply(law: Any, pl_key: str) -> None:
-        """Set short_title and official_title on a PublicLawSchema."""
+        """Set title and metadata fields on a PublicLawSchema from the DB lookup."""
         if not law.short_title:
             st = short_title_lookup.get(pl_key)
             if st:
                 law.short_title = st
-        if not law.official_title:
-            db_entry = db_lookup.get(pl_key)
-            if db_entry and db_entry[1]:
+        db_entry = db_lookup.get(pl_key)
+        if db_entry:
+            if not law.official_title and db_entry[1]:
                 law.official_title = db_entry[1]
+            if not law.date and db_entry[2]:
+                law.date = db_entry[2]
+            if not law.stat_volume and db_entry[3]:
+                law.stat_volume = db_entry[3]
+            if not law.stat_page and db_entry[4]:
+                law.stat_page = db_entry[4]
 
     # Enrich citations
     for c in notes.citations:
