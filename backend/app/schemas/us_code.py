@@ -227,6 +227,23 @@ class NoteCategoryEnum(enum.StrEnum):
     STATUTORY = "statutory"
 
 
+class FootnoteSchema(BaseModel):
+    """An inline editorial footnote embedded within statutory text.
+
+    These footnotes appear in OLRC XML as ``<note type="footnote">`` elements
+    paired with ``<ref class="footnoteRef">`` markers in the section body.
+    The marker (e.g. ``[1]``) is preserved in ``text_content``; the annotation
+    text is surfaced here so API consumers can resolve the dangling reference.
+
+    Example for 27 U.S.C. § 122b(b)(1):
+        marker: "1"
+        text: "So in original. Probably should be followed by a closing parenthesis."
+    """
+
+    marker: str = Field(..., description="Footnote marker label (e.g. '1')")
+    text: str = Field(..., description="Footnote annotation text")
+
+
 class SectionNoteSchema(BaseModel):
     """A single note within a US Code section.
 
@@ -321,6 +338,20 @@ class SectionNotesSchema(BaseModel):
     notes: list[SectionNoteSchema] = Field(
         default_factory=list,
         description="All notes organized by header",
+    )
+
+    # =========================================================================
+    # INLINE FOOTNOTES - Editorial annotations embedded in statutory text
+    # =========================================================================
+
+    footnotes: list[FootnoteSchema] = Field(
+        default_factory=list,
+        description=(
+            "Inline editorial footnotes from statutory text. Each entry corresponds "
+            "to a <note type='footnote'> element in the OLRC XML, paired with a "
+            "[N] marker preserved in text_content. Common annotations: "
+            '"So in original.", "Two sections N have been enacted."'
+        ),
     )
 
     # =========================================================================

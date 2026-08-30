@@ -6402,3 +6402,116 @@ class TestNoteParAbbrevContinuations:
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
         )
+
+
+class TestInlineFootnotesInSectionNotes:
+    """Tests for inline footnote text capture in section_notes (Issue #667).
+
+    OLRC XML embeds editorial footnotes directly inside paragraph elements
+    using <note type="footnote"> elements.  The parser retains the marker
+    (e.g. [1]) in text_content but previously discarded the footnote body.
+    These tests verify that the body text is now surfaced in section_notes.footnotes.
+    """
+
+    def test_footnotes_surfaced_in_section_notes(self) -> None:
+        """Inline footnote text appears in section_notes.footnotes after normalization.
+
+        Regression test for Issue #667: 27 U.S.C. § 122b(b)(1) has a <note
+        type="footnote"> element whose annotation was silently dropped from the
+        API response.  The [1] marker in text_content had no resolvable footnote.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="122b",
+            heading="General provisions",
+            full_citation="27 U.S.C. § 122b",
+            text_content="(b)(1) authorize any injunction [1] used by another person;",
+            subsections=[
+                ParsedSubsection(
+                    marker="(b)",
+                    heading=None,
+                    content="(1) authorize any injunction [1] used by another person;",
+                    level="subsection",
+                ),
+            ],
+            inline_footnotes=[
+                (
+                    "1",
+                    "So in original. Probably should be followed by a closing parenthesis.",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.section_notes is not None
+        assert len(result.section_notes.footnotes) == 1
+        fn = result.section_notes.footnotes[0]
+        assert fn.marker == "1"
+        assert (
+            fn.text
+            == "So in original. Probably should be followed by a closing parenthesis."
+        )
+
+    def test_multiple_footnotes_all_captured(self) -> None:
+        """All inline footnotes are captured when multiple are present."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="5",
+            heading="Test",
+            full_citation="1 U.S.C. § 5",
+            text_content="text [1] more [2] end",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="text [1] more [2] end",
+                    level="subsection",
+                ),
+            ],
+            inline_footnotes=[
+                ("1", "So in original."),
+                ("2", "Two sections 5 have been enacted."),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.section_notes is not None
+        assert len(result.section_notes.footnotes) == 2
+        assert result.section_notes.footnotes[0].marker == "1"
+        assert result.section_notes.footnotes[0].text == "So in original."
+        assert result.section_notes.footnotes[1].marker == "2"
+        assert (
+            result.section_notes.footnotes[1].text
+            == "Two sections 5 have been enacted."
+        )
+
+    def test_no_footnotes_produces_empty_list(self) -> None:
+        """section_notes.footnotes is empty when no inline footnotes exist."""
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="101",
+            heading="Definitions",
+            full_citation="17 U.S.C. § 101",
+            text_content="As used in this title, the following terms apply.",
+            subsections=[
+                ParsedSubsection(
+                    marker="(a)",
+                    heading=None,
+                    content="As used in this title.",
+                    level="subsection",
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        assert result.section_notes is not None
+        assert result.section_notes.footnotes == []

@@ -23,6 +23,7 @@ from app.schemas import (
     AmendmentSchema,
     CodeLineSchema,
     CodeReferenceSchema,
+    FootnoteSchema,
     LawPathComponent,
     NoteCategoryEnum,
     NoteReferenceSchema,
@@ -2656,6 +2657,16 @@ def normalize_parsed_section(
     # directly without needing to reconstruct it from structured citations.
     if parsed_section.source_credit:
         notes.source_credit = parsed_section.source_credit
+
+    # Inline editorial footnotes from statutory text (Issue #667).
+    # These are (marker, text) pairs collected from <note type="footnote">
+    # elements during XML parsing and are surfaced as a structured list so
+    # API consumers can resolve the [N] markers in text_content.
+    if parsed_section.inline_footnotes:
+        notes.footnotes = [
+            FootnoteSchema(marker=marker, text=text)
+            for marker, text in parsed_section.inline_footnotes
+        ]
 
     # Convert notes refs to schemas (Task 1.17b)
     if parsed_section.notes_refs:

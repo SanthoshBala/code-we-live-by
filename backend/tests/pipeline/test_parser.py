@@ -935,6 +935,81 @@ class TestUSLMParser:
         assert "So in original" in footnotes[0]
         assert "No subsec. (b) has been enacted" in footnotes[0]
 
+    def test_collect_inline_footnotes_returns_marker_and_text(
+        self, parser: USLMParser
+    ) -> None:
+        """_collect_inline_footnotes returns (marker, text) pairs from footnote elements.
+
+        Regression test for Issue #667: 27 U.S.C. § 122b(b)(1) has an inline
+        <note type="footnote"> element whose text was silently dropped from the
+        notes structure. Now it is surfaced as a structured (marker, body_text)
+        pair so API consumers can resolve the dangling [1] reference.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t27/s122b">
+          <num value="122b">§ 122b.</num>
+          <heading>General provisions</heading>
+          <subsection identifier="/us/usc/t27/s122b/b">
+            <num value="b">(b)</num>
+            <paragraph identifier="/us/usc/t27/s122b/b/1">
+              <num value="1">(1)</num>
+              <content>
+                authorize any injunction against an interactive computer service
+                (as defined in section 230(f) of title 47
+                <ref class="footnoteRef" idref="fn1">1</ref>
+                <note type="footnote" id="fn1">1 So in original. Probably should be followed by a closing parenthesis.</note>
+                used by another person to engage in any activity subject to this Act;
+              </content>
+            </paragraph>
+          </subsection>
+        </section>"""
+        elem = etree.fromstring(xml)
+        footnotes = parser._collect_inline_footnotes(elem)
+
+        assert len(footnotes) == 1
+        marker, body = footnotes[0]
+        assert marker == "1"
+        assert (
+            body
+            == "So in original. Probably should be followed by a closing parenthesis."
+        )
+
+    def test_collect_inline_footnotes_multiple(self, parser: USLMParser) -> None:
+        """_collect_inline_footnotes returns one pair per footnote element."""
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t27/s122b">
+          <num value="122b">§ 122b.</num>
+          <heading>Test</heading>
+          <subsection>
+            <num value="a">(a)</num>
+            <content>
+              Text <ref class="footnoteRef" idref="fn1">1</ref>
+              <note type="footnote" id="fn1">1 So in original.</note>
+              more text <ref class="footnoteRef" idref="fn2">2</ref>
+              <note type="footnote" id="fn2">2 Two sections 5 have been enacted.</note>
+            </content>
+          </subsection>
+        </section>"""
+        elem = etree.fromstring(xml)
+        footnotes = parser._collect_inline_footnotes(elem)
+
+        assert len(footnotes) == 2
+        assert footnotes[0] == ("1", "So in original.")
+        assert footnotes[1] == ("2", "Two sections 5 have been enacted.")
+
+    def test_collect_inline_footnotes_no_footnotes(self, parser: USLMParser) -> None:
+        """_collect_inline_footnotes returns empty list when no footnotes present."""
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s101">
+          <num value="101">§ 101.</num>
+          <heading>Definitions</heading>
+          <content>As used in this title, the following terms apply.</content>
+        </section>"""
+        elem = etree.fromstring(xml)
+        footnotes = parser._collect_inline_footnotes(elem)
+
+        assert footnotes == []
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
