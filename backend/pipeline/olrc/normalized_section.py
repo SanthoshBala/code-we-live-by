@@ -1649,6 +1649,10 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
     seen_headers: set[str] = set()
     # Skip headers already emitted by _parse_historical/editorial/statutory_notes
     existing_lower = {n.header.lower() for n in notes.notes}
+    # Track whether we are inside a historical note block so that sub-headings
+    # nested under a House/Senate Report or "Historical and Revision Notes"
+    # header inherit HISTORICAL rather than defaulting to STATUTORY.  (Issue #689)
+    current_historical_context = False
     for i, (_start, end, header) in enumerate(header_positions):
         if header in seen_headers or header.lower() in existing_lower:
             continue
@@ -1678,15 +1682,24 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         # House/Senate Report No. headers are sub-notes of Historical and
         # Revision Notes — classify them as HISTORICAL regardless of the
         # editorial_headers set.  (Issue #526)
-        category = (
-            NoteCategory.HISTORICAL
-            if header.lower() in historical_headers_lower
-            or _REPORT_PATTERN.search(header)
-            else NoteCategory.EDITORIAL
-            if header.lower() in editorial_headers_lower
+        #
+        # Sub-headings that follow a historical report header (e.g. guidelines
+        # nested under "House Report No. 94-1476") inherit HISTORICAL category
+        # via current_historical_context rather than defaulting to STATUTORY.
+        # (Issue #689)
+        if header.lower() in historical_headers_lower or _REPORT_PATTERN.search(header):
+            category = NoteCategory.HISTORICAL
+            current_historical_context = True
+        elif (
+            header.lower() in editorial_headers_lower
             or _EFFECTIVE_DATE_PATTERN.search(header)
-            else NoteCategory.STATUTORY
-        )
+        ):
+            category = NoteCategory.EDITORIAL
+            current_historical_context = False
+        elif current_historical_context:
+            category = NoteCategory.HISTORICAL
+        else:
+            category = NoteCategory.STATUTORY
 
         if header == "Amendments" and content:
             notes.amendments = _parse_amendments(content)

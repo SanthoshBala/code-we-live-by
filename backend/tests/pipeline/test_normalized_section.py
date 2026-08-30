@@ -4031,6 +4031,99 @@ class TestTitle17Section106Notes:
         )
 
 
+class TestHistoricalSubheadingsCategory:
+    """Regression tests for issue #689: sub-headings nested within historical
+    report notes were miscategorised as STATUTORY.
+
+    17 U.S.C. § 107 (release point 113-21) has sub-headings such as
+    "Agreement on Guidelines for Classroom Copying...", "with respect to books
+    and periodicals", "guidelines", and "guidelines for educational uses of
+    music" that appear after the "house report no. 94–1476" header.  These
+    should inherit HISTORICAL category from their parent context rather than
+    defaulting to STATUTORY.
+    """
+
+    def test_subheadings_after_report_header_are_historical(self) -> None:
+        """Sub-headings immediately following a report header inherit HISTORICAL.
+
+        Simulates the 17 U.S.C. § 107 pattern: a House Report No. header is
+        followed by several sub-headings that do not match any explicit
+        HISTORICAL or EDITORIAL keyword.  Before the fix all four sub-headings
+        were classified as STATUTORY; after the fix they must be HISTORICAL.
+        Closes #689.
+        """
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = (
+            "[NH]house report no. 94–1476[/NH]"
+            "General legislative history of fair use. "
+            "[NH]Agreement on Guidelines for Classroom Copying in "
+            "Not-For-Profit Educational Institutions[/NH]"
+            "The guidelines set forth criteria for fair use in classrooms. "
+            "[NH]with respect to books and periodicals[/NH]"
+            "These guidelines apply specifically to printed materials. "
+            "[NH]guidelines[/NH]"
+            "The following guidelines shall apply. "
+            "[NH]guidelines for educational uses of music[/NH]"
+            "These guidelines cover musical works for non-profit education. "
+            "[NH]Amendments[/NH]"
+            "1990—Pub. L. 101–650 amended section. "
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        categories = {n.header: n.category.value for n in notes.notes}
+
+        assert categories.get("house report no. 94–1476") == "historical", (
+            "Report header must be historical"
+        )
+        assert (
+            categories.get(
+                "Agreement on Guidelines for Classroom Copying in "
+                "Not-For-Profit Educational Institutions"
+            )
+            == "historical"
+        ), "First sub-heading nested under report header must be historical"
+        assert (
+            categories.get("with respect to books and periodicals") == "historical"
+        ), "Second sub-heading nested under report header must be historical"
+        assert categories.get("guidelines") == "historical", (
+            "Third sub-heading nested under report header must be historical"
+        )
+        assert (
+            categories.get("guidelines for educational uses of music") == "historical"
+        ), "Fourth sub-heading nested under report header must be historical"
+        assert categories.get("Amendments") == "editorial", (
+            "Amendments header after the historical block must reset to editorial"
+        )
+
+    def test_editorial_header_resets_historical_context(self) -> None:
+        """An EDITORIAL header resets the historical context flag.
+
+        After an editorial header, a subsequent non-matching header must fall
+        back to STATUTORY rather than inheriting HISTORICAL.
+        """
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        raw_notes = (
+            "[NH]house report no. 94–1476[/NH]"
+            "Legislative history content. "
+            "[NH]Amendments[/NH]"
+            "2000—Pub. L. 106–44 amended section. "
+            "[NH]Some Unrecognised Header[/NH]"
+            "This content follows an editorial note and has no recognised category. "
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        categories = {n.header: n.category.value for n in notes.notes}
+
+        assert categories.get("Amendments") == "editorial"
+        assert categories.get("Some Unrecognised Header") == "statutory", (
+            "Header after editorial reset must be statutory, not historical"
+        )
+
+
 class TestNoteTopicAmendmentParsing:
     """Regression tests for issue #216: <note topic="amendments"> not parsed.
 
