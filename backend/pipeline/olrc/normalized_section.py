@@ -409,7 +409,7 @@ _REPORT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _EFFECTIVE_DATE_PATTERN = re.compile(r"^Effective Date of\b", re.IGNORECASE)
-_YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
+_YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–]\s*", re.MULTILINE)
 # Per-paragraph pattern for amendment parsing.
 #
 # Amendment notes in USLM XML have each entry in a separate <p> element.  After
