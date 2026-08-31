@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.31 | 13    | 9       | Information as confidential; exception                                                 | 113-21        | ⚠️ Known issues confirmed (see notes) |
 
 ## Notes
 
@@ -186,6 +187,33 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.31 — 13 U.S.C. § 9
+
+Heading, full statutory text (subsections (a) chapeau + paragraphs (1)–(3), closing un-numbered
+paragraph, and subsection (b)), source credit, `enacted_date` (1954-08-31), and
+`last_modified_date` (1997-11-26) all match the OLRC. The Historical and Revision Notes and
+References in Text note are present with correct content. All six source-credit citations
+(original 1954 act + PL 87-813, 101-533, 103-430, 105-113, 105-119) are correctly parsed.
+
+Two known defects confirmed active on this section:
+
+1. **Amendment year misassignment for PL 105-113** (issue #675, the original occurrence
+   that prompted that issue) — `notes.amendments[1].year` is `"1998"` instead of `"1997"`.
+   The OLRC Amendments note groups both Pub. L. 105-119 and Pub. L. 105-113 under a single
+   `1997—` heading; the parser mistakes the literal string `"1998-"` appearing inside the
+   PL 105-119 description text (referencing the "Appropriations Act, 1998") for the start
+   of a new year-group and assigns year 1998 to the following PL 105-113 entry.
+
+2. **`note_categories` cross-endpoint discrepancy** (issue #686) —
+   `GET /api/v1/titles/13/structure` reports `note_categories: ["editorial", "historical", "statutory"]`
+   for § 9, but `GET /api/v1/sections/13/9` returns `note_categories: ["editorial", "historical"]`
+   with no notes carrying `category: "statutory"`. The current OLRC prelim for § 9 shows no
+   "Statutory Notes and Related Subsidiaries" section, suggesting the 'statutory' entry in
+   the structure response is itself a mis-tagged note from the ingested 113-21 XML.
+   Comment added to #686.
+
+No new bugs filed.
 
 
 ## Test methodology
