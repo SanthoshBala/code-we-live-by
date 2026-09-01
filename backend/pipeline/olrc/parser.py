@@ -1809,13 +1809,21 @@ class USLMParser:
                 # Add paragraph break marker before this <p> element
                 parts.append("[PARA]")
 
-            # Skip HTML table header cells — their text labels columns/rows in the
-            # table, not note content.  Including <th> text as plain content can
-            # trigger false note-header matches downstream (e.g. the
-            # historicalAndRevision note for 31 U.S.C. § 5311 has a <th> cell
-            # containing "Historical and Revision Notes" that would otherwise
-            # appear as the first content line and cause a spurious note match).
-            if tag == "th":
+            # Skip HTML table header cells that span multiple columns — these are
+            # section-title rows (e.g. colspan=3 "Historical and Revision Notes")
+            # that duplicate the [NH] heading already captured from <heading>.
+            # Including them as plain content would trigger false note-header
+            # matches downstream (e.g. the historicalAndRevision note for
+            # 31 U.S.C. § 5311 has a <th colspan="3"> containing "Historical and
+            # Revision Notes" that would otherwise appear as the first content
+            # line and cause a spurious note match).
+            # However, plain <th> cells WITHOUT colspan are column-header labels
+            # (e.g. "Revised section", "Source (U.S. Code)", "Source (Statutes at
+            # Large)") that must be preserved as table content.
+            if tag == "th" and el.get("colspan"):
+                # Section-title row — skip entirely, but keep tail text.
+                # Plain <th> cells WITHOUT colspan (column-header labels such as
+                # "Revised section") fall through and are processed normally.
                 if el.tail:
                     parts.append(el.tail)
                 return
