@@ -2489,3 +2489,78 @@ class TestExtractSourceCreditRefsMultiSubcitation:
         ref = SourceCreditRef(congress=94, law_number=455)
         assert ref.extra_sections == []
         assert ref.extra_stat_pages == []
+
+
+class TestThElementHandling:
+    """Tests for <th> element handling in _get_notes_text_content (Issue #698).
+
+    A <th> with colspan is a section-title row that duplicates the [NH]
+    heading and must be dropped.  A <th> without colspan is a column-header
+    cell (e.g. "Revised section") that must be emitted as table content.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        return USLMParser()
+
+    def test_th_with_colspan_is_skipped(self, parser: USLMParser) -> None:
+        """<th colspan="3"> containing the note title must be silently dropped."""
+        xml = """<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">
+            <note topic="historicalAndRevision">
+                <heading>Historical and Revision Notes</heading>
+                <table>
+                    <thead>
+                        <tr><th colspan="3">Historical and Revision Notes</th></tr>
+                        <tr>
+                            <th>Revised section</th>
+                            <th>Source (U.S. Code)</th>
+                            <th>Source (Statutes at Large)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>905</td><td>34:440f</td><td>Aug. 4, 1949</td></tr>
+                    </tbody>
+                </table>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml.encode())
+        content = parser._get_notes_text_content(elem)
+
+        # The colspan section-title cell must not appear as a content line
+        # (it would otherwise trigger a spurious note-header match)
+        assert content.count("Historical and Revision Notes") <= 1, (
+            "section-title <th colspan> must not be emitted as extra content"
+        )
+
+    def test_th_without_colspan_emits_text(self, parser: USLMParser) -> None:
+        """<th> cells without colspan (column headers) must appear in the output."""
+        xml = """<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">
+            <note topic="historicalAndRevision">
+                <heading>Historical and Revision Notes</heading>
+                <table>
+                    <thead>
+                        <tr><th colspan="3">Historical and Revision Notes</th></tr>
+                        <tr>
+                            <th>Revised section</th>
+                            <th>Source (U.S. Code)</th>
+                            <th>Source (Statutes at Large)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>905</td><td>34:440f</td><td>Aug. 4, 1949</td></tr>
+                    </tbody>
+                </table>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml.encode())
+        content = parser._get_notes_text_content(elem)
+
+        assert "Revised section" in content, (
+            "column-header <th> without colspan must be preserved in output"
+        )
+        assert "Source (U.S. Code)" in content, (
+            "column-header <th> without colspan must be preserved in output"
+        )
+        assert "Source (Statutes at Large)" in content, (
+            "column-header <th> without colspan must be preserved in output"
+        )
