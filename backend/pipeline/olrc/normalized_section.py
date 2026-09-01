@@ -1879,7 +1879,14 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
         return
 
     editorial_text = edit_match.group(1).strip()
-    if not editorial_text:
+    if not _strip_note_markers(editorial_text):
+        notes.notes.append(
+            SectionNote(
+                header="Editorial Notes",
+                lines=[],
+                category=NoteCategory.EDITORIAL,
+            )
+        )
         return
 
     # Find note headers using [NH]...[/NH] markers from XML parser
@@ -1940,7 +1947,14 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
         return
 
     statutory_text = stat_match.group(1).strip()
-    if not statutory_text:
+    if not _strip_note_markers(statutory_text):
+        notes.notes.append(
+            SectionNote(
+                header="Statutory Notes and Related Subsidiaries",
+                lines=[],
+                category=NoteCategory.STATUTORY,
+            )
+        )
         return
 
     # Parse structured fields

@@ -6402,3 +6402,107 @@ class TestNoteParAbbrevContinuations:
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
         )
+
+
+class TestHeadingOnlyDividerNotes:
+    """Regression tests for Issue #697: heading-only section-divider notes dropped.
+
+    The OLRC XML sometimes contains <note topic="editorialNotes"> and
+    <note topic="statutoryNotes"> elements with only a <heading> child and no
+    body paragraphs.  These serve as visual category headers in the OLRC
+    display.  Before the fix the parser silently dropped them; now they must
+    appear in notes.notes[] as header-only SectionNote entries with empty lines.
+    """
+
+    def test_editorial_notes_heading_only_emits_section_note(self) -> None:
+        """_parse_editorial_notes with a heading-only note must emit a SectionNote."""
+        from pipeline.olrc.normalized_section import (
+            NoteCategory,
+            SectionNotes,
+            _parse_editorial_notes,
+        )
+
+        # Simulate a raw_notes string where the "Editorial Notes" wrapper has no
+        # body paragraphs (heading-only), followed immediately by Statutory Notes.
+        raw_notes = (
+            "[H1]Editorial Notes[/H1]"
+            "[H1]Statutory Notes and Related Subsidiaries[/H1]"
+            "[NH]Effective Date[/NH]\n"
+            "Effective on the date of enactment of Pub. L. 103-337."
+        )
+
+        notes = SectionNotes()
+        _parse_editorial_notes(raw_notes, notes)
+
+        editorial = [n for n in notes.notes if n.category == NoteCategory.EDITORIAL]
+        assert len(editorial) == 1, (
+            f"Expected 1 EDITORIAL note (the divider header), got {len(editorial)}"
+        )
+        assert editorial[0].header == "Editorial Notes"
+        assert editorial[0].lines == []
+
+    def test_statutory_notes_heading_only_emits_section_note(self) -> None:
+        """_parse_statutory_notes with a heading-only note must emit a SectionNote."""
+        from pipeline.olrc.normalized_section import (
+            NoteCategory,
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        # Simulate a raw_notes string where the "Statutory Notes and Related
+        # Subsidiaries" wrapper has no body paragraphs (heading-only).
+        raw_notes = "[H1]Statutory Notes and Related Subsidiaries[/H1]"
+
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+
+        statutory = [n for n in notes.notes if n.category == NoteCategory.STATUTORY]
+        assert len(statutory) == 1, (
+            f"Expected 1 STATUTORY note (the divider header), got {len(statutory)}"
+        )
+        assert statutory[0].header == "Statutory Notes and Related Subsidiaries"
+        assert statutory[0].lines == []
+
+    def test_editorial_notes_with_body_still_works(self) -> None:
+        """When editorial notes have body content, normal parsing is unaffected."""
+        from pipeline.olrc.normalized_section import (
+            NoteCategory,
+            SectionNotes,
+            _parse_editorial_notes,
+        )
+
+        raw_notes = (
+            "[H1]Editorial Notes[/H1]\n"
+            "[NH]Amendments[/NH]\n"
+            "1994—Pub. L. 103-337, div. A, title XVI, amended section generally."
+        )
+
+        notes = SectionNotes()
+        _parse_editorial_notes(raw_notes, notes)
+
+        editorial = [n for n in notes.notes if n.category == NoteCategory.EDITORIAL]
+        assert len(editorial) == 1
+        assert editorial[0].header == "Amendments"
+        assert editorial[0].lines  # non-empty
+
+    def test_statutory_notes_with_body_still_works(self) -> None:
+        """When statutory notes have body content, normal parsing is unaffected."""
+        from pipeline.olrc.normalized_section import (
+            NoteCategory,
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        raw_notes = (
+            "[H1]Statutory Notes and Related Subsidiaries[/H1]\n"
+            "[NH]Effective Date of 1994 Amendment[/NH]\n"
+            "Amendment by Pub. L. 103-337 effective Oct. 1, 1994, see section 1691 of that Act."
+        )
+
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+
+        statutory = [n for n in notes.notes if n.category == NoteCategory.STATUTORY]
+        assert len(statutory) == 1
+        assert statutory[0].header == "Effective Date of 1994 Amendment"
+        assert statutory[0].lines  # non-empty
