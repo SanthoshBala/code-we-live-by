@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.02 | 49    | 525     | Disobedience to subpoenas                                                              | 113-21        | ⚠️ Known issues apply (see notes) |
 
 ## Notes
 
@@ -173,6 +174,7 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
@@ -186,6 +188,31 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.02 — 49 U.S.C. § 525
+
+Statutory text matches the OLRC HTML verbatim: both paragraphs (the criminal penalty paragraph
+and the Secretary's registration-enforcement paragraph added by PL 112-141) are present and
+correct. Source credit `(Pub. L. 97–449, §1(b), Jan. 12, 1983, 96 Stat. 2437; Pub. L. 112–141,
+div. C, title II, §32110, July 6, 2012, 126 Stat. 782.)` matches exactly. Two citations and one
+amendment entry (Pub. L. 112–141, 2012) are correctly captured. `is_positive_law: true` and
+group ancestors (Subtitle I / Chapter 5 / Subchapter II) are accurate.
+
+Two known defect patterns confirmed active:
+
+1. **"Effective Date of 2012 Amendment" miscategorized as `editorial`** (issue #686) — CWLB
+   returns this note with `category: "editorial"`, but the OLRC places it under the
+   "Statutory Notes and Related Subsidiaries" heading. The correct category is `"statutory"`.
+   Comment added to #686.
+
+2. **"Disposition Of Sections" sub-note miscategorized as `statutory`** (issue #689) — CWLB
+   creates a separate note named "Disposition Of Sections" with `category: "statutory"`. This
+   content (a disposition table introduced by the Historical and Revision Notes paragraph
+   ending "The comparable provisions of title 49 that are represented by the section may be
+   found as follows:") belongs to the Historical and Revision Notes section and should carry
+   `category: "historical"`. Comment added to #689.
+
+No new defects found beyond the two known-issue reproductions above.
 
 
 ## Test methodology
