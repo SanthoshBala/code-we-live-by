@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.03 | 5     | 806     | Applicability; severability                                                            | 119-102       | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +187,20 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.03 — 5 U.S.C. § 806
+
+Simple unamended section (enacted Mar. 29, 1996 via Pub. L. 104-121; never amended). All
+fields matched: heading ("Applicability; severability"), full body text (subsections (a) and
+(b)), source credit `(Added Pub. L. 104–121, title II, § 251, Mar. 29, 1996, 110 Stat. 873.)`,
+enacted date (1996-03-29), no notes, no amendments, and group ancestors (Part I / Chapter 8).
+
+CWLB `last_revision` reflects release point 113-21 (the initial commit), but since the section
+was enacted in 1996 and has never been amended, the content at 113-21 and 119-102 is identical.
+No new bugs filed.
+
+OLRC XML used: release point 119-102, downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/119/102/xml_usc05@119-102.zip`.
 
 
 ## Test methodology
