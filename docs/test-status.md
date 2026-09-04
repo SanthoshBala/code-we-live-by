@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.04 | 16    | 410ww–21 | Dayton Aviation Heritage Commission                                                   | 113-21        | ⚠️ Known issues apply (see notes) |
 
 ## Notes
 
@@ -187,6 +188,33 @@ and 307) is absent from CWLB, as expected given the stale 2013 release point. Th
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
 
+
+### 2026.09.04 — 16 U.S.C. § 410ww–21 (Dayton Aviation Heritage Commission)
+
+OLRC XML compared: release point 119-102 (downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/119/102/xml_usc16@119-102.zip`).
+CWLB is at release point 113-21 (2013-01-01).
+
+**Text differences due to 2022 amendment (expected, stale release point):**
+
+Subsection (i) was amended by Pub. L. 117–286, § 4(a)(83), Dec. 27, 2022. CWLB returns the
+pre-amendment text ("Section 14(b) of the Federal Advisory Committee Act (5 U.S.C. App.)
+shall not apply to the Commission." with heading "Faca"); current OLRC has "Section 1013(b)
+of title 5 shall not apply to the Commission." with heading "Chapter 10 of title 5". Source
+credit in CWLB is also missing the 2022 PL 117–286 entry. All differences are attributable
+to the stale-ingestion defect already tracked in #583 — not re-filed.
+
+**Parsing bug confirmed (existing issue):**
+
+Subsection (c)(2) contains the inline footnote marker `[1]` in `text_content` — "pursuant to
+subsections [1] (b)(2), (4), (5), (6), and (7) of this section" — but the corresponding
+footnote text ("So in original. Probably should be 'subsection'.") is absent from
+`notes.notes[]`, `raw_notes`, and all other fields in the section detail response. The OLRC
+XML encodes this as `<note type="footnote" id="fn002135">` inside the `<content>` element of
+subsection (c)(2). This is the systemic inline-footnote-dropped bug already tracked in
+issue #667 — comment added to that issue recording this occurrence.
+
+No novel parsing errors found beyond the two known-issue classes above.
 
 ## Test methodology
 
