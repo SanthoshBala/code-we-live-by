@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.05 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ⚠️ Known issues confirmed (see notes) |
 
 ## Notes
 
@@ -186,6 +187,35 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.05 — 17 U.S.C. § 107 (Fair use, re-test)
+
+Section randomly selected; coincided with prior 2026.08.03 test on the same section.
+
+Statutory text matches OLRC at release point 113-21 verbatim: opening fair-use paragraph,
+four numbered factors, and the 1992 unpublished-works sentence. Source credit matches exactly
+(PL 94-553, PL 101-650, PL 102-492). Heading (`"Limitations on exclusive rights: Fair use"`),
+enacted date (1976-10-19), and last_modified_date (1992-10-24) are correct. Historical and
+Revision Notes (H.Rpt. 94-1476 with classroom copying and music education guidelines) and
+editorial notes (Amendments) are all present.
+
+Three known defects confirmed still active:
+
+1. **Issue #689** (legislative history sub-headings miscategorized): Sub-headings nested within
+   "Historical and Revision Notes" — "Agreement on Guidelines for Classroom Copying in Not-For-Profit
+   Educational Institutions", "with respect to books and periodicals", "guidelines", and "guidelines
+   for educational uses of music" — are tagged `category: "statutory"` instead of `"historical"`.
+   Issue #689 was itself discovered and reported on this section (2026-08-27).
+
+2. **Issue #686** (statutory notes miscategorized as editorial): `Effective Date of 1990 Amendment`
+   note has `category: "editorial"` instead of `"statutory"` (it appears under "Statutory Notes and
+   Related Subsidiaries" in the OLRC XML). Comment added to #686 confirming this occurrence.
+
+3. **Issue #561** (amendment law metadata null): `notes.amendments[*].law` objects have null
+   `date`, `official_title`, `short_title`, `stat_volume`, `stat_page`, and `stat_reference`
+   for both PL 102-492 and PL 101-650. Issue #561 was filed specifically about this section.
+
+No new defects found.
 
 
 ## Test methodology
