@@ -1150,6 +1150,44 @@ class TestCamelToTitle:
         assert "[NH]Removal Description[/NH]" in content
         assert "[NH]Removaldescription[/NH]" not in content
 
+    def test_no_spurious_space_before_closing_paren_in_ref_tail(self) -> None:
+        """Tail text starting with ')' after a <ref> element produces no spurious space.
+
+        Regression test for Issue #705: when a <ref> (or similar inline element) is
+        immediately followed by ')' in the OLRC XML with no whitespace between the
+        closing tag and the parenthesis, _get_notes_text_content must not insert a
+        space — i.e. "92 Stat. 86)" not "92 Stat. 86 )".
+
+        Mirrors the structure of 30 U.S.C. § 1144 notes (release point 113-21).
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Reproduces the exact structure from 30 U.S.C. § 1144:
+        #   <ref href="/us/stat/92/86">92 Stat. 86</ref>), pursuant to
+        # ref.tail starts with ')' — no whitespace precedes it in the XML.
+        xml = (
+            '<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">'
+            "<note>"
+            "<heading>Transfer of Functions</heading>"
+            '<p>See <ref href="/us/stat/92/86">92 Stat. 86</ref>), pursuant to'
+            " sections 301(a) and 707.</p>"
+            "</note>"
+            "</notes>"
+        )
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Must not contain a space before the closing parenthesis
+        assert "92 Stat. 86 )" not in content, (
+            "Spurious space found before ')' in notes content"
+        )
+        assert "92 Stat. 86)" in content
+
 
 class TestChapterGroups:
     """Tests for chapter group (subtitle, part, division) parsing."""
