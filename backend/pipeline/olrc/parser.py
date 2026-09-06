@@ -1919,6 +1919,14 @@ class USLMParser:
             # `" section 1069f(a)(1) of this title "` — see issue #472.
             prev_ends_straight_quote = bool(result) and result[-1].endswith('"')
             current_starts_straight_quote = bool(stripped) and stripped[0] == '"'
+            # Do not insert a space when the current fragment starts with a
+            # closing parenthesis or bracket.  In OLRC XML, a <ref> or <date>
+            # element may be immediately followed by ")" or "]" with no
+            # whitespace between the closing tag and that character (e.g.
+            # `<ref href="...">92 Stat. 86</ref>), pursuant to`).  Stripping
+            # the tail fragment and joining it with a space produces a spurious
+            # "92 Stat. 86 )" — see issue #705.
+            current_starts_close_paren = bool(stripped) and stripped[0] in ")]}>"
             if (
                 not result
                 or result[-1] == "\n\n"
@@ -1928,6 +1936,7 @@ class USLMParser:
                 or current_starts_close_quote
                 or prev_ends_straight_quote
                 or current_starts_straight_quote
+                or current_starts_close_paren
             ):
                 result.append(stripped)
             else:
