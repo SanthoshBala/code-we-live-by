@@ -23,7 +23,7 @@ from pipeline.olrc.group_service import (
     _parse_citation_date,
     upsert_groups_from_parse_result,
 )
-from pipeline.olrc.normalized_section import _clean_heading, normalize_parsed_section
+from pipeline.olrc.normalized_section import _clean_heading, normalize_parsed_section, parse_citation
 from pipeline.olrc.parser import (
     ParsedSection,
     USLMParser,
@@ -279,6 +279,20 @@ class USCodeIngestionService:
                 max_year = max(a.year for a in normalized.section_notes.amendments)
                 last_modified_date = date(max_year, 1, 1)
 
+        # Derive is_repealed and repealed_date from the XML status="repealed" attribute.
+        # The USCodeSection check constraint requires repealed_date IS NOT NULL when
+        # is_repealed IS TRUE, so we only set is_repealed=True when the repeal law's
+        # date is parseable from the section heading (e.g. "Repealed. Pub. L. 96–513,
+        # title IV, § 403(a), Dec. 12, 1980, 94 Stat. 2904").
+        is_repealed = False
+        repealed_date = None
+        if parsed.is_repealed:
+            repeal_src = parse_citation(parsed.heading)
+            if repeal_src and repeal_src.law and repeal_src.law.date:
+                repealed_date = _parse_citation_date(repeal_src.law.date)
+            if repealed_date is not None:
+                is_repealed = True
+
         result = await self.session.execute(
             select(USCodeSection).where(
                 USCodeSection.title_number == title_number,
@@ -300,6 +314,8 @@ class USCodeIngestionService:
                 existing.statutes_at_large_citation = statutes_at_large_citation
                 existing.last_modified_date = last_modified_date
                 existing.sort_order = parsed.sort_order
+                existing.is_repealed = is_repealed
+                existing.repealed_date = repealed_date
             return existing
 
         section = USCodeSection(
@@ -316,6 +332,8 @@ class USCodeIngestionService:
             statutes_at_large_citation=statutes_at_large_citation,
             last_modified_date=last_modified_date,
             sort_order=parsed.sort_order,
+            is_repealed=is_repealed,
+            repealed_date=repealed_date,
         )
         self.session.add(section)
         await self.session.flush()
