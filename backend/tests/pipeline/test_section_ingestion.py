@@ -296,6 +296,94 @@ class TestUpsertSectionNormalization:
         assert existing_section.normalized_notes is None
 
 
+class TestUpsertSectionIsRepealed:
+    """Tests for _upsert_section correctly populating is_repealed and repealed_date.
+
+    Regression test for Issue #707: sections with status="repealed" in OLRC XML
+    should have is_repealed=True and repealed_date populated in USCodeSection.
+    """
+
+    @pytest.fixture
+    def mock_session(self):
+        """Create a mock async session."""
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        return session
+
+    def _make_result(self, scalar=None):
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = scalar
+        return result
+
+    @pytest.mark.asyncio
+    async def test_repealed_section_with_parseable_date(self, mock_session) -> None:
+        """A repealed section whose heading contains a Pub. L. date gets is_repealed=True."""
+        from pipeline.olrc.ingestion import USCodeIngestionService
+        from pipeline.olrc.parser import ParsedSection
+
+        mock_session.execute.return_value = self._make_result(None)
+
+        parsed = ParsedSection(
+            section_number="904",
+            heading="Repealed. Pub. L. 96-513, title IV, § 403(a), Dec. 12, 1980, 94 Stat. 2904",
+            full_citation="37 U.S.C. § 904",
+            text_content="",
+            is_repealed=True,
+        )
+
+        service = USCodeIngestionService(session=mock_session)
+        result = await service._upsert_section(parsed, group_id=None, title_number=37)
+
+        assert result.is_repealed is True
+        assert result.repealed_date == date(1980, 12, 12)
+
+    @pytest.mark.asyncio
+    async def test_repealed_section_without_parseable_date(self, mock_session) -> None:
+        """A repealed section whose heading has no parseable date stays is_repealed=False (safe fallback)."""
+        from pipeline.olrc.ingestion import USCodeIngestionService
+        from pipeline.olrc.parser import ParsedSection
+
+        mock_session.execute.return_value = self._make_result(None)
+
+        parsed = ParsedSection(
+            section_number="999",
+            heading="Repealed.",
+            full_citation="37 U.S.C. § 999",
+            text_content="",
+            is_repealed=True,
+        )
+
+        service = USCodeIngestionService(session=mock_session)
+        result = await service._upsert_section(parsed, group_id=None, title_number=37)
+
+        assert result.is_repealed is False
+        assert result.repealed_date is None
+
+    @pytest.mark.asyncio
+    async def test_non_repealed_section_stays_false(self, mock_session) -> None:
+        """A non-repealed section always has is_repealed=False."""
+        from pipeline.olrc.ingestion import USCodeIngestionService
+        from pipeline.olrc.parser import ParsedSection
+
+        mock_session.execute.return_value = self._make_result(None)
+
+        parsed = ParsedSection(
+            section_number="101",
+            heading="Definitions",
+            full_citation="17 U.S.C. § 101",
+            text_content="Some statutory text.",
+            is_repealed=False,
+        )
+
+        service = USCodeIngestionService(session=mock_session)
+        result = await service._upsert_section(parsed, group_id=None, title_number=17)
+
+        assert result.is_repealed is False
+        assert result.repealed_date is None
+
+
 class TestUpsertSectionWithActRefs:
     """Tests for _upsert_section with Act references (pre-1957 laws)."""
 
