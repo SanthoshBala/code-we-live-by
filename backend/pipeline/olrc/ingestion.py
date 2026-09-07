@@ -23,7 +23,11 @@ from pipeline.olrc.group_service import (
     _parse_citation_date,
     upsert_groups_from_parse_result,
 )
-from pipeline.olrc.normalized_section import _clean_heading, normalize_parsed_section, parse_citation
+from pipeline.olrc.normalized_section import (
+    _clean_heading,
+    normalize_parsed_section,
+    parse_citation,
+)
 from pipeline.olrc.parser import (
     ParsedSection,
     USLMParser,
