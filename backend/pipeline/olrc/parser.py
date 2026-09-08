@@ -1169,6 +1169,12 @@ class USLMParser:
             if ref_num:
                 yield f"[{ref_num}]"
             return
+        # Superscript footnote marker: render as [N] (same convention as footnoteRef).
+        if tag == "sup":
+            sup_num = (elem.text or "").strip()
+            if sup_num:
+                yield f"[{sup_num}]"
+            return
         # Footnote note body: skip entirely (avoid injecting note prose inline).
         if tag == "note" and elem.get("type", "") == "footnote":
             return
@@ -1194,6 +1200,8 @@ class USLMParser:
         """
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
         if tag == "ref" and elem.get("class", "") == "footnoteRef":
+            return
+        if tag == "sup":
             return
         if tag == "note" and elem.get("type", "") == "footnote":
             return

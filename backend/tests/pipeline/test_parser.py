@@ -935,6 +935,41 @@ class TestUSLMParser:
         assert "So in original" in footnotes[0]
         assert "No subsec. (b) has been enacted" in footnotes[0]
 
+    def test_sup_footnote_marker_rendered_as_bracketed_in_content(
+        self, parser: USLMParser
+    ) -> None:
+        """<sup>N</sup> footnote markers appear as [N] in subsection content.
+
+        Regression test for Issue #709: 23 U.S.C. § 163 has a <sup>1</sup>
+        marker inside a content element. Previously the bare number was emitted;
+        now it appears as [1] consistent with <ref class="footnoteRef"> markers.
+        """
+        xml = """<subsection xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t23/s163/f/2">
+          <num value="2">(2)</num>
+          <content>Notwithstanding section 118(b)(2),<sup>1</sup> the funds authorized by this subsection shall remain available until expended.</content>
+        </subsection>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "subsection")
+
+        assert "[1]" in result.content, (
+            "Superscript footnote marker [1] must be rendered in subsection content"
+        )
+        assert "Notwithstanding section 118(b)(2),[1]" in result.content
+        assert "1 the funds" not in result.content
+
+    def test_sup_footnote_marker_stripped_in_heading(self) -> None:
+        """<sup>N</sup> markers are omitted by _itertext_strip_all_footnotes.
+
+        Headings must not include footnote superscript markers in their text.
+        """
+        xml = """<heading xmlns="http://xml.house.gov/schemas/uslm/1.0">Authorization of Appropriations<sup>1</sup></heading>"""
+        elem = etree.fromstring(xml)
+        text = "".join(USLMParser._itertext_strip_all_footnotes(elem))
+
+        assert "1" not in text
+        assert "Authorization of Appropriations" in text
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
