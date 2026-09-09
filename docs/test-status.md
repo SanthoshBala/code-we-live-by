@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.09 | 6     | 190     | Transfer of Plum Island Animal Disease Center, Department of Agriculture               | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -173,6 +174,7 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
@@ -186,6 +188,29 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.09 — 6 U.S.C. § 190
+
+Compared CWLB against the OLRC XML at release point 113-21 (`xml_usc06@113-21.zip`).
+
+All fields matched: heading, full statutory text (subsections (a)–(d) with nested paragraphs
+(1)–(2) in (d)), source credit `(Pub. L. 107–296, title III, § 310, Nov. 25, 2002, 116 Stat. 2174.)`,
+enacted date (2002-11-25), last_modified_date (2002-11-25), `is_repealed: false`, and
+`is_positive_law: false`. The one statutory note ("Disposition of Plum Island Property and
+Transportation Assets", Pub. L. 112-74, Dec. 23, 2011) is present with full text, matching
+the OLRC XML `<note topic="miscellaneous">` content verbatim.
+
+One known issue reproduced:
+- **Issue #659** (citation path drops title/subtitle within public laws): The enactment
+  citation "Pub. L. 107–296, title III, § 310" returns
+  `path: [{"level": "section", "value": "310"}]`, silently dropping the
+  `{"level": "title", "value": "III"}` segment. `path_display` shows `§310` with no title
+  prefix. Comment added to #659.
+
+OLRC XML used: `https://uscode.house.gov/download/releasepoints/us/pl/113/21/xml_usc06@113-21.zip`.
+Note: the current OLRC prelim (release point 119-103) shows two additional statutory notes
+(Pub. L. 116-260 and Pub. L. 117-328) that post-date 113-21 and are therefore correctly
+absent from CWLB.
 
 
 ## Test methodology
