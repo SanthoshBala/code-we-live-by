@@ -3890,6 +3890,125 @@ class TestFlatNotesParser:
         headers = [n.header.lower() for n in notes.notes]
         assert "historical and revision notes" not in headers
 
+    def test_statutory_cross_heading_with_empty_content_skipped_issue_713(
+        self,
+    ) -> None:
+        """Regression: a bare 'Statutory Notes and Related Subsidiaries' [NH] marker
+        with no body content must be silently dropped by _parse_flat_notes so it
+        does not surface as a spurious empty note.
+
+        Newer USLM XML releases encode the 'Statutory Notes and Related Subsidiaries'
+        section label as a <note role="crossHeading" topic="statutoryNotes"> element
+        with only a <heading> child and no body <p> elements.  The parser correctly
+        emits [NH]Statutory Notes and Related Subsidiaries[/NH] for that heading, and
+        then a separate [NH]Effective Date[/NH] for the sibling effectiveDate note.
+        Because the source credit text precedes the [NH] block, _find_wrapper_heading
+        rejects the wrapper match and _parse_statutory_notes finds nothing; the flat
+        fallback _parse_flat_notes is invoked instead.
+
+        Prior to the fix, _parse_flat_notes added the empty cross-heading as a
+        standalone note with no lines, cluttering notes.notes alongside the real
+        Effective Date note.  After the fix the cross-heading is silently skipped
+        and only the Effective Date note is returned.  Closes #713.
+        """
+        from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
+
+        # Mirrors the raw_notes produced by _get_notes_text_content for a section
+        # whose USLM XML contains a <note role="crossHeading" topic="statutoryNotes">
+        # followed by a <note topic="effectiveDate">.
+        raw_notes = (
+            "[NH]Statutory Notes and Related Subsidiaries[/NH] "
+            "[NH]Effective Date[/NH]\n\n"
+            "Section effective Jan. 3, 1979, see section 717 of Pub. L. 95–521, "
+            "set out as a note under section 288 of this title."
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        # Only the Effective Date note must be present — the cross-heading is noise.
+        assert len(notes.notes) == 1, (
+            f"Expected exactly 1 note (Effective Date), got {len(notes.notes)}: "
+            f"{[n.header for n in notes.notes]}"
+        )
+        assert notes.notes[0].header == "Effective Date"
+        assert notes.notes[0].category.value == "statutory"
+        body = " ".join(line.content for line in notes.notes[0].lines)
+        assert "Pub. L. 95–521" in body
+
+    def test_effective_date_after_statutory_cross_heading_end_to_end_issue_713(
+        self,
+    ) -> None:
+        """End-to-end pipeline test for issue #713: 2 U.S.C. § 288e-like structure.
+
+        Confirms the complete pipeline (USLM XML parsing → raw text →
+        _parse_notes_structure) captures an Effective Date note when the USLM
+        XML encodes it as a sibling of a <note role="crossHeading"> element
+        that carries the 'Statutory Notes and Related Subsidiaries' label.
+
+        This structure appears in newer USLM releases (e.g. 119-72not60) for
+        sections like 2 U.S.C. § 288e ('Intervention or appearance') that have
+        no Amendments note — only a single standalone Effective Date cross-
+        reference.  In release 113-21 those notes were absent from the XML;
+        when the live database was populated from that older release the API
+        returned notes.notes=[], has_notes=false.
+
+        The parser must return exactly one statutory note ('Effective Date')
+        and the cross-heading must NOT appear as a separate note entry.
+        Closes #713.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_notes_structure,
+        )
+        from pipeline.olrc.parser import USLMParser
+
+        # Mirrors the USLM XML structure for 2 U.S.C. § 288e as it appears in
+        # release 119-72not60 (current).  The first <note> is a cross-heading
+        # with role="crossHeading" and topic="statutoryNotes"; it has only a
+        # <heading> child and no body <p> elements.  The second <note> carries
+        # the actual Effective Date content.
+        xml = (
+            "<notes>"
+            '<note role="crossHeading" topic="statutoryNotes">'
+            "<heading><b>Statutory Notes and Related Subsidiaries</b></heading>"
+            "</note>"
+            '<note topic="effectiveDate">'
+            "<heading>Effective Date</heading>"
+            "<p>Section effective Jan. 3, 1979, see section 717 of "
+            "Pub. L. 95&#x2013;521, set out as a note under section 288 "
+            "of this title.</p>"
+            "</note>"
+            "</notes>"
+        )
+        notes_elem = etree.fromstring(xml)
+        raw = USLMParser()._get_notes_text_content(notes_elem)
+
+        # Confirm the raw text contains the expected markers
+        assert "[NH]Effective Date[/NH]" in raw, (
+            f"Expected [NH]Effective Date[/NH] in raw notes text; got: {raw!r}"
+        )
+
+        notes = SectionNotes()
+        _parse_notes_structure(raw, notes)
+
+        statutory = [n for n in notes.notes if n.category.value == "statutory"]
+        assert len(statutory) == 1, (
+            f"Expected 1 statutory note, got {len(statutory)}: "
+            f"{[n.header for n in notes.notes]}"
+        )
+        assert statutory[0].header == "Effective Date"
+        body = " ".join(line.content for line in statutory[0].lines)
+        assert "Pub. L. 95" in body
+
+        # The cross-heading must NOT appear as a note entry
+        headers_lower = [n.header.lower() for n in notes.notes]
+        assert "statutory notes and related subsidiaries" not in headers_lower, (
+            "Cross-heading 'Statutory Notes and Related Subsidiaries' must not "
+            "appear as a standalone note entry"
+        )
+
 
 class TestTitle17Section106Notes:
     """Regression tests for issue #526: notes not parsed for 17 U.S.C. § 106.

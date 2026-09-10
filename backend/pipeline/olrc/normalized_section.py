@@ -1664,15 +1664,29 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
 
         # Skip only short non-empty fragments that are likely noise.
         # Heading-only notes (empty content) are preserved as standalone headers,
-        # except for the "Historical and Revision Notes" wrapper heading itself:
-        # an empty wrapper heading here is the same marker-artifact-only pattern
-        # (e.g. "[/NH]") that _parse_historical_notes already suppresses when it
-        # has only a <heading> child and no <p> content — the real content lives
-        # in sibling notes (e.g. "House Report No. 94-1476") and would otherwise
-        # be duplicated by a contentless shell note surfacing here.  (Issue #526)
+        # except for known category cross-heading labels whose body content
+        # always lives in sibling <note> elements:
+        #
+        # - "Historical and Revision Notes": an empty wrapper heading is the same
+        #   marker-artifact-only pattern (e.g. "[/NH]") that _parse_historical_notes
+        #   already suppresses when it has only a <heading> child and no <p> content
+        #   — the real content lives in sibling notes (e.g. "House Report No.
+        #   94-1476") and would otherwise be duplicated here.  (Issue #526)
+        #
+        # - "Statutory Notes and Related Subsidiaries" / "Editorial Notes": newer
+        #   USLM XML releases encode these as a <note role="crossHeading"> element
+        #   with only a <heading> child and no body <p> elements.  The parser emits
+        #   an [NH] marker for the heading, but the real notes live in sibling
+        #   <note topic="..."> elements.  Adding an empty standalone header here
+        #   would produce spurious noise entries in notes.notes.  (Issue #713)
+        SKIP_WHEN_EMPTY_LOWER = {
+            "historical and revision notes",
+            "statutory notes and related subsidiaries",
+            "editorial notes",
+        }
         if content and len(content) <= 30:
             continue
-        if not content and header.lower() == "historical and revision notes":
+        if not content and header.lower() in SKIP_WHEN_EMPTY_LOWER:
             continue
 
         # House/Senate Report No. headers are sub-notes of Historical and
