@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.11 | 28    | 1331    | Federal question                                                                       | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,26 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.11 — 28 U.S.C. § 1331
+
+All primary fields matched: heading ("Federal question"), full body text ("The district courts
+shall have original jurisdiction of all civil actions arising under the Constitution, laws, or
+treaties of the United States."), source credit, enacted date (1948-06-25), and
+last_modified_date (1980-12-01). Historical and Revision Notes (7 paragraphs covering the
+1940-edition derivation, jurisdictional-amount history, and drafting changes), Amendments note
+(1980, 1976, and 1958 entries with full descriptions), and two Effective Date notes are all
+present and match the OLRC HTML verbatim. Cross-references to Pub. L. 96–486, 94–574, and
+85–554 are correct. `is_positive_law: true` and `group_ancestors` (Part IV / Chapter 85) are
+accurate. Section was last amended in 1980 so content at release point 113-21 matches current
+OLRC prelim exactly.
+
+One known-issue occurrence: the "Effective Date of 1980 Amendment; Applicability" and
+"Effective Date of 1958 Amendment" notes carry `category: "editorial"` in the CWLB detail
+API, but they appear under "Statutory Notes and Related Subsidiaries" in the OLRC and should
+be `category: "statutory"`. The detail endpoint's `note_categories` returns
+`["editorial", "historical"]`, missing `"statutory"`. This is the systemic categorization
+defect already tracked in #686. Comment added to that issue.
 
 
 ## Test methodology
