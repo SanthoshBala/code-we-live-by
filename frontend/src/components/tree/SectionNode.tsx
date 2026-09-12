@@ -19,6 +19,7 @@ const NOTE_FILES: { file: string; category: string }[] = [
   { file: 'EDITORIAL_NOTES', category: 'editorial' },
   { file: 'STATUTORY_NOTES', category: 'statutory' },
   { file: 'HISTORICAL_NOTES', category: 'historical' },
+  { file: 'EXECUTIVE_NOTES', category: 'executive' },
 ];
 
 /** Expandable section node showing file children (Code + notes). */

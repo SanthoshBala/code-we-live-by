@@ -3,14 +3,16 @@
 import re
 
 from app.models.enums import NoteRefType
-from app.schemas import NoteReferenceSchema
+from app.schemas import NoteCategoryEnum, NoteReferenceSchema
 from pipeline.olrc.normalized_section import (
     PARAGRAPH_BREAK_MARKER,
+    NoteCategory,
     ParsedPublicLaw,
     SectionNotes,
     SourceLaw,
     _detect_marker_level,
     _is_sentence_boundary,
+    _parse_flat_notes,
     _parse_notes_structure,
     _split_into_sentences,
     _strip_note_markers,
@@ -6401,4 +6403,140 @@ class TestNoteParAbbrevContinuations:
         )
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
+        )
+
+
+class TestFunctionTransferNoteOrderAndCategory:
+    """Tests for issue #716: functionTransfer note order and category.
+
+    OLRC renders "Statutory Notes" before "Executive Documents".  When USLM XML
+    places a functionTransfer note before a miscellaneous note (opposite of the
+    display order), the parser must:
+    1. Assign category EXECUTIVE (not STATUTORY) to functionTransfer notes.
+    2. Output miscellaneous notes before functionTransfer notes regardless of
+       XML element order.
+    """
+
+    # Minimal raw_notes string that simulates the parser output for a section
+    # whose XML has a functionTransfer note BEFORE a miscellaneous note.
+    # The [EXEC]functionTransfer[/EXEC] marker is emitted by _get_notes_text_content
+    # in parser.py for any <note topic="functionTransfer"> element.
+    _RAW_NOTES_EXEC_BEFORE_MISC = (
+        "[EXEC]functionTransfer[/EXEC]"
+        "[NH]Exception as to Transfer of Functions[/NH]"
+        "[PARA]Functions vested by any provision of law in Comptroller of the Currency,"
+        " referred to in this section, not included in transfer of functions to"
+        " Secretary of the Treasury.[/PARA]"
+        "[NH]Application to District of Columbia[/NH]"
+        "[PARA]Provisions of this section were made applicable to banks in the"
+        " District of Columbia.[/PARA]"
+    )
+
+    def test_function_transfer_note_gets_executive_category(self) -> None:
+        """functionTransfer notes must have category EXECUTIVE, not STATUTORY."""
+        notes = SectionNotes()
+        _parse_flat_notes(self._RAW_NOTES_EXEC_BEFORE_MISC, notes)
+
+        headers = {n.header: n.category for n in notes.notes}
+        assert "Exception as to Transfer of Functions" in headers, (
+            f"functionTransfer note not found; headers: {list(headers)}"
+        )
+        assert (
+            headers["Exception as to Transfer of Functions"] == NoteCategory.EXECUTIVE
+        ), f"Expected EXECUTIVE, got {headers['Exception as to Transfer of Functions']}"
+
+    def test_miscellaneous_note_gets_statutory_category(self) -> None:
+        """miscellaneous notes must have category STATUTORY."""
+        notes = SectionNotes()
+        _parse_flat_notes(self._RAW_NOTES_EXEC_BEFORE_MISC, notes)
+
+        headers = {n.header: n.category for n in notes.notes}
+        assert "Application to District of Columbia" in headers, (
+            f"miscellaneous note not found; headers: {list(headers)}"
+        )
+        assert (
+            headers["Application to District of Columbia"] == NoteCategory.STATUTORY
+        ), f"Expected STATUTORY, got {headers['Application to District of Columbia']}"
+
+    def test_miscellaneous_note_precedes_function_transfer_note(self) -> None:
+        """Miscellaneous (statutory) note must appear before functionTransfer note.
+
+        This is the OLRC display order: "Statutory Notes and Related Subsidiaries"
+        is always shown before "Executive Documents".  When the XML has the exec
+        note first (as in 12 U.S.C. § 198), the parser must reorder them.
+        """
+        notes = SectionNotes()
+        _parse_flat_notes(self._RAW_NOTES_EXEC_BEFORE_MISC, notes)
+
+        assert len(notes.notes) == 2, (
+            f"Expected 2 notes, got {len(notes.notes)}: {[n.header for n in notes.notes]}"
+        )
+        assert notes.notes[0].header == "Application to District of Columbia", (
+            f"Expected miscellaneous note first, got {notes.notes[0].header!r}"
+        )
+        assert notes.notes[1].header == "Exception as to Transfer of Functions", (
+            f"Expected functionTransfer note second, got {notes.notes[1].header!r}"
+        )
+
+    def test_xml_order_misc_before_exec_preserved(self) -> None:
+        """When XML already has misc before exec, order should be unchanged."""
+        raw_notes = (
+            "[NH]Application to District of Columbia[/NH]"
+            "[PARA]Provisions of this section were made applicable to banks.[/PARA]"
+            "[EXEC]functionTransfer[/EXEC]"
+            "[NH]Exception as to Transfer of Functions[/NH]"
+            "[PARA]Functions vested in Comptroller not included in transfer.[/PARA]"
+        )
+        notes = SectionNotes()
+        _parse_flat_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 2
+        assert notes.notes[0].header == "Application to District of Columbia"
+        assert notes.notes[0].category == NoteCategory.STATUTORY
+        assert notes.notes[1].header == "Exception as to Transfer of Functions"
+        assert notes.notes[1].category == NoteCategory.EXECUTIVE
+
+    def test_strip_note_markers_removes_exec_marker(self) -> None:
+        """_strip_note_markers must remove [EXEC]...[/EXEC] markers."""
+        text = "[EXEC]functionTransfer[/EXEC][NH]Some Header[/NH] content here"
+        stripped = _strip_note_markers(text)
+        assert "[EXEC]" not in stripped
+        assert "[/EXEC]" not in stripped
+        assert "functionTransfer" not in stripped
+        assert "content here" in stripped
+
+    def test_executive_category_enum_value(self) -> None:
+        """NoteCategoryEnum must have EXECUTIVE = 'executive'."""
+        assert NoteCategoryEnum.EXECUTIVE == "executive"
+        assert NoteCategory.EXECUTIVE == "executive"
+
+    def test_full_parse_notes_structure_assigns_executive_category(self) -> None:
+        """_parse_notes_structure must assign EXECUTIVE for functionTransfer notes.
+
+        This exercises the full pipeline that would run during ingestion of a
+        section like 12 U.S.C. § 198 where the XML places a functionTransfer
+        note before a miscellaneous note.
+        """
+        notes = SectionNotes()
+        _parse_notes_structure(self._RAW_NOTES_EXEC_BEFORE_MISC, notes)
+
+        exec_notes = [n for n in notes.notes if n.category == NoteCategory.EXECUTIVE]
+        stat_notes = [n for n in notes.notes if n.category == NoteCategory.STATUTORY]
+
+        assert len(exec_notes) == 1, (
+            f"Expected 1 executive note, got {len(exec_notes)}: {[n.header for n in exec_notes]}"
+        )
+        assert exec_notes[0].header == "Exception as to Transfer of Functions"
+
+        assert len(stat_notes) == 1, (
+            f"Expected 1 statutory note, got {len(stat_notes)}: {[n.header for n in stat_notes]}"
+        )
+        assert stat_notes[0].header == "Application to District of Columbia"
+
+        # Statutory note must appear first in the combined list (OLRC display order)
+        all_headers = [n.header for n in notes.notes]
+        misc_idx = all_headers.index("Application to District of Columbia")
+        exec_idx = all_headers.index("Exception as to Transfer of Functions")
+        assert misc_idx < exec_idx, (
+            f"Expected miscellaneous note (idx {misc_idx}) before exec note (idx {exec_idx})"
         )

@@ -1639,17 +1639,33 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
     }
     editorial_headers_lower = {h.lower() for h in EDITORIAL_HEADERS}
 
-    header_positions: list[tuple[int, int, str]] = []
+    # Build a set of [NH] marker start positions that are immediately preceded
+    # by an [EXEC]...[/EXEC] marker (with optional whitespace in between).
+    # These notes belong to the "Executive Documents" category (issue #716).
+    _exec_nh_starts: set[int] = set()
+    _EXEC_MARKER_RE = re.compile(r"\[EXEC\].*?\[/EXEC\]", re.DOTALL)
+    for exec_m in _EXEC_MARKER_RE.finditer(raw_notes):
+        rest = raw_notes[exec_m.end() :]
+        nh_m = re.match(r"\s*\[NH\]", rest)
+        if nh_m:
+            _exec_nh_starts.add(exec_m.end() + nh_m.start())
+
+    header_positions: list[tuple[int, int, str, bool]] = []
     for match in _NH_HEADER_PATTERN.finditer(raw_notes):
         header = match.group(1).strip()
         if not header:
             continue
-        header_positions.append((match.start(), match.end(), header))
+        is_exec = match.start() in _exec_nh_starts
+        header_positions.append((match.start(), match.end(), header, is_exec))
 
     seen_headers: set[str] = set()
     # Skip headers already emitted by _parse_historical/editorial/statutory_notes
     existing_lower = {n.header.lower() for n in notes.notes}
-    for i, (_start, end, header) in enumerate(header_positions):
+    # Collect regular and executive notes separately so executive notes can be
+    # appended after statutory notes regardless of XML element order (issue #716).
+    regular_new_notes: list[SectionNote] = []
+    exec_new_notes: list[SectionNote] = []
+    for i, (_start, end, header, is_exec) in enumerate(header_positions):
         if header in seen_headers or header.lower() in existing_lower:
             continue
         seen_headers.add(header)
@@ -1675,31 +1691,45 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         if not content and header.lower() == "historical and revision notes":
             continue
 
+        # Assign category.  Executive-document notes (tagged with [EXEC]...[/EXEC])
+        # take precedence; otherwise classify by header text (issue #716).
         # House/Senate Report No. headers are sub-notes of Historical and
         # Revision Notes — classify them as HISTORICAL regardless of the
         # editorial_headers set.  (Issue #526)
-        category = (
-            NoteCategory.HISTORICAL
-            if header.lower() in historical_headers_lower
-            or _REPORT_PATTERN.search(header)
-            else NoteCategory.EDITORIAL
-            if header.lower() in editorial_headers_lower
+        if is_exec:
+            category = NoteCategory.EXECUTIVE
+        elif header.lower() in historical_headers_lower or _REPORT_PATTERN.search(
+            header
+        ):
+            category = NoteCategory.HISTORICAL
+        elif (
+            header.lower() in editorial_headers_lower
             or _EFFECTIVE_DATE_PATTERN.search(header)
-            else NoteCategory.STATUTORY
-        )
+        ):
+            category = NoteCategory.EDITORIAL
+        else:
+            category = NoteCategory.STATUTORY
 
         if header == "Amendments" and content:
             notes.amendments = _parse_amendments(content)
 
-        notes.notes.append(
-            SectionNote(
-                header=header,
-                lines=_paragraph_lines(raw_content)
-                if header in PARAGRAPH_LINE_HEADERS
-                else normalize_note_content(raw_content),
-                category=category,
-            )
+        note = SectionNote(
+            header=header,
+            lines=_paragraph_lines(raw_content)
+            if header in PARAGRAPH_LINE_HEADERS
+            else normalize_note_content(raw_content),
+            category=category,
         )
+        if is_exec:
+            exec_new_notes.append(note)
+        else:
+            regular_new_notes.append(note)
+
+    # Append regular notes first (historical/editorial/statutory), then executive
+    # notes.  This matches the OLRC display order where "Statutory Notes and
+    # Related Subsidiaries" precedes "Executive Documents" (issue #716).
+    notes.notes.extend(regular_new_notes)
+    notes.notes.extend(exec_new_notes)
 
 
 def _strip_note_markers(text: str) -> str:
@@ -1710,8 +1740,10 @@ def _strip_note_markers(text: str) -> str:
     - [H1]...[/H1] bold header markers (cross-headings)
     - [H2]...[/H2] italic sub-header markers (text kept)
     - [QC:N]...[/QC] quoted-content markers (text kept)
+    - [EXEC]...[/EXEC] executive-document category markers
     - Orphaned [/NH] and [/H1] closing markers
     """
+    text = re.sub(r"\[EXEC\].*?\[/EXEC\]", "", text, flags=re.DOTALL)
     text = re.sub(r"\[NH\].*?\[/NH\]", "", text, flags=re.DOTALL)
     text = re.sub(r"\[H1\].*?\[/H1\]", "", text, flags=re.DOTALL)
     text = re.sub(r"\[/NH\]", "", text)
@@ -1744,6 +1776,7 @@ def _find_wrapper_heading(pattern: str, raw_notes: str) -> re.Match[str] | None:
     """
     for match in re.finditer(pattern, raw_notes, re.DOTALL | re.IGNORECASE):
         prefix = raw_notes[: match.start()]
+        prefix = re.sub(r"\[EXEC\].*?\[/EXEC\]", "", prefix, flags=re.DOTALL)
         prefix = re.sub(r"\[NH\].*?\[/NH\]", "", prefix, flags=re.DOTALL)
         prefix = re.sub(r"\[H1\].*?\[/H1\]", "", prefix, flags=re.DOTALL)
         prefix = re.sub(r"\[/?NH\]|\[/?H1\]", "", prefix)

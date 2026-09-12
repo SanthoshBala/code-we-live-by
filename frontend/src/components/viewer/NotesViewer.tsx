@@ -16,12 +16,14 @@ const FILE_TO_CATEGORY: Record<string, SectionNote['category']> = {
   EDITORIAL_NOTES: 'editorial',
   STATUTORY_NOTES: 'statutory',
   HISTORICAL_NOTES: 'historical',
+  EXECUTIVE_NOTES: 'executive',
 };
 
 const CATEGORY_LABELS: Record<SectionNote['category'], string> = {
   editorial: 'Editorial Notes',
   statutory: 'Statutory Notes',
   historical: 'Historical Notes',
+  executive: 'Executive Documents',
 };
 
 /** Client component that renders notes for a single category. */

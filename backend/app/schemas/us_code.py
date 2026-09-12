@@ -216,15 +216,18 @@ class NoteReferenceSchema(BaseModel):
 class NoteCategoryEnum(enum.StrEnum):
     """Category of a section note in the US Code.
 
-    The OLRC organizes notes into three main categories:
+    The OLRC organizes notes into four categories:
     - HISTORICAL: Legislative history from original codification
     - EDITORIAL: OLRC editorial annotations added for clarity
     - STATUTORY: Provisions from enacting laws not part of Code text
+    - EXECUTIVE: Executive documents (orders, proclamations, function transfers)
+                 rendered under the "Executive Documents" heading in OLRC HTML
     """
 
     HISTORICAL = "historical"
     EDITORIAL = "editorial"
     STATUTORY = "statutory"
+    EXECUTIVE = "executive"
 
 
 class SectionNoteSchema(BaseModel):
@@ -455,6 +458,11 @@ class SectionNotesSchema(BaseModel):
     def statutory_notes(self) -> list[SectionNoteSchema]:
         """Get all statutory notes."""
         return self.notes_by_category(NoteCategoryEnum.STATUTORY)
+
+    @property
+    def executive_notes(self) -> list[SectionNoteSchema]:
+        """Get all executive document notes (orders, proclamations, function transfers)."""
+        return self.notes_by_category(NoteCategoryEnum.EXECUTIVE)
 
 
 # =========================================================================
