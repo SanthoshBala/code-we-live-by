@@ -117,7 +117,7 @@ export interface NoteReference {
 export interface SectionNote {
   header: string;
   lines: CodeLine[];
-  category: 'historical' | 'editorial' | 'statutory';
+  category: 'historical' | 'editorial' | 'statutory' | 'executive';
   references?: NoteReference[];
 }
 

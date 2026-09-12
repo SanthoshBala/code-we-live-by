@@ -157,6 +157,21 @@ _NOTE_TOPIC_DISPLAY: dict[str, str] = {
     "constructionOfAmendment": "Construction of Amendment",
 }
 
+# USLM note topics that belong to the "Executive Documents" category.
+# These appear under the "Executive Documents" cross-heading in OLRC HTML
+# rendering, not under "Statutory Notes and Related Subsidiaries".
+# The [EXEC]topic[/EXEC] marker emitted for these notes lets the downstream
+# parser assign NoteCategory.EXECUTIVE (issue #716).
+_EXECUTIVE_NOTE_TOPICS = frozenset(
+    {
+        "functionTransfer",
+        "executiveOrder",
+        "presidentialProclamation",
+        "reorganizationPlan",
+        "presidentMessage",
+    }
+)
+
 # Matches leading comma-separated parenthetical sub-citation clauses that
 # trail a sourceCredit PL <ref> as plain text, e.g. the "(b)(3)(I)" in
 # "<ref>...§ 1901(a)(130)</ref>, (b)(3)(I), <date>...". Only matches simple
@@ -1763,7 +1778,14 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
-            # <note topic="..."> without a <heading> child: synthesize [NH] from topic.
+            # <note topic="..."> processing: emit a category marker and/or
+            # synthesize [NH] from topic.
+            #
+            # For topics in _EXECUTIVE_NOTE_TOPICS, emit [EXEC]topic[/EXEC]
+            # BEFORE any heading/content so the downstream parser can assign
+            # NoteCategory.EXECUTIVE (issue #716).
+            #
+            # For notes without a <heading> child: synthesize [NH] from topic.
             # Some USLM releases omit the heading element and rely solely on the
             # topic attribute (e.g. <note topic="amendments"><p>...</p>).
             if tag == "note":
@@ -1772,6 +1794,9 @@ class USLMParser:
                     child_tags = {
                         (c.tag.split("}")[-1] if "}" in c.tag else c.tag) for c in el
                     }
+                    normalized_topic = topic[0].lower() + topic[1:]
+                    if normalized_topic in _EXECUTIVE_NOTE_TOPICS:
+                        parts.append(f"[EXEC]{normalized_topic}[/EXEC]")
                     if "heading" not in child_tags:
                         # Use the canonical display string for known camelCase topics;
                         # fall back to _camel_to_title() for topics not in the table
@@ -1785,7 +1810,7 @@ class USLMParser:
                         # "historicalAndRevision").  Normalise to lowercase-first camelCase
                         # before the dict lookup so the canonical display string is always
                         # found (issue #542).
-                        normalized_topic = topic[0].lower() + topic[1:]
+                        # (normalized_topic was already computed above for the exec check)
                         display = _NOTE_TOPIC_DISPLAY.get(
                             normalized_topic, _camel_to_title(topic)
                         )
