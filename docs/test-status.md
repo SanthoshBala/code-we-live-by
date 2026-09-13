@@ -30,7 +30,8 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.07.31 | 9     | 10      | Same; vacation; grounds; rehearing                                                     | 113-21        | ✅ Clean (known issue applies — see notes) |
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
-| 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.04 | 9     | 1       | “Maritime transactions” and “commerce” defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.13 | 9     | 1       | “Maritime transactions” and “commerce” defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -173,6 +174,7 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
@@ -186,6 +188,26 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.13 — 9 U.S.C. § 1 (re-test)
+
+Section 9/1 randomly selected again. All fields matched at the 113-21 baseline: heading
+(`“Maritime transactions” and “commerce” defined; exceptions to operation of title`), full
+statutory text (single paragraph), source credit, enacted date (1947-07-30),
+`last_modified_date: null` (correct — § 1 has never been amended), Derivation note
+(category: historical), `has_amendments: false`, `amendments: []`, and `group_ancestors`
+(Chapter 1). Unicode typographic quotation marks (U+201C/U+201D) are preserved correctly
+in both heading and text.
+
+Secondarily verified 9 U.S.C. § 10 (the section with the most amendments in Title 9).
+All six `notes.amendments[*].law` entries have `date`, `stat_volume`, `stat_page`, and
+`official_title` as `null` for PL 107-169, PL 102-354, and PL 101-552 — the systemic
+amendment law metadata null bug already tracked in #561. Comment added to that issue.
+The section's own `last_modified_date` (2002-05-07) is correct, confirming the per-section
+date is derived independently of the law join.
+
+OLRC XML used: release point 113-21 (downloaded from OLRC bulk ZIP).
+OLRC latest release point as of 2026.09.13: PL 119-103 (2026-09-02).
 
 
 ## Test methodology
