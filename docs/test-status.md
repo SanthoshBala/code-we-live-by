@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.14 | 22    | 6009    | Enforcement                                                                            | 113-21        | ⚠️ Known issues apply (see notes) |
 
 ## Notes
 
@@ -186,6 +187,32 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.14 — 22 U.S.C. § 6009
+
+Title 22 (Foreign Relations and Intercourse), Chapter 69 (Cuban Democracy Act), § 6009
+(Enforcement). Section was enacted Oct. 23, 1992 (Pub. L. 102–484) and has never been amended,
+so it is present in full at release point 113-21. OLRC XML from release point 119-103
+(`xml_usc22@119-103.zip`) was used for structural comparison.
+
+Two discrepancy classes found — both covered by existing open issues:
+
+1. **Multi-sentence paragraph split** (instance of #672) — The OLRC XML for subsection (a)
+   has all three sentences within a **single `<p>` element** inside `<content>`. CWLB
+   returns them as three separate provisions (lines 2, 3, 4 of `provisions[]`), each at
+   `indent_level: 0` with no marker. Unlike some occurrences of #672, the indent level is
+   correct here (0) — only the splitting is wrong. Comment added to #672.
+
+2. **Stale citation text** (covered by #564, #578, #583, #485) — CWLB returns the pre-2013
+   Appendix-style citations `[50 U.S.C. App. 1 et seq.]` and `[50 U.S.C. App. 16]`, as
+   well as the old Codification and References in Text note text referencing the Appendix,
+   whereas the current OLRC XML uses `[50 U.S.C. 4301 et seq.]` and `[50 U.S.C. 4315]`
+   (reflecting the Trading With the Enemy Act reclassification into chapter 53 of Title 50
+   by Pub. L. 112-229). These differences are attributable to the stale ingestion defect.
+
+No new bugs filed. Heading, subsection structure (a)–(e), source credit, enacted date, and
+editorial notes (References in Text, Codification) all present. `is_repealed: false` and
+`is_positive_law: false` are correct.
 
 
 ## Test methodology
