@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.15 | 48    | 1821    | District Court for the Northern Mariana Islands                                        | 113-21        | ⚠️ Known issues apply (see notes) |
 
 ## Notes
 
@@ -186,6 +187,36 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.15 — 48 U.S.C. § 1821
+
+Heading ("District Court for the Northern Mariana Islands"), full body text (subsections (a),
+(b)(1)–(b)(4), (c)), source credit (`Pub. L. 95–157, § 1, Nov. 8, 1977, 91 Stat. 1265;
+Pub. L. 98–454, title IX, § 901, Oct. 5, 1984, 98 Stat. 1744.`), enacted date
+(`1977-11-08`), and `last_modified_date` (`1984-10-05`) all match the OLRC XML at release
+point 113-21. All seven note categories are present and their full text matches: References in
+Text (3 paragraphs), Codification, Amendments (3 entries with complete prior-text quote),
+Effective Date of 1984 Amendment, Effective Date, Termination of Trust Territory of the Pacific
+Islands, and Extension of Term of District Judges.
+
+Two known-issue occurrences found and commented on existing open issues — no new bugs filed:
+
+1. **Inline footnote text dropped** (issue #667) — Subsection (c) contains
+   `<ref class="footnoteRef" idref="fn002021">1</ref><note type="footnote" id="fn002021">So in original.</note>`
+   in the OLRC XML. CWLB retains `[1]` inline in `text_content` (`"...of titles [1] 28,
+   the rules..."`) but "So in original." does not appear anywhere in the `notes` structure.
+   Comment added to #667.
+
+2. **Multi-sentence paragraph split at wrong indent level** (issue #672) — Paragraphs
+   `(b)(1)` and `(b)(2)` each have a single OLRC `<content>` element containing two
+   sentences. CWLB splits each into two separate provisions: the first sentence at
+   indent_level 1 (correct), and the continuation sentence at indent_level 2 with no
+   marker (incorrect — makes it appear as a sub-provision). For example, `(b)(1)`'s
+   continuation "The judge shall receive a salary..." appears as provision line 8 at
+   indent_level 2 rather than as part of line 7. Comment added to #672.
+
+OLRC XML used: `usc48@113-21.xml` from
+`https://uscode.house.gov/download/releasepoints/us/pl/113/21/xml_usc48@113-21.zip`.
 
 
 ## Test methodology
