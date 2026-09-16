@@ -6174,6 +6174,64 @@ class TestAmendmentMidSentencePubLFix:
         fifth_1976 = [a for a in amendments if a.year == 1976][4]
         assert "Subsecs. (d) to (g)." in fifth_1976.description
 
+    def test_par_prefix_multi_law_same_year_issue_721(self) -> None:
+        """Bug: second law in a multi-law year group dropped when Par. prefix present.
+
+        Regression test for Issue #721: 49 U.S.C. § 31501 (OLRC release 113-21).
+
+        OLRC Amendments note text (simplified):
+          1995—Par. (2). Pub. L. 104–88, § 308(k)(1), substituted "13102" for "10102".
+          Par. (3)(A). Pub. L. 104–88, § 308(k)(2), substituted "13501" for "10521(a)".
+          1994—Pub. L. 103–272 renumbered section 3101 as this section.
+          Par. (1). Pub. L. 103–429 substituted "section 3(f)" for "section 203(f)".
+
+        Expected: 4 amendments (2 for 1995 PL 104-88, 1 for 1994 PL 103-272, 1 for
+        1994 PL 103-429).  Previously: only 2 — PL 103-429 was silently dropped
+        because the 'Par.' prefix was not recognised by _PUB_L_PARA_PATTERN.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1995—"
+            'Par. (2). Pub. L. 104–88, § 308(k)(1), substituted "13102" for "10102".\n\n'
+            'Par. (3)(A). Pub. L. 104–88, § 308(k)(2), substituted "13501" for "10521(a)".\n\n'
+            "1994—"
+            "Pub. L. 103–272 renumbered section 3101 of this title as this section and amended it generally, restating it without substantive change.\n\n"
+            'Par. (1). Pub. L. 103–429 substituted "section 3(f)" for "section 203(f)".'
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 4, (
+            f"Expected 4 amendments but got {len(amendments)}: "
+            + str([(a.year, a.law.congress, a.law.law_number) for a in amendments])
+        )
+
+        years = [a.year for a in amendments]
+        assert years.count(1995) == 2
+        assert years.count(1994) == 2
+
+        # Both 1995 entries must be for PL 104-88
+        for a in amendments:
+            if a.year == 1995:
+                assert a.law.congress == 104
+                assert a.law.law_number == 88
+
+        # 1994 entries must cover both PL 103-272 and PL 103-429
+        law_numbers_1994 = {a.law.law_number for a in amendments if a.year == 1994}
+        assert 272 in law_numbers_1994
+        assert 429 in law_numbers_1994
+
+        # Par. prefix must be preserved in descriptions
+        par2_entry = next(
+            a for a in amendments if a.year == 1995 and "Par. (2)" in a.description
+        )
+        assert "Par. (2)" in par2_entry.description
+
+        par1_entry = next(
+            a for a in amendments if a.year == 1994 and a.law.law_number == 429
+        )
+        assert "Par. (1)" in par1_entry.description
+
 
 class TestReferencesInTextAbbreviationPeriods:
     """Regression tests for issue #551: 17 U.S.C. § 1201 note paragraphs split at 'subsecs.' period.
