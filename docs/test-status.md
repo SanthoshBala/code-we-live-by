@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.17 | 46    | 51908   | Prohibition against unauthorized manufacture, sale, possession, or display of awards  | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,24 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.17 — 46 U.S.C. § 51908
+
+Heading, full body text (subsections (a) and (b)), source credit, enacted date (2006-10-06),
+and `last_modified_date` (2008-01-28) all match the OLRC. Citations (3 entries — PL 109-304
+enactment, PL 109-364 amendment, PL 110-181 amendment) are present and correct. The two
+amendment note entries (2008 and 2006) match the OLRC Editorial Notes verbatim. Historical
+and Revision Notes data is present (revised section number `51908`, source US Code
+`46 App.:2007.`, source Statutes at Large `Pub. L. 100–324, §8, May 30, 1988, 102 Stat. 577.`,
+and the narrative sentence about adding "not more than").
+
+One known-issue occurrence confirmed: the Historical and Revision Notes table column headers
+("Revised section", "Source (U.S. Code)", "Source (Statutes at Large)") are absent from
+`notes.notes[0].lines` — only the data row values are returned. This is the systemic defect
+already tracked in #698. Comment added to that issue.
+
+No new bugs filed. OLRC prelim current through 2026-09-16; section last amended 2008-01-28,
+so content is identical between release point 113-21 and the current OLRC.
 
 
 ## Test methodology
