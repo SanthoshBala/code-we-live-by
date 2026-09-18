@@ -1383,9 +1383,11 @@ class USLMParser:
     ) -> list[ParsedSubsection]:
         """Extract structured subsections from a section element.
 
-        Handles two XML patterns:
+        Handles three XML patterns:
         1. Standard: <section> > <subsection> > <paragraph> > ...
-        2. Direct paragraphs: <section> > <chapeau>? > <paragraph> > ...
+        2. Standard with chapeau: <section> > <chapeau> > <subsection> > ...
+           (e.g. 27 U.S.C. § 205 — section-level chapeau precedes subsections)
+        3. Direct paragraphs: <section> > <chapeau>? > <paragraph> > ...
            (e.g. 20 U.S.C. § 5204 which has no <subsection> wrapper)
         """
         subsections = []
@@ -1397,6 +1399,28 @@ class USLMParser:
 
         for subsec_elem in subsec_elems:
             subsections.append(self._parse_subsection(subsec_elem, "subsection"))
+
+        # When <subsection> elements exist, also check for a section-level <chapeau>
+        # sibling. If found, wrap the subsections in a synthetic parent so the
+        # preamble text ("It shall be unlawful for any person…:") precedes (a), (b), …
+        # instead of being silently dropped (Issue #724).
+        if subsections:
+            chapeau_elem = section_elem.find("{*}chapeau")
+            if chapeau_elem is None:
+                chapeau_elem = section_elem.find("chapeau")
+            if chapeau_elem is not None:
+                chapeau_text = self._get_text_content(chapeau_elem).strip()
+                if chapeau_text:
+                    subsections = [
+                        ParsedSubsection(
+                            marker="",
+                            heading=None,
+                            content=chapeau_text,
+                            children=subsections,
+                            level="subsection",
+                            continuation=[],
+                        )
+                    ]
 
         # If no <subsection> elements, check for <paragraph> directly under section
         if not subsections:

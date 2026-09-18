@@ -498,6 +498,50 @@ class TestUSLMParser:
         assert para2.children[0].marker == "(A)"
         assert para2.children[1].marker == "(B)"
 
+    def test_extract_subsections_with_section_level_chapeau(
+        self, parser: USLMParser
+    ) -> None:
+        """Section-level <chapeau> before <subsection> children must not be dropped.
+
+        Regression test for Issue #724: 27 U.S.C. § 205 and similar sections that
+        have a <chapeau> at the section level (not inside a subsection) were silently
+        dropping the preamble text.  The chapeau should wrap all subsections in a
+        synthetic parent so the introductory sentence precedes (a), (b), …
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t27/s205">
+          <num value="205">§ 205.</num>
+          <heading>Unfair competition and unlawful practices</heading>
+          <chapeau class="blockIndent0">It shall be unlawful for any person engaged in business as a distiller, directly or indirectly or through an affiliate:</chapeau>
+          <subsection identifier="/us/usc/t27/s205/a">
+            <num value="a">(a)</num>
+            <heading>Exclusive outlet</heading>
+            <content>To require exclusive dealing.</content>
+          </subsection>
+          <subsection identifier="/us/usc/t27/s205/b">
+            <num value="b">(b)</num>
+            <heading>Tied house</heading>
+            <content>To induce through financial interest.</content>
+          </subsection>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        # Should produce a synthetic wrapper with the chapeau as content
+        assert len(subsections) == 1, (
+            "Expected one synthetic wrapper, got subsections starting with "
+            f"markers {[s.marker for s in subsections]}"
+        )
+        wrapper = subsections[0]
+        assert wrapper.marker == ""
+        assert "unlawful" in (wrapper.content or ""), (
+            f"Chapeau text missing from wrapper.content: {wrapper.content!r}"
+        )
+        assert len(wrapper.children) == 2
+        assert wrapper.children[0].marker == "(a)"
+        assert wrapper.children[1].marker == "(b)"
+        assert "exclusive dealing" in (wrapper.children[0].content or "")
+
     def test_parse_subsection_continuation_element(self, parser: USLMParser) -> None:
         """_parse_subsection collects <continuation> elements into the continuation field.
 
