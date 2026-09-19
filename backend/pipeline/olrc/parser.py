@@ -1229,7 +1229,17 @@ class USLMParser:
         # Find content element
         content = section_elem.find("content") or section_elem.find("{*}content")
         if content is not None:
-            return self._get_text_content(content, strip_footnotes=True)
+            parts = [self._get_text_content(content, strip_footnotes=True)]
+            # Also include any <proviso> elements that are direct children of
+            # the section (OLRC XML sometimes places them as siblings of
+            # <content> rather than inline inside it).
+            for child in section_elem:
+                tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                if tag == "proviso":
+                    text = self._get_text_content(child, strip_footnotes=True)
+                    if text:
+                        parts.append(text)
+            return " ".join(filter(None, parts)).strip()
 
         # Fall back to getting all text except heading and metadata
         parts = []
@@ -1314,6 +1324,14 @@ class USLMParser:
                 content_parts.append(
                     self._get_text_content(content_elem, strip_footnotes=True)
                 )
+
+        # Also collect <proviso> elements that are direct children of this element
+        # (OLRC XML sometimes encodes these as siblings to <content> rather than inline)
+        proviso_elems = elem.findall("{*}proviso") or elem.findall("proviso")
+        for proviso_elem in proviso_elems:
+            text = self._get_text_content(proviso_elem, strip_footnotes=True)
+            if text:
+                content_parts.append(text)
 
         content = " ".join(content_parts).strip()
 

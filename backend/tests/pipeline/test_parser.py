@@ -935,6 +935,78 @@ class TestUSLMParser:
         assert "So in original" in footnotes[0]
         assert "No subsec. (b) has been enacted" in footnotes[0]
 
+    def test_proviso_inside_content_preserved(self, parser: USLMParser) -> None:
+        """<proviso> inline inside <content> is included in section text.
+
+        Regression test for Issue #726: verifies the existing inline case
+        continues to work after the sibling-proviso fix.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t47/ch1/s33">
+          <num value="33">§ 33.</num>
+          <heading>Jurisdiction and venue of actions and offenses</heading>
+          <content>The district courts...outside of said waters:<proviso> Provided, That in case such infraction is committed outside...</proviso></content>
+        </section>"""
+        elem = etree.fromstring(xml)
+        result = parser._extract_section_text(elem)
+
+        assert "outside of said waters" in result
+        assert "Provided, That" in result
+        assert "committed outside" in result
+
+    def test_proviso_sibling_of_content_in_section_preserved(
+        self, parser: USLMParser
+    ) -> None:
+        """<proviso> as a direct sibling of <content> at section level is included.
+
+        Regression test for Issue #726: 47 U.S.C. § 33 encodes the proviso
+        as a sibling element of <content> rather than inline inside it.
+        _extract_section_text must include the proviso text.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t47/ch1/s33">
+          <num value="33">§ 33.</num>
+          <heading>Jurisdiction and venue of actions and offenses</heading>
+          <content>The district courts...outside of said waters:</content>
+          <proviso> Provided, That in case such infraction is committed outside...</proviso>
+        </section>"""
+        elem = etree.fromstring(xml)
+        result = parser._extract_section_text(elem)
+
+        assert "outside of said waters" in result, (
+            "Content text before proviso must be present"
+        )
+        assert "Provided, That" in result, (
+            "<proviso> sibling at section level must be included in extracted text"
+        )
+        assert "committed outside" in result
+
+    def test_proviso_sibling_of_content_in_paragraph_preserved(
+        self, parser: USLMParser
+    ) -> None:
+        """<proviso> as a direct sibling of <content> at paragraph level is included.
+
+        Regression test for Issue #726: _parse_subsection must include
+        <proviso> elements that are direct children of the paragraph element,
+        not just those encoded inline inside <content>.
+        """
+        xml = """<paragraph xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t47/ch1/s33/p1">
+          <num value="1">(1)</num>
+          <content>The district courts...outside of said waters:</content>
+          <proviso> Provided, That in case such infraction is committed outside the territorial waters of the United States...</proviso>
+        </paragraph>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "paragraph")
+
+        assert "outside of said waters" in result.content, (
+            "Content text before proviso must be present"
+        )
+        assert "Provided, That" in result.content, (
+            "<proviso> sibling at paragraph level must be included in content"
+        )
+        assert "outside the territorial waters" in result.content
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
