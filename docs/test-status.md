@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.20 | 45    | 914     | Obligation guarantees                                                                  | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,26 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+
+### 2026.09.20 — 45 U.S.C. § 914 (Obligation guarantees)
+
+All main fields matched: heading, source credit, enacted date (1979-11-04), last_modified_date
+(1980-10-14), two citations (PL 96-101 / PL 96-448), and all three notes (References in Text,
+Amendments, Effective Date of 1980 Amendment). The `is_positive_law: false`, `is_repealed: false`,
+and `group_ancestors` (Chapter 18) fields are accurate.
+
+One discrepancy found — an instance of an already-tracked defect class:
+
+**Issue #672 (multi-sentence paragraph split into separate provisions)** — Subsection (a) of the
+OLRC XML contains a single `<content><p>` element with two sentences. CWLB splits these into two
+separate provision lines (line 2 and line 3), both at `indent_level: 0`. Unlike the § 670/§ 672
+examples in issue #672 where continuation sentences are promoted to a higher indent level, here
+both are at level 0 (the subsection is already at the top level). The core defect — a single
+paragraph split into separate provisions — is the same. Comment added to issue #672.
+
+OLRC XML used: `usc45@113-21.xml`, downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/113/21/xml_usc45@113-21.zip`.
 
 
 ## Test methodology
