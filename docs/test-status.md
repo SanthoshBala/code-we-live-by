@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.21 | 43    | 1350    | Remedies and penalties                                                                 | 113-21        | ✅ Clean (known issues apply — see notes) |
 
 ## Notes
 
@@ -186,6 +187,34 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.21 — 43 U.S.C. § 1350
+
+Full statutory text matches OLRC verbatim: heading ("Remedies and penalties"), all five subsections
+(a)–(e) with correct body text, source credit `(Aug. 7, 1953, ch. 345, §24, as added Pub. L. 95–372,
+title II, §208, Sept. 18, 1978, 92 Stat. 659; amended Pub. L. 101–380, title VIII, §8201, Aug. 18,
+1990, 104 Stat. 570.)`, enacted date (1953-08-07), and last_modified_date (1990-08-18). All three
+notes are present (Amendments, Effective Date of 1990 Amendment, Transfer of Functions).
+
+Three known defects confirmed active on this section:
+
+1. **Issue #686** (statutory notes miscategorized as editorial): The "Effective Date of 1990 Amendment"
+   note falls under "Statutory Notes and Related Subsidiaries" in OLRC HTML (via the
+   `effectivedate-amendment-note` field type, appearing after the "Statutory Notes" header), but
+   CWLB returns `category: "editorial"` for it. The "Transfer of Functions" note in the same
+   section is correctly categorized as `statutory`. Comment added to #686.
+
+2. **Issue #672** (multi-sentence paragraph split with wrong indent): Subsection (b)(1) is a single
+   `<p class="statutory-body">` in OLRC containing the lead sentence plus three continuation
+   sentences. CWLB splits these into 4 provisions: the (1) sentence at `indent_level: 1` and the
+   three continuation sentences at `indent_level: 2`, making them appear as sub-provisions.
+   Comment added to #672.
+
+3. **Issue #657** (trailing period stripped from headings): The OLRC subsection heading for (a) is
+   "(a) Injunctions, restraining orders, etc." but CWLB stores it as "(a) Injunctions, restraining
+   orders, etc" — the trailing period from the "etc." abbreviation is stripped. Comment added to
+   #657 noting this also manifests on statutory body subsection headings, not only note body
+   subheadings.
 
 
 ## Test methodology
