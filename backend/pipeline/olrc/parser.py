@@ -1644,37 +1644,36 @@ class USLMParser:
                     child_level = level + 1 if line_parts else level
                     parts.append(f"[QC:{child_level}]{cont_text}[/QC]")
 
-        # Process top-level sections (both anonymous inline and named)
-        for section in elem.findall("{*}section"):
-            format_item(section, 1)
-        for section in elem.findall("section"):
-            format_item(section, 1)
-
-        # Process top-level subsections when no sections are present
-        if not parts:
-            for subsection in elem.findall("{*}subsection"):
-                format_item(subsection, 1)
-            for subsection in elem.findall("subsection"):
-                format_item(subsection, 1)
-
-        # Process top-level paragraphs when neither sections nor subsections
-        # wrap them directly under quotedContent (e.g. a flat enumeration
-        # like "(1)", "(2)" with "(A)", "(B)" sub-items but no enclosing
-        # <section>/<subsection>). A bare <inline> intro line, if present,
-        # is emitted first at the same level so it precedes the enumeration.
-        if not parts:
-            inline_elem = elem.find("{*}inline")
-            if inline_elem is None:
-                inline_elem = elem.find("inline")
-            if inline_elem is not None:
-                inline_text = self._get_text_content(inline_elem).strip()
+        # Process all top-level structural elements in document order.
+        # OLRC USLM XML can mix different structural element types at the same
+        # level within a single <quotedContent> (e.g., <paragraph> elements
+        # followed by <subclause> elements followed by <subsection> elements).
+        # The previous cascading fallback (process sections OR subsections OR
+        # paragraphs) silently dropped all non-matching types when mixed types
+        # coexist at the top level (issue #731).
+        #
+        # Bare <inline> intro lines are also emitted in document order when
+        # encountered (e.g. the "Congress finds the following:" prefix before
+        # a flat <paragraph> enumeration — issue #536).
+        _STRUCTURAL_ELEM_TAGS = frozenset(
+            [
+                "section",
+                "subsection",
+                "paragraph",
+                "subparagraph",
+                "clause",
+                "subclause",
+                "item",
+            ]
+        )
+        for child in elem:
+            local_tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+            if local_tag in _STRUCTURAL_ELEM_TAGS:
+                format_item(child, 1)
+            elif local_tag == "inline":
+                inline_text = self._get_text_content(child).strip()
                 if inline_text:
                     parts.append(f"[QC:1]{inline_text}[/QC]")
-
-            for paragraph in elem.findall("{*}paragraph"):
-                format_item(paragraph, 1)
-            for paragraph in elem.findall("paragraph"):
-                format_item(paragraph, 1)
 
         # Fallback: extract plain text for simple inline quotedContent
         if not parts:

@@ -2349,6 +2349,107 @@ class TestParserNotesContent:
             "subparagraphs (A) and (B) must not be merged into a single QC block"
         )
 
+    def test_mixed_structural_types_at_quotedcontent_top_level(self) -> None:
+        """quotedContent with mixed top-level element types all render correctly.
+
+        Regression test for issue #731: OLRC USLM XML can encode statutory note
+        bodies using a mix of <paragraph>, <subclause>, and <subsection> elements
+        as DIRECT siblings under <quotedContent>. The previous cascading fallback
+        processed only the first non-empty structural type (sections → subsections
+        → paragraphs), silently dropping all elements of other types. For the
+        30 U.S.C. § 1005 geothermal lease note, this dropped the <paragraph>(1)
+        and <paragraph>(2) content plus the intermediate <subclause> elements,
+        leaving only the <subsection>(b)–(h) content.
+
+        The fix processes ALL structural elements at the top level of
+        <quotedContent> in document order, regardless of their element type.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        # Mirrors the actual OLRC USLM XML structure for the 30 U.S.C. § 1005
+        # "Extension of Lease; Listing, Monitoring..." note (Pub. L. 99–500
+        # § 101(h) [title I, § 115], as amended by Pub. L. 106–510 § 3(a)(2)).
+        # The quotedContent has <paragraph> elements followed by <subclause>
+        # elements followed by <subsection> elements at the same top level.
+        xml = """<notes>
+            <note topic="miscellaneous">
+                <heading>Extension of Lease</heading>
+                <p>Pub. L. 99-500, provided that:<quotedContent>
+                    <paragraph class="indent0">
+                        <num value="1">"(1)</num>
+                        <chapeau> The primary term of any geothermal lease...is hereby extended, if the Secretary finds that&#8212;</chapeau>
+                        <item class="indent1"><num value="a">"(a)</num><content> a bona fide sale exists;</content></item>
+                        <item class="indent1"><num value="b">"(b)</num><content> substantial investment has been made; and</content></item>
+                        <item class="indent1"><num value="c">"(c)</num><content> the lease would otherwise expire.</content></item>
+                    </paragraph>
+                    <paragraph class="indent0">
+                        <num value="2">"(2)</num>
+                        <item class="indent0"><num value="a">(a)</num><content> The Secretary shall publish a proposed list of significant thermal features.</content></item>
+                    </paragraph>
+                    <subclause class="indent1"><num value="1">"(1)</num><content> size, extent, and uniqueness;</content></subclause>
+                    <subclause class="indent1"><num value="2">"(2)</num><content> scientific and geologic significance;</content></subclause>
+                    <subsection class="indent0"><num value="b">"(b)</num><content> The Secretary shall maintain a monitoring program for those significant thermal features listed pursuant to subsection (a) of this section.</content></subsection>
+                    <subsection class="indent0"><num value="c">"(c)</num><content> Upon receipt of an application the Secretary shall determine whether to issue such geothermal lease.</content></subsection>
+                </quotedContent></p>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # All structural element types must appear in the output.
+        # Previously, <paragraph> and <subclause> elements were dropped because
+        # <subsection> elements were found first and the paragraph/subclause
+        # processing branches were never reached.
+        assert '"(1)' in content, "paragraph (1) intro must be preserved"
+        assert "primary term" in content, (
+            "paragraph (1) chapeau content must be preserved"
+        )
+        assert '"(a)' in content, "item (a) under paragraph (1) must be preserved"
+        assert "bona fide sale" in content, "item (a) content must be preserved"
+        assert "substantial investment" in content, "item (b) content must be preserved"
+        assert "significant thermal features" in content, (
+            "paragraph (2)(a) content must be preserved"
+        )
+        assert "size, extent" in content, "subclause (1) content must be preserved"
+        assert "scientific and geologic" in content, (
+            "subclause (2) content must be preserved"
+        )
+        assert "monitoring program" in content, (
+            "subsection (b) content must be preserved"
+        )
+        assert "Upon receipt" in content, "subsection (c) content must be preserved"
+
+        # Verify through normalize_note_content that (1) precedes (b) in output lines.
+        lines = normalize_note_content(content)
+        non_empty = [ln for ln in lines if ln.content]
+        contents = [ln.content for ln in non_empty]
+
+        # Paragraph (1) content must appear before subsection (b) content.
+        idx_para1 = next(
+            (i for i, c in enumerate(contents) if "primary term" in c), None
+        )
+        idx_sub_b = next(
+            (i for i, c in enumerate(contents) if "monitoring program" in c), None
+        )
+        assert idx_para1 is not None, (
+            "paragraph (1) chapeau content ('primary term') not found in output lines; "
+            f"got: {contents}"
+        )
+        assert idx_sub_b is not None, (
+            "subsection (b) content ('monitoring program') not found in output lines; "
+            f"got: {contents}"
+        )
+        assert idx_para1 < idx_sub_b, (
+            f"paragraph (1) (index {idx_para1}) must appear before subsection (b) "
+            f"(index {idx_sub_b}) in output; got: {contents}"
+        )
+
     def test_is_quoted_flag_set_on_qc_lines(self) -> None:
         """Lines derived from quotedContent blocks have is_quoted=True."""
         from pipeline.olrc.normalized_section import normalize_note_content
