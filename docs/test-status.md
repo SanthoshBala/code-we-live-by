@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.24 | 38    | 8155    | Pilot programs; grants to medical schools                                              | 113-21        | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +187,35 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.24 — 38 U.S.C. § 8155
+
+Compared CWLB against the current OLRC prelim (PL 119-111, 2026-09-18). Section was last
+amended in 1994 (Pub. L. 103–446), so the statutory text at release point 113-21 is identical
+to the current OLRC. All fields matched:
+
+- **Heading**: "Pilot programs; grants to medical schools" ✓
+- **Main text (subsections a–f)**: All six subsections match verbatim, including correct
+  reference to "section 7312" (updated from "section 4112" by the 1994 amendment) ✓
+- **Source credit**: Full 9-law citation chain from PL 89-785 (1966) through PL 103-446 (1994)
+  matches exactly ✓
+- **`enacted_date`**: `1966-11-07` ✓
+- **`last_modified_date`**: `1994-11-02` — correctly reflects the actual PL 103-446 enactment
+  date (not the Jan-1 placeholder defect) ✓
+- **Citations note**: All 9 citation entries present with correct relationship types and
+  path_display values ✓
+- **Amendments note**: All 12 amendment paragraphs (1971–1994) present and match OLRC ✓
+- **Change of Name note**: Both paragraphs present; minor parsing artifact of an empty
+  placeholder line between them (CWLB `lines[1]: {content: "", start_char: 0, end_char: 0}`),
+  but content is unaffected ✓
+- **Effective Date of 1976 Amendment note**: Present and correct ✓
+- **Termination of Advisory Councils note**: CWLB text at 113-21 reads "See sections 3(2) and
+  14 of Pub. L. 92–463, Oct. 6, 1972, 86 Stat. 770, 776, set out in the Appendix to Title 5"
+  while current OLRC prelim reads "See sections 1001(2) and 1013 of Title 5." This is an OLRC
+  editorial update (replacing the Pub. L. cite with the codified Title 5 location) that
+  postdates the 113-21 release point — not a CWLB parsing error ✓
+
+No novel parsing bugs found. No new issues filed.
 
 
 ## Test methodology
