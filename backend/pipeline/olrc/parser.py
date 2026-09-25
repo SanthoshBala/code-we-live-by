@@ -1347,14 +1347,15 @@ class USLMParser:
         ]
         if level in hierarchy:
             level_index = hierarchy.index(level)
-            for child_level in hierarchy[level_index + 1 :]:
-                child_elems = elem.findall(f"{{*}}{child_level}") or elem.findall(
-                    child_level
+            valid_child_levels = set(hierarchy[level_index + 1 :])
+            for child_elem in elem:
+                local_tag = (
+                    child_elem.tag.split("}")[-1]
+                    if "}" in child_elem.tag
+                    else child_elem.tag
                 )
-                if child_elems:
-                    for child_elem in child_elems:
-                        children.append(self._parse_subsection(child_elem, child_level))
-                    break
+                if local_tag in valid_child_levels:
+                    children.append(self._parse_subsection(child_elem, local_tag))
 
         # Collect continuation elements (closing text that follows a numbered list,
         # e.g. the penalty clause in 18 U.S.C. § 1001(a)).

@@ -604,6 +604,104 @@ class TestUSLMParser:
         assert clause_ii.level == "clause"
         assert "incurred actual liability or loss" in clause_ii.content
 
+    def test_parse_subsection_subparagraph_siblings_of_paragraph(
+        self, parser: USLMParser
+    ) -> None:
+        """_parse_subsection captures <subparagraph> elements that are direct
+        children of a <subsection> alongside <paragraph> siblings.
+
+        Regression test for Issue #734: 29 U.S.C. § 158(b) contains paragraphs
+        (1)–(5) and several <subparagraph> elements ((A)–(D)) that are direct
+        children of the <subsection> rather than nested inside paragraph (4).
+        The parser previously broke out of its child-collection loop after finding
+        the first matching level (<paragraph>), so all four sibling subparagraphs
+        were silently dropped and never surfaced to users.
+        """
+        xml = """<subsection xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t29/s158/b">
+          <num value="b">(b)</num>
+          <heading>Unfair labor practices by labor organization</heading>
+          <chapeau>It shall be an unfair labor practice for a labor
+          organization or its agents—</chapeau>
+          <paragraph identifier="/us/usc/t29/s158/b/1">
+            <num value="1">(1)</num>
+            <content>to restrain or coerce employees in the exercise of the
+            rights guaranteed in section 157 of this title;</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t29/s158/b/4">
+            <num value="4">(4)</num>
+            <chapeau>to engage in, or to induce or encourage any individual
+            employed by any person to engage in, a strike or a refusal to
+            perform services;</chapeau>
+          </paragraph>
+          <subparagraph identifier="/us/usc/t29/s158/b/4/A">
+            <num value="A">(A)</num>
+            <content>forcing or requiring any employer or self-employed person
+            to join any labor or employer organization;</content>
+          </subparagraph>
+          <subparagraph identifier="/us/usc/t29/s158/b/4/B">
+            <num value="B">(B)</num>
+            <content>forcing or requiring any person to cease using, selling,
+            handling, transporting, or otherwise dealing in the products of
+            any other producer;</content>
+          </subparagraph>
+          <subparagraph identifier="/us/usc/t29/s158/b/4/C">
+            <num value="C">(C)</num>
+            <content>forcing or requiring any employer to recognize or bargain
+            with a particular labor organization;</content>
+          </subparagraph>
+          <subparagraph identifier="/us/usc/t29/s158/b/4/D">
+            <num value="D">(D)</num>
+            <content>forcing or requiring any employer to assign particular
+            work to employees in a particular labor organization;</content>
+          </subparagraph>
+          <paragraph identifier="/us/usc/t29/s158/b/5">
+            <num value="5">(5)</num>
+            <content>to require of employees covered by an agreement the
+            payment of dues;</content>
+          </paragraph>
+        </subsection>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "subsection")
+
+        assert result.marker == "(b)"
+        assert "unfair labor practice" in result.content
+
+        # Three paragraphs and four sibling subparagraphs must all be collected,
+        # in document order.
+        assert len(result.children) == 7
+
+        para1, para4, sub_a, sub_b, sub_c, sub_d, para5 = result.children
+
+        assert para1.marker == "(1)"
+        assert para1.level == "paragraph"
+        assert "restrain or coerce" in para1.content
+
+        assert para4.marker == "(4)"
+        assert para4.level == "paragraph"
+
+        assert sub_a.marker == "(A)"
+        assert sub_a.level == "subparagraph"
+        assert (
+            "forcing or requiring any employer or self-employed person" in sub_a.content
+        )
+
+        assert sub_b.marker == "(B)"
+        assert sub_b.level == "subparagraph"
+        assert "forcing or requiring any person to cease using" in sub_b.content
+
+        assert sub_c.marker == "(C)"
+        assert sub_c.level == "subparagraph"
+        assert "forcing or requiring any employer to recognize" in sub_c.content
+
+        assert sub_d.marker == "(D)"
+        assert sub_d.level == "subparagraph"
+        assert "forcing or requiring any employer to assign particular" in sub_d.content
+
+        assert para5.marker == "(5)"
+        assert para5.level == "paragraph"
+        assert "payment of dues" in para5.content
+
     def test_extract_subsections_continuation_in_subsection(
         self, parser: USLMParser
     ) -> None:
