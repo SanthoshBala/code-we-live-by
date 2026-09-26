@@ -34,22 +34,36 @@ def _extract_last_amendment(
 ) -> tuple[int | None, str | None]:
     """Extract the most recent amendment year and law from normalized_notes.
 
-    The amendments list is stored newest-first per the parser convention.
-    Returns (year, "PL {congress}-{law_number}") or (None, None).
+    When multiple laws share the most recent year, picks the one with the
+    highest (congress, law_number). Returns (year, "PL {congress}-{law_number}")
+    or (None, None).
     """
     if not notes:
         return None, None
     amendments = notes.get("amendments", [])
     if not amendments:
         return None, None
-    latest = amendments[0]
-    year = latest.get("year")
+    latest_year: int | None = None
+    for a in amendments:
+        y = a.get("year")
+        if y is not None and (latest_year is None or y > latest_year):
+            latest_year = y
+    if latest_year is None:
+        return None, None
+    year_amendments = [a for a in amendments if a.get("year") == latest_year]
+    latest = max(
+        year_amendments,
+        key=lambda a: (
+            (a.get("law") or {}).get("congress") or 0,
+            (a.get("law") or {}).get("law_number") or 0,
+        ),
+    )
     law = latest.get("law") or {}
     congress = law.get("congress")
     law_number = law.get("law_number")
     if congress is not None and law_number is not None:
-        return year, f"PL {congress}-{law_number}"
-    return year, None
+        return latest_year, f"PL {congress}-{law_number}"
+    return latest_year, None
 
 
 def _extract_note_categories(notes: dict[str, Any] | None) -> list[str]:
