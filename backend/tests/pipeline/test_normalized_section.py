@@ -2844,6 +2844,71 @@ class TestParserNotesContent:
         assert len(header_lines) == 1
         assert "General Scope of Copyright" in header_lines[0].content
 
+    def test_bold_header_preserves_trailing_period(self) -> None:
+        """Trailing period on inline bold sub-headings must not be stripped.
+
+        OLRC consistently ends inline bold sub-heads with a period (e.g.
+        ``<b>In General.</b>``).  CWLB must preserve that period so the API
+        returns "In General." rather than "In General".
+
+        Regression test for issue #657.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = "<notes><p><b>In General.</b> The five fundamental rights.</p></notes>"
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # The [H1] marker must include the trailing period
+        assert "[H1]In General.[/H1]" in content
+
+        lines = normalize_note_content(content)
+        header_lines = [ln for ln in lines if ln.is_header]
+        assert len(header_lines) == 1
+        assert header_lines[0].content == "In General."
+
+    def test_bold_subheadings_17_usc_302_style(self) -> None:
+        """All 5 inline bold sub-headings from 17 U.S.C. § 302 preserve periods.
+
+        Verifies that "In General.", "Basic Copyright Term.", "Joint Works.",
+        "Works Made for Hire.", and "Anonymous and Pseudonymous Works." each
+        come back with the trailing period intact.
+
+        Regression test for issue #657.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.normalized_section import normalize_note_content
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        subheadings = [
+            "In General.",
+            "Basic Copyright Term.",
+            "Joint Works.",
+            "Works Made for Hire.",
+            "Anonymous and Pseudonymous Works.",
+        ]
+
+        for heading in subheadings:
+            xml = f"<notes><p><b>{heading}</b> Some explanatory text.</p></notes>"
+            elem = etree.fromstring(xml)
+            content = parser._get_notes_text_content(elem)
+
+            lines = normalize_note_content(content)
+            header_lines = [ln for ln in lines if ln.is_header]
+            assert len(header_lines) == 1, f"Expected 1 header for '{heading}'"
+            assert header_lines[0].content == heading, (
+                f"Expected '{heading}' but got '{header_lines[0].content}'"
+            )
+
 
 class TestStripNoteMarkers:
     """Tests for _strip_note_markers function."""
