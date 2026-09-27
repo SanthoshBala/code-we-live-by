@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.27 | 23    | 321     | Signs identifying funding sources                                                      | 113-21        | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +187,16 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.09.27 — 23 U.S.C. § 321
+
+All fields matched: heading ("Signs identifying funding sources"), full body text (single
+unnumbered paragraph), source credit `(Added Pub. L. 109–59, title I, §1901(a), Aug. 10, 2005,
+119 Stat. 1464.)`, enacted date (`2005-08-10`), and `last_modified_date` (`2005-08-10`).
+Both editorial notes (Codification and Prior Provisions) present with matching text.
+`has_amendments: false` and `amendments: []` are correct — § 321 was added in 2005 and never
+amended. The enactment-only citation with `path_display: "§1901(a)"` matches the OLRC source
+credit. No known systemic issues apply to this section. No new bugs filed.
 
 
 ## Test methodology
