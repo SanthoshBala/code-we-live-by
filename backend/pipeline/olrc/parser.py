@@ -1847,9 +1847,7 @@ class USLMParser:
             if el.text:
                 text = el.text
                 if tag == "b":
-                    # Bold text is a header - strip trailing period
-                    header_text = text.rstrip(".")
-                    parts.append(f"[H1]{header_text}[/H1]")
+                    parts.append(f"[H1]{text}[/H1]")
                 elif tag == "i":
                     # In USLM, <i> marks inline italic styling — connective phrases,
                     # sub-item designators, role/title text, Latin terms, case
