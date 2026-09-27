@@ -371,6 +371,51 @@ class TestUSLMParser:
             "terminal uppercase-letter segment /A must be included in section"
         )
 
+    def test_extract_source_credit_refs_title_from_display_text_fallback(
+        self, parser: USLMParser
+    ) -> None:
+        """When the href lacks /tXX, the title is extracted from the ref display text.
+
+        OLRC XML sometimes omits the title component from the href even though
+        the source credit prose includes a qualifier like "title II, § 306".
+        The fallback must populate SourceCreditRef.title from the display text so
+        the citation path is not silently truncated to section-only.
+
+        Regression test for issue #659.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t21/s826">
+          <num value="826">§ 826.</num>
+          <heading>Production quotas</heading>
+          <content>Test content.</content>
+          <sourceCredit>(<ref href="/us/pl/91/513/s306">Pub. L. 91–513, title II, § 306</ref>,
+          <date date="1970-10-27">Oct. 27, 1970</date>,
+          <ref href="/us/stat/84/1257">84 Stat. 1257</ref>;
+          <ref href="/us/pl/109/177/s713">Pub. L. 109–177, title VII, § 713</ref>,
+          <date date="2006-03-09">Mar. 9, 2006</date>,
+          <ref href="/us/stat/120/264">120 Stat. 264</ref>.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, _act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 2
+
+        ref1 = pl_refs[0]
+        assert ref1.congress == 91
+        assert ref1.law_number == 513
+        assert ref1.title == "II", (
+            f"Expected title='II' from display text fallback, got {ref1.title!r}"
+        )
+        assert ref1.section == "306"
+
+        ref2 = pl_refs[1]
+        assert ref2.congress == 109
+        assert ref2.law_number == 177
+        assert ref2.title == "VII", (
+            f"Expected title='VII' from display text fallback, got {ref2.title!r}"
+        )
+        assert ref2.section == "713"
+
     def test_extract_source_credit_text_returns_parenthetical(
         self, parser: USLMParser
     ) -> None:
@@ -2489,3 +2534,127 @@ class TestExtractSourceCreditRefsMultiSubcitation:
         ref = SourceCreditRef(congress=94, law_number=455)
         assert ref.extra_sections == []
         assert ref.extra_stat_pages == []
+
+
+class TestExtractSourceCreditRefsHrefMissingTitle:
+    """Tests for title fallback when OLRC PL href omits the /tXX component.
+
+    Regression coverage for GitHub issue #659: OLRC XML sometimes uses a
+    simplified href like /us/pl/91/513/s306 (no /tII) even when the source
+    credit prose reads "Pub. L. 91–513, title II, § 306".  Without a
+    fallback the SourceCreditRef.title was None and the citation path only
+    stored the section level, silently dropping the title-within-law
+    hierarchy.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_title_extracted_from_display_text_when_missing_from_href(
+        self, parser: USLMParser
+    ) -> None:
+        """When href lacks /tXX, title is parsed from the ref's display text.
+
+        Simulates 21 U.S.C. § 826 citations:
+          PL 91-513: href=/us/pl/91/513/s306, text="Pub. L. 91–513, title II, § 306"
+          PL 109-177: href=/us/pl/109/177/s713, text="Pub. L. 109–177, title VII, § 713"
+          PL 112-144: href=/us/pl/112/144/s1005, text="Pub. L. 112–144, title X, § 1005"
+
+        Expected: each SourceCreditRef.title is set to the Roman numeral from
+        the display text even though the href encodes only the section.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t21/s826">
+          <num value="826">§ 826.</num>
+          <sourceCredit>(<ref href="/us/pl/91/513/s306">Pub. L. 91&#x2013;513, title II, &#167; 306</ref>,
+          <date date="1970-10-27">Oct. 27, 1970</date>,
+          <ref href="/us/stat/84/1257">84 Stat. 1257</ref>;
+          <ref href="/us/pl/109/177/s713">Pub. L. 109&#x2013;177, title VII, &#167; 713</ref>,
+          <date date="2006-03-09">Mar. 9, 2006</date>,
+          <ref href="/us/stat/120/264">120 Stat. 264</ref>;
+          <ref href="/us/pl/112/144/s1005">Pub. L. 112&#x2013;144, title X, &#167; 1005</ref>,
+          <date date="2012-07-09">July 9, 2012</date>,
+          <ref href="/us/stat/126/1100">126 Stat. 1100</ref>.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert act_refs == []
+        assert len(pl_refs) == 3
+
+        ref1 = pl_refs[0]
+        assert ref1.congress == 91
+        assert ref1.law_number == 513
+        assert ref1.title == "II", (
+            f"Expected title='II' extracted from display text but got {ref1.title!r}; "
+            "href /us/pl/91/513/s306 lacks /tII so fallback must read it from prose"
+        )
+        assert ref1.section == "306"
+
+        ref2 = pl_refs[1]
+        assert ref2.congress == 109
+        assert ref2.law_number == 177
+        assert ref2.title == "VII", (
+            f"Expected title='VII' extracted from display text but got {ref2.title!r}"
+        )
+        assert ref2.section == "713"
+
+        ref3 = pl_refs[2]
+        assert ref3.congress == 112
+        assert ref3.law_number == 144
+        assert ref3.title == "X", (
+            f"Expected title='X' extracted from display text but got {ref3.title!r}"
+        )
+        assert ref3.section == "1005"
+
+    def test_href_title_not_overridden_when_present(self, parser: USLMParser) -> None:
+        """When the href already encodes /tIII, the href title takes precedence.
+
+        The fallback must not run when match.group(4) is already set.
+        Uses the existing /us/pl/107/273/dC/tIII/s13210/4/A fixture.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s106">
+          <sourceCredit>(<ref href="/us/pl/107/273/dC/tIII/s13210/4/A">Pub. L. 107&#x2013;273,
+          div. C, title III, &#167;13210(4)(A)</ref>,
+          <date date="2002-11-02">Nov. 2, 2002</date>,
+          <ref href="/us/stat/116/1909">116 Stat. 1909</ref>.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 1
+        ref = pl_refs[0]
+        assert ref.title == "III"
+        assert ref.section == "13210(4)(A)"
+
+    def test_citation_path_includes_title_and_section_for_href_missing_title(
+        self, parser: USLMParser
+    ) -> None:
+        """End-to-end: citations_from_source_credit_refs path contains both
+        title and section when href lacks /tXX.
+
+        Verifies the full data flow from XML parsing through to the SourceLaw
+        path that the API exposes.
+        """
+        from pipeline.olrc.normalized_section import citations_from_source_credit_refs
+
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t21/s826">
+          <sourceCredit>(<ref href="/us/pl/109/177/s713">Pub. L. 109&#x2013;177,
+          title VII, &#167; 713</ref>,
+          <date date="2006-03-09">Mar. 9, 2006</date>,
+          <ref href="/us/stat/120/264">120 Stat. 264</ref>.)</sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml)
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+        citations = citations_from_source_credit_refs(pl_refs)
+
+        assert len(citations) == 1
+        citation = citations[0]
+        assert citation.title == "VII", (
+            "citation path must include title='VII' extracted from display text"
+        )
+        assert citation.section == "713"
