@@ -2164,11 +2164,26 @@ class USLMParser:
                                 if part.strip()
                             ]
 
+                        # OLRC XML sometimes omits the /tXX component from the
+                        # href even when the source credit prose includes a title
+                        # qualifier (e.g. "title II, § 306").  Fall back to
+                        # extracting the title from the ref's display text so the
+                        # citation path is not silently truncated.
+                        href_title = match.group(4)
+                        if href_title is None:
+                            title_text_match = re.search(
+                                r",?\s*title\s+([IVXLCDM]+)",
+                                full_text,
+                                re.IGNORECASE,
+                            )
+                            if title_text_match:
+                                href_title = title_text_match.group(1).upper()
+
                         ref = SourceCreditRef(
                             congress=int(match.group(1)),
                             law_number=int(match.group(2)),
                             division=match.group(3),
-                            title=match.group(4),
+                            title=href_title,
                             section=section_value,
                             raw_text=full_text,
                             extra_sections=extra_sections,
