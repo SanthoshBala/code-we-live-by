@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.28 | 5     | 702     | Right of review                                                                        | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -173,6 +174,29 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.09.28 — 5 U.S.C. § 702 (Right of review)
+
+Heading, full statutory text (three body paragraphs plus two-item enumerated list), source
+credit `(Pub. L. 89–554, Sept. 6, 1966, 80 Stat. 392; Pub. L. 94–574, §1, Oct. 21, 1976,
+90 Stat. 2721.)`, enacted date (1966-09-06), and last_modified_date (1976-10-21) all match
+the OLRC. Provisions are correctly split into 6 lines with appropriate indent levels and
+markers. Citation and amendment metadata both match. OLRC source fetched via prelim edition
+(effective Sep 27, 2026); content is identical to release point 113-21 as § 702 was last
+amended in 1976.
+
+Two known-issue occurrences found and commented on existing open issues:
+
+1. **Issue #698** — Historical and Revision Notes derivation table column headers
+   ("Derivation | U.S. Code | Revised Statutes and Statutes at Large") are silently dropped.
+   Only the data rows appear in `notes.notes[0].lines`; the table header row is absent.
+   Comment added to #698.
+
+2. **Issue #697** — The "Editorial Notes" heading-only parent note is silently dropped from
+   `notes.notes[]`. Only the child "Amendments" note is present; "Editorial Notes" has no
+   entry to provide grouping context. Comment added to #697.
+
+No new defects found.
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
