@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.29 | 31    | 333     | Prohibition of misuse of Department of the Treasury names, symbols, etc.               | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -173,6 +174,31 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.09.29 — 31 U.S.C. § 333
+
+Heading, full body text (subsections (a)–(d) with all nested paragraphs), source credit
+`(Added Pub. L. 103–296, title III, § 312(l)(1), Aug. 15, 1994, 108 Stat. 1528.)`, enacted
+date (1994-08-15), and last_modified_date (1994-08-15) all match the OLRC. Section was never
+amended after its original enactment so the 113-21 release point text is identical to the
+current OLRC prelim. Both substantive statutory notes are present and accurate:
+
+- **Effective Date** — full quoted text from Pub. L. 103–296, § 312(m) reproduced correctly,
+  including paragraphs (1) and (2), the March 31 1995 applicability date for the general
+  amendments, and the enactment-date applicability for the Treasury misuse provision.
+- **Report on Implementation of Section** — full quoted text from Pub. L. 103–296,
+  § 312(l)(3) reproduced correctly, including the May 1 1996 deadline, the two-committee
+  report requirement, and the three required reporting metrics.
+
+All citation objects are present (Pub. L. 103–296 enactment citation, both 108 Stat. 1530
+references, and cross-reference to 42 U.S.C. § 1320b–10). `has_amendments: false`,
+`is_repealed: false`, `is_positive_law: true`, and group ancestors (Subtitle I / Chapter 3 /
+Subchapter II) are all correct.
+
+One known-issue occurrence confirmed: the "Statutory Notes and Related Subsidiaries"
+heading-only section-divider note present in OLRC HTML is absent from CWLB's `notes.notes`
+array. This matches the pattern in issue #697 — comment added to that issue.
+
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
