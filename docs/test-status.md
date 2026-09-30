@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.09.30 | 13    | 141     | Population and other census information                                                | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -173,6 +174,29 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.09.30 — 13 U.S.C. § 141
+
+All fields matched against the OLRC prelim: heading ("Population and other census information"),
+full body text (subsections (a)–(g), 5171 chars), source credit
+`(Aug. 31, 1954, ch. 1158, 68 Stat. 1019; Pub. L. 85–207, § 9, Aug. 28, 1957, 71 Stat. 483;
+Pub. L. 94–171, §§ 1, 2(a), Dec. 23, 1975, 89 Stat. 1023, 1024; Pub. L. 94–521, § 7(a),
+Oct. 17, 1976, 90 Stat. 2461.)`, enacted date `1954-08-31`, and `last_modified_date` `1976-10-17`
+(correct — Pub. L. 94–521 was enacted Oct. 17, 1976, the last amendment to the section text).
+All 11 statutory notes are present with full content, including Historical and Revision Notes,
+Amendments (1976, 1975, 1957), Effective Date of 1976 Amendment, and 8 statutory-note provisions
+from Pub. L. 105–119 (1997), 104–193 (1996), 102–135 (1991), 101–645 (1990), 101–624 (1990),
+and 94–311 (1976). The OLRC prelim page has no notes from laws enacted after 1997, so the
+113-21 data is current for this section. Provision markers for all 21 lines are correctly
+populated where applicable. `is_positive_law: true`, `is_repealed: false`, `group_ancestors`
+(Chapter 5 / Subchapter II) accurate.
+
+One known defect confirmed active: all 8 `notes.amendments[*].law` objects have `date`,
+`official_title`, `stat_volume`, `stat_page`, and `stat_reference` all `null` — only
+`congress`, `law_number`, and `public_law_id` are populated. This is the systemic amendment law
+metadata null bug already tracked in #561 — not re-filed; commented on that issue with this
+occurrence.
+
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
