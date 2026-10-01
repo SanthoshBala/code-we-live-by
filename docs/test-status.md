@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.01 | 23    | 146     | Carpool and vanpool projects                                                           | 113-21        | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +187,31 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.01 — 23 U.S.C. § 146
+
+Compared CWLB against the GPO/GovInfo 2013 edition HTML for Title 23 (the closest publicly
+accessible source for the 113-21 release point, since direct OLRC XML download is blocked by
+network policy in the test environment). The OLRC bulk-download URL pattern was confirmed from
+the backend pipeline code: `xml_usc23@113-21.zip`.
+
+All fields matched:
+- **Heading**: "Carpool and vanpool projects" ✅
+- **Text** (subsections (a) and (b)): verbatim match when normalized for whitespace ✅
+- **Source credit**: matches exactly (PL 95-599, PL 105-178, PL 112-141) ✅
+- **Enacted date**: `1978-11-06` ✅
+- **Last modified date**: `2012-07-06` (PL 112-141 enactment date) ✅
+- **Notes — count**: 7 notes present ✅
+- **Notes — headers**: Prior Provisions, Amendments, Effective Date of 2012 Amendment, Use of
+  High Occupancy Lanes, Expenditure of Administrative Funds for Carpooling and Vanpooling
+  Programs, Grants to States, Counties, etc., To Promote Carpooling and Vanpooling Programs,
+  Federal Facility Ridesharing Program — all present ✅
+- **Notes — categories**: editorial (notes 1–3), statutory (notes 4–7) ✅
+- **Citations and in-note references**: all match ✅
+- **`is_positive_law`**: `true` ✅
+- **`group_ancestors`**: Chapter 1 ✅
+
+No new bugs found. No existing open issues were matched. 29 open bug issues reviewed.
 
 
 ## Test methodology
