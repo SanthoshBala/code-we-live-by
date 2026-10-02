@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.02 | 17    | 512     | Limitations on liability relating to material online                                   | 113-21        | ✅ Clean (known issues apply — see notes) |
 
 ## Notes
 
@@ -173,6 +174,40 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.10.02 — 17 U.S.C. § 512
+
+All fields matched at the 113-21 baseline: heading ("Limitations on liability relating to
+material online"), full statutory text (all subsections (a) through (n): Transitory Digital
+Network Communications, System Caching, Information Residing on Systems or Networks At Direction
+of Users, Information Location Tools, Limitation on Liability of Nonprofit Educational
+Institutions, Misrepresentations, Replacement of Removed or Disabled Material, Subpoena To
+Identify Infringer, Conditions for Eligibility, Injunctions, Definitions, Other Defenses Not
+Affected, Protection of Privacy, and Construction), source credit
+`(Added Pub. L. 105–304, title II, § 202(a), Oct. 28, 1998, 112 Stat. 2877; amended Pub. L.
+106–44, § 1(d), Aug. 5, 1999, 113 Stat. 222; Pub. L. 111–295, § 3(a), Dec. 9, 2010, 124 Stat.
+3180.)`, enacted date (1998-10-28), last_modified_date (2010-12-09), and all four notes
+(References in Text, Codification, Amendments × 4 entries, Effective Date). Note categories
+are correct: References in Text, Codification, and Amendments are `editorial`; Effective Date
+is `statutory`.
+
+Note: uscode.house.gov was under scheduled maintenance on 2026-10-02; Cornell LII (which mirrors
+OLRC data) was used as the authoritative comparison source.
+
+Two known defects confirmed active on this section:
+
+- **Issue #659** (citation path drops title-level hierarchy): The citation for Pub. L. 105-304
+  stores `path: [{"level":"section","value":"202(a)"}]` but `raw_text` reads
+  "Pub. L. 105–304, title II, § 202(a), 112 Stat. 2877" — the "title II" subdivision is
+  silently dropped. Comment added to #659.
+
+- **Issue #561** (amendment law metadata all null): `notes.amendments[*].law` objects for all
+  three entries (PL 106-44 × 3, PL 111-295 × 1) have `date`, `official_title`, `short_title`,
+  `stat_volume`, `stat_page`, `stat_reference`, and `display_title` all `null` — only `congress`,
+  `law_number`, and `public_law_id` are populated. Comment added to #561.
+
+No new bugs filed.
+
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
