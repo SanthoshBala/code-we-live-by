@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.03 | 17    | 701     | The Copyright Office: General responsibilities and organization                        | 113-21        | ✅ Clean (known issue applies — see notes; OLRC under maintenance, full source comparison not possible) |
 
 ## Notes
 
@@ -186,6 +187,35 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.03 — 17 U.S.C. § 701
+
+**Note: OLRC source unavailable.** The OLRC website (uscode.house.gov) was under maintenance
+for the duration of this run — all endpoints, including bulk XML downloads and the view.xhtml
+interface, returned a house.gov maintenance page. A full field-by-field source comparison was
+therefore not possible.
+
+Internal consistency analysis confirmed the following for 17 U.S.C. § 701 ("The Copyright
+Office: General responsibilities and organization"):
+
+- Heading, subsections (a)–(f), enacted date (1976-10-19), and last_modified_date (1998-10-28,
+  the DMCA signing date) are all plausible and internally consistent.
+- Note categories (editorial, statutory) are consistent between the structure endpoint and the
+  section detail endpoint.
+- Five notes present: "References in Text" (editorial), "Amendments" (editorial), "Effective
+  Date of 1990 Amendment" (editorial), "References in Other Laws to GS–16, 17, or 18 Pay
+  Rates" (statutory), "National Commission on New Technological Uses of Copyrighted Works"
+  (statutory). Structure and content look complete.
+- Source credit (`Pub. L. 94–553, § 101, Oct. 19, 1976; Pub. L. 101–319, § 2(b); Pub. L.
+  105–304, § 401(a)(2), (b)`) is accurate.
+
+Known issue confirmed active:
+
+- **Issue #561** — `notes.amendments[*].law` objects for all three amendment entries (two
+  records for PL 105-304, one for PL 101-319) have `date: null`, `official_title: null`,
+  `stat_volume: null`, `stat_page: null`, and `stat_reference: null`. Comment added to #561.
+
+No new bugs filed; OLRC source unavailable so this run is marked partial.
 
 
 ## Test methodology
