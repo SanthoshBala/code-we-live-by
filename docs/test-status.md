@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.04 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issue applies; #652 fix verified — see notes) |
 
 ## Notes
 
@@ -187,6 +188,30 @@ and 307) is absent from CWLB, as expected given the stale 2013 release point. Th
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
 
+
+### 2026.10.04 — 17 U.S.C. § 107 (Fair use) — second test
+
+Note: the OLRC website (uscode.house.gov) was under scheduled maintenance during this run;
+the bulk XML download and the view.xhtml page both returned a house.gov maintenance page.
+Comparison was performed against the known statutory text and the 2026.08.03 OLRC XML
+baseline for this section (which was downloaded and verified on that date).
+
+Statutory text verified complete and accurate: all four fair-use factors and the 1992
+unpublished-works sentence are present and unmodified. Heading, source credit, enacted date
+(1976-10-19), and last_modified_date (1992-10-24) all match the baseline. Note structure
+(7 notes, categories: 1 historical + 4 statutory + 2 editorial) is consistent with the
+expected OLRC layout.
+
+**Fix #652 verified deployed:** `Effective Date of 1990 Amendment` is now returned with
+`category: "editorial"` — the fix from PR #653 (merged 2026-08-05) is live. This section
+was one of the original evidence points for that bug; it is now resolved.
+
+One known defect still active:
+- **Issue #561**: `notes.amendments[*].law` objects for PL 102-492 and PL 101-650 still
+  have `date`, `official_title`, `short_title`, `stat_volume`, `stat_page`, and
+  `stat_reference` all `null`. Comment added to #561 recording this re-occurrence.
+
+No new defects found.
 
 ## Test methodology
 
