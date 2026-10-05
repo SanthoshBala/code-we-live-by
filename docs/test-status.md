@@ -7,7 +7,7 @@ Each row represents one tested section. "Clean" means no discrepancies were foun
 CWLB and the OLRC XML at the stated release point.
 
 | Date       | Title | Section | Heading                                                                                | Release Point | Status |
-|------------|-------|---------|----------------------------------------------------------------------------------------|---------------|--------|
+|------------|-------|---------|----------------------------------------------------------------------------------------|-----------------|--------|
 | 2026.05.20 | 21    | 692     | Inspection extended to reindeer                                                        | 113-21        | ✅ Clean |
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership                                          | 113-21        | ✅ Clean |
 | 2026.05.28 | 29    | 567     | Labor-management dispute settlement expenses                                          | 113-21        | ✅ Clean |
@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.05 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -173,6 +174,7 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
@@ -186,6 +188,28 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.05 — 17 U.S.C. § 107 (Fair use)
+
+Statutory text, heading ("Limitations on exclusive rights: Fair use"), source credit
+(PL 94-553 / PL 101-650 / PL 102-492), enacted date (1976-10-19), and last_modified_date
+(1992-10-24) all match. All four fair-use factor provisions and the 1992 unpublished-works
+sentence are present verbatim. All note content is present (H.Rpt. 94-1476, classroom copying
+guidelines, music education guidelines, Amendments editorial note, Effective Date statutory note).
+
+Note: the OLRC site (uscode.house.gov) was under maintenance at time of testing; Cornell LII
+(law.cornell.edu) was used as the authoritative mirror for note-structure comparison.
+
+Two known defects confirmed active on this section and comments added to tracking issues:
+1. **Issue #686**: `Effective Date of 1990 Amendment` note has `category: "editorial"` instead
+   of `"statutory"`. Cornell LII renders this note under "Statutory Notes and Related
+   Subsidiaries". Comment added to #686.
+2. **Issue #689**: `Agreement on Guidelines for Classroom Copying…`, `with respect to books
+   and periodicals`, `guidelines`, and `guidelines for educational uses of music` notes all
+   have `category: "statutory"` instead of `"historical"`. Cornell LII renders all four under
+   the "Historical and Revision Notes" section divider. Comment added to #689.
+
+No new defects found.
 
 
 ## Test methodology
