@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.07 | 17    | 302     | Duration of copyright: Works created on or after January 1, 1978                      | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,32 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.07 — 17 U.S.C. § 302
+
+Heading ("Duration of copyright: Works created on or after January 1, 1978"), full body text
+(subsections (a)–(e)), source credit, enacted date (`1976-10-19`), and `last_modified_date`
+(`1998-10-27`) all matched. The two citation entries (PL 94-553 enactment and PL 105-298
+amendment) are present with correct date, stat volume, stat page, and path display. All three
+amendment note entries for PL 105-298 (subsecs. (a)/(b), (c), and (e)) are present with the
+correct descriptions. The House Report 94-1476 legislative history note is present with
+complete content (~101 lines). `is_positive_law: true`, `is_repealed: false`, and
+`group_ancestors: [{type: "chapter", number: "3"}]` are all correct.
+
+Note: uscode.house.gov was under maintenance during this test run; the authoritative
+comparison was made against the GovInfo.gov USCODE-2022-title17 edition
+(`https://www.govinfo.gov/content/pkg/USCODE-2022-title17/html/USCODE-2022-title17-chap3-sec302.htm`).
+Since this section has not been amended since 1998, the 113-21 and 2022 editions are
+text-identical.
+
+One known-issue occurrence:
+
+- **Issue #561** (amendment law metadata null): all three `notes.amendments[].law` entries
+  (all PL 105-298) have `date: null`, `stat_volume: null`, `stat_page: null`,
+  `stat_reference: null`, `official_title: null`, `short_title: null`, `display_title: null`.
+  The companion `notes.citations[1].law` entry for the same PL 105-298 correctly carries
+  `date: "Oct. 27, 1998"`, `stat_volume: "112"`, `stat_page: 2827` — confirming the
+  metadata is available but not propagated into amendment note objects. Comment added to #561.
 
 
 ## Test methodology
