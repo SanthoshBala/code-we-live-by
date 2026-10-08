@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.08 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -173,6 +174,31 @@ Two known defects confirmed active on this section:
   PL 102-492 and PL 101-650. Already filed specifically about this section.
 
 No new defects found. Comments added to both issues confirming reproduction.
+### 2026.10.08 — 17 U.S.C. § 107 (Fair use)
+
+Statutory text matches the 113-21 release point verbatim: intro paragraph, all four fair-use
+factors, and the 1992 unpublished-works sentence. Source credit "(Pub. L. 94–553, title I,
+§ 101, Oct. 19, 1976, 90 Stat. 2546; Pub. L. 101–650, title VI, § 607, Dec. 1, 1990, 104
+Stat. 5132; Pub. L. 102–492, Oct. 24, 1992, 106 Stat. 3145.)" matches OLRC exactly. All
+7 notes present (H.Rpt. 94-1476 historical note, Agreement on Guidelines heading note, books
+and periodicals guidelines, detailed guidelines, music education guidelines, Amendments
+editorial note, Effective Date of 1990 Amendment editorial note). Enacted date (1976-10-19)
+and last_modified_date (1992-10-24) are correct. `is_positive_law: true`, `is_repealed: false`,
+and group ancestors (Chapter 1) all accurate. OLRC site was under scheduled maintenance; LII
+(law.cornell.edu) used as cross-reference source to confirm statutory text.
+
+One known issue confirmed active:
+- **Issue #561**: `notes.amendments[*].law` fields `date`, `official_title`, `short_title`,
+  `stat_volume`, `stat_page`, and `stat_reference` are all `null` for both PL 102-492 and
+  PL 101-650 in the amendments array — while the same dates are correctly populated in
+  `notes.citations[*].law.date` for those same laws. Comment added to issue #561.
+
+Note category for "Effective Date of 1990 Amendment" now returns `"editorial"` (correct),
+suggesting issue #652 (previously listed for this section) has been resolved.
+
+No new defects found.
+
+
 ### 2026.08.04 — 9 U.S.C. § 1
 
 All fields matched at the 113-21 baseline: heading, full statutory text (single un-subsectioned
