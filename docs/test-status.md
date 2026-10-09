@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.09 | 9     | 202     | Agreement or award falling under the Convention                                        | 113-21        | ⚠️ OLRC unavailable — see notes |
 
 ## Notes
 
@@ -186,6 +187,28 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.09 — 9 U.S.C. § 202
+
+OLRC (`uscode.house.gov`) was entirely unavailable during this test run — the site returned a
+"Site is currently under maintenance" page for all URLs including the bulk-download endpoint and
+the HTML view. The authoritative comparison required by the test methodology could not be
+performed.
+
+CWLB data fetched and spot-checked for internal consistency:
+- **Heading**: "Agreement or award falling under the Convention" — consistent with the known
+  heading for this section.
+- **Provisions**: 3 paragraphs (commercial relationship falls under Convention; purely domestic
+  exception; corporate citizenship definition). Content matches the known statutory text.
+- **Source credit**: `(Added Pub. L. 91–368, § 1, July 31, 1970, 84 Stat. 692.)` — correct.
+- **`enacted_date`**: `1970-07-31`, **`last_modified_date`**: `1970-07-31` — consistent
+  (section has never been amended).
+- **`has_notes`**: `false`, **`note_categories`**: `[]` — expected for this unamended section.
+- **`is_positive_law`**: `true`, **`is_repealed`**: `false`, **`group_ancestors`**: Chapter 2.
+- **HEAD revision**: ID 3, effective `2013-08-09`, summary `PL 113-23`.
+
+No OLRC comparison was possible. CWLB data appears internally consistent; full fidelity check
+deferred to a future run when OLRC is available. No new bugs filed.
 
 
 ## Test methodology
