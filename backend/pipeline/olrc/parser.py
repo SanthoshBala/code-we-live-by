@@ -157,6 +157,14 @@ _NOTE_TOPIC_DISPLAY: dict[str, str] = {
     "constructionOfAmendment": "Construction of Amendment",
 }
 
+# Structural element tags used inside quoted acts (e.g. <section>, <subsection>).
+# When a <heading> is encountered inside one of these tags, it is a structural
+# heading within the quoted act — not a note-boundary marker — and must NOT emit
+# [NH] (which would incorrectly split the surrounding statutory note).
+_STRUCTURAL_TAGS: frozenset[str] = frozenset(
+    {"section", "subsection", "paragraph", "subparagraph", "clause", "subclause"}
+)
+
 # Matches leading comma-separated parenthetical sub-citation clauses that
 # trail a sourceCredit PL <ref> as plain text, e.g. the "(b)(3)(I)" in
 # "<ref>...§ 1901(a)(130)</ref>, (b)(3)(I), <date>...". Only matches simple
@@ -1707,6 +1715,7 @@ class USLMParser:
             el: etree._Element,
             in_bold: bool = False,
             in_italic: bool = False,
+            nested_in_section: bool = False,
         ) -> None:
             """Recursively process element and its children."""
             tag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
@@ -1820,23 +1829,36 @@ class USLMParser:
                     parts.append(el.tail)
                 return
 
-            # Check if this is a heading element — always emit [NH] markers regardless
-            # of whether it has class="smallCaps".  Some USLM releases use
+            # Check if this is a heading element.  At the top level of a note,
+            # always emit [NH] markers (regardless of whether the element has
+            # class="smallCaps").  Some USLM releases use
             # <note topic="amendments"><heading>Amendments</heading> without the
             # smallCaps class, but the element is still a structural note header.
+            #
+            # However, when this <heading> is nested inside a structural element
+            # (section/subsection/paragraph/…) — as happens in quoted acts embedded
+            # within a note — it is a heading for that sub-structure, NOT a note
+            # boundary marker.  Emitting [NH] in that case causes the note-splitting
+            # logic to break one cohesive note into multiple spurious sub-notes
+            # (issue #753).  Emit [H1] (plain bold header) instead.
             if tag == "heading":
                 text = "".join(el.itertext()).strip()
                 if text:
-                    # Some USLM releases store the raw camelCase topic name as the
-                    # heading text (e.g. <heading>historicalAndRevision</heading>).
-                    # Look up known camelCase topics in _NOTE_TOPIC_DISPLAY first so
-                    # they get their canonical human-readable display string.
-                    # Otherwise, preserve the heading text verbatim from the OLRC
-                    # source — do NOT apply .title() here because that mangles
-                    # lowercase connective words ("of" → "Of", "in" → "In", etc.).
-                    # See issue #509.
-                    display = _NOTE_TOPIC_DISPLAY.get(text, text)
-                    parts.append(f"[NH]{display}[/NH]")
+                    if nested_in_section:
+                        # Heading inside a quoted-act section — render as bold header,
+                        # not as a note-boundary marker.
+                        parts.append(f"[H1]{text}[/H1]")
+                    else:
+                        # Some USLM releases store the raw camelCase topic name as the
+                        # heading text (e.g. <heading>historicalAndRevision</heading>).
+                        # Look up known camelCase topics in _NOTE_TOPIC_DISPLAY first so
+                        # they get their canonical human-readable display string.
+                        # Otherwise, preserve the heading text verbatim from the OLRC
+                        # source — do NOT apply .title() here because that mangles
+                        # lowercase connective words ("of" → "Of", "in" → "In", etc.).
+                        # See issue #509.
+                        display = _NOTE_TOPIC_DISPLAY.get(text, text)
+                        parts.append(f"[NH]{display}[/NH]")
                 return  # Don't process children
 
             # Track bold/italic state
@@ -1864,9 +1886,14 @@ class USLMParser:
                 else:
                     parts.append(text)
 
-            # Process children
+            # Process children, propagating nested_in_section so that any
+            # <heading> inside a structural element is rendered as [H1] rather
+            # than as a note-boundary [NH] marker (issue #753).
+            new_in_nested_section = nested_in_section or tag in _STRUCTURAL_TAGS
             for child in el:
-                process_element(child, new_in_bold, new_in_italic)
+                process_element(
+                    child, new_in_bold, new_in_italic, new_in_nested_section
+                )
 
             # Add tail text (text after closing tag)
             if el.tail:

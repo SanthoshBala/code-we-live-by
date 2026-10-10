@@ -2489,3 +2489,99 @@ class TestExtractSourceCreditRefsMultiSubcitation:
         ref = SourceCreditRef(congress=94, law_number=455)
         assert ref.extra_sections == []
         assert ref.extra_stat_pages == []
+
+
+class TestGetNotesTextContentNestedHeadings:
+    """Regression tests for issue #753.
+
+    A <heading> nested inside a structural element (section/subsection/…) within a
+    <note> must NOT emit [NH] — which would incorrectly split the surrounding note into
+    multiple spurious sub-notes.  It should emit [H1] (plain bold header) instead.
+    Only top-level <heading> children of a <note> are note-boundary markers.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def _make_notes_elem(self, xml_fragment: str) -> etree._Element:
+        """Parse a <notes> XML fragment (with USLM namespace) into an lxml element."""
+        ns = "http://xml.house.gov/schemas/uslm/1.0"
+        full_xml = f'<notes xmlns="{ns}">{xml_fragment}</notes>'
+        return etree.fromstring(full_xml)
+
+    def test_top_level_heading_emits_nh(self, parser: USLMParser) -> None:
+        """A <heading> that is a direct child of <note> must still emit [NH]."""
+        notes_elem = self._make_notes_elem(
+            """
+            <note topic="shortTitle">
+                <heading>Short Title</heading>
+                <p>Some content.</p>
+            </note>
+            """
+        )
+        result = parser._get_notes_text_content(notes_elem)
+        assert "[NH]Short Title[/NH]" in result
+
+    def test_nested_heading_in_section_emits_h1_not_nh(
+        self, parser: USLMParser
+    ) -> None:
+        """A <heading> inside a <section> within a <note> must emit [H1], not [NH].
+
+        This is the core regression for issue #753: quoted acts embedded in a note
+        can contain <section><heading>…</heading>…</section> blocks.  Those nested
+        headings are structural markers within the quoted act, not note-boundary
+        markers.  Emitting [NH] for them causes the note-splitting logic to shred one
+        cohesive note into multiple spurious sub-notes (e.g. 3 U.S.C. § 102).
+        """
+        notes_elem = self._make_notes_elem(
+            """
+            <note topic="shortTitle">
+                <heading>Presidential Transition Act of 1963</heading>
+                <p>Introductory content.</p>
+                <section>
+                    <heading>"Purpose of This Act"</heading>
+                    <p>The purpose of this Act is to promote orderly transitions.</p>
+                </section>
+                <section>
+                    <heading>"Definitions"</heading>
+                    <p>As used in this Act, the term "President-elect" means…</p>
+                </section>
+            </note>
+            """
+        )
+        result = parser._get_notes_text_content(notes_elem)
+
+        # The outer note heading must be a note-boundary marker.
+        assert "[NH]Presidential Transition Act of 1963[/NH]" in result
+
+        # The nested section headings must NOT be note-boundary markers.
+        assert '[NH]"Purpose of This Act"[/NH]' not in result
+        assert '[NH]"Definitions"[/NH]' not in result
+
+        # The nested headings should instead appear as plain bold headers.
+        assert '[H1]"Purpose of This Act"[/H1]' in result
+        assert '[H1]"Definitions"[/H1]' in result
+
+    def test_nested_heading_in_subsection_emits_h1_not_nh(
+        self, parser: USLMParser
+    ) -> None:
+        """A <heading> inside a <subsection> within a <note> must also emit [H1]."""
+        notes_elem = self._make_notes_elem(
+            """
+            <note topic="amendments">
+                <heading>Amendments</heading>
+                <p>Preamble text.</p>
+                <subsection>
+                    <heading>"Subsection Title"</heading>
+                    <p>Subsection body text.</p>
+                </subsection>
+            </note>
+            """
+        )
+        result = parser._get_notes_text_content(notes_elem)
+
+        assert "[NH]Amendments[/NH]" in result
+        assert '[NH]"Subsection Title"[/NH]' not in result
+        assert '[H1]"Subsection Title"[/H1]' in result
