@@ -60,10 +60,10 @@ from pipeline.olrc.parser import USLMParser
 parser = USLMParser()
 result = parser.parse_file("data/olrc/title17/usc17.xml")
 
-print(result.title.title_name)      # "COPYRIGHTS"
-print(result.title.is_positive_law) # True
-print(len(result.chapters))         # 15
-print(len(result.sections))         # 155
+print(result.title.title_name)  # "COPYRIGHTS"
+print(result.title.is_positive_law)  # True
+print(len(result.chapters))  # 15
+print(len(result.sections))  # 155
 ```
 
 **Output dataclasses:**
@@ -93,7 +93,7 @@ async with AsyncSession(engine) as session:
 
     # Ingest a single title (downloads if needed)
     log = await service.ingest_title(17)
-    print(log.status)           # "completed"
+    print(log.status)  # "completed"
     print(log.records_created)  # 171
 
     # Ingest a title
