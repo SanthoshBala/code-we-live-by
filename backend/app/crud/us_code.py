@@ -69,8 +69,7 @@ def _build_section_summary(state: SectionState) -> SectionSummarySchema:
         section_number=state.section_number,
         heading=state.heading or "",
         sort_order=state.sort_order,
-        is_repealed=state.is_deleted
-        or bool(state.heading and state.heading.startswith("Repealed.")),
+        is_repealed=state.is_deleted,
         last_amendment_year=year,
         last_amendment_law=law,
         note_categories=_extract_note_categories(state.normalized_notes),
