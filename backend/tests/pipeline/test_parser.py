@@ -1151,6 +1151,38 @@ class TestCamelToTitle:
         assert "[NH]Removaldescription[/NH]" not in content
 
 
+class TestNotesTextNoSpaceBeforeClosingParen:
+    """Regression tests for spurious space before ')' in notes text (Issue #705)."""
+
+    def test_no_space_before_closing_paren_in_ref_tail(self) -> None:
+        """<ref> tail text starting with ')' must not gain a leading space.
+
+        Regression test for Issue #705: a <ref> element immediately followed
+        by ')' in the tail text (e.g. '92 Stat. 86), pursuant to') was
+        rendered as '92 Stat. 86 ), pursuant to' with a spurious space.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">
+            <note>
+                <p>As amended by the Act of 1978 (
+                <ref href="/us/stat/92/86">92 Stat. 86</ref>), pursuant to
+                section 5.</p>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # The closing paren must immediately follow the ref text, no space
+        assert "92 Stat. 86), pursuant to" in content
+        assert "92 Stat. 86 )," not in content
+
+
 class TestChapterGroups:
     """Tests for chapter group (subtitle, part, division) parsing."""
 
