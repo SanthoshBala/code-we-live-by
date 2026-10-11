@@ -37,6 +37,7 @@ client = GovInfoClient(api_key="your-api-key")
 
 # List public laws modified since a date
 from datetime import datetime
+
 laws = await client.get_public_laws(
     start_date=datetime(2025, 1, 1),
     congress=119,  # Optional filter
