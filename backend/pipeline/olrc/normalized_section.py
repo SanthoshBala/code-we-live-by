@@ -1684,7 +1684,6 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
             or _REPORT_PATTERN.search(header)
             else NoteCategory.EDITORIAL
             if header.lower() in editorial_headers_lower
-            or _EFFECTIVE_DATE_PATTERN.search(header)
             else NoteCategory.STATUTORY
         )
 

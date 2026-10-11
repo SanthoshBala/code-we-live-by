@@ -3134,13 +3134,13 @@ class TestFlatNotesParser:
         assert notes.notes[0].header == "Amendments"
         assert notes.notes[0].category.value == "editorial"
 
-    def test_flat_effective_date_of_amendment_note_is_editorial(self) -> None:
-        """'Effective Date of <year> Amendment' notes are classified as EDITORIAL.
+    def test_flat_effective_date_of_amendment_note_is_statutory(self) -> None:
+        """'Effective Date of <year> Amendment' notes are classified as STATUTORY.
 
-        Regression test for issue #652: effectiveDateOfAmendment notes were
-        miscategorised as STATUTORY because the year-specific header variants
-        (e.g. "Effective Date Of 1986 Amendment") did not match the fixed
-        EDITORIAL_HEADERS set.  _EFFECTIVE_DATE_PATTERN now catches all of them.
+        Regression test for issue #686: effectiveDateOfAmendment notes were
+        miscategorised as EDITORIAL because _EFFECTIVE_DATE_PATTERN was
+        mistakenly placed in the EDITORIAL branch of the category assignment.
+        These notes record when an act takes effect and are STATUTORY.
         """
         from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
 
@@ -3154,13 +3154,14 @@ class TestFlatNotesParser:
 
         assert len(notes.notes) == 1
         assert notes.notes[0].header == "Effective Date Of 1986 Amendment"
-        assert notes.notes[0].category.value == "editorial"
+        assert notes.notes[0].category.value == "statutory"
 
-    def test_flat_effective_date_of_1990_amendment_is_editorial(self) -> None:
-        """'Effective Date of 1990 Amendment' header is classified as EDITORIAL.
+    def test_flat_effective_date_of_1990_amendment_is_statutory(self) -> None:
+        """'Effective Date of 1990 Amendment' header is classified as STATUTORY.
 
-        Targeted regression for issue #652: confirms the fix applies to the
-        specific example cited in the bug report.
+        Regression test for issue #686: confirms "Effective Date of..." notes
+        fall through to the STATUTORY branch after removing _EFFECTIVE_DATE_PATTERN
+        from the EDITORIAL condition.
         """
         from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
 
@@ -3174,7 +3175,7 @@ class TestFlatNotesParser:
 
         assert len(notes.notes) == 1
         assert notes.notes[0].header == "Effective Date of 1990 Amendment"
-        assert notes.notes[0].category.value == "editorial"
+        assert notes.notes[0].category.value == "statutory"
 
     def test_flat_non_effective_date_statutory_note_is_statutory(self) -> None:
         """Flat notes with non-editorial, non-effective-date headers are STATUTORY."""
@@ -3988,18 +3989,20 @@ class TestTitle17Section106Notes:
         amendments = next(n for n in notes.notes if n.header == "Amendments")
         assert amendments.category.value == "editorial"
 
-    def test_effective_date_of_amendment_notes_are_editorial(self) -> None:
-        """'Effective Date of <year> Amendment' notes are classified as EDITORIAL.
+    def test_effective_date_of_amendment_notes_are_statutory(self) -> None:
+        """'Effective Date of <year> Amendment' notes are classified as STATUTORY.
 
-        Regression test for issue #652: effectiveDateOfAmendment notes were
-        miscategorised as STATUTORY.  After the fix they must be EDITORIAL.
+        Updated for issue #686: effectiveDateOfAmendment notes were
+        miscategorised as EDITORIAL due to _EFFECTIVE_DATE_PATTERN being placed
+        in the wrong branch. These notes record when an act takes effect and
+        must be STATUTORY.
         """
         notes = self._parse()
         eff_notes = [n for n in notes.notes if "Effective Date" in n.header]
         assert len(eff_notes) == 2
         for note in eff_notes:
-            assert note.category.value == "editorial", (
-                f"{note.header!r} should be editorial, got {note.category.value}"
+            assert note.category.value == "statutory", (
+                f"{note.header!r} should be statutory, got {note.category.value}"
             )
 
     def test_historical_heading_only_note_surfaced(self) -> None:
@@ -4162,12 +4165,10 @@ class TestNoteTopicAmendmentParsing:
 
         editorial = [n for n in notes.notes if n.category.value == "editorial"]
         statutory = [n for n in notes.notes if n.category.value == "statutory"]
+        assert len(editorial) == 2  # References in Text + Amendments
         assert (
-            len(editorial) == 3
-        )  # References in Text + Amendments + Effective Date of 1996 Amendment
-        assert (
-            len(statutory) == 1
-        )  # No Requirement (effectiveDateOfAmendment is now editorial, issue #652)
+            len(statutory) == 2
+        )  # Effective Date of 1996 Amendment + No Requirement (issue #686: effectiveDateOfAmendment is STATUTORY)
 
         assert len(notes.amendments) >= 2
         years = [a.year for a in notes.amendments]
