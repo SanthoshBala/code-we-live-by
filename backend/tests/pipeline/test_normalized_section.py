@@ -4070,18 +4070,19 @@ class TestTitle17Section106Notes:
         amendments = next(n for n in notes.notes if n.header == "Amendments")
         assert amendments.category.value == "editorial"
 
-    def test_effective_date_of_amendment_notes_are_editorial(self) -> None:
-        """'Effective Date of <year> Amendment' notes are classified as EDITORIAL.
+    def test_effective_date_of_amendment_notes_are_statutory(self) -> None:
+        """'Effective Date of <year> Amendment' notes are classified as STATUTORY.
 
-        Regression test for issue #652: effectiveDateOfAmendment notes were
-        miscategorised as STATUTORY.  After the fix they must be EDITORIAL.
+        Issue #686: effectiveDateOfAmendment notes were miscategorised as
+        EDITORIAL because _EFFECTIVE_DATE_PATTERN was in the EDITORIAL branch.
+        These notes record when an act takes effect and belong under STATUTORY.
         """
         notes = self._parse()
         eff_notes = [n for n in notes.notes if "Effective Date" in n.header]
         assert len(eff_notes) == 2
         for note in eff_notes:
-            assert note.category.value == "editorial", (
-                f"{note.header!r} should be editorial, got {note.category.value}"
+            assert note.category.value == "statutory", (
+                f"{note.header!r} should be statutory, got {note.category.value}"
             )
 
     def test_historical_heading_only_note_surfaced(self) -> None:
