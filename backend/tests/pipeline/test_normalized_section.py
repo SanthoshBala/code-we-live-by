@@ -3134,13 +3134,13 @@ class TestFlatNotesParser:
         assert notes.notes[0].header == "Amendments"
         assert notes.notes[0].category.value == "editorial"
 
-    def test_flat_effective_date_of_amendment_note_is_editorial(self) -> None:
-        """'Effective Date of <year> Amendment' notes are classified as EDITORIAL.
+    def test_flat_effective_date_of_amendment_note_is_statutory(self) -> None:
+        """'Effective Date of <year> Amendment' notes are classified as STATUTORY.
 
-        Regression test for issue #652: effectiveDateOfAmendment notes were
-        miscategorised as STATUTORY because the year-specific header variants
-        (e.g. "Effective Date Of 1986 Amendment") did not match the fixed
-        EDITORIAL_HEADERS set.  _EFFECTIVE_DATE_PATTERN now catches all of them.
+        Regression test for issue #686: effectiveDateOfAmendment notes were
+        miscategorised as EDITORIAL because _EFFECTIVE_DATE_PATTERN was
+        mistakenly placed in the EDITORIAL branch of the category assignment.
+        These notes record when an act takes effect and are STATUTORY.
         """
         from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
 
@@ -3154,13 +3154,14 @@ class TestFlatNotesParser:
 
         assert len(notes.notes) == 1
         assert notes.notes[0].header == "Effective Date Of 1986 Amendment"
-        assert notes.notes[0].category.value == "editorial"
+        assert notes.notes[0].category.value == "statutory"
 
-    def test_flat_effective_date_of_1990_amendment_is_editorial(self) -> None:
-        """'Effective Date of 1990 Amendment' header is classified as EDITORIAL.
+    def test_flat_effective_date_of_1990_amendment_is_statutory(self) -> None:
+        """'Effective Date of 1990 Amendment' header is classified as STATUTORY.
 
-        Targeted regression for issue #652: confirms the fix applies to the
-        specific example cited in the bug report.
+        Regression test for issue #686: confirms "Effective Date of..." notes
+        fall through to the STATUTORY branch after removing _EFFECTIVE_DATE_PATTERN
+        from the EDITORIAL condition.
         """
         from pipeline.olrc.normalized_section import SectionNotes, _parse_flat_notes
 
@@ -3174,7 +3175,7 @@ class TestFlatNotesParser:
 
         assert len(notes.notes) == 1
         assert notes.notes[0].header == "Effective Date of 1990 Amendment"
-        assert notes.notes[0].category.value == "editorial"
+        assert notes.notes[0].category.value == "statutory"
 
     def test_flat_non_effective_date_statutory_note_is_statutory(self) -> None:
         """Flat notes with non-editorial, non-effective-date headers are STATUTORY."""
@@ -3988,18 +3989,20 @@ class TestTitle17Section106Notes:
         amendments = next(n for n in notes.notes if n.header == "Amendments")
         assert amendments.category.value == "editorial"
 
-    def test_effective_date_of_amendment_notes_are_editorial(self) -> None:
-        """'Effective Date of <year> Amendment' notes are classified as EDITORIAL.
+    def test_effective_date_of_amendment_notes_are_statutory(self) -> None:
+        """'Effective Date of <year> Amendment' notes are classified as STATUTORY.
 
-        Regression test for issue #652: effectiveDateOfAmendment notes were
-        miscategorised as STATUTORY.  After the fix they must be EDITORIAL.
+        Updated for issue #686: effectiveDateOfAmendment notes were
+        miscategorised as EDITORIAL due to _EFFECTIVE_DATE_PATTERN being placed
+        in the wrong branch. These notes record when an act takes effect and
+        must be STATUTORY.
         """
         notes = self._parse()
         eff_notes = [n for n in notes.notes if "Effective Date" in n.header]
         assert len(eff_notes) == 2
         for note in eff_notes:
-            assert note.category.value == "editorial", (
-                f"{note.header!r} should be editorial, got {note.category.value}"
+            assert note.category.value == "statutory", (
+                f"{note.header!r} should be statutory, got {note.category.value}"
             )
 
     def test_historical_heading_only_note_surfaced(self) -> None:
@@ -4163,11 +4166,11 @@ class TestNoteTopicAmendmentParsing:
         editorial = [n for n in notes.notes if n.category.value == "editorial"]
         statutory = [n for n in notes.notes if n.category.value == "statutory"]
         assert (
-            len(editorial) == 3
-        )  # References in Text + Amendments + Effective Date of 1996 Amendment
+            len(editorial) == 2
+        )  # References in Text + Amendments
         assert (
-            len(statutory) == 1
-        )  # No Requirement (effectiveDateOfAmendment is now editorial, issue #652)
+            len(statutory) == 2
+        )  # Effective Date of 1996 Amendment + No Requirement (issue #686: effectiveDateOfAmendment is STATUTORY)
 
         assert len(notes.amendments) >= 2
         years = [a.year for a in notes.amendments]
@@ -6402,3 +6405,98 @@ class TestNoteParAbbrevContinuations:
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
         )
+
+
+class TestYearPatternAnchorFalseSplit:
+    """Regression tests for issue #675: year followed by dash inside quoted description text
+    must not trigger a false year-group split in the amendment parser.
+
+    Root cause: _YEAR_PATTERN lacked a ^ anchor, so it matched YYYY- anywhere in the
+    text -- including mid-sentence quoted phrases.  The fix adds ^ so only a year at the
+    start of a line is treated as a year-group heading.
+    """
+
+    def test_year_dash_mid_sentence_no_false_split(self) -> None:
+        """13 U.S.C. § 9: '1998-' inside a quoted phrase must NOT create a new year group.
+
+        Under the 1997 heading, Pub. L. 105-119's description quotes
+        'Appropriations Act, 1998-', which contains a four-digit year followed by a
+        hyphen.  Before the fix this triggered a false year=1998 group, truncating
+        the first amendment's description and incorrectly attributing the second
+        amendment (Pub. L. 105-113) to year 1998.
+
+        After the fix both amendments must remain under year 1997.  Closes #675.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # Two amendments separated by a paragraph break (\n\n), mirroring how
+        # USLM XML <p> elements are encoded after XML processing.  The first
+        # amendment's description contains "1998-" mid-sentence inside a quoted phrase.
+        text = (
+            "1997–Subsec. (a). Pub. L. 105–119 directed substitution of "
+            "“of this title or section 210 of the Departments of Commerce, "
+            "Justice, and State, the Judiciary, and Related Agencies Appropriations "
+            "Act, 1998-” for “of this title-”, but directed "
+            "execution only if certain conditions were met.\n\n"
+            "Pub. L. 105–113 inserted “or section 2(f) of the Census of "
+            "Agriculture Act of 1997” after “this title”."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2, (
+            f"Expected 2 amendments but got {len(amendments)}: "
+            + str(
+                [
+                    (
+                        a.year,
+                        getattr(a.law, "congress", None),
+                        getattr(a.law, "law_number", None),
+                    )
+                    for a in amendments
+                ]
+            )
+        )
+        years = [a.year for a in amendments]
+        assert all(y == 1997 for y in years), (
+            f"All amendments should be year 1997, got years: {years}"
+        )
+        # First amendment is Pub. L. 105-119
+        first = amendments[0]
+        assert first.law is not None
+        assert first.law.congress == 105
+        assert first.law.law_number == 119
+        # The description must not be truncated at '1998-' -- the full quoted phrase
+        # must be present.
+        assert "1998-" in first.description, (
+            f"Expected '1998-' in first amendment description: {first.description!r}"
+        )
+        # Second amendment is Pub. L. 105-113
+        second = amendments[1]
+        assert second.law is not None
+        assert second.law.congress == 105
+        assert second.law.law_number == 113
+        assert second.year == 1997, (
+            f"Expected second amendment year=1997, got {second.year}"
+        )
+
+    def test_year_dash_at_line_start_still_splits(self) -> None:
+        """A year followed by a dash that genuinely starts a new line must still split.
+
+        This verifies the fix is surgical: the ^ anchor blocks mid-sentence matches
+        but preserves the intended split behaviour for real year-group headings that
+        appear at the start of their paragraph/line.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "1998–Pub. L. 105–200 made a change.\n\n"
+            "1997–Pub. L. 105–100 made an earlier change."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2, (
+            f"Expected 2 amendments but got {len(amendments)}: "
+            + str([a.description for a in amendments])
+        )
+        years = {a.year for a in amendments}
+        assert years == {1997, 1998}, f"Expected years {{1997, 1998}}, got {years}"
