@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.11 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -186,6 +187,33 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.11 — 17 U.S.C. § 107 (Fair use)
+
+Statutory text matches verbatim: all four fair-use factors plus the 1992 unpublished-works
+sentence. Source credit matches (PL 94-553, PL 101-650, PL 102-492). All 7 notes are present:
+Historical and Revision Notes (House Report No. 94-1476, 42 content lines), "Agreement on
+Guidelines for Classroom Copying in Not-For-Profit Educational Institutions" (heading-only
+container, no body — expected structure), "With Respect to Books and Periodicals" (5 lines),
+"Guidelines" (107 lines), "Guidelines for Educational Uses of Music" (96 content lines),
+"Amendments" (2 lines), and "Effective Date of 1990 Amendment" (1 line). Heading, enacted
+date (1976-10-19), and last_modified_date (1992-10-24) are all correct. Amendment entries for
+PL 102-492 (1992) and PL 101-650 (1990) are present with correct descriptions.
+
+Note: uscode.house.gov returned a maintenance page; comparison used Cornell LII
+(law.cornell.edu/uscode/text/17/107) as the authoritative reference.
+
+Two known defects confirmed active on this section:
+
+- **Issue #686**: `Effective Date of 1990 Amendment` note (note[6]) is returned with
+  `category: "editorial"` but Cornell LII classifies this note under "Statutory Notes"
+  (it derives from Pub. L. 101-650 § 610, a statutory provision). Matches the defect class
+  in #686 ("statutory notes miscategorized as editorial"). Comment added to #686.
+- **Issue #561**: `notes.amendments[*].law` objects for both PL 102-492 and PL 101-650 have
+  `date`, `stat_volume`, `stat_page`, `official_title`, and `short_title` all `null`. Already
+  filed specifically about this section.
+
+No new defects found.
 
 
 ## Test methodology
