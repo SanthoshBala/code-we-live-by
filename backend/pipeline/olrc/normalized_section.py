@@ -1684,7 +1684,6 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
             or _REPORT_PATTERN.search(header)
             else NoteCategory.EDITORIAL
             if header.lower() in editorial_headers_lower
-            or _EFFECTIVE_DATE_PATTERN.search(header)
             else NoteCategory.STATUTORY
         )
 
@@ -1880,6 +1879,13 @@ def _parse_editorial_notes(raw_notes: str, notes: SectionNotes) -> None:
 
     editorial_text = edit_match.group(1).strip()
     if not editorial_text:
+        notes.notes.append(
+            SectionNote(
+                header="Editorial Notes",
+                lines=[],
+                category=NoteCategory.EDITORIAL,
+            )
+        )
         return
 
     # Find note headers using [NH]...[/NH] markers from XML parser
@@ -1941,6 +1947,13 @@ def _parse_statutory_notes(raw_notes: str, notes: SectionNotes) -> None:
 
     statutory_text = stat_match.group(1).strip()
     if not statutory_text:
+        notes.notes.append(
+            SectionNote(
+                header="Statutory Notes and Related Subsidiaries",
+                lines=[],
+                category=NoteCategory.STATUTORY,
+            )
+        )
         return
 
     # Parse structured fields
