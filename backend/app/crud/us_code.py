@@ -5,6 +5,7 @@ revision parameter for time-travel queries. Group hierarchy comes from
 SectionGroup (populated by both ingestion and bootstrap).
 """
 
+import re
 import uuid
 from typing import Any
 
@@ -35,7 +36,9 @@ def _extract_last_amendment(
     """Extract the most recent amendment year and law from normalized_notes.
 
     The amendments list is stored newest-first per the parser convention.
-    Returns (year, "PL {congress}-{law_number}") or (None, None).
+    Returns (year, "PL {congress}-{law_number}") for post-1957 acts, or
+    (year, "Act ..., ch. NNNN") for pre-1957 chapter-style citations, or
+    (None, None) when no amendment data is available.
     """
     if not notes:
         return None, None
@@ -49,6 +52,15 @@ def _extract_last_amendment(
     law_number = law.get("law_number")
     if congress is not None and law_number is not None:
         return year, f"PL {congress}-{law_number}"
+    # Pre-1957 acts: extract short citation from description
+    # e.g. "Act Sept. 3, 1954, ch. 1263, § 19, 68 Stat. 1233, struck out..."
+    # → "Act Sept. 3, 1954, ch. 1263"
+    description = latest.get("description") or ""
+    act_match = re.search(
+        r"(Act\s+\w+\.?\s+\d+,\s+\d{4}(?:,\s*ch\.\s*\d+)?)", description
+    )
+    if act_match:
+        return year, act_match.group(1)
     return year, None
 
 
@@ -69,7 +81,8 @@ def _build_section_summary(state: SectionState) -> SectionSummarySchema:
         section_number=state.section_number,
         heading=state.heading or "",
         sort_order=state.sort_order,
-        is_repealed=state.is_deleted,
+        is_repealed=state.is_deleted
+        or bool(state.heading and state.heading.startswith("Repealed.")),
         last_amendment_year=year,
         last_amendment_law=law,
         note_categories=_extract_note_categories(state.normalized_notes),
@@ -549,7 +562,8 @@ async def get_section(
         enacted_date=enacted_date,
         last_modified_date=last_modified_date,
         is_positive_law=is_positive_law,
-        is_repealed=state.is_deleted,
+        is_repealed=state.is_deleted
+        or bool(state.heading and state.heading.startswith("Repealed.")),
         notes=notes,
         source_credit=source_credit,
         last_revision=last_revision,
