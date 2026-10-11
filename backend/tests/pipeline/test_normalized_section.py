@@ -3891,6 +3891,88 @@ class TestFlatNotesParser:
         assert "historical and revision notes" not in headers
 
 
+    def test_editorial_heading_only_note_preserved_issue_697(self) -> None:
+        """Regression: editorial heading-only note (section divider) must not be dropped.
+
+        When the OLRC XML includes a <note topic="editorialNotes"> with only a
+        <heading> child and no body paragraphs, the resulting raw_notes string
+        contains "Editorial Notes " with nothing after it before the statutory
+        section (or end of string).  Prior to the fix _parse_editorial_notes
+        silently returned without appending any note when editorial_text was empty.
+        Closes #697.
+        """
+        from pipeline.olrc.normalized_section import (
+            NoteCategory,
+            SectionNotes,
+            _parse_editorial_notes,
+        )
+
+        # Simulate a heading-only Editorial Notes element: the heading appears
+        # but there are no sub-notes underneath it.
+        raw_notes = "Editorial Notes "
+        notes = SectionNotes()
+        _parse_editorial_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 1, (
+            f"Expected 1 heading-only editorial note; got {len(notes.notes)}"
+        )
+        note = notes.notes[0]
+        assert note.header == "Editorial Notes"
+        assert note.category == NoteCategory.EDITORIAL
+        assert note.lines == []
+
+    def test_statutory_heading_only_section_divider_preserved_issue_697(self) -> None:
+        """Regression: statutory heading-only note (section divider) must not be dropped.
+
+        When the OLRC XML includes a <note topic="statutoryNotes"> with only a
+        <heading> child and no body paragraphs, the resulting raw_notes string
+        contains "Statutory Notes and Related Subsidiaries " with nothing after it.
+        Prior to the fix _parse_statutory_notes silently returned without appending
+        any note when statutory_text was empty.  Closes #697.
+        """
+        from pipeline.olrc.normalized_section import (
+            NoteCategory,
+            SectionNotes,
+            _parse_statutory_notes,
+        )
+
+        # Simulate a heading-only Statutory Notes element.
+        raw_notes = "Statutory Notes and Related Subsidiaries "
+        notes = SectionNotes()
+        _parse_statutory_notes(raw_notes, notes)
+
+        assert len(notes.notes) == 1, (
+            f"Expected 1 heading-only statutory note; got {len(notes.notes)}"
+        )
+        note = notes.notes[0]
+        assert note.header == "Statutory Notes and Related Subsidiaries"
+        assert note.category == NoteCategory.STATUTORY
+        assert note.lines == []
+
+    def test_editorial_heading_only_divider_via_notes_structure_issue_697(
+        self,
+    ) -> None:
+        """Heading-only editorial divider must survive the full _parse_notes_structure
+        pipeline.  Closes #697.
+        """
+        from pipeline.olrc.normalized_section import (
+            NoteCategory,
+            SectionNotes,
+            _parse_notes_structure,
+        )
+
+        raw_notes = "Editorial Notes "
+        notes = SectionNotes()
+        _parse_notes_structure(raw_notes, notes)
+
+        editorial = [n for n in notes.notes if n.header == "Editorial Notes"]
+        assert len(editorial) == 1, (
+            f"Expected 1 heading-only editorial note; got {[n.header for n in notes.notes]}"
+        )
+        assert editorial[0].category == NoteCategory.EDITORIAL
+        assert editorial[0].lines == []
+
+
 class TestTitle17Section106Notes:
     """Regression tests for issue #526: notes not parsed for 17 U.S.C. § 106.
 
@@ -6402,3 +6484,4 @@ class TestNoteParAbbrevContinuations:
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
         )
+
