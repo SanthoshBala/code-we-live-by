@@ -549,8 +549,7 @@ async def get_section(
         enacted_date=enacted_date,
         last_modified_date=last_modified_date,
         is_positive_law=is_positive_law,
-        is_repealed=state.is_deleted
-        or bool(state.heading and state.heading.startswith("Repealed.")),
+        is_repealed=state.is_deleted,
         notes=notes,
         source_credit=source_credit,
         last_revision=last_revision,
