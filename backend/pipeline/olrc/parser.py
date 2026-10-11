@@ -1922,7 +1922,7 @@ class USLMParser:
             if (
                 not result
                 or result[-1] == "\n\n"
-                or stripped[0] in ";,."
+                or stripped[0] in ";,.)"
                 or prev_ends_em_dash
                 or prev_ends_open_quote
                 or current_starts_close_quote
