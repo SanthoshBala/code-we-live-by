@@ -45,6 +45,7 @@ TimelineEvent.tsx renders inline blockquote with expand/collapse toggle
 from sqlalchemy.ext.asyncio import AsyncSession
 from pipeline.signing_statements import SigningStatementIngestionService
 
+
 async def run(session: AsyncSession) -> None:
     svc = SigningStatementIngestionService(session)
 
