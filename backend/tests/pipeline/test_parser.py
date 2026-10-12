@@ -2489,3 +2489,138 @@ class TestExtractSourceCreditRefsMultiSubcitation:
         ref = SourceCreditRef(congress=94, law_number=455)
         assert ref.extra_sections == []
         assert ref.extra_stat_pages == []
+
+
+class TestExtractSourceCreditRefsOmnibusCitation:
+    """Regression tests for GitHub issue #762: omnibus appropriations act
+    citation format.
+
+    When a Consolidated Appropriations Act section is cited as
+    "§ N(a)(b) [title X, § Y]", the PL <ref> covers only the outer section
+    number and the bracketed sub-citation appears as plain tail text.
+    Two bugs appeared together:
+
+    1. ``raw_text`` was truncated to "... [title V, 113 Stat. 1536" because
+       _collect_ref_subdivision_suffix stopped at the first comma inside
+       the "[...]" brackets (treating it as a citation delimiter).
+
+    2. ``extra_stat_pages`` captured the integer prefix of "1501A–594"
+       (an appendix-format Stat. page) as [1501] because the regex lacked a
+       word-boundary guard.
+
+    The XML structure for 17 U.S.C. § 1313 / Pub. L. 106-113 is:
+
+        <ref href="/us/pl/106/113/dB/s1000/a/9">
+          Pub. L. 106–113, div. B, § 1000(a)(9)
+        </ref> [title V, § 5005(a)(4)], Nov. 29, 1999,
+        <ref href="/us/stat/113/1536">113 Stat. 1536</ref>, 1501A–594.
+
+    The "[title V, § 5005(a)(4)]" portion is plain tail text of the PL ref
+    (not a nested element), so the suffix collector must treat "[" as an
+    open-bracket and only stop at commas that are outside all brackets.
+    """
+
+    @pytest.fixture
+    def parser(self) -> USLMParser:
+        """Create a parser instance."""
+        return USLMParser()
+
+    def test_omnibus_citation_raw_text_preserved(self, parser: USLMParser) -> None:
+        """17 U.S.C. § 1313 / Pub. L. 106-113 omnibus citation.
+
+        raw_text must include the full "[title V, § 5005(a)(4)]" bracketed
+        sub-citation rather than stopping at the first comma inside it.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s1313">
+          <sourceCredit>
+            (Added <ref href="/us/pl/105/304/tV/s502">Pub. L. 105–304, title V, § 502</ref>,
+            <date date="1998-10-28">Oct. 28, 1998</date>,
+            <ref href="/us/stat/112/2911">112 Stat. 2911</ref>;
+            amended <ref href="/us/pl/106/113/dB/s1000/a/9">Pub. L. 106–113, div. B, § 1000(a)(9)</ref> [title V, § 5005(a)(4)], <date date="1999-11-29">Nov. 29, 1999</date>,
+            <ref href="/us/stat/113/1536">113 Stat. 1536</ref>, 1501A–594.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml.encode())
+
+        pl_refs, act_refs = parser._extract_source_credit_refs(elem)
+
+        assert act_refs == []
+        assert len(pl_refs) == 2
+
+        enactment_ref = pl_refs[0]
+        assert enactment_ref.congress == 105
+        assert enactment_ref.law_number == 304
+        assert enactment_ref.stat_volume == "112"
+        assert enactment_ref.stat_page == 2911
+
+        amendment_ref = pl_refs[1]
+        assert amendment_ref.congress == 106
+        assert amendment_ref.law_number == 113
+        assert amendment_ref.division == "B"
+        # section must include the bracketed sub-citation suffix
+        assert amendment_ref.section == "1000(a)(9) [title V, § 5005(a)(4)]"
+        assert amendment_ref.date == "Nov. 29, 1999"
+        assert amendment_ref.stat_volume == "113"
+        assert amendment_ref.stat_page == 1536
+        # The bracketed sub-citation must appear in raw_text, not the Stat. page
+        assert "[title V, § 5005(a)(4)]" in amendment_ref.raw_text
+        assert amendment_ref.raw_text == (
+            "Pub. L. 106–113, div. B, § 1000(a)(9)"
+            " [title V, § 5005(a)(4)], 113 Stat. 1536"
+        )
+
+    def test_omnibus_citation_extra_stat_pages_appendix_format(
+        self, parser: USLMParser
+    ) -> None:
+        """Appendix-format Stat. page "1501A–594" must not be captured as integer
+        1501.
+
+        The word-boundary guard in _SOURCE_CREDIT_EXTRA_STAT_PAGES_RE prevents
+        the "A–594" suffix from being silently stripped, so the result is an
+        empty extra_stat_pages list rather than [1501].
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t17/s1313">
+          <sourceCredit>
+            (Added <ref href="/us/pl/105/304/tV/s502">Pub. L. 105–304, title V, § 502</ref>,
+            <date date="1998-10-28">Oct. 28, 1998</date>,
+            <ref href="/us/stat/112/2911">112 Stat. 2911</ref>;
+            amended <ref href="/us/pl/106/113/dB/s1000/a/9">Pub. L. 106–113, div. B, § 1000(a)(9)</ref> [title V, § 5005(a)(4)], <date date="1999-11-29">Nov. 29, 1999</date>,
+            <ref href="/us/stat/113/1536">113 Stat. 1536</ref>, 1501A–594.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml.encode())
+
+        pl_refs, _ = parser._extract_source_credit_refs(elem)
+
+        amendment_ref = pl_refs[1]
+        # "1501A–594" is not a plain integer; extra_stat_pages should be empty
+        # rather than the incorrect [1501] that the unfixed parser produced.
+        assert amendment_ref.extra_stat_pages == []
+
+    def test_plain_integer_extra_stat_page_still_captured(
+        self, parser: USLMParser
+    ) -> None:
+        """Plain integer extra Stat. pages (e.g. "1793") must still be captured.
+
+        The word-boundary fix must not regress the existing behavior for
+        ordinary integer extra-page references.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t26/s1037">
+          <sourceCredit>
+            (amended <ref href="/us/pl/94/455/s1901/a/130">Pub. L. 94-455,
+            title XIX, § 1901(a)(130)</ref>,
+            <date date="1976-10-04">Oct. 4, 1976</date>,
+            <ref href="/us/stat/90/1786">90 Stat. 1786</ref>, 1793.)
+          </sourceCredit>
+        </section>"""
+        elem = etree.fromstring(xml.encode())
+
+        pl_refs, _ = parser._extract_source_credit_refs(elem)
+
+        assert len(pl_refs) == 1
+        ref = pl_refs[0]
+        assert ref.stat_page == 1786
+        assert ref.extra_stat_pages == [1793]
