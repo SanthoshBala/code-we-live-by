@@ -170,7 +170,10 @@ _SOURCE_CREDIT_EXTRA_SECTIONS_RE = re.compile(
 # Matches leading comma-separated Stat. page numbers that trail a
 # sourceCredit Stat. <ref> as plain text, e.g. the "1793" in
 # "<ref>90 Stat. 1786</ref>, 1793;".
-_SOURCE_CREDIT_EXTRA_STAT_PAGES_RE = re.compile(r"^,\s*(\d+(?:\s*,\s*\d+)*)")
+# The word-boundary assertion (\b) after each \d+ ensures that strings like
+# "1501A–594" (supplemental appendix page numbers in omnibus appropriations
+# acts) are NOT matched as the integer 1501 — only pure integer tokens count.
+_SOURCE_CREDIT_EXTRA_STAT_PAGES_RE = re.compile(r"^,\s*(\d+\b(?:\s*,\s*\d+\b)*)")
 
 
 @dataclass
@@ -1960,26 +1963,33 @@ class USLMParser:
         _STOP_TAGS = {"date", "ref", "statuteRef", "sourceCredit"}
 
         def _paren_depth(s: str) -> int:
-            """Return the net paren depth change for string s."""
+            """Return the net bracket depth change for string s.
+
+            Tracks both parentheses ( ) and square brackets [ ] so that
+            omnibus-format sub-citations like "[title V, § 5005(a)(4)]"
+            are treated as a single grouped token and commas inside them
+            do not split the collection prematurely.
+            """
             depth = 0
             for ch in s:
-                if ch == "(":
+                if ch in "([":
                     depth += 1
-                elif ch == ")":
+                elif ch in ")]":
                     depth -= 1
             return depth
 
         def _take_until_comma_at_depth(s: str, start_depth: int) -> tuple[str, int]:
             """Return (leading chars of s before a comma at depth <= 0, final depth).
 
-            Scanning begins with paren depth = start_depth, and stops when a comma
-            is encountered while depth <= 0.
+            Scanning begins with bracket depth = start_depth (counting both
+            parentheses and square brackets), and stops when a comma is
+            encountered while depth <= 0.
             """
             depth = start_depth
             for i, ch in enumerate(s):
-                if ch == "(":
+                if ch in "([":
                     depth += 1
-                elif ch == ")":
+                elif ch in ")]":
                     depth -= 1
                 elif ch == "," and depth <= 0:
                     return s[:i], depth
