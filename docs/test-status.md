@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.13 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issue confirmed — see notes) |
 
 ## Notes
 
@@ -186,6 +187,27 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+### 2026.10.13 — 17 U.S.C. § 107 (Fair use)
+
+Tested against OLRC XML release point 119-120 (current as of 2026-10-07), downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/119/120/xml_usc17@119-120.zip`.
+Section 107 was last amended in 1992 (Pub. L. 102-492), so its text is identical between
+release points 113-21 and 119-120.
+
+All fields matched: statutory text (chapeau, four fair-use factor paragraphs, unpublished-works
+continuation sentence), section heading, source credit (PL 94-553, PL 101-650, PL 102-492),
+enacted date (1976-10-19), last_modified_date (1992-10-24), and all seven note sections
+(H.Rpt. 94-1476 historical note, Agreement on Guidelines heading-only note, books/periodicals
+guidelines note, general guidelines note, music education guidelines note, Amendments note,
+and Effective Date of 1990 Amendment note).
+
+One known defect confirmed active:
+- **Issue #561**: `notes.amendments[*].law` objects have `date`, `official_title`,
+  `short_title`, `stat_volume`, `stat_page`, and `stat_reference` all `null` for both
+  PL 102-492 and PL 101-650, while `notes.citations[]` correctly carries full metadata from
+  the `<sourceCredit>` element. Comment added to #561.
+
+No new defects found.
 
 
 ## Test methodology
