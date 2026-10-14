@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.14 | 22    | 3945    | Senior Foreign Service                                                                 | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,32 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+
+### 2026.10.14 — 22 U.S.C. § 3945 (Senior Foreign Service)
+
+All structural fields matched: heading, full body text (subsections (a)–(d) with all nested
+paragraphs and subparagraphs), source credit, enacted date (`1980-10-17`), `last_modified_date`
+(`1990-05-04`), `is_repealed: false`, and all six notes (References in Text, Amendments,
+Effective Date of 1989 Amendment, Effective Date of 1985 Amendment, Effective Date, Placement
+of Senior Foreign Service Personnel). Note content and references match the OLRC XML verbatim.
+
+A minor text difference was found in subsection (c)(1): CWLB says "in subsection (b) of this
+section" while the current OLRC (119-120) says "in subsection (b)." This appears to be a
+legitimate text change between release point 113-21 (used by CWLB) and the current release
+point — not a parsing artifact.
+
+One known-issue occurrence confirmed:
+
+- **Issue #686**: Notes "Effective Date of 1989 Amendment" and "Effective Date of 1985
+  Amendment" are returned with `category: "editorial"` but the OLRC XML (`topic:
+  effectiveDateOfAmendment`) places them under the `<note topic="statutoryNotes">` section
+  header — they should be `"statutory"`. Comment added to #686.
+
+OLRC XML used: release point 119-120 (current as of 2026-10-07), downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/119/120/xml_usc22@119-120.zip`.
+Section was last amended in 1990 so content is substantively identical between 113-21 and
+119-120 (except the minor wording change in (c)(1) noted above).
 
 
 ## Test methodology
