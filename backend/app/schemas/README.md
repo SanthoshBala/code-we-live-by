@@ -47,9 +47,11 @@ class PublicLawBase(BaseModel):
     law_number: int
     date: str | None = None
 
+
 # Input - for API create/update endpoints (no auto-generated fields)
 class PublicLawIn(PublicLawBase):
     pass
+
 
 # Output - for API responses (includes DB fields + computed)
 class PublicLawOut(PublicLawBase):
