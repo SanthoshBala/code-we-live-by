@@ -6402,3 +6402,110 @@ class TestNoteParAbbrevContinuations:
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
         )
+
+
+class TestHistoricalSubheadingCategory:
+    """Regression tests for issue #689: sub-headings nested within
+    'Historical and Revision Notes' were miscategorised as STATUTORY.
+
+    Sub-headings such as "Agreement on Guidelines for Classroom Copying..."
+    and "guidelines for educational uses of music" (from 17 U.S.C. \u00a7 107)
+    are nested inside the historical notes span but don't match
+    _REPORT_PATTERN or appear in historical_headers_lower.  Before the fix
+    they fell through to NoteCategory.STATUTORY.  After the fix, headers
+    whose position in raw_notes falls within the historical section span
+    (and where an explicit Editorial or Statutory Notes section follows)
+    are classified as HISTORICAL.
+    """
+
+    # Represents the raw_notes format that the OLRC parser emits for a
+    # section like 17 U.S.C. \u00a7 107, where the historical section contains
+    # a House Report header AND sub-guidelines headings, followed by a
+    # distinct Editorial Notes section with an Amendments header.
+    _RAW = (
+        "[H1]Historical and Revision Notes[/H1]"
+        "[NH]house report no. 94-1476[/NH]"
+        "The following is from House Report No. 94-1476 on fair use doctrine."
+        "[NH]Agreement on Guidelines for Classroom Copying in Not-For-Profit"
+        " Educational Institutions[/NH]"
+        "With respect to books and periodicals, the guidelines set forth the following."
+        "[NH]guidelines for educational uses of music[/NH]"
+        "The purpose of these guidelines is to state the minimum and not the maximum standards."
+        "[H1]Editorial Notes[/H1]"
+        "[NH]Amendments[/NH]"
+        "1998\u2014Pub. L. 105\u2013298 amended section generally."
+    )
+
+    def _parse(self) -> object:
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_flat_notes,
+            _parse_historical_notes,
+        )
+
+        notes = SectionNotes()
+        _parse_historical_notes(self._RAW, notes)
+        _parse_flat_notes(self._RAW, notes)
+        return notes
+
+    def test_agreement_subheading_is_historical(self) -> None:
+        """'Agreement on Guidelines...' nested under House Report must be HISTORICAL."""
+        notes = self._parse()
+        agreement_note = next(
+            (n for n in notes.notes if "Agreement on Guidelines" in n.header),
+            None,
+        )
+        assert agreement_note is not None, (
+            "Expected an 'Agreement on Guidelines...' note but none was found; "
+            f"headers: {[n.header for n in notes.notes]}"
+        )
+        assert agreement_note.category.value == "historical", (
+            f"Expected 'historical', got {agreement_note.category.value!r}"
+        )
+
+    def test_guidelines_for_music_subheading_is_historical(self) -> None:
+        """'guidelines for educational uses of music' nested under House Report must be HISTORICAL."""
+        notes = self._parse()
+        music_note = next(
+            (
+                n
+                for n in notes.notes
+                if "guidelines for educational uses of music" in n.header.lower()
+            ),
+            None,
+        )
+        assert music_note is not None, (
+            "Expected a 'guidelines for educational uses of music' note but none was found; "
+            f"headers: {[n.header for n in notes.notes]}"
+        )
+        assert music_note.category.value == "historical", (
+            f"Expected 'historical', got {music_note.category.value!r}"
+        )
+
+    def test_amendments_in_editorial_section_is_editorial(self) -> None:
+        """'Amendments' under Editorial Notes must remain EDITORIAL, not HISTORICAL."""
+        notes = self._parse()
+        amendments_note = next(
+            (n for n in notes.notes if n.header == "Amendments"),
+            None,
+        )
+        assert amendments_note is not None, (
+            f"Expected an 'Amendments' note; headers: {[n.header for n in notes.notes]}"
+        )
+        assert amendments_note.category.value == "editorial", (
+            f"Expected 'editorial', got {amendments_note.category.value!r}"
+        )
+
+    def test_report_header_is_historical(self) -> None:
+        """'house report no. 94-1476' must remain classified as HISTORICAL."""
+        notes = self._parse()
+        report_note = next(
+            (n for n in notes.notes if "report" in n.header.lower()),
+            None,
+        )
+        assert report_note is not None, (
+            f"Expected a House Report note; headers: {[n.header for n in notes.notes]}"
+        )
+        assert report_note.category.value == "historical", (
+            f"Expected 'historical', got {report_note.category.value!r}"
+        )
