@@ -5210,7 +5210,13 @@ class TestMultiSentenceSplitting:
         assert result.provisions[2].indent_level == 1
 
     def test_xml_no_heading_multi_sentence_content(self) -> None:
-        """Multi-sentence content without a heading splits after the marker."""
+        """Multi-sentence content without a heading and without children stays as one provision.
+
+        When a subsection has no children (plain prose), all sentences are kept
+        together as a single provision.  Splitting would place continuation
+        sentences one indent level deeper, making them look like sub-provisions
+        (e.g. (A), (B) items).  See issue #672.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5233,17 +5239,13 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        # 2 lines: marker + first sentence, then second sentence
-        assert result.provision_count == 2
-        assert result.provisions[0].content == ("(a) First sentence of provision.")
-        assert result.provisions[0].marker == "(a)"
-        assert result.provisions[1].content == "Second sentence continues here."
-        assert result.provisions[1].marker is None
-        # Continuation line is indented one level deeper, flush with the text
-        # portion of line 0 (not the marker). Fixes: github.com/SanthoshBala/code-we-live-by/issues/122
-        assert (
-            result.provisions[1].indent_level == result.provisions[0].indent_level + 1
+        # 1 provision: marker + full content on one line
+        assert result.provision_count == 1
+        assert result.provisions[0].content == (
+            "(a) First sentence of provision. Second sentence continues here."
         )
+        assert result.provisions[0].marker == "(a)"
+        assert result.provisions[0].indent_level == 0
 
     def test_xml_single_sentence_unchanged(self) -> None:
         """Single-sentence content still produces exactly one line."""
@@ -5271,7 +5273,10 @@ class TestMultiSentenceSplitting:
         assert result.provisions[0].content == "(a) Only one sentence here."
 
     def test_xml_abbreviations_not_split(self) -> None:
-        """Legal abbreviations like U.S.C. are not treated as sentence boundaries."""
+        """Legal abbreviations like U.S.C. are not treated as sentence boundaries.
+
+        With no children, all content stays as one provision regardless of sentence count.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5295,13 +5300,13 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        # "U.S.C." should NOT be a sentence boundary, so the first two
-        # sentences merge.  Only the period after "broadly." triggers a real
-        # split, producing 2 lines total (not 3).
-        assert result.provision_count == 2
+        # No children: all content in one provision; "U.S.C." is still not a
+        # sentence boundary (confirmed by the full text being present).
+        assert result.provision_count == 1
         first = result.provisions[0].content
         assert "U.S.C." in first
         assert "applies broadly." in first
+        assert "Additional provisions may apply." in first
 
     def test_xml_pub_l_abbreviation_not_split(self) -> None:
         """Pub. L. abbreviation does not cause a false sentence split."""
@@ -5332,7 +5337,10 @@ class TestMultiSentenceSplitting:
         assert "Pub. L. 116–136" in result.provisions[0].content
 
     def test_xml_three_sentences(self) -> None:
-        """Three sentences in one paragraph produce three lines."""
+        """Three sentences with no children stay as one provision.
+
+        Issue #672: without children the full content is a single provision.
+        """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5357,13 +5365,11 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        assert result.provision_count == 3
+        assert result.provision_count == 1
         assert result.provisions[0].content.startswith("(c) The Secretary")
         assert result.provisions[0].marker == "(c)"
-        assert result.provisions[1].content.startswith("Such regulations")
-        assert result.provisions[1].marker is None
-        assert result.provisions[2].content.startswith("Nothing in this paragraph")
-        assert result.provisions[2].marker is None
+        assert "Such regulations" in result.provisions[0].content
+        assert "Nothing in this paragraph" in result.provisions[0].content
 
     def test_xml_chapeau_not_split_on_colon(self) -> None:
         """Chapeau text ending with a colon stays on one line."""
@@ -5441,7 +5447,7 @@ class TestMultiSentenceSplitting:
         assert "Pub. L. 116–136" in result.provisions[0].content
 
     def test_xml_et_seq_abbreviation_not_split(self) -> None:
-        """'et seq.' abbreviation does not trigger a false split."""
+        """'et seq.' content without children stays as one provision."""
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
 
@@ -5465,19 +5471,18 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        # "et seq." ends with a period but should not trigger a split
-        # because "seq." is in LEGAL_ABBREVIATIONS (via "et." check)
-        # The "Additional" starts a new sentence after "seq. "
-        # This should produce 2 lines
-        assert result.provision_count == 2
+        # No children: all content stays as one provision regardless of sentence count.
+        assert result.provision_count == 1
         assert "et seq." in result.provisions[0].content
+        assert "Additional requirements apply." in result.provisions[0].content
 
     def test_xml_no_heading_continuation_indent_2usc31_2(self) -> None:
-        """Continuation lines of a no-heading provision are indented one level
-        deeper than the marker line (flush with the text portion).
+        """A no-heading provision with no children keeps all sentences as one provision.
 
-        Regression test for 2 U.S.C. § 31-2 L18-19 being flush with the marker
-        instead of the text. See: github.com/SanthoshBala/code-we-live-by/issues/122
+        Previously this tested that continuation sentences were indented one level
+        deeper (issue #122), but issue #672 identified that splitting multi-sentence
+        prose into separate provisions at a deeper indent makes them look like
+        sub-provisions.  With no children, the full content is now one provision.
         """
         from pipeline.olrc.normalized_section import normalize_parsed_section
         from pipeline.olrc.parser import ParsedSection, ParsedSubsection
@@ -5504,13 +5509,84 @@ class TestMultiSentenceSplitting:
 
         result = normalize_parsed_section(section)
 
-        assert result.provision_count == 3
-        # First line: marker + first sentence at base indent
+        # No children: all three sentences merged into one provision
+        assert result.provision_count == 1
         assert result.provisions[0].marker == "(a)"
-        marker_indent = result.provisions[0].indent_level
-        # Continuation lines (L18-19 equivalent) must be one level deeper
-        assert result.provisions[1].indent_level == marker_indent + 1
-        assert result.provisions[2].indent_level == marker_indent + 1
+        assert "lump-sum payment." in result.provisions[0].content
+        assert "in lieu of any other payment." in result.provisions[0].content
+        assert "determined by the Committee." in result.provisions[0].content
+
+    def test_multi_sentence_paragraph_no_children_single_provision_issue672(
+        self,
+    ) -> None:
+        """Multi-sentence paragraph content with no children stays as one provision.
+
+        Regression test for issue #672: a <content> element holding multiple sentences
+        inside a paragraph-level subsection (e.g. marker '(3)') was incorrectly split
+        into three separate provisions — one at the expected indent and two continuation
+        sentences one level deeper (visually indistinguishable from sub-provisions).
+
+        With no children the entire content must be emitted as a single provision at the
+        correct indent level.
+        """
+        from pipeline.olrc.normalized_section import normalize_parsed_section
+        from pipeline.olrc.parser import ParsedSection, ParsedSubsection
+
+        section = ParsedSection(
+            section_number="670",
+            heading="Test",
+            full_citation="14 U.S.C. § 670",
+            text_content="",
+            subsections=[
+                ParsedSubsection(
+                    marker="(b)",
+                    heading=None,
+                    content=None,
+                    level="subsection",
+                    children=[
+                        ParsedSubsection(
+                            marker="(3)",
+                            heading=None,
+                            content=(
+                                "A multiyear contract authorized under subsection (a) of this section "
+                                "shall contain cancellation and termination provisions to the extent "
+                                "necessary to protect the best interests of the United States, and may "
+                                "include consideration of both recurring and nonrecurring costs. "
+                                "The contract may provide for a cancellation payment to be made. "
+                                "Amounts that were originally obligated for the cost of the contract "
+                                "may be used for cancellation or termination costs."
+                            ),
+                            level="paragraph",
+                            children=[],
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        result = normalize_parsed_section(section)
+
+        # (b) has content=None with one child (3).  The child (3) has multi-sentence
+        # content but NO grandchildren — so it must produce exactly ONE provision.
+        # Before the fix there were 3 provisions: (3) at indent=1, then two
+        # continuation sentences at indent=2.
+        paragraph_provisions = [p for p in result.provisions if p.marker == "(3)"]
+        assert len(paragraph_provisions) == 1, (
+            f"Expected 1 provision for marker '(3)', got {len(paragraph_provisions)}: "
+            f"{[p.content for p in paragraph_provisions]}"
+        )
+        provision = paragraph_provisions[0]
+        assert provision.indent_level == 1
+        assert "cancellation and termination provisions" in provision.content
+        assert "The contract may provide" in provision.content
+        assert "Amounts that were originally obligated" in provision.content
+
+        # Total: one line for (b) [marker only, no content] and one for (3)
+        non_blank = [p for p in result.provisions if p.content]
+        assert len(non_blank) == 2, (
+            f"Expected 2 non-blank provisions ((b) and (3)), got {len(non_blank)}: "
+            f"{[p.content[:60] for p in non_blank]}"
+        )
 
 
 class TestNoteRefsToSchemas:
@@ -6401,4 +6477,111 @@ class TestNoteParAbbrevContinuations:
         )
         assert "(which has been transferred" in non_empty[0].content, (
             f"Continuation fragment missing from line: {non_empty[0].content!r}"
+        )
+
+
+class TestHistoricalSubheadingCategory:
+    """Regression tests for issue #689: sub-headings nested within
+    'Historical and Revision Notes' were miscategorised as STATUTORY.
+
+    Sub-headings such as "Agreement on Guidelines for Classroom Copying..."
+    and "guidelines for educational uses of music" (from 17 U.S.C. \u00a7 107)
+    are nested inside the historical notes span but don't match
+    _REPORT_PATTERN or appear in historical_headers_lower.  Before the fix
+    they fell through to NoteCategory.STATUTORY.  After the fix, headers
+    whose position in raw_notes falls within the historical section span
+    (and where an explicit Editorial or Statutory Notes section follows)
+    are classified as HISTORICAL.
+    """
+
+    # Represents the raw_notes format that the OLRC parser emits for a
+    # section like 17 U.S.C. \u00a7 107, where the historical section contains
+    # a House Report header AND sub-guidelines headings, followed by a
+    # distinct Editorial Notes section with an Amendments header.
+    _RAW = (
+        "[H1]Historical and Revision Notes[/H1]"
+        "[NH]house report no. 94-1476[/NH]"
+        "The following is from House Report No. 94-1476 on fair use doctrine."
+        "[NH]Agreement on Guidelines for Classroom Copying in Not-For-Profit"
+        " Educational Institutions[/NH]"
+        "With respect to books and periodicals, the guidelines set forth the following."
+        "[NH]guidelines for educational uses of music[/NH]"
+        "The purpose of these guidelines is to state the minimum and not the maximum standards."
+        "[H1]Editorial Notes[/H1]"
+        "[NH]Amendments[/NH]"
+        "1998\u2014Pub. L. 105\u2013298 amended section generally."
+    )
+
+    def _parse(self) -> object:
+        from pipeline.olrc.normalized_section import (
+            SectionNotes,
+            _parse_flat_notes,
+            _parse_historical_notes,
+        )
+
+        notes = SectionNotes()
+        _parse_historical_notes(self._RAW, notes)
+        _parse_flat_notes(self._RAW, notes)
+        return notes
+
+    def test_agreement_subheading_is_historical(self) -> None:
+        """'Agreement on Guidelines...' nested under House Report must be HISTORICAL."""
+        notes = self._parse()
+        agreement_note = next(
+            (n for n in notes.notes if "Agreement on Guidelines" in n.header),
+            None,
+        )
+        assert agreement_note is not None, (
+            "Expected an 'Agreement on Guidelines...' note but none was found; "
+            f"headers: {[n.header for n in notes.notes]}"
+        )
+        assert agreement_note.category.value == "historical", (
+            f"Expected 'historical', got {agreement_note.category.value!r}"
+        )
+
+    def test_guidelines_for_music_subheading_is_historical(self) -> None:
+        """'guidelines for educational uses of music' nested under House Report must be HISTORICAL."""
+        notes = self._parse()
+        music_note = next(
+            (
+                n
+                for n in notes.notes
+                if "guidelines for educational uses of music" in n.header.lower()
+            ),
+            None,
+        )
+        assert music_note is not None, (
+            "Expected a 'guidelines for educational uses of music' note but none was found; "
+            f"headers: {[n.header for n in notes.notes]}"
+        )
+        assert music_note.category.value == "historical", (
+            f"Expected 'historical', got {music_note.category.value!r}"
+        )
+
+    def test_amendments_in_editorial_section_is_editorial(self) -> None:
+        """'Amendments' under Editorial Notes must remain EDITORIAL, not HISTORICAL."""
+        notes = self._parse()
+        amendments_note = next(
+            (n for n in notes.notes if n.header == "Amendments"),
+            None,
+        )
+        assert amendments_note is not None, (
+            f"Expected an 'Amendments' note; headers: {[n.header for n in notes.notes]}"
+        )
+        assert amendments_note.category.value == "editorial", (
+            f"Expected 'editorial', got {amendments_note.category.value!r}"
+        )
+
+    def test_report_header_is_historical(self) -> None:
+        """'house report no. 94-1476' must remain classified as HISTORICAL."""
+        notes = self._parse()
+        report_note = next(
+            (n for n in notes.notes if "report" in n.header.lower()),
+            None,
+        )
+        assert report_note is not None, (
+            f"Expected a House Report note; headers: {[n.header for n in notes.notes]}"
+        )
+        assert report_note.category.value == "historical", (
+            f"Expected 'historical', got {report_note.category.value!r}"
         )
