@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.15 | 16    | 6810    | Volunteers                                                                             | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,29 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+
+### 2026.10.15 — 16 U.S.C. § 6810 (Volunteers)
+
+Compared CWLB against OLRC XML at release point 119-120 (current as of 2026-10-07), downloaded
+from `https://uscode.house.gov/download/releasepoints/us/pl/119/120/xml_usc16@119-120.zip`.
+Section 6810 was enacted in 2004 (Pub. L. 108–447) with no subsequent amendments, so its
+content is identical between release point 113-21 and 119-120.
+
+All fields matched: heading ("Volunteers"), full body text (subsections (a)–(d)), source
+credit `(Pub. L. 108–447, div. J, title VIII, § 811, Dec. 8, 2004, 118 Stat. 3389.)`,
+enacted date (`2004-12-08`), `last_modified_date` (`2004-12-08`, correct since no amendments),
+and the substantive "References in Text" editorial note. Citations (PL 108-447) and
+cross-references (§ 6804) are present and accurate.
+
+One known-defect occurrence found:
+- **Issue #697** (heading-only divider notes dropped): The OLRC XML contains a
+  `<note topic="editorialNotes" role="crossHeading">` with heading "Editorial Notes" and
+  no body paragraphs. This divider note is absent from CWLB's `notes.notes[]` array.
+  The substantive "References in Text" note that follows it is present and correct.
+  Comment added to #697 confirming this reproduction.
+
+OLRC XML identifier: `/us/usc/t16/s6810`. CWLB release point: 113-21 (2013-01-01).
 
 
 ## Test methodology
