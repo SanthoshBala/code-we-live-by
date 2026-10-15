@@ -1639,6 +1639,33 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
     }
     editorial_headers_lower = {h.lower() for h in EDITORIAL_HEADERS}
 
+    # Determine the character span of the historical notes section in raw_notes
+    # so that sub-headings nested inside it (e.g. guidelines or sub-report
+    # headings nested below a House/Senate Report header) are classified as
+    # HISTORICAL rather than STATUTORY.  (Issue #689)
+    #
+    # This only activates when a clear section boundary (an [H1]Editorial Notes
+    # or [H1]Statutory Notes wrapper) follows the historical section.  Without
+    # a clear boundary hist_span_end stays 0, keeping the condition
+    # ``hist_span_end > hist_span_start`` False so no existing note is
+    # mis-classified (e.g. Effective Date notes in flat XML would otherwise
+    # be incorrectly promoted to HISTORICAL).
+    hist_span_start = 0
+    hist_span_end = 0
+    _hist_wrapper = _find_wrapper_heading(
+        r"Historical and Revision Notes",
+        raw_notes,
+    )
+    if _hist_wrapper:
+        hist_span_start = _hist_wrapper.start()
+        _next_section = re.search(
+            r"\[H1\](?:Editorial Notes|Statutory Notes)",
+            raw_notes[hist_span_start:],
+            re.IGNORECASE,
+        )
+        if _next_section:
+            hist_span_end = hist_span_start + _next_section.start()
+
     header_positions: list[tuple[int, int, str]] = []
     for match in _NH_HEADER_PATTERN.finditer(raw_notes):
         header = match.group(1).strip()
@@ -1678,10 +1705,24 @@ def _parse_flat_notes(raw_notes: str, notes: SectionNotes) -> None:
         # House/Senate Report No. headers are sub-notes of Historical and
         # Revision Notes — classify them as HISTORICAL regardless of the
         # editorial_headers set.  (Issue #526)
+        #
+        # Headers that fall within the historical notes span but aren't
+        # explicitly editorial or effective-date headers are also classified
+        # as HISTORICAL.  This covers sub-headings nested inside the
+        # historical section (e.g. "Agreement on Guidelines for Classroom
+        # Copying..." or "guidelines for educational uses of music" under a
+        # Report header) that don't match _REPORT_PATTERN.  (Issue #689)
+        inside_historical_span = (
+            hist_span_end > hist_span_start
+            and hist_span_start <= _start < hist_span_end
+            and header.lower() not in editorial_headers_lower
+            and not _EFFECTIVE_DATE_PATTERN.search(header)
+        )
         category = (
             NoteCategory.HISTORICAL
             if header.lower() in historical_headers_lower
             or _REPORT_PATTERN.search(header)
+            or inside_historical_span
             else NoteCategory.EDITORIAL
             if header.lower() in editorial_headers_lower
             or _EFFECTIVE_DATE_PATTERN.search(header)
@@ -2489,16 +2530,25 @@ def _normalize_subsection_recursive(
         child_indent = base_indent + 2 if subsection.content else base_indent + 1
     else:
         # No heading - marker and content on one line.
-        # Split multi-sentence content so each sentence gets its own line.
-        # The first sentence stays with the marker; subsequent sentences
-        # appear indented one level deeper, flush with the text (not the marker).
+        # Split multi-sentence content only when the subsection has children
+        # (e.g., an introductory sentence preceding a numbered/lettered list).
+        # For plain prose with no children, keep all content as a single provision:
+        # splitting would incorrectly place continuation sentences one indent level
+        # deeper, making them visually indistinguishable from sub-provisions
+        # (e.g., (A), (B) items).  See issue #672.
         if subsection.content:
-            sentences = _split_into_sentences(subsection.content)
-            real_sentences = [
-                (text.strip(), s, e)
-                for text, s, e in sentences
-                if text.strip() and text != PARAGRAPH_BREAK_MARKER
-            ]
+            if subsection.children:
+                sentences = _split_into_sentences(subsection.content)
+                real_sentences = [
+                    (text.strip(), s, e)
+                    for text, s, e in sentences
+                    if text.strip() and text != PARAGRAPH_BREAK_MARKER
+                ]
+            else:
+                # No children: emit the entire content as one provision.
+                real_sentences = [
+                    (subsection.content.strip(), 0, len(subsection.content))
+                ]
 
             for i, (sentence_text, _s_start, _s_end) in enumerate(real_sentences):
                 if i == 0:

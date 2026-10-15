@@ -157,6 +157,35 @@ _NOTE_TOPIC_DISPLAY: dict[str, str] = {
     "constructionOfAmendment": "Construction of Amendment",
 }
 
+# Lowercase set of known note-section heading strings that appear as <th>
+# cells in OLRC HTML tables.  These cells carry the section title (e.g.
+# "Historical and Revision Notes") rather than a column label, so they should
+# be skipped when walking table markup.  Any <th> whose text does NOT appear
+# in this set is a genuine column header (e.g. "Revised section") and must be
+# included in the output with a " | " separator so the table row is readable.
+_NOTE_HEADING_TH_SKIP: frozenset[str] = frozenset(
+    s.lower() for s in _NOTE_TOPIC_DISPLAY.values()
+) | frozenset(
+    {
+        # Additional heading strings that appear as <th> cells but are not in
+        # _NOTE_TOPIC_DISPLAY (e.g. plain topic names rendered verbatim).
+        "amendments",
+        "change of name",
+        "codification",
+        "construction",
+        "derivation",
+        "editorial notes",
+        "effective date",
+        "prior provisions",
+        "recodification",
+        "references in text",
+        "savings provision",
+        "short title",
+        "statutory notes and related subsidiaries",
+        "transfer of functions",
+    }
+)
+
 # Matches leading comma-separated parenthetical sub-citation clauses that
 # trail a sourceCredit PL <ref> as plain text, e.g. the "(b)(3)(I)" in
 # "<ref>...§ 1901(a)(130)</ref>, (b)(3)(I), <date>...". Only matches simple
@@ -1809,13 +1838,35 @@ class USLMParser:
                 # Add paragraph break marker before this <p> element
                 parts.append("[PARA]")
 
-            # Skip HTML table header cells — their text labels columns/rows in the
-            # table, not note content.  Including <th> text as plain content can
-            # trigger false note-header matches downstream (e.g. the
-            # historicalAndRevision note for 31 U.S.C. § 5311 has a <th> cell
-            # containing "Historical and Revision Notes" that would otherwise
-            # appear as the first content line and cause a spurious note match).
+            # Handle HTML table header cells.  OLRC tables have two kinds of
+            # <th> content:
+            #
+            #   1. Section-title cells (e.g. "Historical and Revision Notes",
+            #      colspan=3) — these ARE note-section headings and must be
+            #      skipped to avoid a spurious [NH]-marker match downstream
+            #      (regression: 31 U.S.C. § 5311 has such a cell).
+            #
+            #   2. Column-header cells (e.g. "Revised section",
+            #      "Source (U.S. Code)", "Source (Statutes at Large)") — these
+            #      label the data columns and must be preserved so the rendered
+            #      table has visible column labels.
+            #
+            # We distinguish the two by checking whether the cell's text
+            # (lowercased) is a known note-section heading string.  Column
+            # labels are not in that set, so they fall through to the include
+            # branch and are emitted with a " | " separator to keep the table
+            # row readable as "col1 | col2 | col3".
             if tag == "th":
+                th_text = "".join(el.itertext()).strip()
+                if th_text.lower() in _NOTE_HEADING_TH_SKIP:
+                    # Section-title cell: skip it (but keep tail whitespace).
+                    if el.tail:
+                        parts.append(el.tail)
+                    return
+                # Column-header cell: include the text with a separator so
+                # consecutive header cells produce "col1 | col2 | col3".
+                if th_text:
+                    parts.append(th_text + " | ")
                 if el.tail:
                     parts.append(el.tail)
                 return

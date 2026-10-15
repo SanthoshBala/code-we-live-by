@@ -1150,6 +1150,95 @@ class TestCamelToTitle:
         assert "[NH]Removal Description[/NH]" in content
         assert "[NH]Removaldescription[/NH]" not in content
 
+    def test_th_section_title_is_skipped(self) -> None:
+        """<th> cells whose text matches a known note-section heading are skipped.
+
+        Regression test for issue #698: a <th> containing "Historical and Revision
+        Notes" (the section-title row of a two-row <thead>) must NOT appear as
+        content to avoid a spurious note-header match downstream.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">
+            <note topic="historicalAndRevision">
+                <table>
+                    <thead>
+                        <tr><th colspan="3">Historical and Revision Notes</th></tr>
+                        <tr>
+                            <th>Revised section</th>
+                            <th>Source (U.S. Code)</th>
+                            <th>Source (Statutes at Large)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>5311</td>
+                            <td>31:529</td>
+                            <td>Sept. 2, 1964, Pub. L. 88-560.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Section-title <th> must be skipped to avoid spurious note match.
+        # The note topic itself generates one [NH]...[/NH] marker with this
+        # text, so we assert exactly one occurrence (from the NH marker), not
+        # two — confirming the <th> cell was not also emitted as plain content.
+        assert content.count("Historical and Revision Notes") == 1
+        assert "[NH]Historical and Revision Notes[/NH]" in content
+
+    def test_th_column_header_is_included(self) -> None:
+        """<th> cells that are genuine column labels are preserved in output.
+
+        Regression test for issue #698: column-header <th> cells such as
+        "Revised section", "Source (U.S. Code)" and "Source (Statutes at Large)"
+        must appear in the parsed content so the rendered table has visible column
+        labels.
+        """
+        from lxml import etree
+
+        from pipeline.olrc.parser import USLMParser
+
+        parser = USLMParser()
+
+        xml = """<notes xmlns="http://xml.house.gov/schemas/uslm/1.0">
+            <note topic="historicalAndRevision">
+                <table>
+                    <thead>
+                        <tr><th colspan="3">Historical and Revision Notes</th></tr>
+                        <tr>
+                            <th>Revised section</th>
+                            <th>Source (U.S. Code)</th>
+                            <th>Source (Statutes at Large)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>5311</td>
+                            <td>31:529</td>
+                            <td>Sept. 2, 1964, Pub. L. 88-560.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </note>
+        </notes>"""
+        elem = etree.fromstring(xml)
+
+        content = parser._get_notes_text_content(elem)
+
+        # Column-header <th> cells must be present in the output
+        assert "Revised section" in content
+        assert "Source (U.S. Code)" in content
+        assert "Source (Statutes at Large)" in content
+
 
 class TestChapterGroups:
     """Tests for chapter group (subtitle, part, division) parsing."""
