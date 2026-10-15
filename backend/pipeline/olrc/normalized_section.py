@@ -2489,16 +2489,25 @@ def _normalize_subsection_recursive(
         child_indent = base_indent + 2 if subsection.content else base_indent + 1
     else:
         # No heading - marker and content on one line.
-        # Split multi-sentence content so each sentence gets its own line.
-        # The first sentence stays with the marker; subsequent sentences
-        # appear indented one level deeper, flush with the text (not the marker).
+        # Split multi-sentence content only when the subsection has children
+        # (e.g., an introductory sentence preceding a numbered/lettered list).
+        # For plain prose with no children, keep all content as a single provision:
+        # splitting would incorrectly place continuation sentences one indent level
+        # deeper, making them visually indistinguishable from sub-provisions
+        # (e.g., (A), (B) items).  See issue #672.
         if subsection.content:
-            sentences = _split_into_sentences(subsection.content)
-            real_sentences = [
-                (text.strip(), s, e)
-                for text, s, e in sentences
-                if text.strip() and text != PARAGRAPH_BREAK_MARKER
-            ]
+            if subsection.children:
+                sentences = _split_into_sentences(subsection.content)
+                real_sentences = [
+                    (text.strip(), s, e)
+                    for text, s, e in sentences
+                    if text.strip() and text != PARAGRAPH_BREAK_MARKER
+                ]
+            else:
+                # No children: emit the entire content as one provision.
+                real_sentences = [
+                    (subsection.content.strip(), 0, len(subsection.content))
+                ]
 
             for i, (sentence_text, _s_start, _s_end) in enumerate(real_sentences):
                 if i == 0:
