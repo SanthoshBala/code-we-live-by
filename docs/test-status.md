@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.16 | 13    | 9       | Information as confidential; exception                                                 | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,32 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.16 — 13 U.S.C. § 9
+
+All fields matched at the 113-21 baseline: heading ("Information as confidential; exception"),
+full statutory text (subsection (a) chapeau, paragraphs (1)–(3), unmarked retained-copies
+paragraph, and subsection (b)), source credit (6 laws from 1954 through 1997), enacted date
+(1954-08-31), `last_modified_date` (1997-11-26, matching the most recent amendment by
+Pub. L. 105–119), `is_positive_law: true`, and `group_ancestors` (Chapter 1 / Subchapter I).
+
+Three note sections are present and accurate:
+- **Historical and Revision Notes** (category: historical) — 12 lines citing the 1952 edition
+  predecessor sections (13 U.S.C. §§ 73, 83, 122, 208, 211, 252 and 42 U.S.C. § 1442)
+  and explaining the consolidation. Full content matches the OLRC XML.
+- **References in Text** (category: editorial) — 2 lines correctly locating § 210 of Pub. L.
+  105–119 and § 2(f) of the Census of Agriculture Act of 1997. Full content matches.
+- **Amendments** (category: editorial) — 5 year-group entries (1997, 1994, 1990, 1962) fully
+  present, though one year is mislabeled (see below).
+
+One known defect active on this section (no new issue filed):
+
+**Issue #675 — year number in amendment description text triggers false year-group split.**
+In the Amendments note, the description for the Pub. L. 105–119 1997 amendment contains the
+text `“Appropriation Act, 1998—”`. The parser treats `1998—` as a new year-group heading,
+truncating the Pub. L. 105–119 description at `“…Appropriations Act,”` and assigning year
+`1998` to the following amendment (Pub. L. 105–113, enacted Nov. 21, 1997) instead of `1997`.
+Comment added to issue #675 noting this reproduction.
 
 
 ## Test methodology
