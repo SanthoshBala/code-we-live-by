@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.17 | 17    | 709     | Delay in delivery caused by disruption of postal or other services                     | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -187,6 +188,22 @@ and 307) is absent from CWLB, as expected given the stale 2013 release point. Th
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
 
+
+### 2026.10.17 — 17 U.S.C. § 709
+
+Simple unamended section (enacted Oct. 19, 1976; never amended). All fields matched: heading,
+full body text (single paragraph), source credit `(Pub. L. 94–553, title I, § 101, Oct. 19,
+1976, 90 Stat. 2594.)`, enacted date (`1976-10-19`), `last_modified_date` (`1976-10-19`,
+correct for an unamended section), `is_repealed: false`, `has_notes: false`, and `amendments: []`.
+OLRC XML (from current release point 119-121) confirms no note sections for this section.
+
+One known-issue occurrence found:
+- **Issue #659** (citation path truncates at section level): OLRC href is
+  `/us/pl/94/553/tI/s101` (title I, § 101 of Pub. L. 94–553), but CWLB `path` is
+  `[{"level": "section", "value": "101"}]` and `path_display` is `"§101"` — the `tI`
+  (title I) segment is dropped. Comment added to #659.
+
+No new defects found.
 
 ## Test methodology
 
