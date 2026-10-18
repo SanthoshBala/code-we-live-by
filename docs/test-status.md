@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.18 | 21    | 23      | Penalties                                                                              | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,23 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.18 — 21 U.S.C. § 23
+
+Simple unamended section (Apple Barrel Act, enacted Aug. 3, 1912; never amended). All primary
+fields matched against OLRC release point 119-121 XML: heading ("Penalties"), full statutory
+text (single paragraph), source credit `(Aug. 3, 1912, ch. 273, § 6, 37 Stat. 251.)`, enacted
+date (1912-08-03), `last_modified_date: null` (correct — no amendments), and the Codification
+editorial note ("Section is also set out as section 233 of Title 15, Commerce and Trade.").
+
+One known-issue occurrence confirmed: the OLRC XML contains a `role="crossHeading"` note with
+heading "Editorial Notes" and no content paragraphs. CWLB drops this heading-only
+section-divider node and does not include it in `notes.notes[]`. This matches the defect class
+described in issue #697 — not re-filed; comment added to that issue.
+
+OLRC XML used: release point 119-121 (current as of 2026-10-09), downloaded from
+`https://uscode.house.gov/download/releasepoints/us/pl/119/121/xml_usc21@119-121.zip`.
+Section was never amended so content is identical between 113-21 and 119-121.
 
 
 ## Test methodology
