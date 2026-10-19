@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.19 | 3     | 16      | Same; seats for officers and Members of two Houses in joint meeting                    | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -187,6 +188,22 @@ and 307) is absent from CWLB, as expected given the stale 2013 release point. Th
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
 
+
+### 2026.10.19 — 3 U.S.C. § 16
+
+Section tested: 3 U.S.C. § 16 (Title 3 — The President, Chapter 1). OLRC release point 113-21 (GovInfo edition USCODE-2013-title3).
+
+All core fields verified: heading ("Same; seats for officers and Members of two Houses in joint meeting"), full body text (3 paragraphs totalling 1,297 chars), source credit `(June 25, 1948, ch. 644, 62 Stat. 676.)`, enacted date `1948-06-25`, `last_modified_date: null`, `is_repealed: false`, `has_notes: false`. Text was also spot-checked for Title 3 / Section 6 against the GovInfo HTM for USCODE-2013-title3-chap1-sec6 — the 1,854-char body matched exactly.
+
+Section 3 § 16 itself is clean. Three known-issue occurrences were found when browsing surrounding sections of Title 3:
+
+1. **Issue #753 confirmed in 3 U.S.C. § 102** — The "Presidential Transition Act of 1963" (Pub. L. 88–277) statutory note is split into 5 spurious notes with `"` prefix headers (`"purpose of this act`, `"services and facilities…`, etc.). Comment added to #753.
+
+2. **Issue #707 confirmed in 3 U.S.C. §§ 201, 205 (and §§ 202–204, 206–209)** — All four repealed sections in Chapter 3 of Title 3 return `is_repealed: false` despite their headings beginning "Repealed.". Comment added to #707.
+
+3. **Issue #679 confirmed in 3 U.S.C. § 18** — Structure endpoint returns `last_amendment_year: 1954, last_amendment_law: null`; the 1954 amendment was enacted as a pre-PL-numbering-era Act. Comment added to #679.
+
+No new defects found.
 
 ## Test methodology
 
