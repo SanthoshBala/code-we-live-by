@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.07 | 9     | 7       | Witnesses before arbitrators; fees; compelling attendance                              | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -187,6 +188,33 @@ and 307) is absent from CWLB, as expected given the stale 2013 release point. Th
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
 
+
+### 2026.08.07 — 9 U.S.C. § 7
+
+All fields matched at the 113-21 baseline: heading ("Witnesses before arbitrators; fees;
+compelling attendance"), full statutory text (three unnumbered paragraphs covering witness
+summons authority, witness fees, and enforcement via contempt), source credit
+`(July 30, 1947, ch. 392, 61 Stat. 672; Oct. 31, 1951, ch. 655, § 14, 65 Stat. 715.)`,
+enacted date (`1947-07-30`), and `last_modified_date` (`1951-10-31`). The Derivation note
+(category: historical) citing "Act Feb. 12, 1925, ch. 213, § 7, 43 Stat. 884" and the
+Amendments note (category: editorial) describing the 1951 substitution of "United States
+district court for" both match the OLRC XML exactly.
+
+The two citation entries are correctly represented: the 1947 enactment path
+`[{"level": "chapter", "value": "392"}]` (no section reference, correct) and the 1951
+amendment path `[{"level": "chapter", "value": "655"}, {"level": "section", "value": "14"}]`
+(matching "ch. 655, § 14"). The citation path truncation bug (#659) does not apply here
+since neither citation contains a title/subtitle hierarchy above the section level.
+
+`notes.amendments[0].law` is `null` and `public_law_id` is `""` — this is correct for a
+pre-public-law act (1951 predates modern public law numbering); the null-metadata bug
+tracked in #561 applies only to citations with a known public law ID and does not apply here.
+
+Data staleness (revision_id 1, effective_date 2013-01-01, release point 113-21) is the
+systemic issue already tracked in #485, #564, #578, and #583. The section was last amended
+in 1951, so its content is identical at both release points; no text discrepancy observed.
+
+No new defects found.
 
 ## Test methodology
 
