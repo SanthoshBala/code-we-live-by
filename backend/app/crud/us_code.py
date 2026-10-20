@@ -42,7 +42,9 @@ def _extract_last_amendment(
     amendments = notes.get("amendments", [])
     if not amendments:
         return None, None
-    latest = amendments[0]
+    latest_year = amendments[0].get("year")
+    latest_year_amendments = [a for a in amendments if a.get("year") == latest_year]
+    latest = latest_year_amendments[-1]
     year = latest.get("year")
     law = latest.get("law") or {}
     congress = law.get("congress")
