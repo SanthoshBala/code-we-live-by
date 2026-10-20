@@ -7,7 +7,8 @@ Each row represents one tested section. "Clean" means no discrepancies were foun
 CWLB and the OLRC XML at the stated release point.
 
 | Date       | Title | Section | Heading                                                                                | Release Point | Status |
-|------------|-------|---------|----------------------------------------------------------------------------------------|---------------|--------|
+|------------|-------|---------|----------------------------------------------------------------------------------------|---------------|
+--------|
 | 2026.05.20 | 21    | 692     | Inspection extended to reindeer                                                        | 113-21        | ✅ Clean |
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership                                          | 113-21        | ✅ Clean |
 | 2026.05.28 | 29    | 567     | Labor-management dispute settlement expenses                                          | 113-21        | ✅ Clean |
@@ -31,6 +32,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.08 | 30    | 306     | Rules and regulations                                                                  | 113-21        | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +188,18 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.08 — 30 U.S.C. § 306
+
+Simple unamended section (enacted May 21, 1930; never amended). All fields matched: heading
+("Rules and regulations"), full body text (single unnumbered paragraph authorizing the
+Secretary of the Interior to adopt rules and regulations for chapter 5 oil-and-gas-deposit
+leases), source credit "(May 21, 1930, ch. 307, § 6, 46 Stat. 374.)", enacted_date
+"1930-05-21", last_modified_date null (correct for a section with no amendments),
+is_positive_law false, and group_ancestors (chapter 5). No notes, no amendments, no
+cross-references. Citation path [{"level": "chapter", "value": "307"}, {"level": "section",
+"value": "6"}] with path_display "ch. 307, §6" correctly captures the full hierarchy for
+this old-style pre-Public-Law Act citation. No new bugs filed.
 
 
 ## Test methodology
