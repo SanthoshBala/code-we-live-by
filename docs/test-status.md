@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.19 | 36    | 129     | National Pearl Harbor Remembrance Day                                                  | 113-21        | ✅ Clean |
 
 ## Notes
 
@@ -186,6 +187,26 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.19 — 36 U.S.C. § 129
+
+Simple two-subsection unamended section enacted Aug. 12, 1998 by Pub. L. 105-225 (the
+codification act that created Title 36). All fields matched:
+
+- **Heading**: "National Pearl Harbor Remembrance Day" ✓
+- **Text content**: Subsections (a) Designation and (b) Proclamation with (b)(1)–(b)(2) match
+  verbatim, including "halfstaff" as one word (matching the OLRC XML exactly). ✓
+- **Source credit**: "(Pub. L. 105–225, Aug. 12, 1998, 112 Stat. 1260.)" ✓
+- **enacted_date / last_modified_date**: "1998-08-12" (correct — no amendments ever made) ✓
+- **Historical and Revision Notes**: Content matches the OLRC table; CWLB flattens the
+  three-column table into sequential lines, which is by design and preserves all text. ✓
+- **Citations**: Pub. L. 105-225 correctly identified as original enactment; `path: []` is
+  correct since the source credit has no within-law title/subtitle prefix. ✓
+- **Amendments**: None expected, none returned. ✓
+- **`is_positive_law: true`**, `group_ancestors` (Subtitle I / Part A / Chapter 1): ✓
+
+No new bugs filed. Data staleness (#583, #578, #564, #485) is the only systemic known issue
+that applies and is not specific to this section.
 
 
 ## Test methodology
