@@ -1315,6 +1315,16 @@ class USLMParser:
                     self._get_text_content(content_elem, strip_footnotes=True)
                 )
 
+        # Collect <proviso> elements that are direct siblings of <content>.
+        # A proviso continues the same sentence as the preceding content
+        # (it typically follows a colon), so its text is appended to the
+        # content string rather than emitted as a separate continuation.
+        proviso_elems = elem.findall("{*}proviso") or elem.findall("proviso")
+        for proviso_elem in proviso_elems:
+            prov_text = self._get_text_content(proviso_elem, strip_footnotes=True)
+            if prov_text:
+                content_parts.append(prov_text)
+
         content = " ".join(content_parts).strip()
 
         # Parse nested children.
@@ -1394,6 +1404,27 @@ class USLMParser:
         subsec_elems = section_elem.findall("{*}subsection")
         if not subsec_elems:
             subsec_elems = section_elem.findall("subsection")
+
+        if subsec_elems:
+            # Capture a section-level <chapeau> that introduces the subsection list
+            # (e.g. 27 U.S.C. § 205 "It shall be unlawful for any person…").
+            # Without this, the introductory sentence is silently dropped.  Issue #724.
+            sec_chapeau = section_elem.find("{*}chapeau")
+            if sec_chapeau is None:
+                sec_chapeau = section_elem.find("chapeau")
+            if sec_chapeau is not None:
+                chapeau_text = self._get_text_content(sec_chapeau).strip()
+                if chapeau_text:
+                    subsections.append(
+                        ParsedSubsection(
+                            marker="",
+                            heading=None,
+                            content=chapeau_text,
+                            children=[],
+                            level="subsection",
+                            continuation=[],
+                        )
+                    )
 
         for subsec_elem in subsec_elems:
             subsections.append(self._parse_subsection(subsec_elem, "subsection"))
