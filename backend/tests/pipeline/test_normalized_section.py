@@ -4935,6 +4935,32 @@ class TestAmendmentSubsectionPrefix:
         assert amendments[0].description.startswith("Pub. L. 112–239")
         assert "Subsec." not in amendments[0].description
 
+    def test_paragraph_prefix_captured(self) -> None:
+        """Test that Par. prefix is captured (issue #721)."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "2005—Par. (3). Pub. L. 109–59, § 4118, struck out par. (3).\n\n"
+            "Pub. L. 109–59, § 4117, added par. (3)."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+        assert all("Pub. L. 109–59" in a.description for a in amendments)
+
+    def test_pars_plural_prefix_captured(self) -> None:
+        """Test that Pars. plural prefix is captured (issue #721)."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = (
+            "2005—Pars. (1) and (2). Pub. L. 109–59, § 4119, amended pars. (1) and (2)."
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert "Pars. (1) and (2)." in amendments[0].description
+        assert "Pub. L. 109–59" in amendments[0].description
+
 
 class TestAmendmentDateSpacing:
     """Tests for fixing whitespace inside quotes in amendments."""

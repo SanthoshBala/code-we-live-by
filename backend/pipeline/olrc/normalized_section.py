@@ -427,7 +427,7 @@ _YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
 # The optional leading group handles both singular ("Subsec.") and plural
 # ("Subsecs.") forms and arbitrary range expressions like "(d) to (g)".
 _PUB_L_PARA_PATTERN = re.compile(
-    r"^(Subsecs?\.\s+.*?)?"  # Optional "Subsec." / "Subsecs." prefix (lazy)
+    r"^((?:Subsecs?|Pars?)\.\s+.*?)?"  # Optional "Subsec(s)." / "Par(s)." prefix (lazy)
     r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
     r"(.*)",  # Rest of paragraph
     re.DOTALL,
