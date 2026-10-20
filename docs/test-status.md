@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.18 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -186,6 +187,39 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.18 — 17 U.S.C. § 107 (Fair use)
+
+Statutory text, heading, source credit, enacted date (1976-10-19), and last_modified_date
+(1992-10-24) all match OLRC verbatim. Provisions array (7 lines), citations (3 entries),
+and all note sections — historical (H.Rpt. 94-1476 with full ~12,000 word content), classroom
+copying agreement guidelines, books/periodicals guidelines, music education guidelines,
+Amendments editorial note, and Effective Date of 1990 Amendment note — are all present.
+The "Agreement on Guidelines for Classroom Copying in Not-For-Profit Educational Institutions"
+header node correctly has `lines: []` (no body text directly under that heading on OLRC either).
+No new defects found.
+
+Two known defects confirmed still active:
+
+- **Issue #561** (`notes.amendments[*].law` metadata null): both PL 102-492 and PL 101-650
+  have `date`, `official_title`, `short_title`, `stat_volume`, `stat_page`, `stat_reference`,
+  and `display_title` all `null`. Commented on #561 with this occurrence.
+
+- **Issue #657** (inline bold subheadings in historical note missing trailing periods): all
+  four inline bold subheadings in the H.Rpt. 94-1476 note have trailing periods on OLRC
+  but are stored without them in CWLB:
+
+  | OLRC | CWLB |
+  |---|---|
+  | `General Background of the Problem.` | `General Background of the Problem` |
+  | `General Intention Behind the Provision.` | `General Intention Behind the Provision` |
+  | `Intention as to Classroom Reproduction.` | `Intention as to Classroom Reproduction` |
+  | `Reproduction and Uses for Other Purposes.` | `Reproduction and Uses for Other Purposes` |
+
+  Commented on #657 with this occurrence.
+
+Since § 107 was last amended in 1992 (within the 113-21 release point window), the stale-data
+issue (#583 etc.) does not affect this section's accuracy.
 
 
 ## Test methodology
