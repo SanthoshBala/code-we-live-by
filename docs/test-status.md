@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.14 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 
 ## Notes
 
@@ -186,6 +187,35 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.14 — 17 U.S.C. § 107 (Fair use)
+
+Second random draw on this section (first was 2026.08.03). Statutory text matches OLRC
+verbatim: all four fair-use factors plus the 1992 unpublished-works sentence. Source credit,
+heading, enacted date (1976-10-19), last_modified_date (1992-10-24), and group_ancestors
+(Chapter 1) are all correct. The House Report 94-1476 historical note (~12,000 words),
+classroom copying agreement, books/periodicals guidelines, and music education guidelines are
+all present with full content. The two amendment history entries (1992 and 1990) are present.
+
+Three known defects confirmed on this section:
+
+- **Issue #659** (citation path drops title/subtitle hierarchy): Citations for PL 94-553
+  ("title I, § 101") and PL 101-650 ("title VI, § 607") are stored with truncated paths —
+  `[{"level": "section", "value": "101"}]` and `[{"level": "section", "value": "607"}]`
+  respectively — dropping "title I" and "title VI". Comment added to #659.
+
+- **Issue #657** (trailing period stripped from inline bold note subheadings): Four
+  subheadings inside the `house report no. 94–1476` historical note have their trailing
+  periods stripped. OLRC source: "General Background of the Problem.", "General Intention
+  Behind the Provision.", "Intention as to Classroom Reproduction.", "Reproduction and Uses
+  for Other Purposes."; CWLB stores each without the terminal period. Comment added to #657.
+
+- **Issue #561** (amendment law metadata all null): `notes.amendments[*].law` objects for
+  PL 102-492 and PL 101-650 have `date`, `official_title`, `short_title`, `stat_volume`,
+  `stat_page`, `stat_reference`, and `display_title` all `null`. Already filed specifically
+  about this section — not re-commented.
+
+No new defects found.
 
 
 ## Test methodology
