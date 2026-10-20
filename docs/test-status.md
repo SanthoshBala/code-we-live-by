@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.21 | 9     | 10      | Same; vacation; grounds; rehearing                                                     | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,24 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.21 — 9 U.S.C. § 10 (re-test)
+
+Re-test of the same section last verified on 2026.07.31. All fields continue to match the
+OLRC at the 113-21 baseline: heading ("Same; vacation; grounds; rehearing"), full body text
+(7 provisions — subsection (a) chapeau + paragraphs (1)–(4), (b), (c)), source credit
+`(July 30, 1947, ch. 392, 61 Stat. 672; Pub. L. 101–552, § 5; Pub. L. 102–354, § 5(b)(4);
+Pub. L. 107–169, § 1)`, enacted date (1947-07-30), and last_modified_date (2002-05-07). The
+two editorial notes (Derivation and Amendments with 6 entries) are present and correct.
+All 4 citations in `notes.citations` have accurate paths and dates.
+
+Known defect confirmed present: `notes.amendments[*].law` objects still have
+`official_title`, `short_title`, `display_title`, `stat_volume`, `stat_page`, and
+`stat_reference` all `null` for all 6 amendment entries (PL 107-169 ×4, PL 102-354,
+PL 101-552). Note: `notes.citations[*].law.date` IS populated for the same laws, confirming
+the join is working for citations but not for the amendments array. Comment added to #561.
+
+No new defects found.
 
 
 ## Test methodology
