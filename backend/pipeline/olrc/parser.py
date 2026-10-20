@@ -1315,6 +1315,16 @@ class USLMParser:
                     self._get_text_content(content_elem, strip_footnotes=True)
                 )
 
+        # Collect <proviso> elements that are direct siblings of <content>.
+        # A proviso continues the same sentence as the preceding content
+        # (it typically follows a colon), so its text is appended to the
+        # content string rather than emitted as a separate continuation.
+        proviso_elems = elem.findall("{*}proviso") or elem.findall("proviso")
+        for proviso_elem in proviso_elems:
+            prov_text = self._get_text_content(proviso_elem, strip_footnotes=True)
+            if prov_text:
+                content_parts.append(prov_text)
+
         content = " ".join(content_parts).strip()
 
         # Parse nested children.
