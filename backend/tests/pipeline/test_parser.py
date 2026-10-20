@@ -604,6 +604,77 @@ class TestUSLMParser:
         assert clause_ii.level == "clause"
         assert "incurred actual liability or loss" in clause_ii.content
 
+    def test_parse_subsection_sibling_subparagraphs_of_paragraphs(
+        self, parser: USLMParser
+    ) -> None:
+        """<subparagraph> elements that are siblings of <paragraph>s are captured.
+
+        Regression test for Issue #734: 29 U.S.C. § 158(b) has an unusual OLRC
+        XML layout where <subparagraph> elements (A)-(D) appear as direct children
+        of <subsection> alongside <paragraph> siblings (1)-(7), rather than nested
+        inside paragraph (4). The parser previously stopped scanning after finding
+        the first child tag type (<paragraph>), silently dropping the
+        <subparagraph> siblings (~2,651 characters of statutory text).
+        """
+        xml = """<subsection xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t29/s158/b">
+          <num value="b">(b)</num>
+          <heading>Unfair labor practices by labor organization</heading>
+          <chapeau>It shall be an unfair labor practice for a labor organization
+          or its agents—</chapeau>
+          <paragraph identifier="/us/usc/t29/s158/b/3">
+            <num value="3">(3)</num>
+            <content>to refuse to bargain collectively.</content>
+          </paragraph>
+          <paragraph identifier="/us/usc/t29/s158/b/4">
+            <num value="4">(4)</num>
+            <content>to force or require any employer to join any organization.</content>
+          </paragraph>
+          <subparagraph identifier="/us/usc/t29/s158/b/4/A">
+            <num value="A">(A)</num>
+            <content>forcing or requiring any employer to join an organization.</content>
+          </subparagraph>
+          <subparagraph identifier="/us/usc/t29/s158/b/4/B">
+            <num value="B">(B)</num>
+            <content>forcing or requiring any person to cease using products.</content>
+          </subparagraph>
+          <paragraph identifier="/us/usc/t29/s158/b/5">
+            <num value="5">(5)</num>
+            <content>to require employees to pay excessive fees.</content>
+          </paragraph>
+        </subsection>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "subsection")
+
+        assert result.marker == "(b)"
+        assert (
+            result.content
+            == "It shall be an unfair labor practice for a labor organization or its agents—"
+        )
+
+        # All 5 children: (3), (4), (A), (B), (5) — in document order
+        assert len(result.children) == 5
+        markers = [c.marker for c in result.children]
+        assert markers == ["(3)", "(4)", "(A)", "(B)", "(5)"], (
+            f"Unexpected order: {markers}"
+        )
+
+        # Paragraphs keep their level
+        para3, para4 = result.children[0], result.children[1]
+        assert para3.level == "paragraph"
+        assert para4.level == "paragraph"
+
+        # Subparagraphs have subparagraph level
+        sub_a, sub_b = result.children[2], result.children[3]
+        assert sub_a.level == "subparagraph"
+        assert "forcing or requiring any employer" in sub_a.content
+        assert sub_b.level == "subparagraph"
+        assert "cease using products" in sub_b.content
+
+        # Trailing paragraph follows the subparagraphs
+        assert result.children[4].level == "paragraph"
+        assert "excessive fees" in result.children[4].content
+
     def test_extract_subsections_continuation_in_subsection(
         self, parser: USLMParser
     ) -> None:
@@ -907,6 +978,28 @@ class TestUSLMParser:
         # The footnote note body text must NOT appear inline in content
         assert "So in original" not in result.content
 
+    def test_sup_footnote_marker_rendered_as_brackets(self, parser: USLMParser) -> None:
+        """<sup>N</sup> footnote reference markers appear as [N] in text_content.
+
+        Regression test for Issue #709: 23 U.S.C. § 163(f)(2) uses <sup>1</sup>
+        as a secondary footnote reference pointing to a footnote defined elsewhere
+        in the section.  Previously it was emitted as a bare number (e.g. ",1");
+        now it is bracketed as [1] for consistency with <ref class="footnoteRef">.
+        """
+        xml = """<subsection xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t23/s163/f/2">
+          <num value="2">(2)</num>
+          <content>Notwithstanding section 118(b)(2),<sup>1</sup> the funds authorized by this subsection shall remain available until expended.</content>
+        </subsection>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "subsection")
+
+        assert "[1]" in result.content, (
+            "<sup>1</sup> must render as [1] in content, not as bare '1'"
+        )
+        assert "118(b)(2),[1]" in result.content
+        assert "118(b)(2),1 " not in result.content
+
     def test_footnote_body_texts_collected_from_section(
         self, parser: USLMParser
     ) -> None:
@@ -934,6 +1027,99 @@ class TestUSLMParser:
         assert len(footnotes) == 1
         assert "So in original" in footnotes[0]
         assert "No subsec. (b) has been enacted" in footnotes[0]
+
+    def test_proviso_sibling_of_content_included(self, parser: USLMParser) -> None:
+        """<proviso> that is a sibling of <content> is included in the provision text.
+
+        Regression test for Issue #726: 47 U.S.C. § 33 has a <proviso> element
+        as a direct sibling of <content> (not nested inside it). Previously the
+        proviso text was silently dropped; now it is appended to the content.
+        """
+        xml = """<paragraph xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t47/s33">
+          <num value="a">(a)</num>
+          <content>The district courts shall have jurisdiction over all offenses
+          outside of said waters:</content>
+          <proviso> Provided, That this shall apply only to vessels of the United States.</proviso>
+        </paragraph>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "paragraph")
+
+        assert "Provided, That" in result.content, (
+            "<proviso> sibling of <content> must be included in provision text"
+        )
+        assert "jurisdiction" in result.content, (
+            "Content text preceding the proviso must also be present"
+        )
+
+    def test_proviso_inside_content_still_included(self, parser: USLMParser) -> None:
+        """<proviso> nested inside <content> continues to be included (no regression).
+
+        Verifies that provisos inside <content> (the pre-existing working case)
+        still produce correct output after the fix for Issue #726.
+        """
+        xml = """<paragraph xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t47/s33">
+          <num value="a">(a)</num>
+          <content>The courts shall have jurisdiction: <proviso>Provided, That this applies only to United States vessels.</proviso></content>
+        </paragraph>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "paragraph")
+
+        assert "Provided, That" in result.content, (
+            "<proviso> inside <content> must still be included in provision text"
+        )
+
+    def test_section_chapeau_preserved_when_subsections_present(
+        self, parser: USLMParser
+    ) -> None:
+        """Section-level <chapeau> before <subsection> children must appear in output.
+
+        Regression test for Issue #724: 27 U.S.C. § 205 has a chapeau
+        ("It shall be unlawful for any person engaged in business as a distiller…")
+        immediately before its (a)–(f) <subsection> elements. The parser was
+        discarding this preamble entirely, leaving subsections without their
+        introductory predicate.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t27/s205">
+          <num value="205">§ 205.</num>
+          <heading>Unfair competition and unlawful practices</heading>
+          <chapeau>It shall be unlawful for any person engaged in business as a distiller,
+          brewer, or rectifier, directly or indirectly or through an affiliate:</chapeau>
+          <subsection identifier="/us/usc/t27/s205/a">
+            <num value="a">(a)</num>
+            <heading>Exclusive outlet</heading>
+            <content>To require, by agreement or otherwise, that any retailer purchase
+            distilled spirits exclusively from the permittee.</content>
+          </subsection>
+          <subsection identifier="/us/usc/t27/s205/b">
+            <num value="b">(b)</num>
+            <heading>Tied house</heading>
+            <content>To acquire any interest in the retail license of any retailer.</content>
+          </subsection>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        # Expect a synthetic entry for the chapeau followed by the two subsections
+        assert len(subsections) == 3, (
+            "Should be chapeau entry + 2 subsections = 3 entries total"
+        )
+
+        chapeau_entry = subsections[0]
+        assert chapeau_entry.marker == "", (
+            "Chapeau synthetic entry must have an empty marker"
+        )
+        assert "unlawful" in chapeau_entry.content, (
+            "Section-level chapeau text must be captured in the first entry"
+        )
+        assert chapeau_entry.children == [], (
+            "Chapeau synthetic entry must have no children"
+        )
+
+        assert subsections[1].marker == "(a)", "First subsection marker must be (a)"
+        assert subsections[2].marker == "(b)", "Second subsection marker must be (b)"
 
 
 class TestToTitleCase:

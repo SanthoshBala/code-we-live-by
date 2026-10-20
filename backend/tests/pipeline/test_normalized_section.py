@@ -1839,6 +1839,27 @@ class TestNormalizeNoteContent:
         assert lines[1].is_header is False
         assert lines[1].indent_level == 2  # Content after H1 at indent 2
 
+    def test_h1_header_preserves_trailing_period(self) -> None:
+        """Test that trailing periods in [H1] headers are preserved (issue #657).
+
+        OLRC inline bold sub-headings (e.g. <b>In General.</b>) conventionally
+        end with a period. That period must not be stripped.
+        """
+        text = "[H1]In General.[/H1] The debate over how long a copyright should last."
+        lines = normalize_note_content(text)
+
+        assert len(lines) == 2
+        assert lines[0].content == "In General."
+        assert lines[0].is_header is True
+        assert lines[1].content == "The debate over how long a copyright should last."
+
+        # Multiple headers — all keep their periods
+        text2 = "[H1]Basic Copyright Term.[/H1] Under subsection (a).\n\n[H1]Joint Works.[/H1] Since by definition."
+        lines2 = normalize_note_content(text2)
+        headers = [ln for ln in lines2 if ln.is_header]
+        assert headers[0].content == "Basic Copyright Term."
+        assert headers[1].content == "Joint Works."
+
     def test_h2_header_markers(self) -> None:
         """Test that [H2]...[/H2] markers create sub-header lines."""
         text = "[H2]Reproduction[/H2] The right to reproduce."
@@ -4934,6 +4955,42 @@ class TestAmendmentSubsectionPrefix:
         assert len(amendments) == 1
         assert amendments[0].description.startswith("Pub. L. 112–239")
         assert "Subsec." not in amendments[0].description
+
+    def test_paragraph_prefix_captured(self) -> None:
+        """Par.-prefixed paragraphs are parsed as separate amendment entries (issue #721).
+
+        When a year group has multiple laws and a later paragraph begins with
+        'Par. (N).' instead of 'Subsec. (x).', it should still be extracted
+        as its own Amendment entry rather than silently dropped.
+        """
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        # 49 U.S.C. § 31501 scenario: 1994 had PL 103-272 and PL 103-429
+        text = (
+            "1994—Pub. L. 103–272 renumbered section 3101 of this title as this section "
+            "and amended it generally, restating it without substantive change.\n\n"
+            'Par. (1). Pub. L. 103–429 substituted "section 3(f)" for "section 203(f)".'
+        )
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 2
+        pl_ids = {
+            f"PL {a.law.congress}-{a.law.law_number}" for a in amendments if a.law
+        }
+        assert "PL 103-272" in pl_ids
+        assert "PL 103-429" in pl_ids
+        par_entry = next(a for a in amendments if a.law and a.law.law_number == 429)
+        assert "Par. (1)." in par_entry.description
+
+    def test_pars_plural_prefix_captured(self) -> None:
+        """'Pars.' (plural) prefix is also handled."""
+        from pipeline.olrc.normalized_section import _parse_amendments
+
+        text = "2005—Pars. (1), (2). Pub. L. 109–58, § 1301, substituted something."
+        amendments = _parse_amendments(text)
+
+        assert len(amendments) == 1
+        assert "Pars. (1), (2)." in amendments[0].description
 
 
 class TestAmendmentDateSpacing:

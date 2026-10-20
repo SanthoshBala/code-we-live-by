@@ -425,9 +425,10 @@ _YEAR_PATTERN = re.compile(r"(\d{4})\s*[—–-]\s*", re.MULTILINE)
 # treated as the start of a new entry.
 #
 # The optional leading group handles both singular ("Subsec.") and plural
-# ("Subsecs.") forms and arbitrary range expressions like "(d) to (g)".
+# ("Subsecs.") forms, as well as paragraph-level prefixes ("Par.", "Pars."),
+# and arbitrary range expressions like "(d) to (g)".
 _PUB_L_PARA_PATTERN = re.compile(
-    r"^(Subsecs?\.\s+.*?)?"  # Optional "Subsec." / "Subsecs." prefix (lazy)
+    r"^((?:Subsecs?|Pars?)\.\s+.*?)?"  # Optional "Subsec(s)." / "Par(s)." prefix (lazy)
     r"(Pub\.\s*L\.\s*(\d+)[—–-](\d+))"  # Pub. L. reference
     r"(.*)",  # Rest of paragraph
     re.DOTALL,
@@ -1024,8 +1025,8 @@ def normalize_note_content(text: str) -> list[ParsedLine]:
         h2_text = match.group(2)
 
         if h1_text:
-            # H1 is a bold header (section-level)
-            header_text = h1_text.strip().rstrip(".")
+            # H1 is a bold header (section-level); period is canonical OLRC formatting
+            header_text = h1_text.strip()
             if header_text:
                 line_number += 1
                 lines.append(

@@ -1114,6 +1114,11 @@ class USLMParser:
                     if ref_num:
                         yield f"[{ref_num}]"
                     return
+                if tag == "sup":
+                    ref_num = (el.text or "").strip()
+                    if ref_num:
+                        yield f"[{ref_num}]"
+                    return
                 if tag == "note" and el.get("type", "") == "footnote":
                     return
             if el.text:
@@ -1143,6 +1148,13 @@ class USLMParser:
             if raw:
                 yield raw.title()
             return
+        # <sup> encodes a footnote reference marker; render as [N] for consistency
+        # with <ref class="footnoteRef"> handling.
+        if tag == "sup":
+            ref_num = (elem.text or "").strip()
+            if ref_num:
+                yield f"[{ref_num}]"
+            return
         if elem.text:
             yield elem.text
         for child in elem:
@@ -1165,6 +1177,12 @@ class USLMParser:
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
         # Footnote reference link: include the marker number as [N].
         if tag == "ref" and elem.get("class", "") == "footnoteRef":
+            ref_num = (elem.text or "").strip()
+            if ref_num:
+                yield f"[{ref_num}]"
+            return
+        # <sup> also encodes footnote reference markers; render as [N] for consistency.
+        if tag == "sup":
             ref_num = (elem.text or "").strip()
             if ref_num:
                 yield f"[{ref_num}]"
@@ -1194,6 +1212,8 @@ class USLMParser:
         """
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
         if tag == "ref" and elem.get("class", "") == "footnoteRef":
+            return
+        if tag == "sup":
             return
         if tag == "note" and elem.get("type", "") == "footnote":
             return
@@ -1315,6 +1335,16 @@ class USLMParser:
                     self._get_text_content(content_elem, strip_footnotes=True)
                 )
 
+        # Collect <proviso> elements that are direct siblings of <content>.
+        # A proviso continues the same sentence as the preceding content
+        # (it typically follows a colon), so its text is appended to the
+        # content string rather than emitted as a separate continuation.
+        proviso_elems = elem.findall("{*}proviso") or elem.findall("proviso")
+        for proviso_elem in proviso_elems:
+            prov_text = self._get_text_content(proviso_elem, strip_footnotes=True)
+            if prov_text:
+                content_parts.append(prov_text)
+
         content = " ".join(content_parts).strip()
 
         # Parse nested children.
@@ -1347,14 +1377,27 @@ class USLMParser:
         ]
         if level in hierarchy:
             level_index = hierarchy.index(level)
-            for child_level in hierarchy[level_index + 1 :]:
-                child_elems = elem.findall(f"{{*}}{child_level}") or elem.findall(
-                    child_level
+            # Build a mapping from valid child tag name to its hierarchy level.
+            # We include ALL levels below the current one so that:
+            #   1. Skipped levels work (e.g. paragraph → clause with no subparagraph).
+            #   2. Mixed siblings work (e.g. 29 U.S.C. § 158(b) where <subparagraph>
+            #      elements appear as direct children of <subsection> alongside
+            #      <paragraph> siblings rather than nested inside a paragraph).
+            valid_child_tags: dict[str, str] = {
+                child_level: child_level for child_level in hierarchy[level_index + 1 :]
+            }
+            # Walk direct children in document order so mixed-tag siblings (e.g.
+            # paragraphs interleaved with subparagraphs) are preserved correctly.
+            for child_elem in elem:
+                child_tag = (
+                    child_elem.tag.split("}")[-1]
+                    if "}" in child_elem.tag
+                    else child_elem.tag
                 )
-                if child_elems:
-                    for child_elem in child_elems:
-                        children.append(self._parse_subsection(child_elem, child_level))
-                    break
+                if child_tag in valid_child_tags:
+                    children.append(
+                        self._parse_subsection(child_elem, valid_child_tags[child_tag])
+                    )
 
         # Collect continuation elements (closing text that follows a numbered list,
         # e.g. the penalty clause in 18 U.S.C. § 1001(a)).
@@ -1394,6 +1437,29 @@ class USLMParser:
         subsec_elems = section_elem.findall("{*}subsection")
         if not subsec_elems:
             subsec_elems = section_elem.findall("subsection")
+
+        if subsec_elems:
+            # Capture a section-level <chapeau> that introduces the subsection list
+            # (e.g. 27 U.S.C. § 205 "It shall be unlawful for any person…").
+            # This element appears as a direct child of <section> before the first
+            # <subsection>; the existing "no-subsection" branch handles it only when
+            # paragraphs are used directly.  Issue #724.
+            sec_chapeau = section_elem.find("{*}chapeau")
+            if sec_chapeau is None:
+                sec_chapeau = section_elem.find("chapeau")
+            if sec_chapeau is not None:
+                chapeau_text = self._get_text_content(sec_chapeau).strip()
+                if chapeau_text:
+                    subsections.append(
+                        ParsedSubsection(
+                            marker="",
+                            heading=None,
+                            content=chapeau_text,
+                            children=[],
+                            level="subsection",
+                            continuation=[],
+                        )
+                    )
 
         for subsec_elem in subsec_elems:
             subsections.append(self._parse_subsection(subsec_elem, "subsection"))
@@ -1847,9 +1913,8 @@ class USLMParser:
             if el.text:
                 text = el.text
                 if tag == "b":
-                    # Bold text is a header - strip trailing period
-                    header_text = text.rstrip(".")
-                    parts.append(f"[H1]{header_text}[/H1]")
+                    # Bold text is a header (inline note sub-headings keep their period)
+                    parts.append(f"[H1]{text}[/H1]")
                 elif tag == "i":
                     # In USLM, <i> marks inline italic styling — connective phrases,
                     # sub-item designators, role/title text, Latin terms, case
