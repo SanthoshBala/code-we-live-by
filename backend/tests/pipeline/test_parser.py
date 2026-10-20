@@ -973,6 +973,44 @@ class TestUSLMParser:
             "<proviso> inside <content> must still be included in provision text"
         )
 
+    def test_section_chapeau_preserved_when_subsections_present(
+        self, parser: USLMParser
+    ) -> None:
+        """Section-level <chapeau> is preserved when <subsection> children exist.
+
+        Regression test for Issue #724: a <chapeau> that is a direct child of
+        <section> (before the first <subsection>) was silently dropped when
+        subsections were present.  It should appear as the first ParsedSubsection
+        with an empty marker.
+        """
+        xml = """<section xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t27/s205">
+          <num value="205">§ 205.</num>
+          <heading>Unfair competition and unlawful practices</heading>
+          <chapeau>It shall be unlawful for any person engaged in business as a distiller,
+          brewer, rectifier, blender, or other producer to coerce any retailer.</chapeau>
+          <subsection>
+            <num value="a">(a)</num>
+            <content>Exclusive outlet</content>
+          </subsection>
+          <subsection>
+            <num value="b">(b)</num>
+            <content>Tied house</content>
+          </subsection>
+        </section>"""
+        elem = etree.fromstring(xml)
+        subsections = parser._extract_subsections(elem)
+
+        assert len(subsections) == 3, (
+            "Expected chapeau + 2 subsections; section-level chapeau was dropped"
+        )
+        assert subsections[0].marker == "", "Chapeau entry should have empty marker"
+        assert "unlawful" in subsections[0].content, (
+            "Chapeau text must be present in first entry"
+        )
+        assert subsections[1].marker == "(a)"
+        assert subsections[2].marker == "(b)"
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
