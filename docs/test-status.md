@@ -7,7 +7,7 @@ Each row represents one tested section. "Clean" means no discrepancies were foun
 CWLB and the OLRC XML at the stated release point.
 
 | Date       | Title | Section | Heading                                                                                | Release Point | Status |
-|------------|-------|---------|----------------------------------------------------------------------------------------|---------------|--------|
+|------------|-------|---------|----------------------------------------------------------------------------------------|-----------------|--------|
 | 2026.05.20 | 21    | 692     | Inspection extended to reindeer                                                        | 113-21        | ✅ Clean |
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership                                          | 113-21        | ✅ Clean |
 | 2026.05.28 | 29    | 567     | Labor-management dispute settlement expenses                                          | 113-21        | ✅ Clean |
@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.26 | 38    | 8136    | Recapture provisions                                                                   | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,27 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.26 — 38 U.S.C. § 8136
+
+Statute text matches OLRC exactly: subsection (a) (20-year recapture period for state-home
+grant projects) and subsection (b) (outpatient clinic exclusion) are identical character-for-
+character. Source credit, enacted date (1964-08-19), and `last_modified_date` (2000-11-01,
+corresponding to Pub. L. 106–419, Nov. 1, 2000) are all correct. Group ancestors (Part VI /
+Chapter 81 / Subchapter III) are accurate. `is_positive_law: true` and `is_repealed: false`
+are correct.
+
+All 4 note groups are present with full content:
+- **Amendments** (9 entries, 2000–1973): matches OLRC editorial notes verbatim.
+- **Effective Date of 1977 Amendment**: matches OLRC statutory note verbatim.
+- **Effective Date of 1976 Amendment**: matches OLRC statutory note verbatim.
+- **Effective Date of 1973 Amendment**: matches OLRC statutory note verbatim.
+
+One known-issue occurrence found: the top-level `note_categories` field in
+`GET /api/v1/sections/38/8136` returns `["editorial"]` only, omitting `"statutory"`,
+even though the three Effective Date notes fall under "Statutory Notes and Related
+Subsidiaries" in the OLRC. This is the same defect class as issue #686 — comment added
+to that issue. No new bugs filed.
 
 
 ## Test methodology
