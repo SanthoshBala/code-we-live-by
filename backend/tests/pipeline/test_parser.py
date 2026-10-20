@@ -935,6 +935,44 @@ class TestUSLMParser:
         assert "So in original" in footnotes[0]
         assert "No subsec. (b) has been enacted" in footnotes[0]
 
+    def test_proviso_sibling_of_content_included(self, parser: USLMParser) -> None:
+        """<proviso> that is a sibling of <content> is included in provision text.
+
+        Regression test for Issue #726: OLRC XML sometimes places <proviso> as a
+        direct sibling of <content> (not nested inside it). Previously the proviso
+        text was silently dropped; now it is appended to the content.
+        """
+        xml = """<paragraph xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t47/s33">
+          <num value="a">(a)</num>
+          <content>The district courts shall have jurisdiction over all offenses
+          outside of said waters:</content>
+          <proviso> Provided, That this shall apply only to vessels of the United States.</proviso>
+        </paragraph>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "paragraph")
+
+        assert "Provided, That" in result.content, (
+            "<proviso> sibling of <content> must be included in provision text"
+        )
+        assert "jurisdiction" in result.content, (
+            "Content text preceding the proviso must also be present"
+        )
+
+    def test_proviso_inside_content_still_included(self, parser: USLMParser) -> None:
+        """<proviso> nested inside <content> continues to be included (no regression)."""
+        xml = """<paragraph xmlns="http://xml.house.gov/schemas/uslm/1.0"
+            identifier="/us/usc/t47/s33">
+          <num value="a">(a)</num>
+          <content>The courts shall have jurisdiction: <proviso>Provided, That this applies only to United States vessels.</proviso></content>
+        </paragraph>"""
+        elem = etree.fromstring(xml)
+        result = parser._parse_subsection(elem, "paragraph")
+
+        assert "Provided, That" in result.content, (
+            "<proviso> inside <content> must still be included in provision text"
+        )
+
 
 class TestToTitleCase:
     """Tests for to_title_case function."""
