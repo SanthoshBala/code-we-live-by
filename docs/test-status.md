@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.12 | 12    | 1428    | Examination of State laws, regulations, and procedures; studies of values, etc.        | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,25 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.12 — 12 U.S.C. § 1428
+
+All fields matched at the 113-21 baseline: heading ("Examination of State laws, regulations,
+and procedures; studies of values, etc."), full statutory text (3 unnumbered paragraphs on
+Director's examination authority, withholding/limiting bank operations in inadequate-law
+states, and studies of property values), source credit
+`(July 22, 1932, ch. 522, § 8, 47 Stat. 731; Pub. L. 101–73, title VII, § 701(b)(1), (3)(A),
+Aug. 9, 1989, 103 Stat. 412; Pub. L. 110–289, div. A, title II, § 1204(8), (9), July 30,
+2008, 122 Stat. 2786.)`, enacted date (`1932-07-22`), and `last_modified_date` (`2008-07-30`).
+The single Amendments note (category: editorial) correctly records both the 2008 PL 110–289
+substitution of "The Director" for "The Board" and the 1989 PL 101–73 substitution of "Board"
+for "board". Section was last amended before the 113-21 release point so the text is identical
+to the current OLRC prelim.
+
+One known defect confirmed: `notes.amendments[*].law` objects for both PL 110-289 and
+PL 101-73 have `date`, `official_title`, `short_title`, `stat_volume`, `stat_page`, and
+`stat_reference` all `null` — the systemic amendment law metadata null bug tracked in #561.
+Comment added to #561 with this occurrence. No new bugs filed.
 
 
 ## Test methodology
