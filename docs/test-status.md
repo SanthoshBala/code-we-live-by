@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.08.24 | 9     | 10      | Same; vacation; grounds; rehearing                                                     | 113-21        | ✅ Clean (known issue applies — see notes) |
 
 ## Notes
 
@@ -186,6 +187,27 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.08.24 — 9 U.S.C. § 10
+
+All fields matched: heading ("Same; vacation; grounds; rehearing"), full body text (subsections
+(a) chapeau + paragraphs (1)–(4), (b), (c)), source credit, enacted date (1947-07-30), and
+`last_modified_date` (2002-05-07). Derivation note (historical) and Amendments note (editorial)
+match the OLRC HTML verbatim, including all six amendment paragraphs for 2002, 1992, and 1990
+changes. In-note cross-references to Pub. L. 107-169, 102-354, and 101-552 all present and
+correct. `is_positive_law: true`, `group_ancestors` (Chapter 1), `note_categories`
+(["editorial", "historical"]) all accurate.
+
+`notes.amendments[*].law` objects for all three amendment entries (PL 107-169, PL 102-354,
+PL 101-552) have `date`, `official_title`, `short_title`, `stat_volume`, `stat_page`, and
+`stat_reference` all `null`. Notably, `notes.citations[].law` for the same laws carries these
+fields correctly (e.g. PL 101-552 shows `"date": "Nov. 15, 1990"`, `"stat_volume": "104"`,
+`"stat_page": 2745`), confirming the nulls are specific to the amendments join path and the
+underlying data is available. This is the systemic amendment law metadata null bug tracked
+in #561 — commented on that issue with this occurrence and the citations-vs-amendments contrast.
+
+No new bugs found. Section text has not changed since 2002, so the 113-21 release point
+content is identical to the current OLRC HTML view.
 
 
 ## Test methodology
