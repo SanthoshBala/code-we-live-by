@@ -7,7 +7,7 @@ Each row represents one tested section. "Clean" means no discrepancies were foun
 CWLB and the OLRC XML at the stated release point.
 
 | Date       | Title | Section | Heading                                                                                | Release Point | Status |
-|------------|-------|---------|----------------------------------------------------------------------------------------|---------------|--------|
+|------------|-------|---------|----------------------------------------------------------------------------------------|---------------| ------|
 | 2026.05.20 | 21    | 692     | Inspection extended to reindeer                                                        | 113-21        | ✅ Clean |
 | 2026.05.24 | 17    | 204     | Execution of transfers of copyright ownership                                          | 113-21        | ✅ Clean |
 | 2026.05.28 | 29    | 567     | Labor-management dispute settlement expenses                                          | 113-21        | ✅ Clean |
@@ -31,6 +31,7 @@ CWLB and the OLRC XML at the stated release point.
 | 2026.08.02 | 43    | 597a    | Easements for Bull Lake Dam and Reservoir                                              | 113-21        | ✅ Clean |
 | 2026.08.03 | 17    | 107     | Limitations on exclusive rights: Fair use                                              | 113-21        | ✅ Clean (known issues confirmed — see notes) |
 | 2026.08.04 | 9     | 1       | "Maritime transactions" and "commerce" defined; exceptions to operation of title       | 113-21        | ✅ Clean (known issue applies — see notes) |
+| 2026.10.20 | 38    | 106     | Certain service deemed to be active service                                            | 113-21        | ⚠️ Known issue applies (see notes) |
 
 ## Notes
 
@@ -186,6 +187,29 @@ The Pub. L. 117–90 statutory note (March 3, 2022) present on the current OLRC 
 and 307) is absent from CWLB, as expected given the stale 2013 release point. This is the
 systemic stale-data issue already tracked in #485, #564, #578, and #583 — not re-filed here.
 
+
+### 2026.10.20 — 38 U.S.C. § 106
+
+**Note:** OLRC (uscode.house.gov) was returning HTTP 500 errors site-wide at the time of this
+test; direct XML comparison was not possible. Structural analysis was performed on the CWLB
+response only, cross-referenced against known defect patterns.
+
+All six subsections (a)–(f) are present with correct indentation and nesting. The 12-entry
+amendment history covers PL 87-102 (1961) through PL 106-419 (2000) in correct chronological
+order. Source credit matches the expected citation sequence. `last_modified_date: "2000-11-01"`
+correctly reflects PL 106-419 (the later of the two year-2000 amendments — Nov. 1, 2000 vs.
+Aug. 9, 2000 for PL 106-259). `last_amendment_law: "PL 106-419"` on the structure endpoint is
+also correct; issue #736 does not manifest here.
+
+One probable defect found matching an existing bug class:
+
+**Issue #686** (statutory notes miscategorized as editorial): The "Effective Date of 1961
+Amendment" note has `category: "editorial"` in the CWLB response, but its content quotes
+Pub. L. 87–102, § 2 directly ("No monetary benefits shall accrue by reason of the amendments
+made by this Act…") — statutory-note content that should appear under "Statutory Notes and
+Related Subsidiaries" with `category: "statutory"`. The other two notes on this section that
+contain quoted statutory text ("Service in Alaska Territorial Guard" and "Women's Air Forces
+Service Pilots") are correctly classified as `"statutory"`. Comment added to issue #686.
 
 
 ## Test methodology
